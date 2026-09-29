@@ -1,0 +1,8 @@
+OpenJevSwift
+Copyright 2026 Algorythm Canada and contributors
+
+This product is an independent, native Swift implementation of the OpenJev
+decision server (https://github.com/razorback16/openjev, Apache-2.0). It is
+not affiliated with or endorsed by TypeSafe AI (Jev), Google DeepMind or
+NVIDIA (DiffusionGemma), or the authors of the other models it may serve.
+See THIRD_PARTY.md for the upstream projects this work references.
