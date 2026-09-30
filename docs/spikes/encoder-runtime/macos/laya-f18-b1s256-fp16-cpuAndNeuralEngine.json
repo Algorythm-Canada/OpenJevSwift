@@ -1,0 +1,109 @@
+{
+  "batch1" : {
+    "count" : 99,
+    "maxMs" : 74.47624999622349,
+    "meanMs" : 27.620659525079343,
+    "medianMs" : 26.21549999457784,
+    "minMs" : 25.684583000838757,
+    "p95Ms" : 29.92787500261329
+  },
+  "batch16ByLength" : {
+
+  },
+  "batch16PerCall" : {
+    "count" : 0,
+    "maxMs" : 0,
+    "meanMs" : 0,
+    "medianMs" : 0,
+    "minMs" : 0,
+    "p95Ms" : 0
+  },
+  "batch16PerQuestion" : {
+    "count" : 0,
+    "maxMs" : 0,
+    "meanMs" : 0,
+    "medianMs" : 0,
+    "minMs" : 0,
+    "p95Ms" : 0
+  },
+  "batch1ByLength" : {
+    "s256" : {
+      "count" : 99,
+      "maxMs" : 74.47624999622349,
+      "meanMs" : 27.620659525079343,
+      "medianMs" : 26.21549999457784,
+      "minMs" : 25.684583000838757,
+      "p95Ms" : 29.92787500261329
+    }
+  },
+  "compileSeconds" : 0.13395233399933204,
+  "computePlan" : {
+    "costShare" : {
+
+    },
+    "function" : "main",
+    "operations" : {
+      "cpu" : 16,
+      "neuralEngine" : 1167,
+      "none" : 1324
+    }
+  },
+  "device" : {
+    "chip" : "Apple M3 Max",
+    "machine" : "arm64",
+    "model" : "Mac15,9",
+    "operatingSystem" : "Version 27.0.1 (Build 26A434)",
+    "physicalMemoryBytes" : 137438953472,
+    "processorCount" : 16
+  },
+  "firstLoadSeconds" : 17.761541040999873,
+  "fixtureRevisions" : {
+    "laya" : "1a793eb568e6718f15941d08f85432581df534e3",
+    "script" : "Tools\/encoders\/reference.py",
+    "verdict" : "8af2496eb63c7fa66d7d234e1f62629380030eb4",
+    "version" : "1"
+  },
+  "footprintAfterLoadBytes" : 60965800,
+  "footprintAfterWarmupBytes" : {
+    "b1_s256" : 66815512
+  },
+  "footprintBeforeLoadBytes" : 7504592,
+  "functionLoadSeconds" : {
+    "main" : 7.254585167000187
+  },
+  "kind" : "enumerated",
+  "lifetimePeakFootprintBytes" : 73335624,
+  "model" : "laya",
+  "package" : "laya-f18-b1s256-fp16",
+  "packageBytes" : 842760754,
+  "parityBatch1" : {
+    "maxAbsLogitDifference" : 0.07378441095352173,
+    "maxAbsProbabilityDifference" : 0.011076389275463727,
+    "meanAbsProbabilityDifference" : 0.0006917181413241664,
+    "nonFinite" : 0,
+    "questions" : 99,
+    "topLabelAgreement" : 98,
+    "topLabelChanges" : [
+      "state_object_six\/tone"
+    ]
+  },
+  "peakFootprintDuringRunBytes" : 68797976,
+  "secondLoadSeconds" : 7.109945208998397,
+  "thermalEnd" : "fair",
+  "thermalStart" : "fair",
+  "tokenizationMatches" : "200\/200",
+  "tokenizePerQuestion" : {
+    "count" : 200,
+    "maxMs" : 80.79470800294075,
+    "meanMs" : 9.780240825202782,
+    "medianMs" : 7.654375000129221,
+    "minMs" : 0.12962499749846756,
+    "p95Ms" : 33.49308399629081
+  },
+  "tokenizerLoadSeconds" : 0.8714229170000181,
+  "units" : "cpuAndNeuralEngine",
+  "wallSeconds" : 47.03839429200161,
+  "warmupSeconds" : {
+    "b1_s256" : 0.0342341249997844
+  }
+}

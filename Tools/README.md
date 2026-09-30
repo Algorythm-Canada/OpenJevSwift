@@ -7,6 +7,7 @@ does not build anything in this directory. The testing strategy they serve is de
 | Directory | Language | What it holds |
 |---|---|---|
 | `fixtures/` | Python | The scripts that generate [Fixtures/](../Fixtures/README.md), run together by `make fixtures` from a virtual environment at `Tools/fixtures/.venv` (`make fixtures-venv`, packages pinned in `requirements.txt`). `upstream_tables.py` drives upstream OpenJev at the pinned commit with the real DiffusionGemma tokenizer: it imports `openjev.engine` and `openjev.api` directly and stubs the model read the way upstream's `test_api.py` does (issue #6). `wire_tables.py` records upstream's HTTP contract into `Fixtures/wire` with a stand-in tokenizer (issue #5). `python_json_tables.py` writes the CPython JSON reference tables in `Fixtures/python-json` (issue #3). The script that records model parity data from mlx-vlm through upstream's `MlxRuntime.read` will join them with issue #31. |
+| `encoders/` | Python and Swift | Spike #56: `reference.py` writes [Fixtures/encoders](../Fixtures/encoders/README.md) from upstream's own Verdict and Laya read paths, `convert_*.py` convert both models to Core ML, and `Harness/` (a separate Swift package) with `HarnessApp.swiftpm` measures them on macOS and an iPhone. Nothing in it is built by the main package; [encoders/README.md](encoders/README.md) explains the order to run them. |
 | `sdk-compat/` | Python and TypeScript | Smoke tests that run the official TypeSafe SDKs (`typesafe-sdk` and `@typesafe-ai/sdk`) against a Swift server started with the stub backend. They check decoded answers, error mapping and request-id headers. Added by issue #39. |
 
 ## Rules
@@ -17,3 +18,4 @@ does not build anything in this directory. The testing strategy they serve is de
 - Read model weights and tokenizer files from a local cache outside the repository. Never commit
   them.
 - Swift code does not go here. Anything the package builds lives under `Sources/` or `Tests/`.
+  The one exception is a spike's measurement harness kept as its own package, as `encoders/` does.

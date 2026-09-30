@@ -1,0 +1,25 @@
+verdict-e17-fp16 cpuOnly: exit status 139
+    verdict-e17-fp16 cpuOnly: tokenized 200 questions, 200 match the reference
+    verdict-e17-fp16 cpuOnly: compiled in 0.129 s, loads 1.106 s and 0.001 s
+verdict-e17-fp16 cpuAndNeuralEngine: exit status 133
+    verdict-e17-fp16 cpuAndNeuralEngine: tokenized 200 questions, 200 match the reference
+    verdict-e17-fp16 cpuAndNeuralEngine: compiled in 0.131 s, loads 98.042 s and 0.075 s
+verdict-e17-fp32 cpuAndNeuralEngine: exit status 133
+    verdict-e17-fp32 cpuAndNeuralEngine: tokenized 200 questions, 200 match the reference
+    verdict-e17-fp32 cpuAndNeuralEngine: compiled in 0.121 s, loads 2.256 s and 0.036 s
+verdict-m18-fp16 all: exit status 1
+    verdict-m18-fp16 all: compiled in 0.507 s, loads 2.132 s and 0.208 s
+    verdict-m18-fp16 all: batch 1 median 15.995 ms
+    encoder-harness: verdict-m18-fp16 all: Error Domain=com.apple.CoreML Code=0 "`MLModelConfiguration`'s `.functionName` property must be `nil` unless the model type is ML Program." UserInfo={NSLocalizedDescription=`MLModelConfiguration`'s `.functionName` property must be `nil` unless the model type is ML Program.}
+laya-m18-fp16 all: exit status 1
+    laya-m18-fp16 all: tokenized 200 questions, 200 match the reference
+    encoder-harness: laya-m18-fp16 all: Error Domain=com.apple.CoreML Code=0 "`MLModelConfiguration`'s `.functionName` property must be `nil` unless the model type is ML Program." UserInfo={NSLocalizedDescription=`MLModelConfiguration`'s `.functionName` property must be `nil` unless the model type is ML Program.}
+laya-m18-fp16 cpuAndNeuralEngine: exit status 1
+    laya-m18-fp16 cpuAndNeuralEngine: tokenized 200 questions, 200 match the reference
+    encoder-harness: laya-m18-fp16 cpuAndNeuralEngine: Error Domain=com.apple.CoreML Code=0 "`MLModelConfiguration`'s `.functionName` property must be `nil` unless the model type is ML Program." UserInfo={NSLocalizedDescription=`MLModelConfiguration`'s `.functionName` property must be `nil` unless the model type is ML Program.}
+laya-e17-fp16 cpuOnly: exit status 139
+    laya-e17-fp16 cpuOnly: tokenized 200 questions, 200 match the reference
+    laya-e17-fp16 cpuOnly: compiled in 0.164 s, loads 3.165 s and 0.002 s
+laya-e17-fp16 cpuAndNeuralEngine: exit status 133
+    laya-e17-fp16 cpuAndNeuralEngine: tokenized 200 questions, 200 match the reference
+    laya-e17-fp16 cpuAndNeuralEngine: compiled in 0.162 s, loads 192.477 s and 0.081 s

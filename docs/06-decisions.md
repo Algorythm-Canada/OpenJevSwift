@@ -219,19 +219,64 @@ responsibility.
 
 Status. Accepted.
 
-## D-011 Encoder models: Core ML or MLX decided by a spike; JevK5 first among the extra models
+## D-011 Encoder models: Core ML for Verdict and Laya; JevK5 first among the extra models
 
 Context. Verdict (151M) and Laya (421M) are ModernBERT encoders with custom heads; Core ML would
 reach iOS and the Neural Engine, while an MLX port shares the codebase. JevK5 is Qwen3.5-4B with a
 merged LoRA and a next-token letter readout, which `MLXLLM`'s existing Qwen3.5 implementation
-can run today with no new model code.
+can run today with no new model code. Spike #56 converted both encoders to Core ML and measured
+them on an M3 Max and an iPhone 13 Pro Max (A15, iOS 27.0); the evidence is in
+[spikes/encoder-runtime.md](spikes/encoder-runtime.md).
 
-Decision. Implement JevK5 first among the additional models. Run one spike converting Verdict to
-Core ML and measuring accuracy parity and latency on macOS and iOS, and one comparing with an MLX
-ModernBERT port; choose per model. CLM (Qwen3-8B embeddings plus heads) is deferred until the
-others exist.
+Decision.
 
-Status. Open (spike).
+1. **Verdict runs on Core ML** on iOS and macOS, from the float16 package that
+   `Tools/encoders/convert_verdict.py` converts from the PyTorch checkpoint: one function per
+   input shape (batch 1 and 16 by 128, 256 and 512 tokens), weights stored once, 306 MB. On an
+   iPhone it uses `.cpuAndNeuralEngine` and reads one question per call: 9.7 ms at 128 tokens,
+   17 ms at 256 and 46 ms at 512, in 106 MB. On a Mac it uses `.cpuAndGPU` (7.5 to 20 ms a
+   question) and may read up to 16 questions per call.
+2. **Laya runs on Core ML** (`convert_laya.py`, 128 to 1,024 tokens), with the marker gather, the
+   temperatures, the clamp and the 4-decimal rounding in Swift. On an iPhone it uses
+   `.cpuAndNeuralEngine` with one package per sequence length, each one program for one shape (845
+   MB each), because Core ML does not load the multifunction package for the Neural Engine: 27.9 ms
+   at 128 tokens, 137 ms at 512 and 513 ms at 1,024, in 106 MB or less, loading included. That is
+   2.6 to 2.9 times faster than the iPhone's GPU (82 ms to 1.35 s, 855 MB). An app downloads the
+   package for a length when a state first needs it. On a Mac it uses the multifunction package (849
+   MB) with `.cpuAndGPU` (15 to 82 ms).
+3. **No MLX port of ModernBERT.** It would take 5 to 6 days and about 700 lines to maintain, and it
+   could not use the Neural Engine, which ran Verdict about 2.5 times faster than the iPhone's GPU
+   with a third of the memory, and Laya 2.6 to 2.9 times faster in an eighth of it.
+4. **iOS 18 and macOS 15.** The multifunction packages need them. The iOS 17 alternative, one
+   program with enumerated input shapes, crashes Core ML's CPU backend on macOS 27.0.1 and iOS 27.0.
+   iOS 18 runs on the same iPhones as iOS 17 (XS, XR and later), so no device is lost; the library
+   keeps its iOS 17 platform and the encoder backends are available from iOS 18.
+5. **Packages are downloaded on first use,** verified by SHA-256 and compiled on the device, not
+   bundled in apps. On iOS, Verdict's package needs only its batch-1 functions, and each of Laya's
+   per-length packages is downloaded when a state first needs that length.
+6. **Fallback.** When a device cannot meet an app's time budget (Laya at 1,024 tokens takes 0.51 s
+   on an A15's Neural Engine), or has not downloaded the package a read needs, the app sends the
+   read to an OpenJev server over the same wire API
+   (`/v1/systemone` with `verdict-1.4` or `laya-1.0`).
+7. Implement JevK5 first among the additional models; on iPhones it waits for a measurement on an
+   8 GB device (issue #55). CLM (Qwen3-8B embeddings plus heads) is deferred until the others
+   exist.
+
+Alternatives rejected. (a) An MLX ModernBERT port: see 3. (b) iOS 17 packages with enumerated
+shapes: see 4. (c) ONNX Runtime with its Core ML execution provider: a large binary dependency for
+two small models, and coremltools 9.0 cannot read the shipped ONNX export. (d) Server-only
+encoders: the iPhone numbers show on-device reads are affordable. (e) Laya on the iPhone's GPU from
+the multifunction package, one 849 MB download: 2.6 to 2.9 times slower than the Neural Engine,
+with 855 MB in use.
+
+Consequences. Issues #57 and #58 build on the spike's harness (tokenization, the prompt and
+sequence builders, calibration, the Core ML runner) and on Fixtures/encoders; the report lists their
+scope. The converted packages need a home and a release step. Core ML's own defects (the crash
+with enumerated shapes, a misleading `functionName` load error, silent fallbacks to the CPU, and
+Laya's multifunction package failing to load for the Neural Engine, which costs an iPhone one
+download per length) enter the backends' test matrix on every OS release.
+
+Status. Decided by spike #56 on 2026-09-30.
 
 ## D-012 Reads come first; text generation and `think` come later
 
