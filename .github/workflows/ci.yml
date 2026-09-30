@@ -10,10 +10,11 @@ on:
 permissions:
   contents: read
 
-# One run per branch or pull request: a newer push cancels the run it supersedes. On main a run is
-# never cancelled once it has started, so every merged commit keeps its result.
+# A pull request's runs share one group, so a newer push cancels the run it supersedes. Every
+# commit on main gets a group of its own: GitHub cancels a pending run when a newer one joins its
+# group, and a shared group would leave some merged commits untested.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 defaults:

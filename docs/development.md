@@ -243,9 +243,9 @@ And took this long:
   image.
 - **The test log check.** [check-test-log.sh](../.github/scripts/check-test-log.sh) reads the
   saved output of `swift test`. It fails when the log holds no Swift Testing run or a run failed,
-  and when a test or suite was skipped for any reason other than an unset `OPENJEV_TEST_MODEL` or
-  `OPENJEV_LIVE_URL`. CI has every fixture, so a fixture test that skipped there would stop testing
-  without failing. A test that needs the weights names `OPENJEV_TEST_MODEL` in the comment of its
+  and when a test or suite was skipped or cancelled for any reason other than an unset
+  `OPENJEV_TEST_MODEL` or `OPENJEV_LIVE_URL`; a skip without a comment fails too. CI has every
+  fixture, so a fixture test that skipped there would stop testing without failing. A test that needs the weights names `OPENJEV_TEST_MODEL` in the comment of its
   `.enabled(if:)` trait, and the check lists it as skipped. Both jobs unset the two variables
   before `swift test`.
 - **Caches.** Each CI job caches its build directory, `.build/linux` or `.build`, which holds the
@@ -254,14 +254,17 @@ And took this long:
   or a dependency change starts from an empty directory. A cache that `main` saved serves every
   pull request; one that a pull request saved serves only that pull request. The fixtures job
   caches pip downloads, keyed on `requirements.txt`, and the tokenizer download, keyed on the
-  tokenizer revision.
-- **Superseded runs.** A newer push to a pull request cancels the run it replaces. On `main`, a
-  run that has started always finishes, so every merged commit keeps its result.
+  tokenizer revision. Its scheduled runs skip both caches: `huggingface_hub` serves a cached
+  revision without asking the Hub, so only a fresh download shows that the pins can still be
+  fetched and installed.
+- **Superseded runs.** A newer push to a pull request cancels the run it replaces. Every commit on
+  `main` runs in a concurrency group of its own, so no merged commit's run is cancelled.
 - **Fixture regeneration.** The job runs on Apple silicon because the committed files were written
   there: CPython takes its math functions from the platform's C library, and another library could
   change the last digit of a float. It reproduced every committed file byte for byte.
   `FixturePinTests`, in the CI workflow, checks the pins the files record; this job checks that
-  the scripts still write the files.
+  the scripts still write the files. It cannot notice a committed file that no script writes any
+  more, because the scripts only write; delete such a file when the script that wrote it stops.
 - **The MLX runner probe.** Run it again when mlx-swift, Xcode or a runner image changes, from the
   repository's Actions tab or with `gh workflow run mlx-probe.yml`. Each job writes a table of
   outcomes and the probe's output to the run summary.

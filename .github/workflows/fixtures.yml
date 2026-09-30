@@ -15,7 +15,8 @@ on:
       - .github/workflows/fixtures.yml
   workflow_dispatch:
   schedule:
-    # Mondays at 06:23 UTC, to catch a pin that can no longer be fetched or installed.
+    # Mondays at 06:23 UTC, to catch a pin that can no longer be fetched or installed. Scheduled
+    # runs skip the caches below, so they download everything again.
     - cron: "23 6 * * 1"
 
 permissions:
@@ -46,7 +47,7 @@ jobs:
           # The version the committed files record. Another one changes the "python" pin in every
           # file.
           python-version: "3.14.7"
-          cache: pip
+          cache: ${{ github.event_name != 'schedule' && 'pip' || '' }}
           cache-dependency-path: Tools/fixtures/requirements.txt
 
       - name: Read the tokenizer revision
@@ -60,8 +61,11 @@ jobs:
           echo "revision=$revision" >> "$GITHUB_OUTPUT"
 
       # The tokenizer files (about 32 MB) that upstream_tables.py downloads into the Hugging Face
-      # cache. The revision is a commit, so the files under it never change.
+      # cache. The revision is a commit, so the files under it never change. huggingface_hub then
+      # serves them from the cache without asking the Hub, so a scheduled run skips the cache to
+      # find out whether the revision can still be downloaded.
       - name: Restore the tokenizer download
+        if: github.event_name != 'schedule'
         uses: actions/cache@v6
         with:
           path: ~/.cache/huggingface/hub
