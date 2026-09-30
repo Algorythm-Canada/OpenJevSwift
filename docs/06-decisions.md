@@ -193,3 +193,18 @@ prove that slot-only self-conditioning is numerically equivalent to upstream; eq
 shown by the parity tests before the shortcut is used.
 
 Status. Accepted for planning.
+
+## D-016 The JSON parser is stricter than Python's `json.loads`
+
+Context. Upstream reads request bodies with Starlette's `request.json()`, which is Python's
+`json.loads`. That parser accepts `NaN`, `Infinity` and `-Infinity`, turns a float that overflows
+into infinity (`1e400`), accepts lone surrogate escapes such as `"\ud83d"`, and rejects integers of
+more than 4,300 digits (`sys.int_max_str_digits`). Issue #3 asks for a strict RFC 8259 parser.
+
+Decision. `JSONParser` follows RFC 8259: it rejects `NaN`, `Infinity`, overflowing floats and lone
+surrogates, and it accepts integers of any length. A request that upstream would accept with one
+of these values gets a parse error from OpenJevSwift instead. The writer matches CPython exactly
+for every value the parser can produce, including `ensure_ascii` escaping U+007F as `\u007f`.
+
+Status. Proposed with issue #3. The HTTP layer (the 422 body for invalid JSON) decides whether any
+of these cases must instead reproduce upstream's behaviour.

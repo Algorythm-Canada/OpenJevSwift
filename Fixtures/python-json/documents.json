@@ -1,0 +1,178 @@
+{
+ "generator": {
+  "script": "Tools/fixtures/python_json_tables.py",
+  "python": "3.14.7",
+  "implementation": "cpython",
+  "seed": 20260929
+ },
+ "rows": [
+  {
+   "name": "scalars",
+   "text": "[null, true, false, 0, -0, 1, -1, 12345678901234567890123456789, 1.0, -0.0, 1e2, 1E-7, 2.5e+300, 0.1, 100, 1.5]",
+   "dumps": "[null, true, false, 0, 0, 1, -1, 12345678901234567890123456789, 1.0, -0.0, 100.0, 1e-07, 2.5e+300, 0.1, 100, 1.5]",
+   "dumps_sorted": "[null, true, false, 0, 0, 1, -1, 12345678901234567890123456789, 1.0, -0.0, 100.0, 1e-07, 2.5e+300, 0.1, 100, 1.5]",
+   "dumps_compact": "[null,true,false,0,0,1,-1,12345678901234567890123456789,1.0,-0.0,100.0,1e-07,2.5e+300,0.1,100,1.5]",
+   "dumps_unicode": "[null, true, false, 0, 0, 1, -1, 12345678901234567890123456789, 1.0, -0.0, 100.0, 1e-07, 2.5e+300, 0.1, 100, 1.5]"
+  },
+  {
+   "name": "nested",
+   "text": "{\"state\": {\"name\": \"Ada\", \"tags\": [\"a\", \"b\", {\"deep\": [1, [2, [3, {}]]]}], \"empty\": {}, \"list\": []}, \"questions\": {\"q2\": {\"type\": \"yesno\"}, \"q1\": {\"type\": \"choice\", \"criteria\": {\"z\": null, \"a\": \"first\"}}}}",
+   "dumps": "{\"state\": {\"name\": \"Ada\", \"tags\": [\"a\", \"b\", {\"deep\": [1, [2, [3, {}]]]}], \"empty\": {}, \"list\": []}, \"questions\": {\"q2\": {\"type\": \"yesno\"}, \"q1\": {\"type\": \"choice\", \"criteria\": {\"z\": null, \"a\": \"first\"}}}}",
+   "dumps_sorted": "{\"questions\": {\"q1\": {\"criteria\": {\"a\": \"first\", \"z\": null}, \"type\": \"choice\"}, \"q2\": {\"type\": \"yesno\"}}, \"state\": {\"empty\": {}, \"list\": [], \"name\": \"Ada\", \"tags\": [\"a\", \"b\", {\"deep\": [1, [2, [3, {}]]]}]}}",
+   "dumps_compact": "{\"state\":{\"name\":\"Ada\",\"tags\":[\"a\",\"b\",{\"deep\":[1,[2,[3,{}]]]}],\"empty\":{},\"list\":[]},\"questions\":{\"q2\":{\"type\":\"yesno\"},\"q1\":{\"type\":\"choice\",\"criteria\":{\"z\":null,\"a\":\"first\"}}}}",
+   "dumps_unicode": "{\"state\": {\"name\": \"Ada\", \"tags\": [\"a\", \"b\", {\"deep\": [1, [2, [3, {}]]]}], \"empty\": {}, \"list\": []}, \"questions\": {\"q2\": {\"type\": \"yesno\"}, \"q1\": {\"type\": \"choice\", \"criteria\": {\"z\": null, \"a\": \"first\"}}}}"
+  },
+  {
+   "name": "non_ascii_keys",
+   "text": "{\"été\": 1, \"zebra\": 2, \"中\": 3, \"😀\": 4, \"A\": 5, \"a\": 6, \"É\": 7}",
+   "dumps": "{\"\\u00e9t\\u00e9\": 1, \"zebra\": 2, \"\\u4e2d\": 3, \"\\ud83d\\ude00\": 4, \"A\": 5, \"a\": 6, \"\\u00c9\": 7}",
+   "dumps_sorted": "{\"A\": 5, \"a\": 6, \"zebra\": 2, \"\\u00c9\": 7, \"\\u00e9t\\u00e9\": 1, \"\\u4e2d\": 3, \"\\ud83d\\ude00\": 4}",
+   "dumps_compact": "{\"\\u00e9t\\u00e9\":1,\"zebra\":2,\"\\u4e2d\":3,\"\\ud83d\\ude00\":4,\"A\":5,\"a\":6,\"\\u00c9\":7}",
+   "dumps_unicode": "{\"été\": 1, \"zebra\": 2, \"中\": 3, \"😀\": 4, \"A\": 5, \"a\": 6, \"É\": 7}"
+  },
+  {
+   "name": "equivalent_keys",
+   "text": "{\"caf\\u00e9\": \"precomposed\", \"cafe\\u0301\": \"decomposed\", \"é\": 1, \"é\": 2}",
+   "dumps": "{\"caf\\u00e9\": \"precomposed\", \"cafe\\u0301\": \"decomposed\", \"\\u00e9\": 1, \"e\\u0301\": 2}",
+   "dumps_sorted": "{\"cafe\\u0301\": \"decomposed\", \"caf\\u00e9\": \"precomposed\", \"e\\u0301\": 2, \"\\u00e9\": 1}",
+   "dumps_compact": "{\"caf\\u00e9\":\"precomposed\",\"cafe\\u0301\":\"decomposed\",\"\\u00e9\":1,\"e\\u0301\":2}",
+   "dumps_unicode": "{\"café\": \"precomposed\", \"café\": \"decomposed\", \"é\": 1, \"é\": 2}"
+  },
+  {
+   "name": "duplicate_keys",
+   "text": "{\"a\": 1, \"b\": 2, \"a\": 3, \"c\": {\"x\": 1, \"x\": [2]}, \"b\": 4}",
+   "dumps": "{\"a\": 3, \"b\": 4, \"c\": {\"x\": [2]}}",
+   "dumps_sorted": "{\"a\": 3, \"b\": 4, \"c\": {\"x\": [2]}}",
+   "dumps_compact": "{\"a\":3,\"b\":4,\"c\":{\"x\":[2]}}",
+   "dumps_unicode": "{\"a\": 3, \"b\": 4, \"c\": {\"x\": [2]}}"
+  },
+  {
+   "name": "escapes",
+   "text": "{\"s\": \"\\\"\\\\\\/\\b\\f\\n\\r\\t\\u0000\\u001f\\u007f\\u2028\\ud83d\\ude00\"}",
+   "dumps": "{\"s\": \"\\\"\\\\/\\b\\f\\n\\r\\t\\u0000\\u001f\\u007f\\u2028\\ud83d\\ude00\"}",
+   "dumps_sorted": "{\"s\": \"\\\"\\\\/\\b\\f\\n\\r\\t\\u0000\\u001f\\u007f\\u2028\\ud83d\\ude00\"}",
+   "dumps_compact": "{\"s\":\"\\\"\\\\/\\b\\f\\n\\r\\t\\u0000\\u001f\\u007f\\u2028\\ud83d\\ude00\"}",
+   "dumps_unicode": "{\"s\": \"\\\"\\\\/\\b\\f\\n\\r\\t\\u0000\\u001f 😀\"}"
+  },
+  {
+   "name": "seed_key",
+   "text": "[{\"text\": \"The cat sat.\"}, {\"q1\": {\"type\": \"yesno\", \"description\": \"Is there a cat?\"}, \"q0\": {\"type\": \"score\", \"criteria\": [1, 2.5, \"high\"]}}]",
+   "dumps": "[{\"text\": \"The cat sat.\"}, {\"q1\": {\"type\": \"yesno\", \"description\": \"Is there a cat?\"}, \"q0\": {\"type\": \"score\", \"criteria\": [1, 2.5, \"high\"]}}]",
+   "dumps_sorted": "[{\"text\": \"The cat sat.\"}, {\"q0\": {\"criteria\": [1, 2.5, \"high\"], \"type\": \"score\"}, \"q1\": {\"description\": \"Is there a cat?\", \"type\": \"yesno\"}}]",
+   "dumps_compact": "[{\"text\":\"The cat sat.\"},{\"q1\":{\"type\":\"yesno\",\"description\":\"Is there a cat?\"},\"q0\":{\"type\":\"score\",\"criteria\":[1,2.5,\"high\"]}}]",
+   "dumps_unicode": "[{\"text\": \"The cat sat.\"}, {\"q1\": {\"type\": \"yesno\", \"description\": \"Is there a cat?\"}, \"q0\": {\"type\": \"score\", \"criteria\": [1, 2.5, \"high\"]}}]"
+  },
+  {
+   "name": "string_state",
+   "text": "\"just a string state\"",
+   "dumps": "\"just a string state\"",
+   "dumps_sorted": "\"just a string state\"",
+   "dumps_compact": "\"just a string state\"",
+   "dumps_unicode": "\"just a string state\""
+  },
+  {
+   "name": "floats",
+   "text": "[0.30000000000000004, 1e15, 1e16, 0.0001, 0.00001, 123456789012345678, 123456789012345678.0, 5e-324, 1.7976931348623157e308]",
+   "dumps": "[0.30000000000000004, 1000000000000000.0, 1e+16, 0.0001, 1e-05, 123456789012345678, 1.2345678901234568e+17, 5e-324, 1.7976931348623157e+308]",
+   "dumps_sorted": "[0.30000000000000004, 1000000000000000.0, 1e+16, 0.0001, 1e-05, 123456789012345678, 1.2345678901234568e+17, 5e-324, 1.7976931348623157e+308]",
+   "dumps_compact": "[0.30000000000000004,1000000000000000.0,1e+16,0.0001,1e-05,123456789012345678,1.2345678901234568e+17,5e-324,1.7976931348623157e+308]",
+   "dumps_unicode": "[0.30000000000000004, 1000000000000000.0, 1e+16, 0.0001, 1e-05, 123456789012345678, 1.2345678901234568e+17, 5e-324, 1.7976931348623157e+308]"
+  },
+  {
+   "name": "random_00",
+   "text": "{\"中\\\"中\": [], \"\": {}}",
+   "dumps": "{\"\\u4e2d\\\"\\u4e2d\": [], \"\": {}}",
+   "dumps_sorted": "{\"\": {}, \"\\u4e2d\\\"\\u4e2d\": []}",
+   "dumps_compact": "{\"\\u4e2d\\\"\\u4e2d\":[],\"\":{}}",
+   "dumps_unicode": "{\"中\\\"中\": [], \"\": {}}"
+  },
+  {
+   "name": "random_01",
+   "text": "2064947395588888987",
+   "dumps": "2064947395588888987",
+   "dumps_sorted": "2064947395588888987",
+   "dumps_compact": "2064947395588888987",
+   "dumps_unicode": "2064947395588888987"
+  },
+  {
+   "name": "random_02",
+   "text": "false",
+   "dumps": "false",
+   "dumps_sorted": "false",
+   "dumps_compact": "false",
+   "dumps_unicode": "false"
+  },
+  {
+   "name": "random_03",
+   "text": "\"\\u2028\"",
+   "dumps": "\"\\u2028\"",
+   "dumps_sorted": "\"\\u2028\"",
+   "dumps_compact": "\"\\u2028\"",
+   "dumps_unicode": "\" \""
+  },
+  {
+   "name": "random_04",
+   "text": "[]",
+   "dumps": "[]",
+   "dumps_sorted": "[]",
+   "dumps_compact": "[]",
+   "dumps_unicode": "[]"
+  },
+  {
+   "name": "random_05",
+   "text": "3.225062419289833e-300",
+   "dumps": "3.225062419289833e-300",
+   "dumps_sorted": "3.225062419289833e-300",
+   "dumps_compact": "3.225062419289833e-300",
+   "dumps_unicode": "3.225062419289833e-300"
+  },
+  {
+   "name": "random_06",
+   "text": "\"/é éb 😀\"",
+   "dumps": "\"/\\u00e9\\u2028\\u00e9b \\ud83d\\ude00\"",
+   "dumps_sorted": "\"/\\u00e9\\u2028\\u00e9b \\ud83d\\ude00\"",
+   "dumps_compact": "\"/\\u00e9\\u2028\\u00e9b \\ud83d\\ude00\"",
+   "dumps_unicode": "\"/é éb 😀\""
+  },
+  {
+   "name": "random_07",
+   "text": "61779848916048881352",
+   "dumps": "61779848916048881352",
+   "dumps_sorted": "61779848916048881352",
+   "dumps_compact": "61779848916048881352",
+   "dumps_unicode": "61779848916048881352"
+  },
+  {
+   "name": "random_08",
+   "text": "[\"😀Z\", null, [], {\"\\\"😀aé\": \"\\\\中\\\"\", \"ZbZ\\\\/\": \"/\\u0001/\\\"\\\\\\u0001\", \"\": \"😀😀 \", \"a\": \"/\\\"\"}]",
+   "dumps": "[\"\\ud83d\\ude00Z\", null, [], {\"\\\"\\ud83d\\ude00a\\u00e9\": \"\\\\\\u4e2d\\\"\", \"ZbZ\\\\/\": \"/\\u0001/\\\"\\\\\\u0001\", \"\": \"\\ud83d\\ude00\\ud83d\\ude00\\u007f\\u2028\", \"a\": \"/\\\"\"}]",
+   "dumps_sorted": "[\"\\ud83d\\ude00Z\", null, [], {\"\": \"\\ud83d\\ude00\\ud83d\\ude00\\u007f\\u2028\", \"\\\"\\ud83d\\ude00a\\u00e9\": \"\\\\\\u4e2d\\\"\", \"ZbZ\\\\/\": \"/\\u0001/\\\"\\\\\\u0001\", \"a\": \"/\\\"\"}]",
+   "dumps_compact": "[\"\\ud83d\\ude00Z\",null,[],{\"\\\"\\ud83d\\ude00a\\u00e9\":\"\\\\\\u4e2d\\\"\",\"ZbZ\\\\/\":\"/\\u0001/\\\"\\\\\\u0001\",\"\":\"\\ud83d\\ude00\\ud83d\\ude00\\u007f\\u2028\",\"a\":\"/\\\"\"}]",
+   "dumps_unicode": "[\"😀Z\", null, [], {\"\\\"😀aé\": \"\\\\中\\\"\", \"ZbZ\\\\/\": \"/\\u0001/\\\"\\\\\\u0001\", \"\": \"😀😀 \", \"a\": \"/\\\"\"}]"
+  },
+  {
+   "name": "random_09",
+   "text": "[null, null, \"e\\u0301\"]",
+   "dumps": "[null, null, \"e\\u0301\"]",
+   "dumps_sorted": "[null, null, \"e\\u0301\"]",
+   "dumps_compact": "[null,null,\"e\\u0301\"]",
+   "dumps_unicode": "[null, null, \"é\"]"
+  },
+  {
+   "name": "random_10",
+   "text": "\"aa😀 é\"",
+   "dumps": "\"aa\\ud83d\\ude00 \\u00e9\"",
+   "dumps_sorted": "\"aa\\ud83d\\ude00 \\u00e9\"",
+   "dumps_compact": "\"aa\\ud83d\\ude00 \\u00e9\"",
+   "dumps_unicode": "\"aa😀 é\""
+  },
+  {
+   "name": "random_11",
+   "text": "null",
+   "dumps": "null",
+   "dumps_sorted": "null",
+   "dumps_compact": "null",
+   "dumps_unicode": "null"
+  }
+ ]
+}
