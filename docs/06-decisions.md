@@ -59,7 +59,31 @@ mlx-vlm): not native, not shippable in apps.
 Consequences. The first hardware spike validates feasibility and tolerances against the fork and
 mlx-vlm before the port begins.
 
-Status. Accepted for planning; confirmed or revised by the backend spike.
+Outcome of spike #22 (2026-09-30; details in
+[spikes/backend-validation.md](spikes/backend-validation.md)). Confirmed, with one refinement.
+mlx-vlm is the only numeric oracle; the fork is a reference for code structure only.
+
+| Implementation of the read, against mlx-vlm 0.6.15 on 27 fixture reads | Bit-identical reads | Top label agreement (156 slots) | Max label probability difference |
+|---|---|---|---|
+| mlx-vlm's read path written out in Swift on ml-explore/mlx-swift 0.32.2 and mlx-swift-lm `c043fb3`, with the mlx-metal wheel's `mlx.metallib` and mlx-vlm's RoPE table | 27 | 156 | 0 |
+| The same code on mlx-swift's own kernels | 0 | 150 | 0.374 |
+| Layr-Labs/mlx-swift-lm `eeba2af` (`encode` then `denoise`) | 0 | 147 | 0.451 |
+| mlx-vlm itself with a 64-token chunked prefill | 0 | 148 | 0.618 |
+
+- **A port on upstream primitives can match mlx-vlm bit for bit.** With the same kernels, 321
+  intermediate tensors of the prefill, all 27 reads, the argmaxes of steps 2 and 3 and the
+  prefill caches of prompts up to 2,939 tokens are identical.
+- **The upstream pieces used:** `SwitchLinear`, `gatherSort` and `scatterUnsort`, `loadWeights`
+  with `BaseConfiguration.perLayerQuantization`, `MLXFast.RoPE` with explicit frequencies,
+  `MLXFast.rmsNorm`, `MLXFast.scaledDotProductAttention` and `QuantizedEmbedding.asLinear`.
+- **The pieces not used:** upstream's Gemma 4 router, whose rounding differs from mlx-vlm's, and
+  its `SwitchGLU` experts. DiffusionGemma's experts are a fused, quantized `gate_up_proj`.
+- **The fork cannot be made exact.** It runs on its own MLX fork (Layr-Labs/mlx-swift `0f4fe403`,
+  MLX 0.32.2 with kernel patches), and its differences from mlx-vlm are the size of mlx-vlm's own
+  under a chunked prefill. Depending on it would not improve parity.
+
+Status. Accepted: port mlx-vlm's DiffusionGemma onto upstream mlx-swift-lm primitives, with mlx-vlm
+as the numeric oracle. Decided by spike #22.
 
 ## D-005 Backend-agnostic core behind a `DecisionBackend` protocol
 
@@ -229,7 +253,7 @@ transfer. Library APIs take typed configuration and never read the environment.
 
 Status. Accepted for planning.
 
-## D-014 Answers are compared with tolerances, never bit for bit
+## D-014 Model parity: bit for bit under the oracle's kernels, bounded aggregates otherwise
 
 Context. Upstream itself observes that BF16 execution paths changed 5 to 6 of 777 argmaxes and
 that vLLM and Transformers kernels differ by up to 0.055 in probability for JevK5. MLX Swift
@@ -240,7 +264,49 @@ slot log-probabilities within a tolerance to be fixed by the parity spike (propo
 probability per label, top label agreement at 99% or better on the fixture set); identical wire
 shapes and errors (exact). See [09-conformance-and-testing.md](09-conformance-and-testing.md).
 
-Status. Accepted for planning; tolerance value open until the spike reports.
+Outcome of spike #22 (2026-09-30; numbers and method in
+[spikes/backend-validation.md](spikes/backend-validation.md)). The proposal is replaced.
+
+The read is chaotic in bfloat16: last-bit differences in a few kernels move label probabilities
+by up to 0.62. The same changes move top labels even where the oracle's top-two margin is 0.68.
+A chunked prefill in mlx-vlm itself, exact in real arithmetic, fails 0.02 on 67 of 156 slots.
+The fork fails it on 70 and a faithful Swift port on mlx-swift's kernels on 64. No per-label
+tolerance can be both met and useful. Model parity against `Fixtures/oracle/reads.json` therefore
+has two tiers.
+
+1. **Exact tier, the conformance test.** This runs on the reference machine, or any machine that
+   regenerates the oracle. The port runs with `MLX.GPU.metallib` set to the pinned mlx-metal
+   wheel's `mlx.metallib`, SHA-256 in the oracle's generator. Its full-attention layers use the
+   RoPE frequency table recorded in the oracle's `rope`. Under those conditions every read must
+   be identical: every `[token id, logprob]` pair, `slot_distribution`'s probabilities and
+   entropies, the argmaxes written by steps 2 and 3, the prompt token counts, and the prefill
+   cache digests of layers 0 and 29. Spike #22's transliteration meets this on all 27 reads.
+   Any deviation from mlx-vlm's operations fails it, including one that is exact in real
+   arithmetic, such as upstream's Gemma 4 router.
+2. **Native tier, the production check.** With mlx-swift's own kernels, the 27 reads must meet
+   every bound below. The table gives the legitimate range (mlx-vlm chunked or unsorted, the fork,
+   the Swift port on native kernels) and the planted bugs (self-conditioning skipped on step 1,
+   canvas RoPE from position 0, no sliding window for the canvas).
+
+| Aggregate over the fixture reads | Bound | Legitimate range | Planted bugs |
+|---|---|---|---|
+| Mean absolute label probability difference, all 1,763 labels | ≤ 0.02 | 0.0011 to 0.0100 | 0.0159 to 0.0562 |
+| The same over the 50 slots of the prompts over 1,024 tokens | ≤ 0.01 | 0.0000 to 0.0069 | 0.0142 to 0.0320 |
+| Mean absolute entropy difference, all 156 slots | ≤ 0.2 | 0.016 to 0.102 | 0.133 to 0.765 |
+| The same over the prompts over 1,024 tokens | ≤ 0.2 | 0.000 to 0.161 | 0.275 to 0.926 |
+| Top label agreement, all slots | ≥ 90% | 94.2% to 100% | 67.3% to 91.7% |
+| Top label agreement where the oracle's top-two margin is at least 0.5 | ≥ 97% | 99.2% to 100% | 76.7% to 98.3% |
+
+Each planted bug breaks at least one bound, and every legitimate implementation passes all of
+them. The window bug shows only in the long-prompt rows. Per-read and per-slot maxima are
+reported, never bounded: the legitimate maximum is 0.62. The argmaxes written between steps are
+compared only in the exact tier; under native kernels they flipped on 2 of 6 multi-step reads.
+Entropy never changed upstream's re-read decision: every fixture read has a slot entropy above
+0.1. Prompt ids, templates, slots, canvases, wire shapes and errors stay exact. Synthetic MLX tests
+(D-028) keep their CPU-reference tolerances. The bounds are calibrated on 27 reads; issue #31
+should widen the fixture set and recompute them with `Tools/oracle/tolerance_stats.py`.
+
+Status. Accepted: two tiers, with the bounds above. Decided by spike #22.
 
 ## D-015 Slot-only output projection is allowed
 
