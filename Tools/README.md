@@ -6,7 +6,7 @@ does not build anything in this directory. The testing strategy they serve is de
 
 | Directory | Language | What it holds |
 |---|---|---|
-| `fixtures/` | Python | The scripts that generate [Fixtures/](../Fixtures/README.md) from upstream OpenJev at the pinned commit, with the real DiffusionGemma tokenizer. They import `openjev.engine` and `openjev.api` directly and stub the model read the way upstream's `test_api.py` does. This directory also holds the script that records model parity data from mlx-vlm on the 4-bit checkpoint through upstream's `MlxRuntime.read`. Added by issue #6. |
+| `fixtures/` | Python | The scripts that generate [Fixtures/](../Fixtures/README.md) from upstream OpenJev at the pinned commit, with the real DiffusionGemma tokenizer. They import `openjev.engine` and `openjev.api` directly and stub the model read the way upstream's `test_api.py` does. This directory also holds the script that records model parity data from mlx-vlm on the 4-bit checkpoint through upstream's `MlxRuntime.read`. Added by issue #6. It also holds `python_json_tables.py`, which writes the CPython JSON reference tables in `Fixtures/python-json` (issue #3). |
 | `sdk-compat/` | Python and TypeScript | Smoke tests that run the official TypeSafe SDKs (`typesafe-sdk` and `@typesafe-ai/sdk`) against a Swift server started with the stub backend. They check decoded answers, error mapping and request-id headers. Added by issue #39. |
 
 ## Rules
