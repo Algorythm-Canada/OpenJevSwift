@@ -436,17 +436,32 @@ struct EnvironmentReader {
 /// Python's `int(text)` and `float(text)` for the ASCII forms a setting uses.
 ///
 /// Both strip surrounding whitespace and accept a sign and single `_` between digits. `float`
-/// also accepts a fraction, an exponent, and `inf`, `infinity` and `nan` in any case. Python
-/// accepts non-ASCII decimal digits too and has no integer limit; here those are refused, since an
-/// `Int` setting cannot hold them either.
+/// also accepts a fraction, an exponent, and `inf`, `infinity` and `nan` in any case. `int`
+/// refuses more than 4,300 digits, leading zeros included, CPython's default
+/// `sys.int_max_str_digits`. Python accepts non-ASCII decimal digits too; here they are refused.
 enum PythonNumber {
     private static let digits = #"[0-9](?:_?[0-9])*"#
 
     /// `int(text)`, or `nil` where Python raises or the value does not fit an `Int`.
     static func integer(_ text: String) -> Int? {
+        guard isInteger(text) else { return nil }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard matches(trimmed, #"[+-]?"# + digits) else { return nil }
         return Int(trimmed.replacingOccurrences(of: "_", with: ""))
+    }
+
+    /// Whether `int(text)` succeeds, however large the result. Past 4,300 digits CPython raises
+    /// the `ValueError` of its limit, whose count leaves out the sign and the underscores.
+    static func isInteger(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let decimal = UInt8(ascii: "0")...UInt8(ascii: "9")
+        let digitCount = trimmed.utf8.lazy.filter { decimal.contains($0) }.count
+        return matches(trimmed, #"[+-]?"# + digits)
+            && digitCount <= PythonJSONLoads.maximumIntegerDigits
+    }
+
+    /// Whether the text, without its surrounding whitespace, starts with `-`.
+    static func isNegative(_ text: String) -> Bool {
+        text.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("-")
     }
 
     /// `float(text)`, or `nil` where Python raises. Out of range is infinity, as in Python.

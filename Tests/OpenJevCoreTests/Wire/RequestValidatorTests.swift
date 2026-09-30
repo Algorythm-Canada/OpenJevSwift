@@ -136,6 +136,33 @@ struct RequestValidatorTests {
         #expect(WireError.invalidRequest.status == 400)
     }
 
+    /// Upstream's handler logged these problems for this body, in this order, with FastAPI
+    /// 0.142.1 and pydantic 2.13.5.
+    @Test("problems(_:) lists what upstream logs, unknown question types included")
+    func problems() {
+        let value: JSONValue = [
+            "model": 5,
+            "questions": [
+                "q": ["type": "nope"], "r": ["type": 5], "s": ["type": .null],
+                "t": ["type": "choice"],
+            ],
+            "steps": 99,
+        ]
+        #expect(rejection(value) == .invalidRequest)
+        #expect(
+            RequestValidator().problems(value).map(\.description) == [
+                "body.state: missing", "body.model: string_type",
+                "body.questions.q: union_tag_invalid", "body.questions.r: union_tag_invalid",
+                "body.questions.s: union_tag_invalid", "body.questions.t.choice.criteria: missing",
+                "body.steps: less_than_equal",
+            ])
+        let mistyped = body([("model", 5), ("steps", 0)])
+        #expect(
+            RequestValidator().problems(mistyped)
+                == items(mistyped).map { ValidationProblem(loc: $0.loc, type: $0.type) })
+        #expect(RequestValidator().problems(body()).isEmpty)
+    }
+
     @Test("instructions and descriptions take the union member labels in loc")
     func describedUnion() {
         let value = body(questions: ["q": ["type": "noul", "instructions": 5]])

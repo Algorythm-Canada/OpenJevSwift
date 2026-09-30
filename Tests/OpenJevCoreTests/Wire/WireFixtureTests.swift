@@ -10,10 +10,10 @@ import Testing
 /// a recorded 422 or unknown-question-type 400 must be reproduced byte for byte, and any other
 /// outcome means validation passed, so the validator must accept the body.
 ///
-/// Parts of those exchanges belong to later issues and are asserted here only as far as the
-/// bodies go: authentication (401, 403) is #36, the body cap (413), bodies that are not JSON and
-/// non-JSON content types are #35, and the unknown model 400, the semantic 400s and the backend
-/// 503 come from the server and engine (#35, #38, #10, #18).
+/// Parts of those exchanges are the server's and are asserted here only as far as the bodies go:
+/// authentication (401, 403), the body cap (413), bodies that are not JSON and non-JSON content
+/// types, which OpenJevServerTests replays in full, and the unknown model 400, the semantic 400s
+/// and the backend 503, which come from the server and engine.
 @Suite(
     "Wire fixtures", .enabled(if: WireFixtures.exists("cases.json"), WireFixtures.missingMessage))
 struct WireFixtureTests {
@@ -247,11 +247,11 @@ struct WireFixtureTests {
             request["path"]?.stringValue == "/v1/systemone",
             ![401, 403, 413].contains(status)
         else {
-            return .notOwned  // no body validation took place (#35, #36)
+            return .notOwned  // no body validation took place (the server's middleware)
         }
         let contentType = request["headers"]?["content-type"]?.stringValue ?? ""
         guard contentType.hasPrefix("application/json") || contentType.hasSuffix("+json") else {
-            return .notOwned  // FastAPI does not parse the body as JSON (#35)
+            return .notOwned  // FastAPI does not parse the body as JSON (the server's reader)
         }
         let bytes = try #require(try WireFixtures.bodyBytes(of: request))
         let body: JSONValue?
@@ -261,7 +261,7 @@ struct WireFixtureTests {
             do {
                 body = try JSONParser().parse(bytes)
             } catch {
-                // Invalid JSON: the 422 with Python's decoder message is #35's to reproduce.
+                // Invalid JSON: the server reproduces the 422 with Python's decoder message.
                 let recorded = try JSONParser().parse(expected)
                 let invalid =
                     recorded["detail"]?[0]?["type"]?.stringValue == "json_invalid"

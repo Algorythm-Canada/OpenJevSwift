@@ -14,8 +14,8 @@ public protocol SystemOneService: Sendable {
     /// listing.
     var servedModels: ServedModels { get }
 
-    /// Answers a request. The errors are ``SchemaError``, ``OverloadedError``, the backend's own
-    /// and, for an encoder engine, ``BackendContractError``.
+    /// Answers a request. The errors are ``SchemaError``, ``OverloadedError``, the backend's own,
+    /// among them ``BackendRefusal``, and, for an encoder engine, ``BackendContractError``.
     func decide(_ request: SystemOneRequest) async throws -> Decision
 }
 

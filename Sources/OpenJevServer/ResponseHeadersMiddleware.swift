@@ -1,6 +1,7 @@
 // A port of upstream OpenJev (razorback16/openjev at dcd2094), the `request_id_and_auth`
-// middleware of `openjev/api.py` without its authentication and body cap (issues #36 and #35),
-// and the `model_ns` context variable of `openjev/engine.py`. Apache-2.0. See THIRD_PARTY.md.
+// middleware of `openjev/api.py`, whose authentication and body cap are
+// `AuthenticationMiddleware` and `BodyCapMiddleware`, and the `model_ns` context variable of
+// `openjev/engine.py`. Apache-2.0. See THIRD_PARTY.md.
 
 #if canImport(Hummingbird)
     import Foundation

@@ -108,7 +108,7 @@ The SDK accepts both, but the fixtures compare bytes, so the Swift serialiser wi
 |---|---|---|
 | `Authorization` | request | `Bearer <key>` |
 | `x-typesafe-request-id`, `x-request-id` | response | `req_` + 32 hex characters, on every response including errors |
-| `server-timing` | response | `model;dur=41.2, server;dur=2.8, total;dur=44.0` (milliseconds; upstream extension). Absent on the 401, 403 and 413 answered before routing. |
+| `server-timing` | response | `model;dur=41.2, server;dur=2.8, total;dur=44.0` (milliseconds; upstream extension). Upstream leaves it off the 401, 403 and 413 its middleware answers before routing; OpenJevSwift sets it on every response (D-031). |
 | `retry-after` | response | `1` on 529, `2` on 503 |
 | `retry-after-ms` | response | honoured by the SDK when present (Jev's gateway may send it) |
 | `X-TypeSafe-Retry-Count` (name per SDK constants) | request | attempt number on retries |

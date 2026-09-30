@@ -21,7 +21,7 @@
             let service = try await ServerHarness.diffusionService(ServerSettings())
             try await ServerHarness.withClient(service: service) { client in
                 let response = try await ServerHarness.send(client, .get, "/health")
-                try Self.expectRecorded(response, recorded, "get_health")
+                try ServerHarness.expectRecorded(response, recorded, "get_health")
             }
         }
 
@@ -31,7 +31,7 @@
             let service = try await ServerHarness.diffusionService(ServerSettings())
             try await ServerHarness.withClient(service: service) { client in
                 let response = try await ServerHarness.send(client, .get, "/v1/models")
-                try Self.expectRecorded(response, recorded, "get_v1_models")
+                try ServerHarness.expectRecorded(response, recorded, "get_v1_models")
             }
         }
 
@@ -83,8 +83,8 @@
         }
 
         /// The recorded 400s and 422s that end before the engine reads, or that the engine
-        /// refuses, with upstream's default settings. Malformed and non-JSON bodies and the body
-        /// cap are issue #35's; authentication is issue #36's.
+        /// refuses, with upstream's default settings. The `body_*` and `auth_*` rows, which need
+        /// other settings or other ways of sending, are ``ErrorContractTests``'.
         @Test("Recorded refusals come back with upstream's status, body and headers")
         func recordedRefusals() async throws {
             let cases = try #require(WireFixtures.load("cases.json")["cases"]?.arrayValue)
@@ -103,61 +103,10 @@
                     let request = try #require(row["request"])
                     let response = try await ServerHarness.send(
                         client, .post, try #require(request["path"]?.stringValue),
-                        headers: Self.headers(request["headers"]),
+                        headers: ServerHarness.headers(request["headers"]),
                         body: try WireFixtures.bodyBytes(of: request))
-                    try Self.expectRecorded(response, row, name)
+                    try ServerHarness.expectRecorded(response, row, name)
                 }
-            }
-        }
-
-        @Test("An empty body is FastAPI's missing-body 422, with the headers")
-        func emptyBody() async throws {
-            let recorded = try WireFixtures.recordedCase(named: "body_empty")
-            let service = try await ServerHarness.diffusionService(ServerSettings())
-            try await ServerHarness.withClient(service: service) { client in
-                let response = try await ServerHarness.send(
-                    client, .post, "/v1/systemone",
-                    headers: ["content-type": "application/json"], body: [])
-                try Self.expectRecorded(response, recorded, "body_empty")
-            }
-        }
-
-        @Test("A full queue is the 529 with retry-after 1 and the request id")
-        func overloaded() async throws {
-            let settings = try ServerSettings(maxQueue: 0)
-            let service = try await ServerHarness.diffusionService(settings)
-            let request = try #require(PolicyFixtures.policyCase(named: "plain")["request"])
-            try await ServerHarness.withClient(settings: settings, service: service) { client in
-                let response = try await ServerHarness.post(client, request)
-                #expect(response.status.code == 529)
-                #expect(
-                    ServerHarness.text(response)
-                        == #"{"detail":{"error_type":"overloaded_error","message":"#
-                        + #""OpenJev is at capacity. Retry shortly."}}"#)
-                #expect(ServerHarness.header(response, "retry-after") == "1")
-                ServerHarness.expectServerHeaders(response, "529")
-            }
-        }
-
-        /// Upstream answers the 413 from its middleware without `server-timing`; this server
-        /// still sets it, which issue #35 settles along with the rest of the body cap.
-        @Test("A body over the cap is the 413, with the request ids")
-        func bodyCap() async throws {
-            let settings = try ServerSettings(maxBodyBytes: 16)
-            let service = try await ServerHarness.diffusionService(settings)
-            try await ServerHarness.withClient(settings: settings, service: service) { client in
-                let response = try await ServerHarness.send(
-                    client, .post, "/v1/systemone",
-                    headers: ["content-type": "application/json"],
-                    body: Array(repeating: UInt8(ascii: " "), count: 17))
-                #expect(response.status == .contentTooLarge)
-                #expect(
-                    ServerHarness.text(response)
-                        == #"{"detail":{"error_type":"api_usage_error","message":"#
-                        + #""request body is larger than 16 bytes"}}"#)
-                let id = try #require(ServerHarness.header(response, "x-request-id"))
-                #expect(ServerHarness.isRequestID(id))
-                #expect(ServerHarness.header(response, "x-typesafe-request-id") == id)
             }
         }
 
@@ -220,37 +169,6 @@
             for _ in 0..<100 {
                 #expect(ServerHarness.isRequestID(RequestIdentifier.make()))
             }
-        }
-
-        /// Checks status, body bytes, `content-type`, `retry-after` and the per-response headers
-        /// against a recorded case.
-        private static func expectRecorded(
-            _ response: TestResponse, _ recorded: JSONValue, _ label: String,
-            sourceLocation: SourceLocation = #_sourceLocation
-        ) throws {
-            let expected = try #require(recorded["response"])
-            #expect(
-                Int(response.status.code) == expected["status"]?.intValue, "\(label): status",
-                sourceLocation: sourceLocation)
-            #expect(
-                ServerHarness.text(response) == expected["body_text"]?.stringValue,
-                "\(label): body", sourceLocation: sourceLocation)
-            for name in ["content-type", "retry-after"] {
-                #expect(
-                    ServerHarness.header(response, name)
-                        == expected["headers"]?[name]?.stringValue,
-                    "\(label): \(name)", sourceLocation: sourceLocation)
-            }
-            ServerHarness.expectServerHeaders(response, label, sourceLocation: sourceLocation)
-        }
-
-        /// A recorded request's headers.
-        private static func headers(_ value: JSONValue?) -> [String: String] {
-            var headers: [String: String] = [:]
-            for (name, value) in value?.objectValue ?? [:] {
-                headers[name] = value.stringValue
-            }
-            return headers
         }
     }
 #endif

@@ -194,26 +194,61 @@ struct GroupReader: Sendable {
     /// Reads every group at once, group `k` at `groupSeed(seed, k)` with chunked system text
     /// when there is more than one group. The results are in group order whatever the
     /// scheduling.
+    ///
+    /// Without a thought, upstream's `read_group` resolves its template and builds its prompt
+    /// before its first `await`, and `asyncio.gather` starts the groups in order, so a request
+    /// refused there is refused with the first group's error. Every group is prepared before
+    /// any read, and the first group's error is thrown, so the answer does not depend on which
+    /// group happens to finish first.
     func readGroups(
         _ groups: [[ReadQuestion]], format: AnswerFormat, stateText: String,
         images: [ImagePart], seed: UInt64, options: ReadOptions
     ) async throws -> [GroupResult] {
         let chunked = groups.count > 1
-        return try await concurrently(groups.indices) { k in
-            let group = groups[k]
-            return try await self.readGroup(
-                group, format: format,
-                systemText: SystemText.render(group, format: format, chunked: chunked),
-                stateText: stateText, images: images, seed: SeedDerivation.groupSeed(seed, k),
-                options: options, prefix: nil, lead: "")
+        let systemTexts = groups.map { SystemText.render($0, format: format, chunked: chunked) }
+        var prepared = [PreparedGroup?](repeating: nil, count: groups.count)
+        if options.think == 0 {
+            prepared = try await inGroupOrder(groups.indices) { k in
+                try self.prepare(
+                    groups[k], format: format, systemText: systemTexts[k], stateText: stateText,
+                    images: images, prefix: nil, lead: "")
+            }
+        }
+        return try await concurrently(groups.indices) { [prepared] k in
+            try await self.readGroup(
+                groups[k], format: format, systemText: systemTexts[k], stateText: stateText,
+                images: images, seed: SeedDerivation.groupSeed(seed, k), options: options,
+                prefix: nil, lead: "", prepared: prepared[k])
         }
     }
 
-    /// Upstream's `read_group`: the reads for one group of questions, averaged.
+    /// What a group's reads start from: its resolved template and its prompt.
+    struct PreparedGroup: Sendable {
+        var resolved: ResolvedTemplate
+        var prompt: ReadPrompt
+    }
+
+    /// The template and prompt of a group, checked as upstream checks them before reading: the
+    /// canvas, the backend's prompt limit and the label limit, in that order.
+    func prepare(
+        _ questions: [ReadQuestion], format: AnswerFormat, systemText: String,
+        stateText: String, images: [ImagePart], prefix: [Int]?, lead: String
+    ) throws -> PreparedGroup {
+        let resolved = try resolver.resolve(
+            questions, format: format, head: prefix == nil ? nil : [], lead: lead)
+        let prompt = try readPrompt(
+            prefix: prefix, systemText: systemText, stateText: stateText, images: images)
+        try DecisionEngine.checkLabelLimit(resolved.slots)
+        return PreparedGroup(resolved: resolved, prompt: prompt)
+    }
+
+    /// Upstream's `read_group`: the reads for one group of questions, averaged. `prepared` is
+    /// the group's template and prompt when they were made ahead; they are made here otherwise,
+    /// after the thought when there is one.
     func readGroup(
         _ questions: [ReadQuestion], format: AnswerFormat, systemText: String,
         stateText: String, images: [ImagePart], seed: UInt64, options: ReadOptions,
-        prefix: [Int]?, lead: String
+        prefix: [Int]?, lead: String, prepared: PreparedGroup? = nil
     ) async throws -> GroupResult {
         var prefix = prefix
         var thoughtTokens = 0
@@ -227,11 +262,13 @@ struct GroupReader: Sendable {
             thinkInput = thought.promptTokens
             modelTime += thought.modelTime
         }
-        let resolved = try resolver.resolve(
-            questions, format: format, head: prefix == nil ? nil : [], lead: lead)
-        let prompt = try readPrompt(
-            prefix: prefix, systemText: systemText, stateText: stateText, images: images)
-        try DecisionEngine.checkLabelLimit(resolved.slots)
+        let group =
+            try prepared
+            ?? prepare(
+                questions, format: format, systemText: systemText, stateText: stateText,
+                images: images, prefix: prefix, lead: lead)
+        let resolved = group.resolved
+        let prompt = group.prompt
         let steps = options.steps
         let read: @Sendable (Int) async throws -> (result: ReadResult, time: Duration) = { k in
             let sampleSeed = SeedDerivation.sampleSeed(seed, k)
@@ -387,6 +424,27 @@ struct GroupReader: Sendable {
         let started = clock.now
         let value = try await slots.withPermit(call)
         return (value, clock.now - started)
+    }
+
+    /// Runs `body` for every index at once and returns the results in index order. When some
+    /// calls fail, it waits for every call and throws the error of the lowest index.
+    private func inGroupOrder<T: Sendable>(
+        _ indices: Range<Int>, _ body: @Sendable @escaping (Int) throws -> T
+    ) async throws -> [T] {
+        let outcomes = await withTaskGroup(of: (Int, Result<T, any Error>).self) { group in
+            for k in indices {
+                group.addTask { (k, Result { try body(k) }) }
+            }
+            var outcomes = [Result<T, any Error>?](repeating: nil, count: indices.count)
+            for await (k, outcome) in group {
+                outcomes[k - indices.lowerBound] = outcome
+            }
+            return outcomes
+        }
+        return try outcomes.map { outcome in
+            guard let outcome else { preconditionFailure("a task returned no result") }
+            return try outcome.get()
+        }
     }
 
     /// Runs `body` for every index at once and returns the results in index order.
