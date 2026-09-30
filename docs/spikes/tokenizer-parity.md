@@ -156,6 +156,18 @@ as `transformers` did before 4.45; one line and a test. What the adapter does: s
 `clean_up_tokenization_spaces` to false in the configuration when the file does not set it,
 before constructing `PreTrainedTokenizer`. A checkpoint that sets it true keeps it.
 
+## Where the tests find the files, and CI
+
+The suite reads the tokenizer directory from `OPENJEV_TEST_TOKENIZER` (a directory holding just
+the three files), else `OPENJEV_TEST_MODEL` (the checkpoint directory, which holds them beside
+the weights), else the Hugging Face cache snapshot the fixture generator downloads. The files
+are checked against the fixture digests before loading. Without them the suites skip with a
+comment naming `OPENJEV_TEST_MODEL`: the files are part of the checkpoint, so these are model
+opt-in tests in the sense of docs/09-conformance-and-testing.md, and that is the one skip
+`.github/scripts/check-test-log.sh` accepts. Hosted CI therefore builds the suite but does not
+run it; the results above come from a developer machine, as the model tests' will. Follow-up E
+below would make CI run it.
+
 ## Does OpenJevSwift need a custom loader?
 
 No. The BPE model, normalizer (`Replace` of a space with `▁`), pre-tokenizer (`Split " "
@@ -189,3 +201,10 @@ D. Record the image message shape for #46. Scope: add to `upstream_tables.py` a
 `[{"type": "image"}] * n + [{"type": "text", "text": state}]` for n in 1 and 2, with
 `tokenize=False` and the ids of the text, so `ChatTemplateParityTests/imageMessages` compares
 with a recording instead of the template's own text.
+
+E. Run the tokenizer parity suite in CI. Scope: a step in the macOS job of
+`.github/workflows/ci.yml` that fetches the four tokenizer files of the pinned revision (32 MB;
+`fixtures.yml` already caches the same download keyed on the revision) into a directory and
+exports `OPENJEV_TEST_TOKENIZER` before `swift test`, so the suite runs on every pull request
+instead of skipping as a model test. Kept out of this pull request because the CI workflow was
+landing in parallel (#77).

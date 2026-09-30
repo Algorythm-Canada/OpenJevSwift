@@ -91,7 +91,10 @@ identity.
 - macOS Apple silicon job: build everything, run core and server tests, run MLX unit tests on
   synthetic small shapes if the runner's GPU allows (a spike decides), run swift-format.
 - Model and live tests never run on hosted CI. They are run by developers with the weights and
-  recorded in the pull request. A self-hosted Apple silicon runner is a later option.
+  recorded in the pull request. A self-hosted Apple silicon runner is a later option. The
+  tokenizer parity suite of `OpenJevDiffusionGemmaTests` needs the checkpoint's tokenizer files
+  (`OPENJEV_TEST_TOKENIZER`, `OPENJEV_TEST_MODEL` or the Hugging Face cache) and is opt-in the
+  same way until CI fetches those files (spikes/tokenizer-parity.md, follow-up E).
 
 ## Test data hygiene
 

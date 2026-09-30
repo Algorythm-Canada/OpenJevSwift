@@ -6,10 +6,14 @@ import Testing
 
 /// Locates the pinned tokenizer files and the fixtures the parity tests compare them with.
 ///
-/// The tokenizer directory is `OPENJEV_TEST_TOKENIZER` when set, else the Hugging Face cache
-/// snapshot the fixture generator (Tools/fixtures) downloads. Tests are disabled with a message
+/// The tokenizer files are part of the checkpoint, so the parity tests are model opt-in tests in
+/// the sense of docs/09-conformance-and-testing.md: the directory is `OPENJEV_TEST_TOKENIZER`
+/// when set (a directory holding just the tokenizer files), else `OPENJEV_TEST_MODEL` (the
+/// checkpoint directory), else the Hugging Face cache snapshot the fixture generator
+/// (Tools/fixtures) downloads. Tests are disabled with a message naming `OPENJEV_TEST_MODEL`
 /// when the directory lacks `tokenizer.json`, `tokenizer_config.json` or `chat_template.jinja`,
-/// or when a fixture file is missing. The tokenizer is loaded once per process.
+/// which is the skip CI's check-test-log.sh accepts, or with another message when a fixture file
+/// is missing, which CI treats as a failure. The tokenizer is loaded once per process.
 enum TokenizerFixtures {
     /// The Hugging Face cache snapshot of `mlx-community/diffusiongemma-26B-A4B-it-4bit` at the
     /// pinned revision, which `make fixtures` fills.
@@ -18,21 +22,33 @@ enum TokenizerFixtures {
         .appendingPathComponent("models--mlx-community--diffusiongemma-26B-A4B-it-4bit")
         .appendingPathComponent("snapshots/a7a81407613811e8ba63af92ac0d852b809e191f")
 
-    /// The environment variable that names another tokenizer directory.
-    static let environmentVariable = "OPENJEV_TEST_TOKENIZER"
+    /// The environment variable that names a directory holding just the tokenizer files.
+    static let tokenizerVariable = "OPENJEV_TEST_TOKENIZER"
 
-    /// The tokenizer directory the tests use.
+    /// The environment variable that names the checkpoint directory, which holds the tokenizer
+    /// files beside the weights; the model tests read the same variable.
+    static let modelVariable = "OPENJEV_TEST_MODEL"
+
+    /// The tokenizer directory the tests use: the first of ``tokenizerVariable``,
+    /// ``modelVariable`` and ``cachedSnapshot`` that is set.
     static let tokenizerDirectory: URL = {
-        if let path = ProcessInfo.processInfo.environment[environmentVariable], !path.isEmpty {
-            return URL(fileURLWithPath: path)
+        let environment = ProcessInfo.processInfo.environment
+        for variable in [tokenizerVariable, modelVariable] {
+            if let path = environment[variable], !path.isEmpty {
+                return URL(fileURLWithPath: path)
+            }
         }
         return cachedSnapshot
     }()
 
-    /// The message shown when the tokenizer directory is incomplete.
+    /// The message shown when the tokenizer directory is incomplete. It names
+    /// ``modelVariable`` because these tests need files from the checkpoint, and that is the
+    /// skip CI accepts.
     static let missingTokenizerMessage = Comment(
-        rawValue: "The tokenizer files are missing from \(tokenizerDirectory.path) (set "
-            + "\(environmentVariable) or run make fixtures); the parity tests are skipped")
+        rawValue: "\(modelVariable) is unset and \(tokenizerDirectory.path) lacks the tokenizer "
+            + "files; set \(modelVariable) to the checkpoint directory or \(tokenizerVariable) to a "
+            + "directory holding tokenizer.json, tokenizer_config.json and chat_template.jinja, or "
+            + "run make fixtures")
 
     /// True when the tokenizer directory holds the three required files.
     static var tokenizerAvailable: Bool {

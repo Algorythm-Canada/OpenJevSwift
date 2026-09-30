@@ -163,14 +163,15 @@ same template to one `<|image|>` (258880) per image directly before the text.
 Two decode departures in swift-transformers 1.3.4 are handled generally in the adapter and
 pinned by a test over the unmodified path: byte tokens at the end of a sequence are dropped by
 its `ByteFallbackDecoder`, and `clean_up_tokenization_spaces` defaults to true. Neither needs a
-custom loader; follow-up issues A to D in spikes/tokenizer-parity.md cover the upstream reports
-and the fixture rows that would record them.
+custom loader; follow-up issues A to E in spikes/tokenizer-parity.md cover the upstream reports,
+the fixture rows that would record them, and running the suite in CI.
 
 Holds for swift-transformers 1.3.4, swift-jinja 2.5.1, swift-huggingface 0.11.0, mlx-swift-lm
 `c043fb3`, tokenizer revision `a7a81407`, fixtures from transformers 5.17.0 and tokenizers
-0.23.2. `Tests/OpenJevDiffusionGemmaTests/Tokenization` is the permanent regression suite; it
-skips with a message when the tokenizer files are absent (`OPENJEV_TEST_TOKENIZER` or the
-Hugging Face cache).
+0.23.2. `Tests/OpenJevDiffusionGemmaTests/Tokenization` is the permanent regression suite. It
+needs the checkpoint's tokenizer files (`OPENJEV_TEST_TOKENIZER`, `OPENJEV_TEST_MODEL` or the
+Hugging Face cache) and otherwise skips as a model opt-in test, naming `OPENJEV_TEST_MODEL`, so
+hosted CI builds it but does not run it until follow-up E in spikes/tokenizer-parity.md.
 
 Status. Accepted: swift-transformers for the tokenizer, the shipped template through
 swift-jinja for prompts. Decided by spikes #20 and #21.
