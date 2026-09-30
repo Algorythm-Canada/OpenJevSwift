@@ -29,8 +29,10 @@ and which the mlx-vlm authors verified against the Transformers implementation t
 | Vision | Gemma 4 vision tower + multimodal embedder; image token budgets 70, 140, 280, 560 or 1,120; `boi` 255999, `eoi` 258882, image placeholder 258880; vision tokens attend bidirectionally within their own image block (`use_bidirectional_attention: "vision"`) |
 
 Special token ids that the read path depends on: `pad` 0, `eos` {1, 106, 50}, `bos` 2,
-`<end_of_turn>` 106 (upstream's `TURN_CLOSE`). Thought-channel markers `<|channel>` and
-`<channel|>`; `<|think|>` at the start of the system prompt enables thinking. The tokenizer class
+`<turn|>` 106 (upstream's `TURN_CLOSE`). `<end_of_turn>` is not a token of this vocabulary: it
+encodes as seven ordinary tokens ([Fixtures/tokenizer/README.md](../Fixtures/tokenizer/README.md)).
+Thought-channel markers `<|channel>` and `<channel|>`; `<|think|>` at the start of the system
+prompt enables thinking. The tokenizer class
 is `GemmaTokenizer` (a byte-level BPE in `tokenizer.json`, 32 MB); the chat template ships as a
 separate `chat_template.jinja` (Gemma 4's template with tools and channels) rather than inside
 `tokenizer_config.json`.

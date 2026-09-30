@@ -310,12 +310,75 @@ Decision.
    never gets there because forced answers set 1.0 directly, and `Answer.make` with `[1.0]` for a
    single-option choice or single-level score gives exactly upstream's forced answer.
 4. `ReadAveraging` lives in its own file, `Read/ReadAveraging.swift`.
-5. The tests for `Fixtures/distributions/` (issue #6) read every `.json` file there: an array of
-   entries, or an object with the array under `entries` or `rows`. An entry
-   `{top, label_ids, probs, entropy}` checks `slot_distribution`, with `top` an object in the
-   backend's order; an entry `{probabilities, confidence}` checks `confidence`. Both compare
-   exactly, because these are pure functions of the same doubles (D-014's tolerances apply to
-   model logprobs, not to this arithmetic). The tests skip with a message while the folder is
-   absent.
+5. The tests for `Fixtures/distributions/distributions.json` (issue #6) read its
+   `slot_distribution` rows (`{name, top, label_ids, result: {probs, entropy}}`, with `top` as
+   `[token id, logprob]` pairs in the backend's order) and its `confidence` rows
+   (`{name, p, result}`). Rows that record an upstream exception are skipped: the empty map is
+   item 2's precondition, and one option gives 1.0 by item 3. Both compare exactly, because
+   these are pure functions of the same doubles (D-014's tolerances apply to model logprobs,
+   not to this arithmetic). The loader was first written against a guessed layout, before #6
+   landed, and was brought in line with the real file on the branch for #10 and #11.
 
 Status. Proposed with issue #16.
+
+## D-021 Question schema: where the port goes beyond or differs from the issue text
+
+Context. Issue #10 ports `Engine.build_schema`, `text_of` and `FORMATS` from `engine.py` and the
+encoder backends' `build_schema` from `encoders.py`. A few choices were needed that the issue does
+not spell out.
+
+Decision.
+
+1. `TextOf.render` does not throw. A value that `PythonJSONWriter` cannot write (an infinite or
+   NaN float, or integer text that is not normalized digits) stops with a precondition failure.
+   `JSONParser` never produces one (D-016), so only a hand-built value can get there. Upstream's
+   `json.dumps` would write `NaN`; the writer does not support `allow_nan`.
+2. The question type is a public `QuestionKind` enum (`noul`, `choice`, `score`) shared by
+   `ReadQuestion` and `EncoderQuestion`. `ReadQuestion.choices` is the tuple array the issue
+   gives, so `ReadQuestion` and `QuestionSchema` are `Sendable` but not `Equatable`.
+3. The score limit message interpolates `maxScoreLevels`; at the default of 10 it is upstream's
+   text. The choice limit is `min(maxChoices, choiceLabels.count)`, and the message names that
+   number, as upstream's names `len(choice_labels)`.
+4. `AnswerFormat` also has `afterID` (the lead without the id), `lead(id:)` (Python's
+   `lead.format(id=...)`) and `forReadCount(_:)` (the 10-question rule), so later issues read the
+   format rules from one place. Its raw values are `lines` and `indexed`, the fixture names.
+5. `EncoderQuestion` keeps the question as sent (`question: Question`) rather than separate raw
+   instructions and criteria; `rawInstructions` reads it. Upstream's encoders rebuild
+   `{type, instructions, criteria}` from those two fields, which is that question. For a noul
+   sent without criteria upstream keeps `{}`, this port keeps `nil`; both mean no descriptions.
+   `EncoderQuestionSchemaBuilder` keeps upstream's fixed limit of 10 score levels.
+6. Both builders go through one internal `SchemaRules.entry(key:question:)`, which holds the
+   limits, the forced answers and the rendered answers; only the labels, ids and format are
+   the engine builder's own.
+7. A score with no levels cannot pass `RequestValidator`. Built by hand, it is read with no
+   labels, as upstream would.
+8. The fixture test checks the two `api_reachable: false` rows by asserting that
+   `RequestValidator` refuses them: there is no `Question` to build. The loader for the engine
+   fixtures, `Tests/OpenJevCoreTests/Schema/UpstreamFixtures.swift`, is shared with the prompt
+   tests of #11.
+
+Status. Proposed with issue #10.
+
+## D-022 Prompt text: where the port goes beyond or differs from the issue text
+
+Context. Issue #11 ports `Engine.system_text`, `Engine.answer_text` and the state text of
+`Engine.decide`. A few choices were needed that the issue does not spell out.
+
+Decision.
+
+1. `SystemText` exposes its fixed strings as `opening`, `defaultInstructions` and
+   `chunkedSentence`, so tests and later issues (#13, #17) read them from one place, as
+   `AnswerFormat` does for the format strings (D-021).
+2. `SystemText.render` pairs a question's choices and labels with `zip`, as upstream does, so a
+   hand-built question with unequal counts lists the shorter one. The schema builder always makes
+   them equal.
+3. `AnswerText.render` stops with a precondition failure when the question and index counts
+   differ, as the issue asks, and also when an index is outside a question's labels. Upstream's
+   `zip` would drop the extra entries and its indexing would raise `IndexError`.
+4. `StateText.render` shares `TextOf`'s precondition for values `PythonJSONWriter` cannot write
+   (D-021, item 1). A string state is not stripped.
+5. `Fixtures/tokenizer/corpus.json` records the `json_state` texts but not the states they came
+   from. The test renders the state of every request in `schemas/`, `system-texts/` and
+   `templates/` and requires each of the three `json_state` texts to be one of those renderings.
+
+Status. Proposed with issue #11.

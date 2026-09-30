@@ -2,15 +2,18 @@ import Foundation
 import OpenJevCore
 import Testing
 
-/// Loads the upstream read tables in Fixtures/distributions, which issue #6 will write.
+/// Loads the upstream read tables in Fixtures/distributions/distributions.json, which
+/// Tools/fixtures/upstream_tables.py writes (issue #6). Two of its arrays are read here:
+/// - `slot_distribution`: `{name, top, label_ids, result: {probs, entropy, ...}}`, the arguments
+///   and result of `slot_distribution`, with `top` as `[token id, logprob]` pairs in the order
+///   the backend returned them;
+/// - `confidence`: `{name, p, result}`, the argument and result of `confidence`.
 ///
-/// Every `.json` file in the folder is read. A file is either an array of entries or an object
-/// holding the array under `entries` or `rows`. Two entry shapes are recognised:
-/// - `{top: {tokenId: logprob}, label_ids: [...], probs: [...], entropy: x}`, the arguments and
-///   result of `slot_distribution`, with `top` in the order the backend returned it;
-/// - `{probabilities: [...], confidence: x}`, the argument and result of `confidence`.
+/// Rows that record an upstream exception (`error`) are skipped: an empty map is a
+/// precondition failure here, and a single option gives 1.0 where upstream divides by zero
+/// (decision D-020). `to_answer` and `read_group` belong to other tests.
 ///
-/// Tests that need the folder are disabled with a message when it is missing.
+/// Tests that need the file are disabled with a message when it is missing.
 enum DistributionFixtures {
     /// Fixtures/distributions, found relative to this source file.
     static let directory = URL(fileURLWithPath: #filePath)
@@ -20,13 +23,16 @@ enum DistributionFixtures {
         .deletingLastPathComponent()  // repository root
         .appendingPathComponent("Fixtures/distributions")
 
-    /// The message shown when the folder is missing.
+    /// The message shown when the file is missing.
     static let missingMessage: Comment =
-        "Fixtures/distributions is missing; issue #6 generates it from upstream"
+        "Fixtures/distributions/distributions.json is missing; run make fixtures"
 
-    /// True when the folder exists.
+    /// The fixture file.
+    static let file = directory.appendingPathComponent("distributions.json")
+
+    /// True when the file exists.
     static var exists: Bool {
-        FileManager.default.fileExists(atPath: directory.path)
+        FileManager.default.fileExists(atPath: file.path)
     }
 
     /// One recorded `slot_distribution` call.
@@ -45,45 +51,41 @@ enum DistributionFixtures {
         var confidence: Double
     }
 
-    /// Every entry of every file, sorted into the two shapes. An entry of neither shape is
-    /// reported as an error so a layout change is noticed.
+    /// The rows of the two arrays that have a result. A row with neither a result nor an error
+    /// is reported, so a layout change is noticed.
     static func load() throws -> (slots: [Slot], confidences: [ConfidenceCase]) {
-        let files = try FileManager.default.contentsOfDirectory(
-            at: directory, includingPropertiesForKeys: nil
-        )
-        .filter { $0.pathExtension == "json" }
-        .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        let document = try JSONParser().parse(Data(contentsOf: file))
         var slots: [Slot] = []
-        var confidences: [ConfidenceCase] = []
-        for file in files {
-            let document = try JSONParser().parse(Data(contentsOf: file))
-            let entries = try #require(
-                document.arrayValue ?? document["entries"]?.arrayValue
-                    ?? document["rows"]?.arrayValue,
-                "\(file.lastPathComponent) has no entries")
-            for (index, entry) in entries.enumerated() {
-                let name = "\(file.lastPathComponent)[\(index)]"
-                if let top = entry["top"]?.objectValue {
-                    var pairs: [(tokenID: Int, logprob: Double)] = []
-                    for (key, value) in top {
-                        pairs.append(
-                            (try #require(Int(key), "\(name)"), try #require(value.doubleValue)))
-                    }
-                    slots.append(
-                        Slot(
-                            name: name, top: pairs,
-                            labelIDs: try numbers(entry["label_ids"], name).map { Int($0) },
-                            probabilities: try numbers(entry["probs"], name),
-                            entropy: try #require(entry["entropy"]?.doubleValue, "\(name)")))
-                } else if entry["confidence"] != nil {
-                    confidences.append(
-                        ConfidenceCase(
-                            name: name, probabilities: try numbers(entry["probabilities"], name),
-                            confidence: try #require(entry["confidence"]?.doubleValue, "\(name)")))
-                } else {
-                    Issue.record("\(name) is neither a slot nor a confidence entry")
-                }
+        for entry in try #require(document["slot_distribution"]?.arrayValue) {
+            let name = entry["name"]?.stringValue ?? "?"
+            guard let result = entry["result"] else {
+                if entry["error"] == nil { Issue.record("\(name) has no result and no error") }
+                continue
             }
+            let top = try #require(entry["top"]?.arrayValue, "\(name)").map { pair in
+                (
+                    tokenID: try #require(pair[0]?.intValue, "\(name)"),
+                    logprob: try #require(pair[1]?.doubleValue, "\(name)")
+                )
+            }
+            slots.append(
+                Slot(
+                    name: name, top: top,
+                    labelIDs: try numbers(entry["label_ids"], name).map { Int($0) },
+                    probabilities: try numbers(result["probs"], name),
+                    entropy: try #require(result["entropy"]?.doubleValue, "\(name)")))
+        }
+        var confidences: [ConfidenceCase] = []
+        for entry in try #require(document["confidence"]?.arrayValue) {
+            let name = entry["name"]?.stringValue ?? "?"
+            guard let result = entry["result"] else {
+                if entry["error"] == nil { Issue.record("\(name) has no result and no error") }
+                continue
+            }
+            confidences.append(
+                ConfidenceCase(
+                    name: name, probabilities: try numbers(entry["p"], name),
+                    confidence: try #require(result.doubleValue, "\(name)")))
         }
         try #require(!slots.isEmpty, "no slot distribution entries")
         try #require(!confidences.isEmpty, "no confidence entries")
