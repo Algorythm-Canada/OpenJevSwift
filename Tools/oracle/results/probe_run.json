@@ -1,0 +1,2807 @@
+{
+  "cache_digests" : {
+    "indexed_12_mixed\/g0" : [
+      {
+        "fork_retained" : 1024,
+        "keys" : {
+          "max_abs" : 1.578125,
+          "oracle_max_abs" : 1.578125,
+          "oracle_sum" : -1795.6046215764945,
+          "oracle_sum_of_squares" : 31227.020905752666,
+          "relative_sum_of_squares_difference" : 2.0960923112569209e-09,
+          "sha256_equal" : false,
+          "shape_equal" : true,
+          "sum" : -1795.6047940076678,
+          "sum_of_squares" : 31227.020971207385
+        },
+        "kind" : "sliding_attention",
+        "layer" : 0,
+        "offset" : 1572,
+        "positions" : [
+          549,
+          1572
+        ],
+        "values" : {
+          "max_abs" : 15.5625,
+          "oracle_max_abs" : 15.5625,
+          "oracle_sum" : -72117.358251869678,
+          "oracle_sum_of_squares" : 2095227.3760839486,
+          "relative_sum_of_squares_difference" : 9.7789370621127281e-15,
+          "sha256_equal" : true,
+          "shape_equal" : true,
+          "sum" : -72117.358251869678,
+          "sum_of_squares" : 2095227.3760839282
+        }
+      },
+      {
+        "fork_retained" : 1572,
+        "keys" : {
+          "max_abs" : 0.92578125,
+          "oracle_max_abs" : 0.92578125,
+          "oracle_sum" : 3434.3584239106276,
+          "oracle_sum_of_squares" : 6095.1568630858701,
+          "relative_sum_of_squares_difference" : 1.9210832651215786e-05,
+          "sha256_equal" : false,
+          "shape_equal" : true,
+          "sum" : 3395.9332203483209,
+          "sum_of_squares" : 6095.2739561243498
+        },
+        "kind" : "full_attention",
+        "layer" : 29,
+        "offset" : 1572,
+        "positions" : [
+          0,
+          1572
+        ],
+        "values" : {
+          "max_abs" : 15.0625,
+          "oracle_max_abs" : 15.0625,
+          "oracle_sum" : 56779.641421009786,
+          "oracle_sum_of_squares" : 1609705.0420429269,
+          "relative_sum_of_squares_difference" : 1.6874667612653729e-05,
+          "sha256_equal" : false,
+          "shape_equal" : true,
+          "sum" : 56263.06593452394,
+          "sum_of_squares" : 1609732.2052804658
+        }
+      }
+    ],
+    "lines_10_mixed\/g0" : [
+      {
+        "fork_retained" : 329,
+        "keys" : {
+          "max_abs" : 1.609375,
+          "oracle_max_abs" : 1.609375,
+          "oracle_sum" : -1585.1232124855742,
+          "oracle_sum_of_squares" : 10043.423746738679,
+          "relative_sum_of_squares_difference" : 1.695098731584759e-10,
+          "sha256_equal" : false,
+          "shape_equal" : true,
+          "sum" : -1585.1232739980333,
+          "sum_of_squares" : 10043.42374503622
+        },
+        "kind" : "sliding_attention",
+        "layer" : 0,
+        "offset" : 329,
+        "positions" : [
+          0,
+          329
+        ],
+        "values" : {
+          "max_abs" : 15.5625,
+          "oracle_max_abs" : 15.5625,
+          "oracle_sum" : -17057.575940907001,
+          "oracle_sum_of_squares" : 673830.65568582341,
+          "relative_sum_of_squares_difference" : 7.2561903728686801e-15,
+          "sha256_equal" : true,
+          "shape_equal" : true,
+          "sum" : -17057.575940907001,
+          "sum_of_squares" : 673830.65568581852
+        }
+      },
+      {
+        "fork_retained" : 329,
+        "keys" : {
+          "max_abs" : 0.953125,
+          "oracle_max_abs" : 0.9609375,
+          "oracle_sum" : 570.12027480476536,
+          "oracle_sum_of_squares" : 1275.6246915273396,
+          "relative_sum_of_squares_difference" : 6.7653909364419646e-06,
+          "sha256_equal" : false,
+          "shape_equal" : true,
+          "sum" : 587.39465121971443,
+          "sum_of_squares" : 1275.6333216270659
+        },
+        "kind" : "full_attention",
+        "layer" : 29,
+        "offset" : 329,
+        "positions" : [
+          0,
+          329
+        ],
+        "values" : {
+          "max_abs" : 15.5,
+          "oracle_max_abs" : 15.625,
+          "oracle_sum" : 9908.5468649789691,
+          "oracle_sum_of_squares" : 336900.70516471798,
+          "relative_sum_of_squares_difference" : 1.1873295001595957e-06,
+          "sha256_equal" : false,
+          "shape_equal" : true,
+          "sum" : 10120.817813232541,
+          "sum_of_squares" : 336900.30515257211
+        }
+      }
+    ],
+    "long_state\/g0" : [
+      {
+        "fork_retained" : 1024,
+        "keys" : {
+          "max_abs" : 1.5078125,
+          "oracle_max_abs" : 1.5078125,
+          "oracle_sum" : -1713.2066340525635,
+          "oracle_sum_of_squares" : 31225.852508306638,
+          "relative_sum_of_squares_difference" : 1.4924648453631997e-09,
+          "sha256_equal" : false,
+          "shape_equal" : true,
+          "sum" : -1713.2072181967087,
+          "sum_of_squares" : 31225.852461703151
+        },
+        "kind" : "sliding_attention",
+        "layer" : 0,
+        "offset" : 2939,
+        "positions" : [
+          1916,
+          2939
+        ],
+        "values" : {
+          "max_abs" : 15.5625,
+          "oracle_max_abs" : 15.5625,
+          "oracle_sum" : -54339.207412689924,
+          "oracle_sum_of_squares" : 2095117.096276796,
+          "relative_sum_of_squares_difference" : 2.2114896665899167e-14,
+          "sha256_equal" : true,
+          "shape_equal" : true,
+          "sum" : -54339.207412689924,
+          "sum_of_squares" : 2095117.0962767496
+        }
+      },
+      {
+        "fork_retained" : 2939,
+        "keys" : {
+          "max_abs" : 0.94140625,
+          "oracle_max_abs" : 0.94140625,
+          "oracle_sum" : 5245.8008875466185,
+          "oracle_sum_of_squares" : 11395.772851012156,
+          "relative_sum_of_squares_difference" : 3.7699456151730408e-05,
+          "sha256_equal" : false,
+          "shape_equal" : true,
+          "sum" : 5174.7686501466669,
+          "sum_of_squares" : 11395.343236573244
+        },
+        "kind" : "full_attention",
+        "layer" : 29,
+        "offset" : 2939,
+        "positions" : [
+          0,
+          2939
+        ],
+        "values" : {
+          "max_abs" : 15.3125,
+          "oracle_max_abs" : 15.3125,
+          "oracle_sum" : 82481.427968911827,
+          "oracle_sum_of_squares" : 3009540.4846932823,
+          "relative_sum_of_squares_difference" : 2.3973457401731873e-05,
+          "sha256_equal" : false,
+          "shape_equal" : true,
+          "sum" : 81190.600489892997,
+          "sum_of_squares" : 3009468.3356026737
+        }
+      }
+    ],
+    "many_choices\/g0" : [
+      {
+        "fork_retained" : 1024,
+        "keys" : {
+          "max_abs" : 1.5625,
+          "oracle_max_abs" : 1.5625,
+          "oracle_sum" : -3607.1199145045321,
+          "oracle_sum_of_squares" : 31229.700839747104,
+          "relative_sum_of_squares_difference" : 5.6438863631972912e-09,
+          "sha256_equal" : false,
+          "shape_equal" : true,
+          "sum" : -3607.1199668863701,
+          "sum_of_squares" : 31229.701016003986
+        },
+        "kind" : "sliding_attention",
+        "layer" : 0,
+        "offset" : 2442,
+        "positions" : [
+          1419,
+          2442
+        ],
+        "values" : {
+          "max_abs" : 15.5625,
+          "oracle_max_abs" : 15.5625,
+          "oracle_sum" : -69745.037505298853,
+          "oracle_sum_of_squares" : 2095320.7282083773,
+          "relative_sum_of_squares_difference" : 2.0557076774015599e-14,
+          "sha256_equal" : true,
+          "shape_equal" : true,
+          "sum" : -69745.037505298853,
+          "sum_of_squares" : 2095320.7282083342
+        }
+      },
+      {
+        "fork_retained" : 2442,
+        "keys" : {
+          "max_abs" : 0.921875,
+          "oracle_max_abs" : 0.921875,
+          "oracle_sum" : 5285.5098325871368,
+          "oracle_sum_of_squares" : 9468.6803910201907,
+          "relative_sum_of_squares_difference" : 1.7156608698780389e-05,
+          "sha256_equal" : false,
+          "shape_equal" : true,
+          "sum" : 5293.3766132595483,
+          "sum_of_squares" : 9468.5179405758281
+        },
+        "kind" : "full_attention",
+        "layer" : 29,
+        "offset" : 2442,
+        "positions" : [
+          0,
+          2442
+        ],
+        "values" : {
+          "max_abs" : 15,
+          "oracle_max_abs" : 15,
+          "oracle_sum" : 90943.417086317204,
+          "oracle_sum_of_squares" : 2500608.3150526197,
+          "relative_sum_of_squares_difference" : 4.8605541282338558e-06,
+          "sha256_equal" : false,
+          "shape_equal" : true,
+          "sum" : 91330.949803385185,
+          "sum_of_squares" : 2500596.1607105508
+        }
+      }
+    ],
+    "non_ascii\/g0" : [
+      {
+        "fork_retained" : 200,
+        "keys" : {
+          "max_abs" : 1.609375,
+          "oracle_max_abs" : 1.609375,
+          "oracle_sum" : -879.71771667263238,
+          "oracle_sum_of_squares" : 6105.3728173695963,
+          "relative_sum_of_squares_difference" : 7.7629508105953587e-09,
+          "sha256_equal" : false,
+          "shape_equal" : true,
+          "sum" : -879.7171969054034,
+          "sum_of_squares" : 6105.3727699738874
+        },
+        "kind" : "sliding_attention",
+        "layer" : 0,
+        "offset" : 200,
+        "positions" : [
+          0,
+          200
+        ],
+        "values" : {
+          "max_abs" : 15.5625,
+          "oracle_max_abs" : 15.5625,
+          "oracle_sum" : -6911.6004382371902,
+          "oracle_sum_of_squares" : 409627.32991008792,
+          "relative_sum_of_squares_difference" : 4.4050710403369779e-15,
+          "sha256_equal" : true,
+          "shape_equal" : true,
+          "sum" : -6911.6004382371902,
+          "sum_of_squares" : 409627.32991008612
+        }
+      },
+      {
+        "fork_retained" : 200,
+        "keys" : {
+          "max_abs" : 0.96875,
+          "oracle_max_abs" : 0.96484375,
+          "oracle_sum" : 187.83544082939625,
+          "oracle_sum_of_squares" : 775.47010789104911,
+          "relative_sum_of_squares_difference" : 2.5460704935986836e-05,
+          "sha256_equal" : false,
+          "shape_equal" : true,
+          "sum" : 194.89928494859487,
+          "sum_of_squares" : 775.4898519066528
+        },
+        "kind" : "full_attention",
+        "layer" : 29,
+        "offset" : 200,
+        "positions" : [
+          0,
+          200
+        ],
+        "values" : {
+          "max_abs" : 15.75,
+          "oracle_max_abs" : 15.6875,
+          "oracle_sum" : 3512.2056660652161,
+          "oracle_sum_of_squares" : 204798.22005040816,
+          "relative_sum_of_squares_difference" : 2.8795863283583854e-05,
+          "sha256_equal" : false,
+          "shape_equal" : true,
+          "sum" : 3651.478940486908,
+          "sum_of_squares" : 204804.11739195345
+        }
+      }
+    ],
+    "nouls_8\/g0" : [
+      {
+        "fork_retained" : 174,
+        "keys" : {
+          "max_abs" : 1.609375,
+          "oracle_max_abs" : 1.609375,
+          "oracle_sum" : -717.49699155450799,
+          "oracle_sum_of_squares" : 5311.2417310586907,
+          "relative_sum_of_squares_difference" : 1.417765272607928e-09,
+          "sha256_equal" : false,
+          "shape_equal" : true,
+          "sum" : -717.49711743905209,
+          "sum_of_squares" : 5311.2417235285966
+        },
+        "kind" : "sliding_attention",
+        "layer" : 0,
+        "offset" : 174,
+        "positions" : [
+          0,
+          174
+        ],
+        "values" : {
+          "max_abs" : 15.5625,
+          "oracle_max_abs" : 15.5625,
+          "oracle_sum" : -8926.0477235913277,
+          "oracle_sum_of_squares" : 356388.77677549084,
+          "relative_sum_of_squares_difference" : 2.286568225188245e-15,
+          "sha256_equal" : true,
+          "shape_equal" : true,
+          "sum" : -8926.0477235913277,
+          "sum_of_squares" : 356388.77677549003
+        }
+      },
+      {
+        "fork_retained" : 174,
+        "keys" : {
+          "max_abs" : 0.9921875,
+          "oracle_max_abs" : 1,
+          "oracle_sum" : 275.03165718354285,
+          "oracle_sum_of_squares" : 674.62691328075448,
+          "relative_sum_of_squares_difference" : 2.2671150987697937e-05,
+          "sha256_equal" : false,
+          "shape_equal" : true,
+          "sum" : 279.02107950858772,
+          "sum_of_squares" : 674.64220784936583
+        },
+        "kind" : "full_attention",
+        "layer" : 29,
+        "offset" : 174,
+        "positions" : [
+          0,
+          174
+        ],
+        "values" : {
+          "max_abs" : 16.125,
+          "oracle_max_abs" : 16.25,
+          "oracle_sum" : 4735.3931469917297,
+          "oracle_sum_of_squares" : 178174.43716798021,
+          "relative_sum_of_squares_difference" : 2.7119780094854811e-05,
+          "sha256_equal" : false,
+          "shape_equal" : true,
+          "sum" : 4770.7200345993042,
+          "sum_of_squares" : 178179.26921953473
+        }
+      }
+    ],
+    "nouls_24\/g0" : [
+      {
+        "fork_retained" : 335,
+        "keys" : {
+          "max_abs" : 1.609375,
+          "oracle_max_abs" : 1.609375,
+          "oracle_sum" : -1836.3092065302189,
+          "oracle_sum_of_squares" : 10225.480758208907,
+          "relative_sum_of_squares_difference" : 1.0831043403592068e-10,
+          "sha256_equal" : false,
+          "shape_equal" : true,
+          "sum" : -1836.3092093907762,
+          "sum_of_squares" : 10225.480757101381
+        },
+        "kind" : "sliding_attention",
+        "layer" : 0,
+        "offset" : 335,
+        "positions" : [
+          0,
+          335
+        ],
+        "values" : {
+          "max_abs" : 15.5625,
+          "oracle_max_abs" : 15.5625,
+          "oracle_sum" : -18089.302415907383,
+          "oracle_sum_of_squares" : 686118.7012202756,
+          "relative_sum_of_squares_difference" : 7.1262356033078401e-15,
+          "sha256_equal" : true,
+          "shape_equal" : true,
+          "sum" : -18089.302415907383,
+          "sum_of_squares" : 686118.70122027071
+        }
+      },
+      {
+        "fork_retained" : 335,
+        "keys" : {
+          "max_abs" : 0.9921875,
+          "oracle_max_abs" : 0.9921875,
+          "oracle_sum" : 460.95584307052195,
+          "oracle_sum_of_squares" : 1298.9457967639867,
+          "relative_sum_of_squares_difference" : 1.232746215697594e-05,
+          "sha256_equal" : false,
+          "shape_equal" : true,
+          "sum" : 467.31005047028884,
+          "sum_of_squares" : 1298.9618094691402
+        },
+        "kind" : "full_attention",
+        "layer" : 29,
+        "offset" : 335,
+        "positions" : [
+          0,
+          335
+        ],
+        "values" : {
+          "max_abs" : 16.125,
+          "oracle_max_abs" : 16.125,
+          "oracle_sum" : 7755.2716216444969,
+          "oracle_sum_of_squares" : 343043.65679448057,
+          "relative_sum_of_squares_difference" : 2.532305330208254e-05,
+          "sha256_equal" : false,
+          "shape_equal" : true,
+          "sum" : 7647.25834210217,
+          "sum_of_squares" : 343052.34370728652
+        }
+      }
+    ],
+    "nouls_24\/g1" : [
+      {
+        "fork_retained" : 194,
+        "keys" : {
+          "max_abs" : 1.609375,
+          "oracle_max_abs" : 1.609375,
+          "oracle_sum" : -834.29942468181252,
+          "oracle_sum_of_squares" : 5921.7593675540511,
+          "relative_sum_of_squares_difference" : 1.7914179795288019e-11,
+          "sha256_equal" : false,
+          "shape_equal" : true,
+          "sum" : -834.299436153844,
+          "sum_of_squares" : 5921.7593674479676
+        },
+        "kind" : "sliding_attention",
+        "layer" : 0,
+        "offset" : 194,
+        "positions" : [
+          0,
+          194
+        ],
+        "values" : {
+          "max_abs" : 15.5625,
+          "oracle_max_abs" : 15.5625,
+          "oracle_sum" : -10240.380913436413,
+          "oracle_sum_of_squares" : 397327.39009692066,
+          "relative_sum_of_squares_difference" : 4.101943500999325e-15,
+          "sha256_equal" : true,
+          "shape_equal" : true,
+          "sum" : -10240.380913436413,
+          "sum_of_squares" : 397327.39009691903
+        }
+      },
+      {
+        "fork_retained" : 194,
+        "keys" : {
+          "max_abs" : 0.9765625,
+          "oracle_max_abs" : 0.9765625,
+          "oracle_sum" : 291.7816857136786,
+          "oracle_sum_of_squares" : 752.1635558136245,
+          "relative_sum_of_squares_difference" : 5.0077492409510073e-06,
+          "sha256_equal" : false,
+          "shape_equal" : true,
+          "sum" : 296.48275772854686,
+          "sum_of_squares" : 752.16732246010019
+        },
+        "kind" : "full_attention",
+        "layer" : 29,
+        "offset" : 194,
+        "positions" : [
+          0,
+          194
+        ],
+        "values" : {
+          "max_abs" : 15.875,
+          "oracle_max_abs" : 15.875,
+          "oracle_sum" : 5039.4401879310608,
+          "oracle_sum_of_squares" : 198657.4218381182,
+          "relative_sum_of_squares_difference" : 9.6662427703376991e-06,
+          "sha256_equal" : false,
+          "shape_equal" : true,
+          "sum" : 5021.4439082145691,
+          "sum_of_squares" : 198655.50156725058
+        }
+      }
+    ],
+    "quickstart\/g0" : [
+      {
+        "fork_retained" : 182,
+        "keys" : {
+          "max_abs" : 1.609375,
+          "oracle_max_abs" : 1.609375,
+          "oracle_sum" : -705.85126738203689,
+          "oracle_sum_of_squares" : 5555.53820837494,
+          "relative_sum_of_squares_difference" : 1.4119460825141177e-08,
+          "sha256_equal" : false,
+          "shape_equal" : true,
+          "sum" : -705.85077731264755,
+          "sum_of_squares" : 5555.5382868161441
+        },
+        "kind" : "sliding_attention",
+        "layer" : 0,
+        "offset" : 182,
+        "positions" : [
+          0,
+          182
+        ],
+        "values" : {
+          "max_abs" : 15.5625,
+          "oracle_max_abs" : 15.5625,
+          "oracle_sum" : -7836.2474816888571,
+          "oracle_sum_of_squares" : 372751.7652827886,
+          "relative_sum_of_squares_difference" : 3.2792893100196854e-15,
+          "sha256_equal" : true,
+          "shape_equal" : true,
+          "sum" : -7836.2474816888571,
+          "sum_of_squares" : 372751.76528278738
+        }
+      },
+      {
+        "fork_retained" : 182,
+        "keys" : {
+          "max_abs" : 0.94921875,
+          "oracle_max_abs" : 0.953125,
+          "oracle_sum" : 297.20721342414618,
+          "oracle_sum_of_squares" : 705.65671082769018,
+          "relative_sum_of_squares_difference" : 5.5686849785868296e-06,
+          "sha256_equal" : false,
+          "shape_equal" : true,
+          "sum" : 297.82410720735788,
+          "sum_of_squares" : 705.6606404076158
+        },
+        "kind" : "full_attention",
+        "layer" : 29,
+        "offset" : 182,
+        "positions" : [
+          0,
+          182
+        ],
+        "values" : {
+          "max_abs" : 15.4375,
+          "oracle_max_abs" : 15.5,
+          "oracle_sum" : 5174.6947951316833,
+          "oracle_sum_of_squares" : 186370.05971508333,
+          "relative_sum_of_squares_difference" : 1.4466038021400318e-06,
+          "sha256_equal" : false,
+          "shape_equal" : true,
+          "sum" : 5222.7261815071106,
+          "sum_of_squares" : 186370.32931872032
+        }
+      }
+    ],
+    "single_noul\/g0" : [
+      {
+        "fork_retained" : 78,
+        "keys" : {
+          "max_abs" : 1.609375,
+          "oracle_max_abs" : 1.609375,
+          "oracle_sum" : -305.20618055853993,
+          "oracle_sum_of_squares" : 2380.433836372215,
+          "relative_sum_of_squares_difference" : 9.5517746374228113e-16,
+          "sha256_equal" : false,
+          "shape_equal" : true,
+          "sum" : -305.20618055947125,
+          "sum_of_squares" : 2380.4338363722127
+        },
+        "kind" : "sliding_attention",
+        "layer" : 0,
+        "offset" : 78,
+        "positions" : [
+          0,
+          78
+        ],
+        "values" : {
+          "max_abs" : 15.5625,
+          "oracle_max_abs" : 15.5625,
+          "oracle_sum" : -3288.5000512599945,
+          "oracle_sum_of_squares" : 159756.77502242324,
+          "relative_sum_of_squares_difference" : 7.2870350450298533e-16,
+          "sha256_equal" : true,
+          "shape_equal" : true,
+          "sum" : -3288.5000512599945,
+          "sum_of_squares" : 159756.77502242313
+        }
+      },
+      {
+        "fork_retained" : 78,
+        "keys" : {
+          "max_abs" : 0.9921875,
+          "oracle_max_abs" : 0.9921875,
+          "oracle_sum" : 97.576193258166313,
+          "oracle_sum_of_squares" : 302.41705652998553,
+          "relative_sum_of_squares_difference" : 3.8068861191909223e-05,
+          "sha256_equal" : false,
+          "shape_equal" : true,
+          "sum" : 98.045347429811954,
+          "sum_of_squares" : 302.40554385703842
+        },
+        "kind" : "full_attention",
+        "layer" : 29,
+        "offset" : 78,
+        "positions" : [
+          0,
+          78
+        ],
+        "values" : {
+          "max_abs" : 16.125,
+          "oracle_max_abs" : 16.125,
+          "oracle_sum" : 1815.1382217407227,
+          "oracle_sum_of_squares" : 79871.692828601008,
+          "relative_sum_of_squares_difference" : 9.3308313797237559e-06,
+          "sha256_equal" : false,
+          "shape_equal" : true,
+          "sum" : 1835.9291458129883,
+          "sum_of_squares" : 79872.438097898805
+        }
+      }
+    ],
+    "six_questions\/g0" : [
+      {
+        "fork_retained" : 265,
+        "keys" : {
+          "max_abs" : 1.609375,
+          "oracle_max_abs" : 1.609375,
+          "oracle_sum" : -1352.2669987902045,
+          "oracle_sum_of_squares" : 8089.376360446322,
+          "relative_sum_of_squares_difference" : 9.6890796358657495e-09,
+          "sha256_equal" : false,
+          "shape_equal" : true,
+          "sum" : -1352.2665162235498,
+          "sum_of_squares" : 8089.3764388249338
+        },
+        "kind" : "sliding_attention",
+        "layer" : 0,
+        "offset" : 265,
+        "positions" : [
+          0,
+          265
+        ],
+        "values" : {
+          "max_abs" : 15.5625,
+          "oracle_max_abs" : 15.5625,
+          "oracle_sum" : -12111.399474695325,
+          "oracle_sum_of_squares" : 542745.88073912764,
+          "relative_sum_of_squares_difference" : 4.5043580156450666e-15,
+          "sha256_equal" : true,
+          "shape_equal" : true,
+          "sum" : -12111.399474695325,
+          "sum_of_squares" : 542745.88073912519
+        }
+      },
+      {
+        "fork_retained" : 265,
+        "keys" : {
+          "max_abs" : 0.9375,
+          "oracle_max_abs" : 0.94140625,
+          "oracle_sum" : 450.35022378899157,
+          "oracle_sum_of_squares" : 1027.4638200639852,
+          "relative_sum_of_squares_difference" : 2.8057398435456617e-05,
+          "sha256_equal" : false,
+          "shape_equal" : true,
+          "sum" : 447.34810297423974,
+          "sum_of_squares" : 1027.4926480257627
+        },
+        "kind" : "full_attention",
+        "layer" : 29,
+        "offset" : 265,
+        "positions" : [
+          0,
+          265
+        ],
+        "values" : {
+          "max_abs" : 15.25,
+          "oracle_max_abs" : 15.3125,
+          "oracle_sum" : 7793.1424993649125,
+          "oracle_sum_of_squares" : 271359.06344578462,
+          "relative_sum_of_squares_difference" : 2.3011498550501227e-05,
+          "sha256_equal" : false,
+          "shape_equal" : true,
+          "sum" : 7694.9426450580359,
+          "sum_of_squares" : 271365.30782447977
+        }
+      }
+    ],
+    "widest_schema\/g0" : [
+      {
+        "fork_retained" : 1024,
+        "keys" : {
+          "max_abs" : 1.5390625,
+          "oracle_max_abs" : 1.5390625,
+          "oracle_sum" : -2737.0159394692164,
+          "oracle_sum_of_squares" : 31226.160474132721,
+          "relative_sum_of_squares_difference" : 1.5724448506479965e-07,
+          "sha256_equal" : false,
+          "shape_equal" : true,
+          "sum" : -2737.0129750247579,
+          "sum_of_squares" : 31226.165384274245
+        },
+        "kind" : "sliding_attention",
+        "layer" : 0,
+        "offset" : 2076,
+        "positions" : [
+          1053,
+          2076
+        ],
+        "values" : {
+          "max_abs" : 15.5625,
+          "oracle_max_abs" : 15.5625,
+          "oracle_sum" : -69053.016525566578,
+          "oracle_sum_of_squares" : 2095054.666472595,
+          "relative_sum_of_squares_difference" : 3.2228699203016918e-15,
+          "sha256_equal" : true,
+          "shape_equal" : true,
+          "sum" : -69053.016525566578,
+          "sum_of_squares" : 2095054.6664726017
+        }
+      },
+      {
+        "fork_retained" : 2076,
+        "keys" : {
+          "max_abs" : 0.921875,
+          "oracle_max_abs" : 0.921875,
+          "oracle_sum" : 4106.3227530315053,
+          "oracle_sum_of_squares" : 8049.3656543340112,
+          "relative_sum_of_squares_difference" : 6.4818214588828051e-07,
+          "sha256_equal" : false,
+          "shape_equal" : true,
+          "sum" : 4126.1862173143309,
+          "sum_of_squares" : 8049.3708717891141
+        },
+        "kind" : "full_attention",
+        "layer" : 29,
+        "offset" : 2076,
+        "positions" : [
+          0,
+          2076
+        ],
+        "values" : {
+          "max_abs" : 15,
+          "oracle_max_abs" : 15,
+          "oracle_sum" : 74258.149744130671,
+          "oracle_sum_of_squares" : 2125814.8192142146,
+          "relative_sum_of_squares_difference" : 3.009359188459781e-06,
+          "sha256_equal" : false,
+          "shape_equal" : true,
+          "sum" : 74093.335106069222,
+          "sum_of_squares" : 2125821.2165545737
+        }
+      }
+    ]
+  },
+  "cache_limit_gb" : null,
+  "deterministic" : true,
+  "fork" : "Layr-Labs\/mlx-swift-lm eeba2afaf059a153ff909c9e01aa5e65b7bcad67",
+  "load_seconds" : 3.8431627090030815,
+  "memory" : {
+    "after_load" : {
+      "lifetime_max_phys_footprint_bytes" : 16752652648,
+      "mlx_active_bytes" : 16545982888,
+      "mlx_cache_bytes" : 5180,
+      "mlx_peak_bytes" : 16545988216,
+      "phys_footprint_bytes" : 16752652648,
+      "resident_bytes" : 16601186304
+    },
+    "after_pass_1" : {
+      "lifetime_max_phys_footprint_bytes" : 30051497976,
+      "mlx_active_bytes" : 21561654516,
+      "mlx_cache_bytes" : 8204002570,
+      "mlx_peak_bytes" : 22618114002,
+      "phys_footprint_bytes" : 30051497976,
+      "resident_bytes" : 16861118464
+    },
+    "after_pass_2" : {
+      "lifetime_max_phys_footprint_bytes" : 30206441488,
+      "mlx_active_bytes" : 21560912976,
+      "mlx_cache_bytes" : 8359526030,
+      "mlx_peak_bytes" : 22618114002,
+      "phys_footprint_bytes" : 30206441488,
+      "resident_bytes" : 16861478912
+    },
+    "before_load" : {
+      "lifetime_max_phys_footprint_bytes" : 5603928,
+      "mlx_active_bytes" : 0,
+      "mlx_cache_bytes" : 0,
+      "mlx_peak_bytes" : 0,
+      "phys_footprint_bytes" : 5603928,
+      "resident_bytes" : 13910016
+    }
+  },
+  "oracle" : "Fixtures\/oracle\/reads.json",
+  "oracle_generator" : {
+    "device" : "Apple M3 Max",
+    "gpu_architecture" : "applegpu_g15s",
+    "huggingface_hub" : "1.33.0",
+    "jinja2" : "3.1.6",
+    "mlx" : "0.32.2",
+    "mlx_metal" : "0.32.2",
+    "mlx_vlm" : "0.6.15",
+    "model_repo" : "mlx-community\/diffusiongemma-26B-A4B-it-4bit",
+    "model_revision" : "a7a81407613811e8ba63af92ac0d852b809e191f",
+    "numpy" : "2.5.3",
+    "python" : "3.14.7",
+    "script" : "Tools\/fixtures\/mlx_vlm_oracle.py",
+    "tokenizer_repo" : "mlx-community\/diffusiongemma-26B-A4B-it-4bit",
+    "tokenizer_revision" : "a7a81407613811e8ba63af92ac0d852b809e191f",
+    "tokenizers" : "0.23.2",
+    "transformers" : "5.17.0",
+    "upstream" : "razorback16\/openjev",
+    "upstream_commit" : "dcd2094",
+    "version" : "1.0"
+  },
+  "overall" : {
+    "max_entropy_difference" : 0.53743322313741404,
+    "max_entropy_difference_on_oracle_set" : 0.47044710183167571,
+    "max_label_logprob_difference" : 3.5987462997436523,
+    "max_probability_difference" : 0.45089614574510345,
+    "slots" : 156,
+    "top_label_agreement" : 147,
+    "worst_read" : "non_ascii\/g0\/c0\/steps1",
+    "written_mismatches" : [
+      "quickstart\/g0\/c0\/steps2",
+      "quickstart\/g0\/c0\/steps3"
+    ]
+  },
+  "reads" : [
+    {
+      "id" : "single_noul\/g0\/c0\/steps1",
+      "max_entropy_difference" : 0.53743322313741404,
+      "max_entropy_difference_on_oracle_set" : 0.47044710183167571,
+      "max_label_logprob_difference" : 0.27751731872558594,
+      "max_probability_difference" : 0.0014965729249629689,
+      "min_top20_overlap" : 15,
+      "per_slot" : [
+        {
+          "entropy_difference" : 0.53743322313741404,
+          "max_probability_difference" : 0.0014965729249629689,
+          "top_label_agrees" : true,
+          "top20_overlap" : 15
+        }
+      ],
+      "prompt_tokens" : 78,
+      "slots" : 1,
+      "steps" : 1,
+      "timing_pass_1" : {
+        "encode_seconds" : 0.12880516600125702,
+        "prefill_cached" : false,
+        "step_seconds" : [
+          0.052114332997007295
+        ],
+        "total_seconds" : 0.19060466600058135
+      },
+      "timing_pass_2" : {
+        "encode_seconds" : 0,
+        "prefill_cached" : true,
+        "step_seconds" : [
+          0.13575808300083736
+        ],
+        "total_seconds" : 0.13577204100147355
+      },
+      "top_label_agreement" : 1,
+      "written" : [
+
+      ],
+      "written_equal" : true
+    },
+    {
+      "id" : "single_noul\/g0\/c2\/steps1",
+      "max_entropy_difference" : 0.0094199193613621612,
+      "max_entropy_difference_on_oracle_set" : 0.0060606567142092449,
+      "max_label_logprob_difference" : 0.49116134643554688,
+      "max_probability_difference" : 0.0003658044239388536,
+      "min_top20_overlap" : 18,
+      "per_slot" : [
+        {
+          "entropy_difference" : 0.0094199193613621612,
+          "max_probability_difference" : 0.0003658044239388536,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        }
+      ],
+      "prompt_tokens" : 78,
+      "slots" : 1,
+      "steps" : 1,
+      "timing_pass_1" : {
+        "encode_seconds" : 0,
+        "prefill_cached" : true,
+        "step_seconds" : [
+          0.053180166003585327
+        ],
+        "total_seconds" : 0.053187582998361904
+      },
+      "timing_pass_2" : {
+        "encode_seconds" : 0.13028333299735095,
+        "prefill_cached" : false,
+        "step_seconds" : [
+          0.059319125000911299
+        ],
+        "total_seconds" : 0.1896381249971455
+      },
+      "top_label_agreement" : 1,
+      "written" : [
+
+      ],
+      "written_equal" : true
+    },
+    {
+      "id" : "quickstart\/g0\/c0\/steps1",
+      "max_entropy_difference" : 0.10206751922989485,
+      "max_entropy_difference_on_oracle_set" : 0.10204809308234178,
+      "max_label_logprob_difference" : 0.82381248474121094,
+      "max_probability_difference" : 0.15248156293356102,
+      "min_top20_overlap" : 17,
+      "per_slot" : [
+        {
+          "entropy_difference" : 0.0028777583746596169,
+          "max_probability_difference" : 9.8413733082503008e-05,
+          "top_label_agrees" : true,
+          "top20_overlap" : 19
+        },
+        {
+          "entropy_difference" : 0.10206751922989485,
+          "max_probability_difference" : 0.042838419118968463,
+          "top_label_agrees" : true,
+          "top20_overlap" : 17
+        },
+        {
+          "entropy_difference" : 0.014885468584363348,
+          "max_probability_difference" : 0.15248156293356102,
+          "top_label_agrees" : false,
+          "top20_overlap" : 18
+        }
+      ],
+      "prompt_tokens" : 182,
+      "slots" : 3,
+      "steps" : 1,
+      "timing_pass_1" : {
+        "encode_seconds" : 0.32330008399731014,
+        "prefill_cached" : false,
+        "step_seconds" : [
+          0.17424875000142492
+        ],
+        "total_seconds" : 0.50351249999948777
+      },
+      "timing_pass_2" : {
+        "encode_seconds" : 0,
+        "prefill_cached" : true,
+        "step_seconds" : [
+          0.083421750001434702
+        ],
+        "total_seconds" : 0.08342845800507348
+      },
+      "top_label_agreement" : 2,
+      "written" : [
+
+      ],
+      "written_equal" : true
+    },
+    {
+      "id" : "quickstart\/g0\/c1\/steps1",
+      "max_entropy_difference" : 0.19209063494598655,
+      "max_entropy_difference_on_oracle_set" : 0.19184208209807302,
+      "max_label_logprob_difference" : 1.2981977462768555,
+      "max_probability_difference" : 0.088764548299362506,
+      "min_top20_overlap" : 16,
+      "per_slot" : [
+        {
+          "entropy_difference" : 0.016104040607504991,
+          "max_probability_difference" : 1.5193323208984033e-05,
+          "top_label_agrees" : true,
+          "top20_overlap" : 16
+        },
+        {
+          "entropy_difference" : 0.049620221913352108,
+          "max_probability_difference" : 0.01851832282502508,
+          "top_label_agrees" : true,
+          "top20_overlap" : 19
+        },
+        {
+          "entropy_difference" : 0.19209063494598655,
+          "max_probability_difference" : 0.088764548299362506,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        }
+      ],
+      "prompt_tokens" : 182,
+      "slots" : 3,
+      "steps" : 1,
+      "timing_pass_1" : {
+        "encode_seconds" : 0,
+        "prefill_cached" : true,
+        "step_seconds" : [
+          0.076872541001648642
+        ],
+        "total_seconds" : 0.076877457999216858
+      },
+      "timing_pass_2" : {
+        "encode_seconds" : 0,
+        "prefill_cached" : true,
+        "step_seconds" : [
+          0.078895165999711026
+        ],
+        "total_seconds" : 0.078912707998824771
+      },
+      "top_label_agreement" : 3,
+      "written" : [
+
+      ],
+      "written_equal" : true
+    },
+    {
+      "id" : "quickstart\/g0\/c2\/steps1",
+      "max_entropy_difference" : 0.088357283845653334,
+      "max_entropy_difference_on_oracle_set" : 0.088420072786046133,
+      "max_label_logprob_difference" : 0.89856243133544922,
+      "max_probability_difference" : 0.13455267002688642,
+      "min_top20_overlap" : 19,
+      "per_slot" : [
+        {
+          "entropy_difference" : 0.027017582534012652,
+          "max_probability_difference" : 1.6661079733970574e-05,
+          "top_label_agrees" : true,
+          "top20_overlap" : 20
+        },
+        {
+          "entropy_difference" : 0.088357283845653334,
+          "max_probability_difference" : 0.045179450101008198,
+          "top_label_agrees" : true,
+          "top20_overlap" : 19
+        },
+        {
+          "entropy_difference" : 0.04280750292383606,
+          "max_probability_difference" : 0.13455267002688642,
+          "top_label_agrees" : false,
+          "top20_overlap" : 19
+        }
+      ],
+      "prompt_tokens" : 182,
+      "slots" : 3,
+      "steps" : 1,
+      "timing_pass_1" : {
+        "encode_seconds" : 0,
+        "prefill_cached" : true,
+        "step_seconds" : [
+          0.078443333994073328
+        ],
+        "total_seconds" : 0.078455916998791508
+      },
+      "timing_pass_2" : {
+        "encode_seconds" : 0,
+        "prefill_cached" : true,
+        "step_seconds" : [
+          0.077509458998974878
+        ],
+        "total_seconds" : 0.077538833997095935
+      },
+      "top_label_agreement" : 2,
+      "written" : [
+
+      ],
+      "written_equal" : true
+    },
+    {
+      "id" : "nouls_8\/g0\/c0\/steps1",
+      "max_entropy_difference" : 0.17234376111507282,
+      "max_entropy_difference_on_oracle_set" : 0.17229570592397198,
+      "max_label_logprob_difference" : 1.1347999572753906,
+      "max_probability_difference" : 0.10473551789047567,
+      "min_top20_overlap" : 17,
+      "per_slot" : [
+        {
+          "entropy_difference" : 0.0014042877953040628,
+          "max_probability_difference" : 0.00052053834026799528,
+          "top_label_agrees" : true,
+          "top20_overlap" : 17
+        },
+        {
+          "entropy_difference" : 0.010920775844224066,
+          "max_probability_difference" : 0.002430036317367823,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        },
+        {
+          "entropy_difference" : 0.17234376111507282,
+          "max_probability_difference" : 0.10473551789047567,
+          "top_label_agrees" : true,
+          "top20_overlap" : 19
+        },
+        {
+          "entropy_difference" : 0.11321918617925916,
+          "max_probability_difference" : 0.037529982584576849,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        },
+        {
+          "entropy_difference" : 0.08560610200826152,
+          "max_probability_difference" : 0.042064144736280618,
+          "top_label_agrees" : true,
+          "top20_overlap" : 19
+        },
+        {
+          "entropy_difference" : 0.15473276797724578,
+          "max_probability_difference" : 0.050676519503839085,
+          "top_label_agrees" : true,
+          "top20_overlap" : 17
+        },
+        {
+          "entropy_difference" : 0.050278053402768891,
+          "max_probability_difference" : 0.013533438599835468,
+          "top_label_agrees" : true,
+          "top20_overlap" : 17
+        },
+        {
+          "entropy_difference" : 0.017008397839683054,
+          "max_probability_difference" : 0.0065962536725537313,
+          "top_label_agrees" : true,
+          "top20_overlap" : 19
+        }
+      ],
+      "prompt_tokens" : 174,
+      "slots" : 8,
+      "steps" : 1,
+      "timing_pass_1" : {
+        "encode_seconds" : 0.19354512500285637,
+        "prefill_cached" : false,
+        "step_seconds" : [
+          0.36153566699795192
+        ],
+        "total_seconds" : 0.56079166699782945
+      },
+      "timing_pass_2" : {
+        "encode_seconds" : 0,
+        "prefill_cached" : true,
+        "step_seconds" : [
+          0.19273004100250546
+        ],
+        "total_seconds" : 0.1927721250031027
+      },
+      "top_label_agreement" : 8,
+      "written" : [
+
+      ],
+      "written_equal" : true
+    },
+    {
+      "id" : "nouls_8\/g0\/c1\/steps1",
+      "max_entropy_difference" : 0.14522619434610365,
+      "max_entropy_difference_on_oracle_set" : 0.14522619434610365,
+      "max_label_logprob_difference" : 0.71158599853515625,
+      "max_probability_difference" : 0.11383913529695699,
+      "min_top20_overlap" : 16,
+      "per_slot" : [
+        {
+          "entropy_difference" : 0.012547844957767167,
+          "max_probability_difference" : 0.002599319201780359,
+          "top_label_agrees" : true,
+          "top20_overlap" : 17
+        },
+        {
+          "entropy_difference" : 0.038752834142287987,
+          "max_probability_difference" : 0.0094617717199097194,
+          "top_label_agrees" : true,
+          "top20_overlap" : 16
+        },
+        {
+          "entropy_difference" : 0.13228740325001875,
+          "max_probability_difference" : 0.11383913529695699,
+          "top_label_agrees" : true,
+          "top20_overlap" : 19
+        },
+        {
+          "entropy_difference" : 0.14522619434610365,
+          "max_probability_difference" : 0.057624855849685484,
+          "top_label_agrees" : true,
+          "top20_overlap" : 20
+        },
+        {
+          "entropy_difference" : 0.12406281025316096,
+          "max_probability_difference" : 0.050426272369492153,
+          "top_label_agrees" : true,
+          "top20_overlap" : 17
+        },
+        {
+          "entropy_difference" : 0.11288747797914389,
+          "max_probability_difference" : 0.051255045945753516,
+          "top_label_agrees" : true,
+          "top20_overlap" : 19
+        },
+        {
+          "entropy_difference" : 0.072280564162606142,
+          "max_probability_difference" : 0.032976542892316107,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        },
+        {
+          "entropy_difference" : 0.067927436614798081,
+          "max_probability_difference" : 0.017009330089771124,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        }
+      ],
+      "prompt_tokens" : 174,
+      "slots" : 8,
+      "steps" : 1,
+      "timing_pass_1" : {
+        "encode_seconds" : 0,
+        "prefill_cached" : true,
+        "step_seconds" : [
+          0.11752583299676189
+        ],
+        "total_seconds" : 0.11753162499371683
+      },
+      "timing_pass_2" : {
+        "encode_seconds" : 0.18981608300236985,
+        "prefill_cached" : false,
+        "step_seconds" : [
+          0.13344954200147185
+        ],
+        "total_seconds" : 0.32331262499792501
+      },
+      "top_label_agreement" : 8,
+      "written" : [
+
+      ],
+      "written_equal" : true
+    },
+    {
+      "id" : "lines_10_mixed\/g0\/c0\/steps1",
+      "max_entropy_difference" : 0.17349762854220996,
+      "max_entropy_difference_on_oracle_set" : 0.17292221255789852,
+      "max_label_logprob_difference" : 0.94771003723144531,
+      "max_probability_difference" : 0.1947242458024529,
+      "min_top20_overlap" : 16,
+      "per_slot" : [
+        {
+          "entropy_difference" : 0.13326664717203995,
+          "max_probability_difference" : 0.093464909313296596,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        },
+        {
+          "entropy_difference" : 0.13430536221470446,
+          "max_probability_difference" : 0.043236981250972736,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        },
+        {
+          "entropy_difference" : 0.040785524282706875,
+          "max_probability_difference" : 0.013819331349471664,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        },
+        {
+          "entropy_difference" : 0.17349762854220996,
+          "max_probability_difference" : 0.084396377981936194,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        },
+        {
+          "entropy_difference" : 0.10846244101279667,
+          "max_probability_difference" : 0.1116803218690236,
+          "top_label_agrees" : true,
+          "top20_overlap" : 17
+        },
+        {
+          "entropy_difference" : 0.044807995491510433,
+          "max_probability_difference" : 0.010670191753583635,
+          "top_label_agrees" : true,
+          "top20_overlap" : 19
+        },
+        {
+          "entropy_difference" : 0.11248623334848151,
+          "max_probability_difference" : 0.15341826744378673,
+          "top_label_agrees" : true,
+          "top20_overlap" : 16
+        },
+        {
+          "entropy_difference" : 0.023669944602933812,
+          "max_probability_difference" : 0.1947242458024529,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        },
+        {
+          "entropy_difference" : 0.068718081254091762,
+          "max_probability_difference" : 0.014666006534720499,
+          "top_label_agrees" : true,
+          "top20_overlap" : 19
+        },
+        {
+          "entropy_difference" : 0.082933863700525356,
+          "max_probability_difference" : 0.053052900090131971,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        }
+      ],
+      "prompt_tokens" : 329,
+      "slots" : 10,
+      "steps" : 1,
+      "timing_pass_1" : {
+        "encode_seconds" : 0.47504883299552603,
+        "prefill_cached" : false,
+        "step_seconds" : [
+          0.19926458300324157
+        ],
+        "total_seconds" : 0.68264199999975972
+      },
+      "timing_pass_2" : {
+        "encode_seconds" : 0,
+        "prefill_cached" : true,
+        "step_seconds" : [
+          0.1076355000041076
+        ],
+        "total_seconds" : 0.10764312500396045
+      },
+      "top_label_agreement" : 10,
+      "written" : [
+
+      ],
+      "written_equal" : true
+    },
+    {
+      "id" : "lines_10_mixed\/g0\/c1\/steps1",
+      "max_entropy_difference" : 0.21818803731439135,
+      "max_entropy_difference_on_oracle_set" : 0.21868161350919435,
+      "max_label_logprob_difference" : 2.3125038146972656,
+      "max_probability_difference" : 0.21828363476481005,
+      "min_top20_overlap" : 16,
+      "per_slot" : [
+        {
+          "entropy_difference" : 0.15668406114799593,
+          "max_probability_difference" : 0.21828363476481005,
+          "top_label_agrees" : true,
+          "top20_overlap" : 16
+        },
+        {
+          "entropy_difference" : 0.028179140305279085,
+          "max_probability_difference" : 0.0068778188462859102,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        },
+        {
+          "entropy_difference" : 0.0048876549474906779,
+          "max_probability_difference" : 0.00067104997607314587,
+          "top_label_agrees" : true,
+          "top20_overlap" : 19
+        },
+        {
+          "entropy_difference" : 0.12436709500515725,
+          "max_probability_difference" : 0.063267177627020166,
+          "top_label_agrees" : true,
+          "top20_overlap" : 17
+        },
+        {
+          "entropy_difference" : 0.05253732967404412,
+          "max_probability_difference" : 0.021553450644352656,
+          "top_label_agrees" : true,
+          "top20_overlap" : 16
+        },
+        {
+          "entropy_difference" : 0.013202121761558126,
+          "max_probability_difference" : 0.0019925967490150853,
+          "top_label_agrees" : true,
+          "top20_overlap" : 20
+        },
+        {
+          "entropy_difference" : 0.0088860216220526533,
+          "max_probability_difference" : 0.0098602029194972962,
+          "top_label_agrees" : true,
+          "top20_overlap" : 19
+        },
+        {
+          "entropy_difference" : 0.21818803731439135,
+          "max_probability_difference" : 0.1243857400264322,
+          "top_label_agrees" : true,
+          "top20_overlap" : 16
+        },
+        {
+          "entropy_difference" : 0.0025210658507086592,
+          "max_probability_difference" : 0.00081007354298834322,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        },
+        {
+          "entropy_difference" : 0.11469596900598361,
+          "max_probability_difference" : 0.068181231769478767,
+          "top_label_agrees" : true,
+          "top20_overlap" : 20
+        }
+      ],
+      "prompt_tokens" : 329,
+      "slots" : 10,
+      "steps" : 1,
+      "timing_pass_1" : {
+        "encode_seconds" : 0,
+        "prefill_cached" : true,
+        "step_seconds" : [
+          0.10488387499935925
+        ],
+        "total_seconds" : 0.10489075000077719
+      },
+      "timing_pass_2" : {
+        "encode_seconds" : 0,
+        "prefill_cached" : true,
+        "step_seconds" : [
+          0.11951158400188433
+        ],
+        "total_seconds" : 0.11952012500114506
+      },
+      "top_label_agreement" : 10,
+      "written" : [
+
+      ],
+      "written_equal" : true
+    },
+    {
+      "id" : "six_questions\/g0\/c0\/steps1",
+      "max_entropy_difference" : 0.10196152501072975,
+      "max_entropy_difference_on_oracle_set" : 0.1020951474522418,
+      "max_label_logprob_difference" : 0.83211708068847656,
+      "max_probability_difference" : 0.15325088359280825,
+      "min_top20_overlap" : 16,
+      "per_slot" : [
+        {
+          "entropy_difference" : 0.00039448893932133439,
+          "max_probability_difference" : 8.383307893324813e-06,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        },
+        {
+          "entropy_difference" : 0.023871748670325099,
+          "max_probability_difference" : 0.014647521421723875,
+          "top_label_agrees" : true,
+          "top20_overlap" : 20
+        },
+        {
+          "entropy_difference" : 0.10196152501072975,
+          "max_probability_difference" : 0.15325088359280825,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        },
+        {
+          "entropy_difference" : 0.031672448240735299,
+          "max_probability_difference" : 3.0714156756526068e-06,
+          "top_label_agrees" : true,
+          "top20_overlap" : 16
+        },
+        {
+          "entropy_difference" : 0.043893439862334127,
+          "max_probability_difference" : 4.6110519498212545e-05,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        },
+        {
+          "entropy_difference" : 0.070652932147126424,
+          "max_probability_difference" : 0.08004328087771384,
+          "top_label_agrees" : true,
+          "top20_overlap" : 20
+        }
+      ],
+      "prompt_tokens" : 265,
+      "slots" : 6,
+      "steps" : 1,
+      "timing_pass_1" : {
+        "encode_seconds" : 0.26346149999881163,
+        "prefill_cached" : false,
+        "step_seconds" : [
+          0.13876399999571731
+        ],
+        "total_seconds" : 0.41373633399780374
+      },
+      "timing_pass_2" : {
+        "encode_seconds" : 0.26813220800249837,
+        "prefill_cached" : false,
+        "step_seconds" : [
+          0.14088741599698551
+        ],
+        "total_seconds" : 0.40905695800029207
+      },
+      "top_label_agreement" : 6,
+      "written" : [
+
+      ],
+      "written_equal" : true
+    },
+    {
+      "id" : "non_ascii\/g0\/c0\/steps1",
+      "max_entropy_difference" : 0.39768177470185639,
+      "max_entropy_difference_on_oracle_set" : 0.38824144302077568,
+      "max_label_logprob_difference" : 3.5987462997436523,
+      "max_probability_difference" : 0.45089614574510345,
+      "min_top20_overlap" : 16,
+      "per_slot" : [
+        {
+          "entropy_difference" : 0.016011183960422559,
+          "max_probability_difference" : 4.4806265291907899e-05,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        },
+        {
+          "entropy_difference" : 0.070962267361660253,
+          "max_probability_difference" : 0.012281154164228369,
+          "top_label_agrees" : true,
+          "top20_overlap" : 17
+        },
+        {
+          "entropy_difference" : 0.39768177470185639,
+          "max_probability_difference" : 0.45089614574510345,
+          "top_label_agrees" : false,
+          "top20_overlap" : 16
+        }
+      ],
+      "prompt_tokens" : 200,
+      "slots" : 3,
+      "steps" : 1,
+      "timing_pass_1" : {
+        "encode_seconds" : 0.2287117500018212,
+        "prefill_cached" : false,
+        "step_seconds" : [
+          0.07832800000323914
+        ],
+        "total_seconds" : 0.39323045900528086
+      },
+      "timing_pass_2" : {
+        "encode_seconds" : 0.22926520799956052,
+        "prefill_cached" : false,
+        "step_seconds" : [
+          0.13573124999675201
+        ],
+        "total_seconds" : 0.36502574999758508
+      },
+      "top_label_agreement" : 2,
+      "written" : [
+
+      ],
+      "written_equal" : true
+    },
+    {
+      "id" : "indexed_12_mixed\/g0\/c0\/steps1",
+      "max_entropy_difference" : 0.41050986442082227,
+      "max_entropy_difference_on_oracle_set" : 0.45090699576755,
+      "max_label_logprob_difference" : 3.3730688095092773,
+      "max_probability_difference" : 0.24018395299389494,
+      "min_top20_overlap" : 15,
+      "per_slot" : [
+        {
+          "entropy_difference" : 0.052033650261098296,
+          "max_probability_difference" : 0.14539540015491825,
+          "top_label_agrees" : false,
+          "top20_overlap" : 17
+        },
+        {
+          "entropy_difference" : 0.32677475768159514,
+          "max_probability_difference" : 0.18115636371270497,
+          "top_label_agrees" : true,
+          "top20_overlap" : 17
+        },
+        {
+          "entropy_difference" : 0.30961773889333055,
+          "max_probability_difference" : 0.070420561031878881,
+          "top_label_agrees" : true,
+          "top20_overlap" : 16
+        },
+        {
+          "entropy_difference" : 0.16427035084634567,
+          "max_probability_difference" : 0.22315639077393851,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        },
+        {
+          "entropy_difference" : 0.41050986442082227,
+          "max_probability_difference" : 0.17356307994553699,
+          "top_label_agrees" : true,
+          "top20_overlap" : 15
+        },
+        {
+          "entropy_difference" : 0.25302551651328598,
+          "max_probability_difference" : 0.074644382976122525,
+          "top_label_agrees" : true,
+          "top20_overlap" : 15
+        },
+        {
+          "entropy_difference" : 0.38781570310142688,
+          "max_probability_difference" : 0.17723495207503909,
+          "top_label_agrees" : true,
+          "top20_overlap" : 16
+        },
+        {
+          "entropy_difference" : 0.3908489399193964,
+          "max_probability_difference" : 0.081431550386769525,
+          "top_label_agrees" : true,
+          "top20_overlap" : 17
+        },
+        {
+          "entropy_difference" : 0.37816569342124806,
+          "max_probability_difference" : 0.14970069256002971,
+          "top_label_agrees" : false,
+          "top20_overlap" : 16
+        },
+        {
+          "entropy_difference" : 0.25386967874523547,
+          "max_probability_difference" : 0.23274852221581832,
+          "top_label_agrees" : true,
+          "top20_overlap" : 17
+        },
+        {
+          "entropy_difference" : 0.28637213218222191,
+          "max_probability_difference" : 0.24018395299389494,
+          "top_label_agrees" : false,
+          "top20_overlap" : 18
+        },
+        {
+          "entropy_difference" : 0.2418596217273854,
+          "max_probability_difference" : 0.066120993492337465,
+          "top_label_agrees" : true,
+          "top20_overlap" : 16
+        }
+      ],
+      "prompt_tokens" : 1572,
+      "slots" : 12,
+      "steps" : 1,
+      "timing_pass_1" : {
+        "encode_seconds" : 1.3946281250027823,
+        "prefill_cached" : false,
+        "step_seconds" : [
+          0.19217270799708785
+        ],
+        "total_seconds" : 1.6213902079980471
+      },
+      "timing_pass_2" : {
+        "encode_seconds" : 0,
+        "prefill_cached" : true,
+        "step_seconds" : [
+          0.14845558299566619
+        ],
+        "total_seconds" : 0.14847741599805886
+      },
+      "top_label_agreement" : 9,
+      "written" : [
+
+      ],
+      "written_equal" : true
+    },
+    {
+      "id" : "indexed_12_mixed\/g0\/c1\/steps1",
+      "max_entropy_difference" : 0.46141521234124627,
+      "max_entropy_difference_on_oracle_set" : 0.46295499280797703,
+      "max_label_logprob_difference" : 2.4987916946411133,
+      "max_probability_difference" : 0.19216353488448434,
+      "min_top20_overlap" : 17,
+      "per_slot" : [
+        {
+          "entropy_difference" : 0.018075740359967174,
+          "max_probability_difference" : 0.19216353488448434,
+          "top_label_agrees" : true,
+          "top20_overlap" : 17
+        },
+        {
+          "entropy_difference" : 0.46141521234124627,
+          "max_probability_difference" : 0.15010797507345802,
+          "top_label_agrees" : true,
+          "top20_overlap" : 17
+        },
+        {
+          "entropy_difference" : 0.02384762902343085,
+          "max_probability_difference" : 0.12115475044536574,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        },
+        {
+          "entropy_difference" : 0.038729779156772448,
+          "max_probability_difference" : 0.0011772096019894152,
+          "top_label_agrees" : true,
+          "top20_overlap" : 17
+        },
+        {
+          "entropy_difference" : 0.12794081111391531,
+          "max_probability_difference" : 0.093628695428978892,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        },
+        {
+          "entropy_difference" : 0.034028338389126223,
+          "max_probability_difference" : 0.046016835066860759,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        },
+        {
+          "entropy_difference" : 0.14793551091467294,
+          "max_probability_difference" : 0.056576694695942509,
+          "top_label_agrees" : true,
+          "top20_overlap" : 17
+        },
+        {
+          "entropy_difference" : 0.099000262207662004,
+          "max_probability_difference" : 0.1796803895311827,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        },
+        {
+          "entropy_difference" : 0.029538291951395568,
+          "max_probability_difference" : 0.060156282267444128,
+          "top_label_agrees" : true,
+          "top20_overlap" : 17
+        },
+        {
+          "entropy_difference" : 0.05069462069911479,
+          "max_probability_difference" : 0.076607625647372668,
+          "top_label_agrees" : false,
+          "top20_overlap" : 17
+        },
+        {
+          "entropy_difference" : 0.12771902577705796,
+          "max_probability_difference" : 0.18822564596845781,
+          "top_label_agrees" : true,
+          "top20_overlap" : 19
+        },
+        {
+          "entropy_difference" : 0.098701555629311155,
+          "max_probability_difference" : 0.12202860790647213,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        }
+      ],
+      "prompt_tokens" : 1572,
+      "slots" : 12,
+      "steps" : 1,
+      "timing_pass_1" : {
+        "encode_seconds" : 0,
+        "prefill_cached" : true,
+        "step_seconds" : [
+          0.13170541699946625
+        ],
+        "total_seconds" : 0.13171224999678088
+      },
+      "timing_pass_2" : {
+        "encode_seconds" : 1.3292550410042168,
+        "prefill_cached" : false,
+        "step_seconds" : [
+          0.1744181660033064
+        ],
+        "total_seconds" : 1.5072596660029376
+      },
+      "top_label_agreement" : 11,
+      "written" : [
+
+      ],
+      "written_equal" : true
+    },
+    {
+      "id" : "many_choices\/g0\/c0\/steps1",
+      "max_entropy_difference" : 0.25159870639828519,
+      "max_entropy_difference_on_oracle_set" : 0.24586692005098554,
+      "max_label_logprob_difference" : 1.9906883239746094,
+      "max_probability_difference" : 0.25207912057742471,
+      "min_top20_overlap" : 17,
+      "per_slot" : [
+        {
+          "entropy_difference" : 0.25159870639828519,
+          "max_probability_difference" : 0.035402474201122969,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        },
+        {
+          "entropy_difference" : 0.031521878953091331,
+          "max_probability_difference" : 0.018390470065872466,
+          "top_label_agrees" : true,
+          "top20_overlap" : 17
+        },
+        {
+          "entropy_difference" : 0.018110461080605766,
+          "max_probability_difference" : 0.041364229417100634,
+          "top_label_agrees" : true,
+          "top20_overlap" : 19
+        },
+        {
+          "entropy_difference" : 0.033250715024080391,
+          "max_probability_difference" : 0.25207912057742471,
+          "top_label_agrees" : false,
+          "top20_overlap" : 17
+        }
+      ],
+      "prompt_tokens" : 2442,
+      "slots" : 4,
+      "steps" : 1,
+      "timing_pass_1" : {
+        "encode_seconds" : 2.1262032919985359,
+        "prefill_cached" : false,
+        "step_seconds" : [
+          0.31136212500132388
+        ],
+        "total_seconds" : 2.4683356250025099
+      },
+      "timing_pass_2" : {
+        "encode_seconds" : 0,
+        "prefill_cached" : true,
+        "step_seconds" : [
+          0.083683958997426089
+        ],
+        "total_seconds" : 0.083689874998526648
+      },
+      "top_label_agreement" : 3,
+      "written" : [
+
+      ],
+      "written_equal" : true
+    },
+    {
+      "id" : "many_choices\/g0\/c1\/steps1",
+      "max_entropy_difference" : 0.24444459524595663,
+      "max_entropy_difference_on_oracle_set" : 0.27323460923381271,
+      "max_label_logprob_difference" : 1.2950897216796875,
+      "max_probability_difference" : 0.2716105362894678,
+      "min_top20_overlap" : 14,
+      "per_slot" : [
+        {
+          "entropy_difference" : 0.24070173267776851,
+          "max_probability_difference" : 0.22939419543378375,
+          "top_label_agrees" : true,
+          "top20_overlap" : 14
+        },
+        {
+          "entropy_difference" : 0.24444459524595663,
+          "max_probability_difference" : 0.12884204887202819,
+          "top_label_agrees" : true,
+          "top20_overlap" : 19
+        },
+        {
+          "entropy_difference" : 0.030705470659634138,
+          "max_probability_difference" : 0.033427005909419001,
+          "top_label_agrees" : true,
+          "top20_overlap" : 16
+        },
+        {
+          "entropy_difference" : 0.088058105166664902,
+          "max_probability_difference" : 0.2716105362894678,
+          "top_label_agrees" : false,
+          "top20_overlap" : 16
+        }
+      ],
+      "prompt_tokens" : 2442,
+      "slots" : 4,
+      "steps" : 1,
+      "timing_pass_1" : {
+        "encode_seconds" : 0,
+        "prefill_cached" : true,
+        "step_seconds" : [
+          0.08524629200110212
+        ],
+        "total_seconds" : 0.085253249999368563
+      },
+      "timing_pass_2" : {
+        "encode_seconds" : 2.1937872909984435,
+        "prefill_cached" : false,
+        "step_seconds" : [
+          0.28619174999766983
+        ],
+        "total_seconds" : 2.4800141249943408
+      },
+      "top_label_agreement" : 3,
+      "written" : [
+
+      ],
+      "written_equal" : true
+    },
+    {
+      "id" : "widest_schema\/g0\/c0\/steps1",
+      "max_entropy_difference" : 0.23592859763699847,
+      "max_entropy_difference_on_oracle_set" : 0.22195526998054493,
+      "max_label_logprob_difference" : 2.5157155990600586,
+      "max_probability_difference" : 0.18750148541923861,
+      "min_top20_overlap" : 18,
+      "per_slot" : [
+        {
+          "entropy_difference" : 0.029410372615546576,
+          "max_probability_difference" : 0.017363327393217554,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        },
+        {
+          "entropy_difference" : 0.12477076469184056,
+          "max_probability_difference" : 0.033213951135469877,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        },
+        {
+          "entropy_difference" : 0.23592859763699847,
+          "max_probability_difference" : 0.18750148541923861,
+          "top_label_agrees" : true,
+          "top20_overlap" : 19
+        }
+      ],
+      "prompt_tokens" : 2076,
+      "slots" : 3,
+      "steps" : 1,
+      "timing_pass_1" : {
+        "encode_seconds" : 1.7564452920050826,
+        "prefill_cached" : false,
+        "step_seconds" : [
+          0.12151254200580297
+        ],
+        "total_seconds" : 1.9079931670057704
+      },
+      "timing_pass_2" : {
+        "encode_seconds" : 0,
+        "prefill_cached" : true,
+        "step_seconds" : [
+          0.093162291996122804
+        ],
+        "total_seconds" : 0.093178625000291504
+      },
+      "top_label_agreement" : 3,
+      "written" : [
+
+      ],
+      "written_equal" : true
+    },
+    {
+      "id" : "widest_schema\/g0\/c1\/steps1",
+      "max_entropy_difference" : 0.12925510626948278,
+      "max_entropy_difference_on_oracle_set" : 0.1281227187093118,
+      "max_label_logprob_difference" : 2.3060340881347656,
+      "max_probability_difference" : 0.074976003246150058,
+      "min_top20_overlap" : 18,
+      "per_slot" : [
+        {
+          "entropy_difference" : 0.081753506545197807,
+          "max_probability_difference" : 0.016593343406457572,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        },
+        {
+          "entropy_difference" : 0.12925510626948278,
+          "max_probability_difference" : 0.022910369212098325,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        },
+        {
+          "entropy_difference" : 0.040189237582095361,
+          "max_probability_difference" : 0.074976003246150058,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        }
+      ],
+      "prompt_tokens" : 2076,
+      "slots" : 3,
+      "steps" : 1,
+      "timing_pass_1" : {
+        "encode_seconds" : 0,
+        "prefill_cached" : true,
+        "step_seconds" : [
+          0.084816208000120241
+        ],
+        "total_seconds" : 0.084831083004246466
+      },
+      "timing_pass_2" : {
+        "encode_seconds" : 1.7963130419957452,
+        "prefill_cached" : false,
+        "step_seconds" : [
+          0.094198874998255633
+        ],
+        "total_seconds" : 1.8905447919969447
+      },
+      "top_label_agreement" : 3,
+      "written" : [
+
+      ],
+      "written_equal" : true
+    },
+    {
+      "id" : "nouls_24\/g0\/c0\/steps1",
+      "max_entropy_difference" : 0.076283418942020884,
+      "max_entropy_difference_on_oracle_set" : 0.074713811177581649,
+      "max_label_logprob_difference" : 2.2390375137329102,
+      "max_probability_difference" : 0.0038707014514575144,
+      "min_top20_overlap" : 17,
+      "per_slot" : [
+        {
+          "entropy_difference" : 0.02324085759844078,
+          "max_probability_difference" : 1.6377542360501707e-05,
+          "top_label_agrees" : true,
+          "top20_overlap" : 19
+        },
+        {
+          "entropy_difference" : 0.061726384930477204,
+          "max_probability_difference" : 0.00010783852273454908,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        },
+        {
+          "entropy_difference" : 0.032414873314441636,
+          "max_probability_difference" : 6.1599625722608131e-05,
+          "top_label_agrees" : true,
+          "top20_overlap" : 20
+        },
+        {
+          "entropy_difference" : 0.032099217357472204,
+          "max_probability_difference" : 3.8894242099796195e-05,
+          "top_label_agrees" : true,
+          "top20_overlap" : 19
+        },
+        {
+          "entropy_difference" : 0.040306988718703619,
+          "max_probability_difference" : 0.00099402023388828198,
+          "top_label_agrees" : true,
+          "top20_overlap" : 17
+        },
+        {
+          "entropy_difference" : 0.076283418942020884,
+          "max_probability_difference" : 0.00057047017704783994,
+          "top_label_agrees" : true,
+          "top20_overlap" : 17
+        },
+        {
+          "entropy_difference" : 0.045525196882736069,
+          "max_probability_difference" : 0.00015406329331821853,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        },
+        {
+          "entropy_difference" : 0.055667597792350337,
+          "max_probability_difference" : 0.00040414759303175618,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        },
+        {
+          "entropy_difference" : 0.039846238368109861,
+          "max_probability_difference" : 0.00081166214468380324,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        },
+        {
+          "entropy_difference" : 0.023213045061698662,
+          "max_probability_difference" : 0.00083235591839204189,
+          "top_label_agrees" : true,
+          "top20_overlap" : 17
+        },
+        {
+          "entropy_difference" : 0.045779376583196585,
+          "max_probability_difference" : 0.0010552569037992621,
+          "top_label_agrees" : true,
+          "top20_overlap" : 17
+        },
+        {
+          "entropy_difference" : 0.041390151768594174,
+          "max_probability_difference" : 0.0038707014514575144,
+          "top_label_agrees" : true,
+          "top20_overlap" : 17
+        },
+        {
+          "entropy_difference" : 0.060625175136864731,
+          "max_probability_difference" : 0.0037788978376446449,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        },
+        {
+          "entropy_difference" : 0.047582351968515589,
+          "max_probability_difference" : 0.00073031073107054922,
+          "top_label_agrees" : true,
+          "top20_overlap" : 19
+        },
+        {
+          "entropy_difference" : 0.023649232041473539,
+          "max_probability_difference" : 0.00080877297807283445,
+          "top_label_agrees" : true,
+          "top20_overlap" : 19
+        },
+        {
+          "entropy_difference" : 0.023814801936963476,
+          "max_probability_difference" : 0.00062042366598602516,
+          "top_label_agrees" : true,
+          "top20_overlap" : 19
+        },
+        {
+          "entropy_difference" : 0.028365142842196822,
+          "max_probability_difference" : 0.0023415642293673428,
+          "top_label_agrees" : true,
+          "top20_overlap" : 19
+        }
+      ],
+      "prompt_tokens" : 335,
+      "slots" : 17,
+      "steps" : 1,
+      "timing_pass_1" : {
+        "encode_seconds" : 0.30204362500080606,
+        "prefill_cached" : false,
+        "step_seconds" : [
+          0.1159808750016964
+        ],
+        "total_seconds" : 0.42873266700189561
+      },
+      "timing_pass_2" : {
+        "encode_seconds" : 0.31193287499627331,
+        "prefill_cached" : false,
+        "step_seconds" : [
+          0.11956308300432283
+        ],
+        "total_seconds" : 0.43152399999962654
+      },
+      "top_label_agreement" : 17,
+      "written" : [
+
+      ],
+      "written_equal" : true
+    },
+    {
+      "id" : "nouls_24\/g1\/c0\/steps1",
+      "max_entropy_difference" : 0.20028421787735162,
+      "max_entropy_difference_on_oracle_set" : 0.20848989017399233,
+      "max_label_logprob_difference" : 1.7566070556640625,
+      "max_probability_difference" : 0.04843391442269275,
+      "min_top20_overlap" : 14,
+      "per_slot" : [
+        {
+          "entropy_difference" : 0.12270993720414225,
+          "max_probability_difference" : 0.001645140000116058,
+          "top_label_agrees" : true,
+          "top20_overlap" : 17
+        },
+        {
+          "entropy_difference" : 0.20028421787735162,
+          "max_probability_difference" : 0.04843391442269275,
+          "top_label_agrees" : true,
+          "top20_overlap" : 16
+        },
+        {
+          "entropy_difference" : 0.032947898455886859,
+          "max_probability_difference" : 0.022522059123941701,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        },
+        {
+          "entropy_difference" : 0.03242562659509618,
+          "max_probability_difference" : 0.0013935781277411297,
+          "top_label_agrees" : true,
+          "top20_overlap" : 17
+        },
+        {
+          "entropy_difference" : 0.088356375769151896,
+          "max_probability_difference" : 0.015195464888142496,
+          "top_label_agrees" : true,
+          "top20_overlap" : 15
+        },
+        {
+          "entropy_difference" : 0.1455538793075013,
+          "max_probability_difference" : 0.047834297111251201,
+          "top_label_agrees" : true,
+          "top20_overlap" : 14
+        },
+        {
+          "entropy_difference" : 0.10423342905734478,
+          "max_probability_difference" : 0.0096512980171087615,
+          "top_label_agrees" : true,
+          "top20_overlap" : 16
+        }
+      ],
+      "prompt_tokens" : 194,
+      "slots" : 7,
+      "steps" : 1,
+      "timing_pass_1" : {
+        "encode_seconds" : 0.20513587500317954,
+        "prefill_cached" : false,
+        "step_seconds" : [
+          0.13422712500323541
+        ],
+        "total_seconds" : 0.34576950000337092
+      },
+      "timing_pass_2" : {
+        "encode_seconds" : 0.22238791700510774,
+        "prefill_cached" : false,
+        "step_seconds" : [
+          0.13481458299793303
+        ],
+        "total_seconds" : 0.35725312500289874
+      },
+      "top_label_agreement" : 7,
+      "written" : [
+
+      ],
+      "written_equal" : true
+    },
+    {
+      "id" : "long_state\/g0\/c0\/steps1",
+      "max_entropy_difference" : 0.066556468620816267,
+      "max_entropy_difference_on_oracle_set" : 0.066413242525241001,
+      "max_label_logprob_difference" : 1.0392532348632812,
+      "max_probability_difference" : 0.029322997167521139,
+      "min_top20_overlap" : 16,
+      "per_slot" : [
+        {
+          "entropy_difference" : 0.019228256038728284,
+          "max_probability_difference" : 1.0238299361420289e-05,
+          "top_label_agrees" : true,
+          "top20_overlap" : 16
+        },
+        {
+          "entropy_difference" : 0.0058224941051246565,
+          "max_probability_difference" : 0.0043605201141656558,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        },
+        {
+          "entropy_difference" : 0.066556468620816267,
+          "max_probability_difference" : 0.029322997167521139,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        }
+      ],
+      "prompt_tokens" : 2939,
+      "slots" : 3,
+      "steps" : 1,
+      "timing_pass_1" : {
+        "encode_seconds" : 2.6478838339971844,
+        "prefill_cached" : false,
+        "step_seconds" : [
+          0.37786224999581464
+        ],
+        "total_seconds" : 3.0565539999952307
+      },
+      "timing_pass_2" : {
+        "encode_seconds" : 0,
+        "prefill_cached" : true,
+        "step_seconds" : [
+          0.098018084005161654
+        ],
+        "total_seconds" : 0.098027084000932518
+      },
+      "top_label_agreement" : 3,
+      "written" : [
+
+      ],
+      "written_equal" : true
+    },
+    {
+      "id" : "long_state\/g0\/c1\/steps1",
+      "max_entropy_difference" : 0.16533110794172984,
+      "max_entropy_difference_on_oracle_set" : 0.16485701750481807,
+      "max_label_logprob_difference" : 1.2223358154296875,
+      "max_probability_difference" : 0.079571089187870814,
+      "min_top20_overlap" : 16,
+      "per_slot" : [
+        {
+          "entropy_difference" : 0.048212336878492537,
+          "max_probability_difference" : 1.2269526072250514e-05,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        },
+        {
+          "entropy_difference" : 0.010418540557676464,
+          "max_probability_difference" : 0.0024173556991590982,
+          "top_label_agrees" : true,
+          "top20_overlap" : 19
+        },
+        {
+          "entropy_difference" : 0.16533110794172984,
+          "max_probability_difference" : 0.079571089187870814,
+          "top_label_agrees" : true,
+          "top20_overlap" : 16
+        }
+      ],
+      "prompt_tokens" : 2939,
+      "slots" : 3,
+      "steps" : 1,
+      "timing_pass_1" : {
+        "encode_seconds" : 0,
+        "prefill_cached" : true,
+        "step_seconds" : [
+          0.087159082999278326
+        ],
+        "total_seconds" : 0.087169165999512188
+      },
+      "timing_pass_2" : {
+        "encode_seconds" : 0,
+        "prefill_cached" : true,
+        "step_seconds" : [
+          0.099026208998111542
+        ],
+        "total_seconds" : 0.099049416996422224
+      },
+      "top_label_agreement" : 3,
+      "written" : [
+
+      ],
+      "written_equal" : true
+    },
+    {
+      "id" : "quickstart\/g0\/c0\/steps2",
+      "max_entropy_difference" : 0.35588022691298138,
+      "max_entropy_difference_on_oracle_set" : 0.35716721580292332,
+      "max_label_logprob_difference" : 2.3255062103271484,
+      "max_probability_difference" : 0.14158924302599063,
+      "min_top20_overlap" : 12,
+      "per_slot" : [
+        {
+          "entropy_difference" : 0.00065014182615461512,
+          "max_probability_difference" : 4.0496066356920934e-06,
+          "top_label_agrees" : true,
+          "top20_overlap" : 12
+        },
+        {
+          "entropy_difference" : 0.063845532055151075,
+          "max_probability_difference" : 0.013375127876843695,
+          "top_label_agrees" : true,
+          "top20_overlap" : 17
+        },
+        {
+          "entropy_difference" : 0.35588022691298138,
+          "max_probability_difference" : 0.14158924302599063,
+          "top_label_agrees" : true,
+          "top20_overlap" : 15
+        }
+      ],
+      "prompt_tokens" : 182,
+      "slots" : 3,
+      "steps" : 2,
+      "timing_pass_1" : {
+        "encode_seconds" : 0,
+        "prefill_cached" : true,
+        "step_seconds" : [
+          0.25242929100204492,
+          0.320277333004924
+        ],
+        "total_seconds" : 0.63124783300008858
+      },
+      "timing_pass_2" : {
+        "encode_seconds" : 0,
+        "prefill_cached" : true,
+        "step_seconds" : [
+          0.08418191599776037,
+          0.10098629099957179
+        ],
+        "total_seconds" : 0.18591683299746364
+      },
+      "top_label_agreement" : 3,
+      "written" : [
+        [
+          603,
+          236771,
+          951
+        ]
+      ],
+      "written_equal" : false
+    },
+    {
+      "id" : "quickstart\/g0\/c0\/steps3",
+      "max_entropy_difference" : 0.011968162216299132,
+      "max_entropy_difference_on_oracle_set" : 0.012242806124949216,
+      "max_label_logprob_difference" : 1.5486869812011719,
+      "max_probability_difference" : 0.0030177720743481684,
+      "min_top20_overlap" : 16,
+      "per_slot" : [
+        {
+          "entropy_difference" : 0.0014445109239935336,
+          "max_probability_difference" : 9.9806531496727976e-06,
+          "top_label_agrees" : true,
+          "top20_overlap" : 19
+        },
+        {
+          "entropy_difference" : 0.0081224395435368878,
+          "max_probability_difference" : 0.0011908192435425777,
+          "top_label_agrees" : true,
+          "top20_overlap" : 19
+        },
+        {
+          "entropy_difference" : 0.011968162216299132,
+          "max_probability_difference" : 0.0030177720743481684,
+          "top_label_agrees" : true,
+          "top20_overlap" : 16
+        }
+      ],
+      "prompt_tokens" : 182,
+      "slots" : 3,
+      "steps" : 3,
+      "timing_pass_1" : {
+        "encode_seconds" : 0,
+        "prefill_cached" : true,
+        "step_seconds" : [
+          0.074959458004741464,
+          0.089805625000735745,
+          0.088584791999892332
+        ],
+        "total_seconds" : 0.25419858399982331
+      },
+      "timing_pass_2" : {
+        "encode_seconds" : 0.20835316699958639,
+        "prefill_cached" : false,
+        "step_seconds" : [
+          0.1321368330027326,
+          0.15565437500481494,
+          0.094929792001494206
+        ],
+        "total_seconds" : 0.66214349999791011
+      },
+      "top_label_agreement" : 3,
+      "written" : [
+        [
+          603,
+          236771,
+          951
+        ],
+        [
+          603,
+          236771,
+          951
+        ]
+      ],
+      "written_equal" : false
+    },
+    {
+      "id" : "lines_10_mixed\/g0\/c0\/steps2",
+      "max_entropy_difference" : 0.067789540038820872,
+      "max_entropy_difference_on_oracle_set" : 0.067463473423631876,
+      "max_label_logprob_difference" : 2.1442699432373047,
+      "max_probability_difference" : 0.02207061370348002,
+      "min_top20_overlap" : 13,
+      "per_slot" : [
+        {
+          "entropy_difference" : 0.0070725861603357504,
+          "max_probability_difference" : 0.0021962140461276869,
+          "top_label_agrees" : true,
+          "top20_overlap" : 19
+        },
+        {
+          "entropy_difference" : 0.046174246417907225,
+          "max_probability_difference" : 0.0097936049445651024,
+          "top_label_agrees" : true,
+          "top20_overlap" : 13
+        },
+        {
+          "entropy_difference" : 0.00045667936778523606,
+          "max_probability_difference" : 0.00014243359895914316,
+          "top_label_agrees" : true,
+          "top20_overlap" : 19
+        },
+        {
+          "entropy_difference" : 0.010687244595262796,
+          "max_probability_difference" : 0.0010893405450664538,
+          "top_label_agrees" : true,
+          "top20_overlap" : 17
+        },
+        {
+          "entropy_difference" : 0.049283271321008321,
+          "max_probability_difference" : 0.012697899639854682,
+          "top_label_agrees" : true,
+          "top20_overlap" : 15
+        },
+        {
+          "entropy_difference" : 0.00019788250833602814,
+          "max_probability_difference" : 2.3763838426282824e-05,
+          "top_label_agrees" : true,
+          "top20_overlap" : 15
+        },
+        {
+          "entropy_difference" : 0.067789540038820872,
+          "max_probability_difference" : 0.014127321789204415,
+          "top_label_agrees" : true,
+          "top20_overlap" : 17
+        },
+        {
+          "entropy_difference" : 0.038949228410672582,
+          "max_probability_difference" : 0.02207061370348002,
+          "top_label_agrees" : true,
+          "top20_overlap" : 14
+        },
+        {
+          "entropy_difference" : 0.0002324691326171073,
+          "max_probability_difference" : 1.9386001319121604e-05,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        },
+        {
+          "entropy_difference" : 0.009469403876975712,
+          "max_probability_difference" : 0.0011464259042645421,
+          "top_label_agrees" : true,
+          "top20_overlap" : 17
+        }
+      ],
+      "prompt_tokens" : 329,
+      "slots" : 10,
+      "steps" : 2,
+      "timing_pass_1" : {
+        "encode_seconds" : 0,
+        "prefill_cached" : true,
+        "step_seconds" : [
+          0.10380187499686144,
+          0.18028366700309562
+        ],
+        "total_seconds" : 0.28466458299953956
+      },
+      "timing_pass_2" : {
+        "encode_seconds" : 0,
+        "prefill_cached" : true,
+        "step_seconds" : [
+          0.10065333300008206,
+          0.14251320800394751
+        ],
+        "total_seconds" : 0.24635108299844433
+      },
+      "top_label_agreement" : 10,
+      "written" : [
+        [
+          951,
+          562,
+          236771,
+          951,
+          562,
+          236771,
+          951,
+          562,
+          236771,
+          951
+        ]
+      ],
+      "written_equal" : true
+    },
+    {
+      "id" : "lines_10_mixed\/g0\/c0\/steps3",
+      "max_entropy_difference" : 0.013040385288313618,
+      "max_entropy_difference_on_oracle_set" : 0.012625524669342296,
+      "max_label_logprob_difference" : 2.5711393356323242,
+      "max_probability_difference" : 0.0007730481439106123,
+      "min_top20_overlap" : 12,
+      "per_slot" : [
+        {
+          "entropy_difference" : 0.0053855811859554823,
+          "max_probability_difference" : 0.0007730481439106123,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        },
+        {
+          "entropy_difference" : 0.0038298191620295251,
+          "max_probability_difference" : 0.00052346374675826812,
+          "top_label_agrees" : true,
+          "top20_overlap" : 12
+        },
+        {
+          "entropy_difference" : 0.002233553174477561,
+          "max_probability_difference" : 0.0001220928973008073,
+          "top_label_agrees" : true,
+          "top20_overlap" : 17
+        },
+        {
+          "entropy_difference" : 0.00068323923995369665,
+          "max_probability_difference" : 8.4707656829163542e-06,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        },
+        {
+          "entropy_difference" : 0.0005640237022358956,
+          "max_probability_difference" : 0.00010387518430077236,
+          "top_label_agrees" : true,
+          "top20_overlap" : 16
+        },
+        {
+          "entropy_difference" : 3.6910071243581534e-05,
+          "max_probability_difference" : 1.4221021320822469e-06,
+          "top_label_agrees" : true,
+          "top20_overlap" : 17
+        },
+        {
+          "entropy_difference" : 0.013040385288313618,
+          "max_probability_difference" : 7.7978618569442769e-05,
+          "top_label_agrees" : true,
+          "top20_overlap" : 14
+        },
+        {
+          "entropy_difference" : 0.00089040022938294792,
+          "max_probability_difference" : 0.00012623296874388968,
+          "top_label_agrees" : true,
+          "top20_overlap" : 17
+        },
+        {
+          "entropy_difference" : 0.00025474702549568406,
+          "max_probability_difference" : 1.8356470435465511e-05,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        },
+        {
+          "entropy_difference" : 0.0028261262914291794,
+          "max_probability_difference" : 1.8044105722259118e-05,
+          "top_label_agrees" : true,
+          "top20_overlap" : 16
+        }
+      ],
+      "prompt_tokens" : 329,
+      "slots" : 10,
+      "steps" : 3,
+      "timing_pass_1" : {
+        "encode_seconds" : 0,
+        "prefill_cached" : true,
+        "step_seconds" : [
+          0.097460958000738174,
+          0.11644766699464526,
+          0.13293858299584826
+        ],
+        "total_seconds" : 0.34774574999755714
+      },
+      "timing_pass_2" : {
+        "encode_seconds" : 0.33348962500167545,
+        "prefill_cached" : false,
+        "step_seconds" : [
+          0.10452833300223574,
+          0.1862276660031057,
+          0.164243457998964
+        ],
+        "total_seconds" : 0.80518587500409922
+      },
+      "top_label_agreement" : 10,
+      "written" : [
+        [
+          951,
+          562,
+          236771,
+          951,
+          562,
+          236771,
+          951,
+          562,
+          236771,
+          951
+        ],
+        [
+          951,
+          562,
+          236771,
+          951,
+          562,
+          236771,
+          951,
+          562,
+          236771,
+          951
+        ]
+      ],
+      "written_equal" : true
+    },
+    {
+      "id" : "long_state\/g0\/c0\/steps2",
+      "max_entropy_difference" : 0.026365816586116114,
+      "max_entropy_difference_on_oracle_set" : 0.02605629650932105,
+      "max_label_logprob_difference" : 1.1943588256835938,
+      "max_probability_difference" : 0.004419208332179572,
+      "min_top20_overlap" : 14,
+      "per_slot" : [
+        {
+          "entropy_difference" : 0.0085975557697232259,
+          "max_probability_difference" : 5.2841571823743776e-06,
+          "top_label_agrees" : true,
+          "top20_overlap" : 14
+        },
+        {
+          "entropy_difference" : 0.00030677687508088702,
+          "max_probability_difference" : 0.00018582349062552667,
+          "top_label_agrees" : true,
+          "top20_overlap" : 18
+        },
+        {
+          "entropy_difference" : 0.026365816586116114,
+          "max_probability_difference" : 0.004419208332179572,
+          "top_label_agrees" : true,
+          "top20_overlap" : 16
+        }
+      ],
+      "prompt_tokens" : 2939,
+      "slots" : 3,
+      "steps" : 2,
+      "timing_pass_1" : {
+        "encode_seconds" : 0,
+        "prefill_cached" : true,
+        "step_seconds" : [
+          0.092733958997996524,
+          0.10848162500042235
+        ],
+        "total_seconds" : 0.20369458299683174
+      },
+      "timing_pass_2" : {
+        "encode_seconds" : 0,
+        "prefill_cached" : true,
+        "step_seconds" : [
+          0.08130275000439724,
+          0.096345291000034194
+        ],
+        "total_seconds" : 0.17799704099888913
+      },
+      "top_label_agreement" : 3,
+      "written" : [
+        [
+          603,
+          236770,
+          11262
+        ]
+      ],
+      "written_equal" : true
+    },
+    {
+      "id" : "long_state\/g0\/c0\/steps3",
+      "max_entropy_difference" : 0.0037953568935782181,
+      "max_entropy_difference_on_oracle_set" : 0.0036061938303657698,
+      "max_label_logprob_difference" : 0.77894210815429688,
+      "max_probability_difference" : 0.00059441702172502442,
+      "min_top20_overlap" : 16,
+      "per_slot" : [
+        {
+          "entropy_difference" : 0.0021459597933288152,
+          "max_probability_difference" : 1.8587635077671472e-05,
+          "top_label_agrees" : true,
+          "top20_overlap" : 17
+        },
+        {
+          "entropy_difference" : 0.0011689915291237685,
+          "max_probability_difference" : 0.00020723884877427192,
+          "top_label_agrees" : true,
+          "top20_overlap" : 19
+        },
+        {
+          "entropy_difference" : 0.0037953568935782181,
+          "max_probability_difference" : 0.00059441702172502442,
+          "top_label_agrees" : true,
+          "top20_overlap" : 16
+        }
+      ],
+      "prompt_tokens" : 2939,
+      "slots" : 3,
+      "steps" : 3,
+      "timing_pass_1" : {
+        "encode_seconds" : 0,
+        "prefill_cached" : true,
+        "step_seconds" : [
+          0.095289583005069289,
+          0.10530595800082665,
+          0.11280845799774397
+        ],
+        "total_seconds" : 0.31494066699815448
+      },
+      "timing_pass_2" : {
+        "encode_seconds" : 2.7315622919995803,
+        "prefill_cached" : false,
+        "step_seconds" : [
+          0.2840180830025929,
+          0.092272041998512577,
+          0.091906166999251582
+        ],
+        "total_seconds" : 3.2007275840005605
+      },
+      "top_label_agreement" : 3,
+      "written" : [
+        [
+          603,
+          236770,
+          11262
+        ],
+        [
+          603,
+          236770,
+          11262
+        ]
+      ],
+      "written_equal" : true
+    }
+  ],
+  "reads_differing_between_passes" : [
+
+  ],
+  "warmup_read_seconds" : 5.1823885420017177
+}
