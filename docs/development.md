@@ -231,6 +231,7 @@ The runs of 2026-09-30 reported these images and toolchains:
 |---|---|---|
 | `Linux` | `ubuntu-24.04` 20260920.314.1, `swift:6.2-noble` | Swift 6.2.4 (`swift-6.2.4-RELEASE`) |
 | `macOS` | `macos-26-arm64` 20260907.0351.1: macOS 26.6.2, Apple M1 (virtual), 3 CPUs, 7 GB | Xcode 26.6 (17F113), Swift 6.3.3, Metal Toolchain installed with the image |
+| `iOS` | `macos-26-arm64` 20260907.0351.1, the same as the macOS job | Xcode 26.6 (17F113), Swift 6.3.3, the iPhone 17 Pro of the iOS 26.5 runtime |
 | `Regenerate the fixtures` | `macos-26-arm64` 20260907.0351.1 | CPython 3.14.7 |
 
 And took this long:
@@ -239,6 +240,7 @@ And took this long:
 |---|---|---|
 | `Linux` | 3.5 minutes: build 128 s, tests 14 s | 1.5 minutes: build 26 s, tests 20 s |
 | `macOS` | 8 minutes: build 270 s with Swift Build (355 s with the native build system), tests 52 s | 3 minutes: cache restore 33 s, build 76 s, tests 37 s |
+| `iOS` | 10 minutes: resolve 100 s, tests 129 s, `OpenJevDiffusionGemma` 327 s | 10 minutes: cache restore 13 s, resolve 32 s, tests 163 s, `OpenJevDiffusionGemma` 382 s |
 | `Regenerate the fixtures` | 41 s | 39 s |
 
 - **Why Swift Build on macOS.** Xcode 26.6's `swift build` uses the native build system, which does
@@ -278,7 +280,9 @@ And took this long:
   which holds the SwiftPM checkouts, the clones they come from and the build products. The iOS
   job caches only the checkouts, which `xcodebuild` keeps under `.build/ios/SourcePackages`. The
   key is the compiler's build identifier, the macOS build system and the hash of
-  `Package.resolved`, so a new toolchain or a dependency change starts from an empty directory. A
+  `Package.resolved`, so a new toolchain or a dependency change starts from an empty directory.
+  The iOS cache therefore saves the clone, not the compiling, and the job takes about ten minutes
+  either way; caching its build products would mean caching gigabytes of MLX intermediates. A
   cache that `main` saved serves every pull request; one that a pull request saved serves only
   that pull request. The fixtures job
   caches pip downloads, keyed on `requirements.txt`, and the tokenizer download, keyed on the
