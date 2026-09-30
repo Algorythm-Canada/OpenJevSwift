@@ -1,0 +1,991 @@
+{
+ "summary": {
+  "reads": 27,
+  "control_bit_identical": 27,
+  "decoders": {
+   "max_probability_difference": 0.29647062316790845,
+   "top_label_agreement": 152,
+   "max_label_logprob_difference": 4.0320892333984375
+  },
+  "encoders": {
+   "max_probability_difference": 0.27283012282779834,
+   "top_label_agreement": 149,
+   "max_label_logprob_difference": 3.440683364868164
+  },
+  "slots": 156
+ },
+ "reads": [
+  {
+   "id": "single_noul/g0/c0/steps1",
+   "control_bit_identical_to_oracle": true,
+   "mlxvlm_decoder_on_fork_cache_vs_fork": {
+    "max_probability_difference": 0.0003998974811205702,
+    "top_label_agreement": 1,
+    "slots": 1,
+    "max_entropy_difference": 0.22409638800497067,
+    "max_label_logprob_difference": 0.12195968627929688
+   },
+   "mlxvlm_decoder_on_fork_cache_vs_oracle": {
+    "max_probability_difference": 0.0010966754438423987,
+    "top_label_agreement": 1,
+    "slots": 1,
+    "max_entropy_difference": 0.31333683513244337,
+    "max_label_logprob_difference": 0.15555763244628906
+   },
+   "fork_vs_oracle": {
+    "max_probability_difference": 0.001496572924962969,
+    "top_label_agreement": 1,
+    "slots": 1,
+    "max_entropy_difference": 0.537433223137414,
+    "max_label_logprob_difference": 0.27751731872558594
+   },
+   "written_on_fork_cache": [],
+   "written_fork": [],
+   "written_oracle": []
+  },
+  {
+   "id": "single_noul/g0/c2/steps1",
+   "control_bit_identical_to_oracle": true,
+   "mlxvlm_decoder_on_fork_cache_vs_fork": {
+    "max_probability_difference": 0.00035903336177956207,
+    "top_label_agreement": 1,
+    "slots": 1,
+    "max_entropy_difference": 0.059574572758138405,
+    "max_label_logprob_difference": 0.33878135681152344
+   },
+   "mlxvlm_decoder_on_fork_cache_vs_oracle": {
+    "max_probability_difference": 0.0007248377857183569,
+    "top_label_agreement": 1,
+    "slots": 1,
+    "max_entropy_difference": 0.06899449211950057,
+    "max_label_logprob_difference": 0.8299427032470703
+   },
+   "fork_vs_oracle": {
+    "max_probability_difference": 0.0003658044239388536,
+    "top_label_agreement": 1,
+    "slots": 1,
+    "max_entropy_difference": 0.009419919361362161,
+    "max_label_logprob_difference": 0.4911613464355469
+   },
+   "written_on_fork_cache": [],
+   "written_fork": [],
+   "written_oracle": []
+  },
+  {
+   "id": "quickstart/g0/c0/steps1",
+   "control_bit_identical_to_oracle": true,
+   "mlxvlm_decoder_on_fork_cache_vs_fork": {
+    "max_probability_difference": 0.07397004132455465,
+    "top_label_agreement": 3,
+    "slots": 3,
+    "max_entropy_difference": 0.11097064682133886,
+    "max_label_logprob_difference": 0.6013736724853516
+   },
+   "mlxvlm_decoder_on_fork_cache_vs_oracle": {
+    "max_probability_difference": 0.2264516042581156,
+    "top_label_agreement": 2,
+    "slots": 3,
+    "max_entropy_difference": 0.04003644490071212,
+    "max_label_logprob_difference": 0.8741035461425781
+   },
+   "fork_vs_oracle": {
+    "max_probability_difference": 0.15248156293356102,
+    "top_label_agreement": 2,
+    "slots": 3,
+    "max_entropy_difference": 0.10206751922989485,
+    "max_label_logprob_difference": 0.8238124847412109
+   },
+   "written_on_fork_cache": [],
+   "written_fork": [],
+   "written_oracle": []
+  },
+  {
+   "id": "quickstart/g0/c1/steps1",
+   "control_bit_identical_to_oracle": true,
+   "mlxvlm_decoder_on_fork_cache_vs_fork": {
+    "max_probability_difference": 0.1831179094625347,
+    "top_label_agreement": 3,
+    "slots": 3,
+    "max_entropy_difference": 0.21119770085974693,
+    "max_label_logprob_difference": 0.804656982421875
+   },
+   "mlxvlm_decoder_on_fork_cache_vs_oracle": {
+    "max_probability_difference": 0.271882457761897,
+    "top_label_agreement": 3,
+    "slots": 3,
+    "max_entropy_difference": 0.4032883358057335,
+    "max_label_logprob_difference": 1.717020034790039
+   },
+   "fork_vs_oracle": {
+    "max_probability_difference": 0.0887645482993625,
+    "top_label_agreement": 3,
+    "slots": 3,
+    "max_entropy_difference": 0.19209063494598655,
+    "max_label_logprob_difference": 1.2981977462768555
+   },
+   "written_on_fork_cache": [],
+   "written_fork": [],
+   "written_oracle": []
+  },
+  {
+   "id": "quickstart/g0/c2/steps1",
+   "control_bit_identical_to_oracle": true,
+   "mlxvlm_decoder_on_fork_cache_vs_fork": {
+    "max_probability_difference": 0.014094674524667464,
+    "top_label_agreement": 3,
+    "slots": 3,
+    "max_entropy_difference": 0.09439202944166197,
+    "max_label_logprob_difference": 0.2456073760986328
+   },
+   "mlxvlm_decoder_on_fork_cache_vs_oracle": {
+    "max_probability_difference": 0.13455267002688642,
+    "top_label_agreement": 2,
+    "slots": 3,
+    "max_entropy_difference": 0.12140961197567463,
+    "max_label_logprob_difference": 0.9035882949829102
+   },
+   "fork_vs_oracle": {
+    "max_probability_difference": 0.13455267002688642,
+    "top_label_agreement": 2,
+    "slots": 3,
+    "max_entropy_difference": 0.08835728384565333,
+    "max_label_logprob_difference": 0.8985624313354492
+   },
+   "written_on_fork_cache": [],
+   "written_fork": [],
+   "written_oracle": []
+  },
+  {
+   "id": "nouls_8/g0/c0/steps1",
+   "control_bit_identical_to_oracle": true,
+   "mlxvlm_decoder_on_fork_cache_vs_fork": {
+    "max_probability_difference": 0.08425466470866116,
+    "top_label_agreement": 8,
+    "slots": 8,
+    "max_entropy_difference": 0.09315725213217518,
+    "max_label_logprob_difference": 0.3585472106933594
+   },
+   "mlxvlm_decoder_on_fork_cache_vs_oracle": {
+    "max_probability_difference": 0.18899018259913675,
+    "top_label_agreement": 8,
+    "slots": 8,
+    "max_entropy_difference": 0.265501013247248,
+    "max_label_logprob_difference": 1.0439510345458984
+   },
+   "fork_vs_oracle": {
+    "max_probability_difference": 0.10473551789047567,
+    "top_label_agreement": 8,
+    "slots": 8,
+    "max_entropy_difference": 0.17234376111507282,
+    "max_label_logprob_difference": 1.1347999572753906
+   },
+   "written_on_fork_cache": [],
+   "written_fork": [],
+   "written_oracle": []
+  },
+  {
+   "id": "nouls_8/g0/c1/steps1",
+   "control_bit_identical_to_oracle": true,
+   "mlxvlm_decoder_on_fork_cache_vs_fork": {
+    "max_probability_difference": 0.07506183165289582,
+    "top_label_agreement": 8,
+    "slots": 8,
+    "max_entropy_difference": 0.10220966899098277,
+    "max_label_logprob_difference": 0.4696941375732422
+   },
+   "mlxvlm_decoder_on_fork_cache_vs_oracle": {
+    "max_probability_difference": 0.1889009669498528,
+    "top_label_agreement": 8,
+    "slots": 8,
+    "max_entropy_difference": 0.18154882394066774,
+    "max_label_logprob_difference": 1.0247726440429688
+   },
+   "fork_vs_oracle": {
+    "max_probability_difference": 0.113839135296957,
+    "top_label_agreement": 8,
+    "slots": 8,
+    "max_entropy_difference": 0.14522619434610365,
+    "max_label_logprob_difference": 0.7115859985351562
+   },
+   "written_on_fork_cache": [],
+   "written_fork": [],
+   "written_oracle": []
+  },
+  {
+   "id": "lines_10_mixed/g0/c0/steps1",
+   "control_bit_identical_to_oracle": true,
+   "mlxvlm_decoder_on_fork_cache_vs_fork": {
+    "max_probability_difference": 0.0722885662773004,
+    "top_label_agreement": 10,
+    "slots": 10,
+    "max_entropy_difference": 0.1390179165857306,
+    "max_label_logprob_difference": 0.43214988708496094
+   },
+   "mlxvlm_decoder_on_fork_cache_vs_oracle": {
+    "max_probability_difference": 0.20422924187310515,
+    "top_label_agreement": 10,
+    "slots": 10,
+    "max_entropy_difference": 0.149536942024468,
+    "max_label_logprob_difference": 1.0214290618896484
+   },
+   "fork_vs_oracle": {
+    "max_probability_difference": 0.1947242458024529,
+    "top_label_agreement": 10,
+    "slots": 10,
+    "max_entropy_difference": 0.17349762854220996,
+    "max_label_logprob_difference": 0.9477100372314453
+   },
+   "written_on_fork_cache": [],
+   "written_fork": [],
+   "written_oracle": []
+  },
+  {
+   "id": "lines_10_mixed/g0/c1/steps1",
+   "control_bit_identical_to_oracle": true,
+   "mlxvlm_decoder_on_fork_cache_vs_fork": {
+    "max_probability_difference": 0.021909900430157725,
+    "top_label_agreement": 10,
+    "slots": 10,
+    "max_entropy_difference": 0.04168798622611192,
+    "max_label_logprob_difference": 0.6863269805908203
+   },
+   "mlxvlm_decoder_on_fork_cache_vs_oracle": {
+    "max_probability_difference": 0.2130597740867225,
+    "top_label_agreement": 10,
+    "slots": 10,
+    "max_entropy_difference": 0.1849155169735468,
+    "max_label_logprob_difference": 2.1649398803710938
+   },
+   "fork_vs_oracle": {
+    "max_probability_difference": 0.21828363476481005,
+    "top_label_agreement": 10,
+    "slots": 10,
+    "max_entropy_difference": 0.21818803731439135,
+    "max_label_logprob_difference": 2.3125038146972656
+   },
+   "written_on_fork_cache": [],
+   "written_fork": [],
+   "written_oracle": []
+  },
+  {
+   "id": "six_questions/g0/c0/steps1",
+   "control_bit_identical_to_oracle": true,
+   "mlxvlm_decoder_on_fork_cache_vs_fork": {
+    "max_probability_difference": 0.04622774495192661,
+    "top_label_agreement": 6,
+    "slots": 6,
+    "max_entropy_difference": 0.0558257925923934,
+    "max_label_logprob_difference": 1.1329708099365234
+   },
+   "mlxvlm_decoder_on_fork_cache_vs_oracle": {
+    "max_probability_difference": 0.1994786285447348,
+    "top_label_agreement": 6,
+    "slots": 6,
+    "max_entropy_difference": 0.15778731760312315,
+    "max_label_logprob_difference": 1.364375114440918
+   },
+   "fork_vs_oracle": {
+    "max_probability_difference": 0.15325088359280825,
+    "top_label_agreement": 6,
+    "slots": 6,
+    "max_entropy_difference": 0.10196152501072975,
+    "max_label_logprob_difference": 0.8321170806884766
+   },
+   "written_on_fork_cache": [],
+   "written_fork": [],
+   "written_oracle": []
+  },
+  {
+   "id": "non_ascii/g0/c0/steps1",
+   "control_bit_identical_to_oracle": true,
+   "mlxvlm_decoder_on_fork_cache_vs_fork": {
+    "max_probability_difference": 0.29647062316790845,
+    "top_label_agreement": 2,
+    "slots": 3,
+    "max_entropy_difference": 0.1543516028811961,
+    "max_label_logprob_difference": 4.0320892333984375
+   },
+   "mlxvlm_decoder_on_fork_cache_vs_oracle": {
+    "max_probability_difference": 0.154425522577195,
+    "top_label_agreement": 3,
+    "slots": 3,
+    "max_entropy_difference": 0.4900890145429331,
+    "max_label_logprob_difference": 2.2020797729492188
+   },
+   "fork_vs_oracle": {
+    "max_probability_difference": 0.45089614574510345,
+    "top_label_agreement": 2,
+    "slots": 3,
+    "max_entropy_difference": 0.3976817747018564,
+    "max_label_logprob_difference": 3.5987462997436523
+   },
+   "written_on_fork_cache": [],
+   "written_fork": [],
+   "written_oracle": []
+  },
+  {
+   "id": "indexed_12_mixed/g0/c0/steps1",
+   "control_bit_identical_to_oracle": true,
+   "mlxvlm_decoder_on_fork_cache_vs_fork": {
+    "max_probability_difference": 0.2057190861727164,
+    "top_label_agreement": 11,
+    "slots": 12,
+    "max_entropy_difference": 0.5795083695814267,
+    "max_label_logprob_difference": 2.084512710571289
+   },
+   "mlxvlm_decoder_on_fork_cache_vs_oracle": {
+    "max_probability_difference": 0.2529249074005271,
+    "top_label_agreement": 10,
+    "slots": 12,
+    "max_entropy_difference": 0.26989063068809616,
+    "max_label_logprob_difference": 2.6744766235351562
+   },
+   "fork_vs_oracle": {
+    "max_probability_difference": 0.24018395299389494,
+    "top_label_agreement": 9,
+    "slots": 12,
+    "max_entropy_difference": 0.41050986442082227,
+    "max_label_logprob_difference": 3.3730688095092773
+   },
+   "written_on_fork_cache": [],
+   "written_fork": [],
+   "written_oracle": []
+  },
+  {
+   "id": "indexed_12_mixed/g0/c1/steps1",
+   "control_bit_identical_to_oracle": true,
+   "mlxvlm_decoder_on_fork_cache_vs_fork": {
+    "max_probability_difference": 0.16084838510189137,
+    "top_label_agreement": 10,
+    "slots": 12,
+    "max_entropy_difference": 0.32544878258603704,
+    "max_label_logprob_difference": 1.7399101257324219
+   },
+   "mlxvlm_decoder_on_fork_cache_vs_oracle": {
+    "max_probability_difference": 0.09728886709106324,
+    "top_label_agreement": 11,
+    "slots": 12,
+    "max_entropy_difference": 0.3634175848421848,
+    "max_label_logprob_difference": 1.9148874282836914
+   },
+   "fork_vs_oracle": {
+    "max_probability_difference": 0.19216353488448434,
+    "top_label_agreement": 11,
+    "slots": 12,
+    "max_entropy_difference": 0.4614152123412463,
+    "max_label_logprob_difference": 2.4987916946411133
+   },
+   "written_on_fork_cache": [],
+   "written_fork": [],
+   "written_oracle": []
+  },
+  {
+   "id": "many_choices/g0/c0/steps1",
+   "control_bit_identical_to_oracle": true,
+   "mlxvlm_decoder_on_fork_cache_vs_fork": {
+    "max_probability_difference": 0.1353964131678454,
+    "top_label_agreement": 4,
+    "slots": 4,
+    "max_entropy_difference": 0.2721539606062602,
+    "max_label_logprob_difference": 0.9321022033691406
+   },
+   "mlxvlm_decoder_on_fork_cache_vs_oracle": {
+    "max_probability_difference": 0.27283012282779834,
+    "top_label_agreement": 3,
+    "slots": 4,
+    "max_entropy_difference": 0.24063208165316885,
+    "max_label_logprob_difference": 2.0173721313476562
+   },
+   "fork_vs_oracle": {
+    "max_probability_difference": 0.2520791205774247,
+    "top_label_agreement": 3,
+    "slots": 4,
+    "max_entropy_difference": 0.2515987063982852,
+    "max_label_logprob_difference": 1.9906883239746094
+   },
+   "written_on_fork_cache": [],
+   "written_fork": [],
+   "written_oracle": []
+  },
+  {
+   "id": "many_choices/g0/c1/steps1",
+   "control_bit_identical_to_oracle": true,
+   "mlxvlm_decoder_on_fork_cache_vs_fork": {
+    "max_probability_difference": 0.17072444092026445,
+    "top_label_agreement": 4,
+    "slots": 4,
+    "max_entropy_difference": 0.37618675083642006,
+    "max_label_logprob_difference": 0.7688388824462891
+   },
+   "mlxvlm_decoder_on_fork_cache_vs_oracle": {
+    "max_probability_difference": 0.23955160417117716,
+    "top_label_agreement": 3,
+    "slots": 4,
+    "max_entropy_difference": 0.2516024356196098,
+    "max_label_logprob_difference": 1.2554378509521484
+   },
+   "fork_vs_oracle": {
+    "max_probability_difference": 0.2716105362894678,
+    "top_label_agreement": 3,
+    "slots": 4,
+    "max_entropy_difference": 0.24444459524595663,
+    "max_label_logprob_difference": 1.2950897216796875
+   },
+   "written_on_fork_cache": [],
+   "written_fork": [],
+   "written_oracle": []
+  },
+  {
+   "id": "widest_schema/g0/c0/steps1",
+   "control_bit_identical_to_oracle": true,
+   "mlxvlm_decoder_on_fork_cache_vs_fork": {
+    "max_probability_difference": 0.12391661893762163,
+    "top_label_agreement": 3,
+    "slots": 3,
+    "max_entropy_difference": 0.16637638356806672,
+    "max_label_logprob_difference": 1.1728591918945312
+   },
+   "mlxvlm_decoder_on_fork_cache_vs_oracle": {
+    "max_probability_difference": 0.0635848664816171,
+    "top_label_agreement": 3,
+    "slots": 3,
+    "max_entropy_difference": 0.1015783315965364,
+    "max_label_logprob_difference": 2.7562427520751953
+   },
+   "fork_vs_oracle": {
+    "max_probability_difference": 0.1875014854192386,
+    "top_label_agreement": 3,
+    "slots": 3,
+    "max_entropy_difference": 0.23592859763699847,
+    "max_label_logprob_difference": 2.5157155990600586
+   },
+   "written_on_fork_cache": [],
+   "written_fork": [],
+   "written_oracle": []
+  },
+  {
+   "id": "widest_schema/g0/c1/steps1",
+   "control_bit_identical_to_oracle": true,
+   "mlxvlm_decoder_on_fork_cache_vs_fork": {
+    "max_probability_difference": 0.03357881068188423,
+    "top_label_agreement": 3,
+    "slots": 3,
+    "max_entropy_difference": 0.09814737224544268,
+    "max_label_logprob_difference": 0.7647991180419922
+   },
+   "mlxvlm_decoder_on_fork_cache_vs_oracle": {
+    "max_probability_difference": 0.04139719256426588,
+    "top_label_agreement": 3,
+    "slots": 3,
+    "max_entropy_difference": 0.13833660982753804,
+    "max_label_logprob_difference": 2.2226314544677734
+   },
+   "fork_vs_oracle": {
+    "max_probability_difference": 0.07497600324615006,
+    "top_label_agreement": 3,
+    "slots": 3,
+    "max_entropy_difference": 0.12925510626948278,
+    "max_label_logprob_difference": 2.3060340881347656
+   },
+   "written_on_fork_cache": [],
+   "written_fork": [],
+   "written_oracle": []
+  },
+  {
+   "id": "nouls_24/g0/c0/steps1",
+   "control_bit_identical_to_oracle": true,
+   "mlxvlm_decoder_on_fork_cache_vs_fork": {
+    "max_probability_difference": 0.009066810210589887,
+    "top_label_agreement": 17,
+    "slots": 17,
+    "max_entropy_difference": 0.07663096123378996,
+    "max_label_logprob_difference": 1.992671012878418
+   },
+   "mlxvlm_decoder_on_fork_cache_vs_oracle": {
+    "max_probability_difference": 0.010122067114389104,
+    "top_label_agreement": 17,
+    "slots": 17,
+    "max_entropy_difference": 0.12241033781698654,
+    "max_label_logprob_difference": 2.960116386413574
+   },
+   "fork_vs_oracle": {
+    "max_probability_difference": 0.0038707014514575144,
+    "top_label_agreement": 17,
+    "slots": 17,
+    "max_entropy_difference": 0.07628341894202088,
+    "max_label_logprob_difference": 2.23903751373291
+   },
+   "written_on_fork_cache": [],
+   "written_fork": [],
+   "written_oracle": []
+  },
+  {
+   "id": "nouls_24/g1/c0/steps1",
+   "control_bit_identical_to_oracle": true,
+   "mlxvlm_decoder_on_fork_cache_vs_fork": {
+    "max_probability_difference": 0.04212694813519324,
+    "top_label_agreement": 7,
+    "slots": 7,
+    "max_entropy_difference": 0.1639999355775853,
+    "max_label_logprob_difference": 1.4831008911132812
+   },
+   "mlxvlm_decoder_on_fork_cache_vs_oracle": {
+    "max_probability_difference": 0.021622470949491768,
+    "top_label_agreement": 7,
+    "slots": 7,
+    "max_entropy_difference": 0.21565281303211403,
+    "max_label_logprob_difference": 0.5158634185791016
+   },
+   "fork_vs_oracle": {
+    "max_probability_difference": 0.04843391442269275,
+    "top_label_agreement": 7,
+    "slots": 7,
+    "max_entropy_difference": 0.20028421787735162,
+    "max_label_logprob_difference": 1.7566070556640625
+   },
+   "written_on_fork_cache": [],
+   "written_fork": [],
+   "written_oracle": []
+  },
+  {
+   "id": "long_state/g0/c0/steps1",
+   "control_bit_identical_to_oracle": true,
+   "mlxvlm_decoder_on_fork_cache_vs_fork": {
+    "max_probability_difference": 0.007936789082284332,
+    "top_label_agreement": 3,
+    "slots": 3,
+    "max_entropy_difference": 0.01658245177660078,
+    "max_label_logprob_difference": 0.29573631286621094
+   },
+   "mlxvlm_decoder_on_fork_cache_vs_oracle": {
+    "max_probability_difference": 0.03725978624980547,
+    "top_label_agreement": 3,
+    "slots": 3,
+    "max_entropy_difference": 0.08313892039741705,
+    "max_label_logprob_difference": 1.0542306900024414
+   },
+   "fork_vs_oracle": {
+    "max_probability_difference": 0.02932299716752114,
+    "top_label_agreement": 3,
+    "slots": 3,
+    "max_entropy_difference": 0.06655646862081627,
+    "max_label_logprob_difference": 1.0392532348632812
+   },
+   "written_on_fork_cache": [],
+   "written_fork": [],
+   "written_oracle": []
+  },
+  {
+   "id": "long_state/g0/c1/steps1",
+   "control_bit_identical_to_oracle": true,
+   "mlxvlm_decoder_on_fork_cache_vs_fork": {
+    "max_probability_difference": 0.03261099520421573,
+    "top_label_agreement": 3,
+    "slots": 3,
+    "max_entropy_difference": 0.06191523895134482,
+    "max_label_logprob_difference": 0.2703876495361328
+   },
+   "mlxvlm_decoder_on_fork_cache_vs_oracle": {
+    "max_probability_difference": 0.04696009398365511,
+    "top_label_agreement": 3,
+    "slots": 3,
+    "max_entropy_difference": 0.10341586899038502,
+    "max_label_logprob_difference": 1.2200336456298828
+   },
+   "fork_vs_oracle": {
+    "max_probability_difference": 0.07957108918787081,
+    "top_label_agreement": 3,
+    "slots": 3,
+    "max_entropy_difference": 0.16533110794172984,
+    "max_label_logprob_difference": 1.2223358154296875
+   },
+   "written_on_fork_cache": [],
+   "written_fork": [],
+   "written_oracle": []
+  },
+  {
+   "id": "quickstart/g0/c0/steps2",
+   "control_bit_identical_to_oracle": true,
+   "mlxvlm_decoder_on_fork_cache_vs_fork": {
+    "max_probability_difference": 0.0021242995788086005,
+    "top_label_agreement": 3,
+    "slots": 3,
+    "max_entropy_difference": 0.013615518508457127,
+    "max_label_logprob_difference": 2.766350746154785
+   },
+   "mlxvlm_decoder_on_fork_cache_vs_oracle": {
+    "max_probability_difference": 0.1400225061560372,
+    "top_label_agreement": 3,
+    "slots": 3,
+    "max_entropy_difference": 0.3543926343849094,
+    "max_label_logprob_difference": 3.440683364868164
+   },
+   "fork_vs_oracle": {
+    "max_probability_difference": 0.14158924302599063,
+    "top_label_agreement": 3,
+    "slots": 3,
+    "max_entropy_difference": 0.3558802269129814,
+    "max_label_logprob_difference": 2.3255062103271484
+   },
+   "written_on_fork_cache": [
+    [
+     603,
+     236771,
+     951
+    ]
+   ],
+   "written_fork": [
+    [
+     603,
+     236771,
+     951
+    ]
+   ],
+   "written_oracle": [
+    [
+     603,
+     236771,
+     11262
+    ]
+   ]
+  },
+  {
+   "id": "quickstart/g0/c0/steps3",
+   "control_bit_identical_to_oracle": true,
+   "mlxvlm_decoder_on_fork_cache_vs_fork": {
+    "max_probability_difference": 0.00023287387751366035,
+    "top_label_agreement": 3,
+    "slots": 3,
+    "max_entropy_difference": 0.001323881373828978,
+    "max_label_logprob_difference": 0.9128246307373047
+   },
+   "mlxvlm_decoder_on_fork_cache_vs_oracle": {
+    "max_probability_difference": 0.0027848981968346953,
+    "top_label_agreement": 3,
+    "slots": 3,
+    "max_entropy_difference": 0.010713379411620517,
+    "max_label_logprob_difference": 1.6232624053955078
+   },
+   "fork_vs_oracle": {
+    "max_probability_difference": 0.0030177720743481684,
+    "top_label_agreement": 3,
+    "slots": 3,
+    "max_entropy_difference": 0.011968162216299132,
+    "max_label_logprob_difference": 1.5486869812011719
+   },
+   "written_on_fork_cache": [
+    [
+     603,
+     236771,
+     951
+    ],
+    [
+     603,
+     236771,
+     951
+    ]
+   ],
+   "written_fork": [
+    [
+     603,
+     236771,
+     951
+    ],
+    [
+     603,
+     236771,
+     951
+    ]
+   ],
+   "written_oracle": [
+    [
+     603,
+     236771,
+     11262
+    ],
+    [
+     603,
+     236771,
+     951
+    ]
+   ]
+  },
+  {
+   "id": "lines_10_mixed/g0/c0/steps2",
+   "control_bit_identical_to_oracle": true,
+   "mlxvlm_decoder_on_fork_cache_vs_fork": {
+    "max_probability_difference": 0.010719884566695814,
+    "top_label_agreement": 10,
+    "slots": 10,
+    "max_entropy_difference": 0.053919049479154824,
+    "max_label_logprob_difference": 1.8411617279052734
+   },
+   "mlxvlm_decoder_on_fork_cache_vs_oracle": {
+    "max_probability_difference": 0.016850168526946527,
+    "top_label_agreement": 10,
+    "slots": 10,
+    "max_entropy_difference": 0.07480289134468388,
+    "max_label_logprob_difference": 2.1944656372070312
+   },
+   "fork_vs_oracle": {
+    "max_probability_difference": 0.02207061370348002,
+    "top_label_agreement": 10,
+    "slots": 10,
+    "max_entropy_difference": 0.06778954003882087,
+    "max_label_logprob_difference": 2.1442699432373047
+   },
+   "written_on_fork_cache": [
+    [
+     951,
+     562,
+     236771,
+     951,
+     562,
+     236771,
+     951,
+     562,
+     236771,
+     951
+    ]
+   ],
+   "written_fork": [
+    [
+     951,
+     562,
+     236771,
+     951,
+     562,
+     236771,
+     951,
+     562,
+     236771,
+     951
+    ]
+   ],
+   "written_oracle": [
+    [
+     951,
+     562,
+     236771,
+     951,
+     562,
+     236771,
+     951,
+     562,
+     236771,
+     951
+    ]
+   ]
+  },
+  {
+   "id": "lines_10_mixed/g0/c0/steps3",
+   "control_bit_identical_to_oracle": true,
+   "mlxvlm_decoder_on_fork_cache_vs_fork": {
+    "max_probability_difference": 0.0013318900050894866,
+    "top_label_agreement": 10,
+    "slots": 10,
+    "max_entropy_difference": 0.009856977211952136,
+    "max_label_logprob_difference": 1.4130306243896484
+   },
+   "mlxvlm_decoder_on_fork_cache_vs_oracle": {
+    "max_probability_difference": 0.0005588418611790491,
+    "top_label_agreement": 10,
+    "slots": 10,
+    "max_entropy_difference": 0.016632111849843634,
+    "max_label_logprob_difference": 2.489048957824707
+   },
+   "fork_vs_oracle": {
+    "max_probability_difference": 0.0007730481439106123,
+    "top_label_agreement": 10,
+    "slots": 10,
+    "max_entropy_difference": 0.013040385288313618,
+    "max_label_logprob_difference": 2.571139335632324
+   },
+   "written_on_fork_cache": [
+    [
+     951,
+     562,
+     236771,
+     951,
+     562,
+     236771,
+     951,
+     562,
+     236771,
+     951
+    ],
+    [
+     951,
+     562,
+     236771,
+     951,
+     562,
+     236771,
+     951,
+     562,
+     236771,
+     951
+    ]
+   ],
+   "written_fork": [
+    [
+     951,
+     562,
+     236771,
+     951,
+     562,
+     236771,
+     951,
+     562,
+     236771,
+     951
+    ],
+    [
+     951,
+     562,
+     236771,
+     951,
+     562,
+     236771,
+     951,
+     562,
+     236771,
+     951
+    ]
+   ],
+   "written_oracle": [
+    [
+     951,
+     562,
+     236771,
+     951,
+     562,
+     236771,
+     951,
+     562,
+     236771,
+     951
+    ],
+    [
+     951,
+     562,
+     236771,
+     951,
+     562,
+     236771,
+     951,
+     562,
+     236771,
+     951
+    ]
+   ]
+  },
+  {
+   "id": "long_state/g0/c0/steps2",
+   "control_bit_identical_to_oracle": true,
+   "mlxvlm_decoder_on_fork_cache_vs_fork": {
+    "max_probability_difference": 0.0014303555565778692,
+    "top_label_agreement": 3,
+    "slots": 3,
+    "max_entropy_difference": 0.007496153530504937,
+    "max_label_logprob_difference": 0.255645751953125
+   },
+   "mlxvlm_decoder_on_fork_cache_vs_oracle": {
+    "max_probability_difference": 0.002988852775601703,
+    "top_label_agreement": 3,
+    "slots": 3,
+    "max_entropy_difference": 0.018869663055611177,
+    "max_label_logprob_difference": 0.9387130737304688
+   },
+   "fork_vs_oracle": {
+    "max_probability_difference": 0.004419208332179572,
+    "top_label_agreement": 3,
+    "slots": 3,
+    "max_entropy_difference": 0.026365816586116114,
+    "max_label_logprob_difference": 1.1943588256835938
+   },
+   "written_on_fork_cache": [
+    [
+     603,
+     236770,
+     11262
+    ]
+   ],
+   "written_fork": [
+    [
+     603,
+     236770,
+     11262
+    ]
+   ],
+   "written_oracle": [
+    [
+     603,
+     236770,
+     11262
+    ]
+   ]
+  },
+  {
+   "id": "long_state/g0/c0/steps3",
+   "control_bit_identical_to_oracle": true,
+   "mlxvlm_decoder_on_fork_cache_vs_fork": {
+    "max_probability_difference": 0.0012794439340983533,
+    "top_label_agreement": 3,
+    "slots": 3,
+    "max_entropy_difference": 0.008142080307173977,
+    "max_label_logprob_difference": 0.6007499694824219
+   },
+   "mlxvlm_decoder_on_fork_cache_vs_oracle": {
+    "max_probability_difference": 0.0018738609558233573,
+    "top_label_agreement": 3,
+    "slots": 3,
+    "max_entropy_difference": 0.011937437200752195,
+    "max_label_logprob_difference": 0.5976810455322266
+   },
+   "fork_vs_oracle": {
+    "max_probability_difference": 0.0005944170217250244,
+    "top_label_agreement": 3,
+    "slots": 3,
+    "max_entropy_difference": 0.003795356893578218,
+    "max_label_logprob_difference": 0.7789421081542969
+   },
+   "written_on_fork_cache": [
+    [
+     603,
+     236770,
+     11262
+    ],
+    [
+     603,
+     236770,
+     11262
+    ]
+   ],
+   "written_fork": [
+    [
+     603,
+     236770,
+     11262
+    ],
+    [
+     603,
+     236770,
+     11262
+    ]
+   ],
+   "written_oracle": [
+    [
+     603,
+     236770,
+     11262
+    ],
+    [
+     603,
+     236770,
+     11262
+    ]
+   ]
+  }
+ ]
+}
