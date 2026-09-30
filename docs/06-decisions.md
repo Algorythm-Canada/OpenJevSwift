@@ -275,3 +275,47 @@ Decision.
    list; the result is the same.
 
 Status. Proposed with issue #18.
+
+## D-019 Sums follow CPython 3.12 and later: compensated, not a running total
+
+Context. Issue #16 asks for ports of `slot_distribution`, `confidence`, `to_answer` and the read
+averaging, and for the recorded answers to be reproduced byte for byte. Every one of those uses
+Python's built-in `sum` over floats. Since Python 3.12, `sum` uses Neumaier's compensated
+summation, so `sum([0.1] * 10)` is `1.0`, not `0.9999999999999999`. The fixtures were recorded
+with Python 3.14.7, and upstream's image and development setups run 3.12 or later.
+
+Decision. `OpenJevCore` has an internal `pythonSum` that reproduces CPython's algorithm, including
+adding the compensation only when it is non-zero and finite. It was checked against CPython
+3.14's `sum` on 20,000 random vectors with no difference. The expected score, the entropies, the
+softmax denominator and the averaged probabilities all use it. A deployment of upstream on Python
+3.11 or earlier would give different last bits; that is not a supported target.
+
+Status. Proposed with issue #16.
+
+## D-020 Slot distribution API and the expected distributions fixture layout
+
+Context. Issue #16 gives `SlotDistribution.compute(top: [Int: Double], labelIDs:)`. The entropy is
+a compensated sum over `top` in the order the backend returned it, and a compensated sum can
+differ in its last bit between orders. A Swift dictionary has no stable order.
+
+Decision.
+
+1. `SlotDistribution.compute(top: [(tokenID: Int, logprob: Double)], labelIDs:)` is the primary
+   form and keeps the backend's order; the dictionary form from the issue forwards to it. The
+   probabilities do not depend on the order.
+2. An empty `top`, an empty `labelIDs` or a token id repeated in `top` stops with a precondition
+   failure rather than throwing: a backend always returns at least one token and a question
+   always has a label, so these are programming errors.
+3. `Confidence.compute` returns 1.0 for `K <= 1`, where upstream's formula divides by zero. Upstream
+   never gets there because forced answers set 1.0 directly, and `Answer.make` with `[1.0]` for a
+   single-option choice or single-level score gives exactly upstream's forced answer.
+4. `ReadAveraging` lives in its own file, `Read/ReadAveraging.swift`.
+5. The tests for `Fixtures/distributions/` (issue #6) read every `.json` file there: an array of
+   entries, or an object with the array under `entries` or `rows`. An entry
+   `{top, label_ids, probs, entropy}` checks `slot_distribution`, with `top` an object in the
+   backend's order; an entry `{probabilities, confidence}` checks `confidence`. Both compare
+   exactly, because these are pure functions of the same doubles (D-014's tolerances apply to
+   model logprobs, not to this arithmetic). The tests skip with a message while the folder is
+   absent.
+
+Status. Proposed with issue #16.

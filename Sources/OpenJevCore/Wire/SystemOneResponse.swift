@@ -4,8 +4,8 @@
 
 /// The answer to one question, with Jev's exact key sets.
 ///
-/// Computing an answer from label probabilities (the argmax, the expected score and the
-/// confidence) belongs to issue #16. This type holds the result and writes it:
+/// ``make(for:probabilities:)`` computes an answer from label probabilities (the argmax, the
+/// expected score and the confidence). This type holds the result and writes it:
 ///
 /// - noul: `{"type", "noul"}`
 /// - choice: `{"type", "choice", "probabilities", "confidence"}`

@@ -73,8 +73,8 @@ struct WireFixtureTests {
             let decoded = try Answer(json: JSONParser().parse(expected))
             #expect(try encoder.string(decoded) == expected, "\(name)")
 
-            // Built from the question and the probabilities; the argmax, score and confidence
-            // come from the recording because computing them is issue #16's.
+            // Built from the question and the probabilities, with the argmax, score and
+            // confidence taken from the recording. AnswerAssemblyTests computes them instead.
             let question = try Question(json: #require(row["question"]))
             let probabilities = try #require(row["probabilities"]?.arrayValue).compactMap(
                 \.doubleValue)
