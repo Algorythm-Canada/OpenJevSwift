@@ -188,6 +188,25 @@ struct DecisionEngineTests {
         #expect(decision.inputTokens == 123)
     }
 
+    /// Upstream's `asyncio.gather` starts the groups in order, and each resolves its template
+    /// before its first `await`, so a canvas too small for every group is refused with the first
+    /// group's size. Fixtures/errors/cases.json records this request as `canvas_8_quickstart`.
+    /// At that canvas each question is a group of its own; the first and third are slowed down,
+    /// so that the second group's larger template is refused first.
+    @Test("A refusal before any read names the first group's problem, whichever group runs first")
+    func firstGroupRefusal() async throws {
+        let tokenizer = DelayingTokenizer(prefixes: ["q1:", "q3:"])
+        let engine = try DecisionEngine(
+            backend: StubBackend(tokenizer: tokenizer),
+            configuration: EngineConfiguration(geometry: CanvasGeometry(canvas: 8, step: 16)))
+        let request = try quickstart()
+        tokenizer.isDelaying = true
+        for _ in 0..<5 {
+            let error = await #expect(throws: SchemaError.self) { try await engine.decide(request) }
+            #expect(error?.message == "answer template is 8 tokens; the canvas holds 7")
+        }
+    }
+
     @Test("The queue bound refuses the request that would exceed it")
     func queueBound() async throws {
         let stub = StubBackend(delay: .milliseconds(300))
@@ -369,5 +388,39 @@ struct DecisionEngineTests {
         #expect(!BackendCapabilities.readsOnly.steps && !BackendCapabilities.readsOnly.samples)
         #expect(!BackendCapabilities.readsOnly.think && !BackendCapabilities.readsOnly.sequential)
         #expect(!BackendCapabilities.readsOnly.images)
+    }
+}
+
+/// ``FixtureTokenizer``, with every encoding of a text that starts with one of `prefixes`
+/// delayed by 50 milliseconds while ``isDelaying`` is set, so that the groups those texts belong
+/// to finish last.
+final class DelayingTokenizer: DecisionTokenizer, @unchecked Sendable {
+    let prefixes: [String]
+    private let lock = NSLock()
+    private var delaying = false
+
+    init(prefixes: [String]) {
+        self.prefixes = prefixes
+    }
+
+    /// Whether encodings are delayed. Off while the engine discovers its labels.
+    var isDelaying: Bool {
+        get { lock.withLock { delaying } }
+        set { lock.withLock { delaying = newValue } }
+    }
+
+    func encode(_ text: String, addSpecialTokens: Bool) throws -> [Int] {
+        if isDelaying && prefixes.contains(where: text.hasPrefix) {
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+        return try FixtureTokenizer.shared.encode(text, addSpecialTokens: addSpecialTokens)
+    }
+
+    func decode(_ ids: [Int], skipSpecialTokens: Bool) throws -> String {
+        try FixtureTokenizer.shared.decode(ids, skipSpecialTokens: skipSpecialTokens)
+    }
+
+    func chatPromptIDs(system: String, user: String, thinking: Bool) throws -> [Int] {
+        try FixtureTokenizer.shared.chatPromptIDs(system: system, user: user, thinking: thinking)
     }
 }
