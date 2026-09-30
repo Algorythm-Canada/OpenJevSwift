@@ -1,15 +1,16 @@
 // A port of upstream OpenJev (razorback16/openjev at dcd2094), `openjev/engine.py`, methods
 // `Engine.__init__`, `Engine.decide`, `Engine.read_group`, `Engine.think`, `Engine._sequential`
 // and the label-id check of `Engine.one_read`, with the prompt-length checks of
-// `openjev/mlx_backend.py`, `MlxEngine.one_read` and `MlxEngine.think`, and the capability check
-// of `openjev/encoders.py`, `EncoderEngine.decide`. Apache-2.0. See THIRD_PARTY.md.
+// `openjev/mlx_backend.py`, `MlxEngine.one_read` and `MlxEngine.think`. The capability check of
+// `openjev/encoders.py`, `EncoderEngine.decide`, and the queue bound are in
+// RequestAdmission.swift. Apache-2.0. See THIRD_PARTY.md.
 
 /// Answers Jev requests by reading canvases through a ``DecisionBackend``.
 ///
 /// The engine owns everything upstream's `Engine` owns apart from the model: the marker tokens,
 /// the choice labels, the schema builder, the template resolver and its cache, the read policies
 /// (automatic re-reads, `samples`, `steps`, `think`, `sequential`), the seeds, the billing and the
-/// two capacity bounds. A request goes through ``decide(_:)``.
+/// two capacity bounds. A request goes through ``decide(_:seed:)``.
 ///
 /// Errors: a ``SchemaError`` is a request the model cannot answer as asked (a 400), an
 /// ``OverloadedError`` is the queue bound (a 529), and a backend's or tokenizer's own error
@@ -33,8 +34,8 @@ public actor DecisionEngine {
     public nonisolated let resolver: TemplateResolver
 
     private nonisolated let reader: GroupReader
-    /// Requests inside ``decide(_:)`` right now, upstream's `waiting`.
-    private var waiting = 0
+    /// Requests inside ``decide(_:seed:)`` right now, upstream's `waiting`, and its bound.
+    private var queue: RequestQueue
 
     /// Creates an engine, as `Engine.__init__` does: encodes the markers, discovers the choice
     /// labels and prepares the resolver and its cache.
@@ -58,6 +59,7 @@ public actor DecisionEngine {
         self.reader = GroupReader(
             backend: backend, configuration: configuration, tokens: tokens, resolver: resolver,
             slots: AsyncSemaphore(permits: configuration.maxInflight))
+        self.queue = RequestQueue(limit: configuration.maxQueue)
     }
 
     /// Answers a request, as upstream's `decide` does.
@@ -81,7 +83,9 @@ public actor DecisionEngine {
     public func decide(_ request: SystemOneRequest, seed: UInt64? = nil) async throws -> Decision {
         let options = ReadOptions(request)
         let sentImages = request.images ?? []
-        try checkCapabilities(options, hasImages: !sentImages.isEmpty)
+        try UnsupportedOptions.check(
+            options, hasImages: !sentImages.isEmpty, capabilities: backend.capabilities,
+            modelName: backend.modelName)
         let images = try ImageValidation.parts(sentImages, limits: configuration.imageLimits)
         if !images.isEmpty && (options.think != 0 || options.sequential) {
             let field = options.think != 0 ? "think" : "sequential"
@@ -93,11 +97,8 @@ public actor DecisionEngine {
             ?? SeedDerivation.seed(
                 for: SeedDerivation.seedKey(
                     state: request.state, questions: request.questions, images: images))
-        guard waiting < configuration.maxQueue else {
-            throw OverloadedError()
-        }
-        waiting += 1
-        defer { waiting -= 1 }
+        try queue.admit(refusing: OverloadedError().message)
+        defer { queue.leave() }
 
         let schema = try schemaBuilder.build(request.questions)
         let format = schema.format
@@ -137,16 +138,9 @@ public actor DecisionEngine {
                     Answer.make(for: asked, probabilities: mean), forKey: question.key)
             }
         }
-        var ordered = OrderedMap<Answer>()
-        for key in request.questions.keys {
-            guard let answer = answers[key] else {
-                preconditionFailure("no answer for question \(key.pythonRepr)")
-            }
-            ordered.updateValue(answer, forKey: key)
-        }
         return Decision(
-            answers: ordered, inputTokens: billed, outputTokens: thoughtTokens,
-            modelTime: modelTime)
+            answers: answers.ordered(as: request.questions.keys), inputTokens: billed,
+            outputTokens: thoughtTokens, modelTime: modelTime)
     }
 
     /// Refuses a read whose slots need more than ``maxLabelIDs`` distinct label ids, as
@@ -161,26 +155,6 @@ public actor DecisionEngine {
             throw SchemaError(
                 "the questions of one read need \(count) label tokens; a read allows "
                     + "\(maxLabelIDs). Ask them in separate requests.")
-        }
-    }
-
-    /// The check upstream's encoder engines run first: an option the backend cannot honour, in
-    /// upstream's field order.
-    private nonisolated func checkCapabilities(
-        _ options: ReadOptions, hasImages: Bool
-    ) throws(SchemaError) {
-        let can = backend.capabilities
-        let unsupported: [(field: String, used: Bool)] = [
-            ("images", hasImages && !can.images),
-            ("steps", options.steps > 1 && !can.steps),
-            ("samples", (options.samples ?? 0) > 1 && !can.samples),
-            ("think", options.think != 0 && !can.think),
-            ("sequential", options.sequential && !can.sequential),
-        ]
-        for entry in unsupported where entry.used {
-            throw SchemaError(
-                "\(backend.modelName) does not support \(entry.field)",
-                loc: ["body", .key(entry.field)])
         }
     }
 }
