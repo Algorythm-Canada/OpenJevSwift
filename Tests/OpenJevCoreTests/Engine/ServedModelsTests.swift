@@ -1,5 +1,6 @@
 import Foundation
 import OpenJevCore
+import OpenJevTestSupport
 import Testing
 
 /// Checks ``ServedModels`` and ``KnownEncoderModels`` against `Fixtures/wire/models.json`, the

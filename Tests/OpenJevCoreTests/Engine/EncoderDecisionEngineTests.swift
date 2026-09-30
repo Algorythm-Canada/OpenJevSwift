@@ -1,5 +1,6 @@
 import Foundation
 import OpenJevCore
+import OpenJevTestSupport
 import Testing
 
 /// Checks of ``EncoderDecisionEngine`` over ``StubQuestionReadBackend``: the generic tests at the

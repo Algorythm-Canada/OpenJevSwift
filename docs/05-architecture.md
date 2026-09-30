@@ -38,8 +38,11 @@ OpenJevSwift/                          Swift package, tools 6.2, strict concurre
       Tokenization/  Tokenizer adapter, chat prompt builder, label discovery hookup
       Vision/        Processor parity, pixel embedding, block ids (later milestone)
       Generation/    Sampler, stopping rules, block loop, streaming detokenizer (later)
-    OpenJevServer/                     Hummingbird 2. Routes, validation, error contract,
-                                       auth, capacity, routes forwarding, settings.
+    OpenJevServer/                     Hummingbird 2. ServerSettings, BackendProvider,
+                                       OpenJevApplication (routes), request id and
+                                       server-timing middleware; later auth, capacity, forwarding.
+    OpenJevTestSupport/                Fixture loaders, FixtureTokenizer and the stub backends
+                                       the test targets share. Foundation only; not a product.
     openjev/                           CLI executable: serve, decide, models
   Tests/
     OpenJevCoreTests/                  Fixture-driven unit tests (no model)
@@ -234,11 +237,25 @@ An `actor DiffusionGemmaRuntime: DecisionBackend`:
 
 ## The server
 
-Hummingbird 2 application with the routes in [02-jev-wire-api.md](02-jev-wire-api.md). Body
-handling reads up to the cap and rejects the rest; JSON is parsed by the core's order-preserving
-parser (Foundation's `JSONDecoder` cannot preserve object order). Middleware adds request ids,
-authentication and the server-timing header; per-request model time is accumulated through a
-task-local. Capacity is a counter plus a semaphore mirroring `max_inflight` and `max_queue`.
+Hummingbird 2 application with the routes in [02-jev-wire-api.md](02-jev-wire-api.md).
+`OpenJevApplication.make(settings:provider:)` asks a `BackendProvider` for the
+`SystemOneService` once, before binding `OPENJEV_HOST` and `OPENJEV_PORT`, as upstream's
+`lifespan` loads its engine. `DecisionBackendProvider` wraps a `DecisionBackend` in a
+`DecisionEngine`, and `QuestionReadBackendProvider` wraps a `QuestionReadBackend` in an
+`EncoderDecisionEngine`, each configured from the settings. Tests hand the router a stub-backed
+service; the CLI hands it the DiffusionGemma runtime or an encoder. `GET /v1/models` lists the
+service's `ServedModels`.
+
+`POST /v1/systemone` reads the body up to the cap (413 past it). JSON is parsed by the core's
+order-preserving parser (Foundation's `JSONDecoder` cannot preserve object order), checked by
+`RequestValidator`, then the model name and the questions cap are checked before
+`SystemOneService.decide`. `SchemaError` and `OverloadedError` become upstream's 400 and 529.
+`ResponseHeadersMiddleware` runs in front of every route. It turns a thrown `WireError` into its
+response, answers an unknown route as FastAPI's 404, and adds `x-typesafe-request-id`,
+`x-request-id` and `server-timing` to every response, errors included. The route adds the
+engine's `Decision.modelTime` to a task-local `ModelTimeRecorder`, and the middleware reports it
+as `model`. Authentication and capacity come later; capacity is the engines' counter and
+semaphore, mirroring `max_inflight` and `max_queue`.
 `OPENJEV_MODEL_ROUTES` forwarding uses `URLSession` or Hummingbird's client. Text generation
 routes are added only when a generation-capable backend is loaded.
 

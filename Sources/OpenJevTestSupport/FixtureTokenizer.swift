@@ -1,6 +1,5 @@
 import Foundation
 import OpenJevCore
-import Testing
 
 /// A ``DecisionTokenizer`` that replays the recorded tokenizations of the pinned DiffusionGemma
 /// tokenizer, so the core's tests need no real tokenizer and run on Linux too.
@@ -17,23 +16,26 @@ import Testing
 /// Texts are compared by Unicode scalars, as Python compares them, so an NFC and an NFD spelling
 /// are different entries. An input that was not recorded throws a ``TokenizerError`` whose message
 /// holds the input. The files are read once per process.
-struct FixtureTokenizer: DecisionTokenizer {
+public struct FixtureTokenizer: DecisionTokenizer {
     /// The paths, relative to Fixtures/, of the files the tokenizer replays.
-    static let files = [
+    public static let files = [
         "tokenizer/engine_encodings.json", "tokenizer/corpus.json", "chat-prompts/prompts.json",
     ]
 
     /// The message shown when a file is missing.
-    static let missingMessage: Comment =
+    public static let missingMessageText =
         "A tokenizer fixture is missing; run make upstream, make fixtures-venv and make fixtures"
 
     /// True when every file the tokenizer replays exists.
-    static var exists: Bool {
+    public static var exists: Bool {
         files.allSatisfy { UpstreamFixtures.exists($0) }
     }
 
     /// The tokenizer, sharing one copy of the tables.
-    static let shared = FixtureTokenizer()
+    public static let shared = FixtureTokenizer()
+
+    /// Creates a tokenizer over the shared tables.
+    public init() {}
 
     /// A text's identity: its UTF-8 bytes, which differ whenever the scalars differ.
     private typealias TextKey = [UInt8]
@@ -54,26 +56,29 @@ struct FixtureTokenizer: DecisionTokenizer {
     private static func loadTables() throws -> Tables {
         var tables = Tables()
         for pair in try UpstreamFixtures.cases("tokenizer/engine_encodings.json") {
-            let text = try #require(pair[0]?.stringValue)
+            let text = try unwrap(pair[0]?.stringValue, "engine_encodings.json: text")
             tables.engineEncodings[Array(text.utf8)] = try ids(pair[1])
         }
         for row in try UpstreamFixtures.cases("tokenizer/corpus.json") {
-            let text = try #require(row["text"]?.stringValue)
+            let text = try unwrap(row["text"]?.stringValue, "corpus.json: text")
             let plain = try ids(row["ids"])
             tables.corpusIDs[Array(text.utf8)] = plain
             tables.corpusIDsWithSpecialTokens[Array(text.utf8)] = try ids(
                 row["ids_with_special_tokens"])
-            tables.decoded[plain] = try #require(row["decoded"]?.stringValue)
-            tables.decodedSkippingSpecialTokens[plain] = try #require(
-                row["decoded_skip_special_tokens"]?.stringValue)
+            tables.decoded[plain] = try unwrap(row["decoded"]?.stringValue, "corpus.json: decoded")
+            tables.decodedSkippingSpecialTokens[plain] = try unwrap(
+                row["decoded_skip_special_tokens"]?.stringValue,
+                "corpus.json: decoded_skip_special_tokens")
         }
         for row in try UpstreamFixtures.cases("chat-prompts/prompts.json") {
-            let messages = try #require(row["messages"]?.arrayValue)
-            let system = try #require(messages.first { $0["role"]?.stringValue == "system" })
-            let user = try #require(messages.first { $0["role"]?.stringValue == "user" })
+            let messages = try unwrap(row["messages"]?.arrayValue, "prompts.json: messages")
+            let system = try unwrap(
+                messages.first { $0["role"]?.stringValue == "system" }, "prompts.json: system")
+            let user = try unwrap(
+                messages.first { $0["role"]?.stringValue == "user" }, "prompts.json: user")
             let key = [
-                Array(try #require(system["content"]?.stringValue).utf8),
-                Array(try #require(user["content"]?.stringValue).utf8),
+                Array(try unwrap(system["content"]?.stringValue, "prompts.json: content").utf8),
+                Array(try unwrap(user["content"]?.stringValue, "prompts.json: content").utf8),
             ]
             tables.chatPrompts[key] = (
                 thinkingOff: try ids(row["thinking_off"]?["ids"]),
@@ -84,11 +89,11 @@ struct FixtureTokenizer: DecisionTokenizer {
     }
 
     private static func ids(_ value: JSONValue?) throws -> [Int] {
-        let values = try #require(value?.arrayValue)
-        return try values.map { try #require($0.intValue) }
+        let values = try unwrap(value?.arrayValue, "ids are not an array")
+        return try values.map { try unwrap($0.intValue, "an id is not an integer") }
     }
 
-    func encode(_ text: String, addSpecialTokens: Bool) throws -> [Int] {
+    public func encode(_ text: String, addSpecialTokens: Bool) throws -> [Int] {
         let tables = try Self.tables.get()
         let key = Array(text.utf8)
         if addSpecialTokens {
@@ -104,7 +109,7 @@ struct FixtureTokenizer: DecisionTokenizer {
         throw TokenizerError("no recorded encoding for \(text.debugDescription)")
     }
 
-    func decode(_ ids: [Int], skipSpecialTokens: Bool) throws -> String {
+    public func decode(_ ids: [Int], skipSpecialTokens: Bool) throws -> String {
         let tables = try Self.tables.get()
         let table = skipSpecialTokens ? tables.decodedSkippingSpecialTokens : tables.decoded
         if let text = table[ids] {
@@ -113,7 +118,7 @@ struct FixtureTokenizer: DecisionTokenizer {
         throw TokenizerError("no recorded decoding for the ids \(ids)")
     }
 
-    func chatPromptIDs(system: String, user: String, thinking: Bool) throws -> [Int] {
+    public func chatPromptIDs(system: String, user: String, thinking: Bool) throws -> [Int] {
         let tables = try Self.tables.get()
         if let prompt = tables.chatPrompts[[Array(system.utf8), Array(user.utf8)]] {
             return thinking ? prompt.thinkingOn : prompt.thinkingOff

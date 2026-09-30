@@ -728,3 +728,56 @@ Decision.
     version is its backend's model name.
 
 Status. Proposed with issue #67.
+
+## D-030 Server skeleton: where the port goes beyond or differs from the issue text
+
+Context. Issue #34 builds the Hummingbird application: `ServerSettings`, the three routes, the
+request id and `server-timing` headers and a `BackendProvider`. The error contract (#35),
+authentication (#36), capacity and shutdown (#37) and model routes (#38) have their own issues,
+and a few points needed choices the issue does not spell out.
+
+Decision.
+
+1. The fixture loaders, `FixtureTokenizer` and the two stub backends moved from
+   `OpenJevCoreTests` into a new library target, `OpenJevTestSupport`, because test targets
+   cannot import each other and the server tests need them. It is not a product. It does not
+   import Testing: the loaders throw `FixtureError` where they used `#require`, and each test
+   target turns `missingMessageText` into its own `Comment`. The iOS scheme builds it.
+2. The issue's `ModelRegistry` is the core's `ServedModels` (D-029): `GET /v1/models` lists the
+   service's `servedModels.listing`, and the unknown-model 400 uses its `accepts(_:)`. Routed
+   models are not listed and not forwarded yet; `OPENJEV_MODEL_ROUTES` is parsed and validated
+   at startup, and #38 uses it.
+3. `ServerSettings(environment:)` reads the environment as upstream does, with one
+   improvement. A missing variable is the default. An empty string is kept for a string
+   setting, is the default for `_env_num`'s two MLX cache settings, and is refused for every
+   other number, as Python's `int("")` is. Numbers parse as Python's `int` and `float` parse
+   them (whitespace, sign, `_` between digits, `inf` and `nan`; hex floats refused). Where
+   upstream raises a bare `ValueError` naming only the text, this port names the variable, with
+   `_env_num`'s `{NAME}={raw!r} is not a int` wording. An integer beyond `Int` is refused as not
+   an int, where Python would accept it. `OPENJEV_LOG_LEVEL` accepts uvicorn's level names plus
+   swift-log's `notice`, case-sensitively. The default backend is `mlx`, not upstream's `vllm`,
+   because this port has no vLLM backend. Settings that exist only for vLLM, CLM and JevK5 are
+   left out.
+4. `String.pythonRepr`, which `ImageValidation` already used, is public so the server's messages
+   format `{value!r}` the same way.
+5. The route applies upstream's order: body, shape, model name, questions cap, engine.
+   `SchemaError` becomes the plain-detail 400 and `OverloadedError` the 529 with
+   `retry-after: 1`. Any other error, which includes a backend failure until #35 maps
+   it to the 503, is logged and answered as Starlette's plain-text 500 `Internal Server Error`.
+   An unknown route is FastAPI's `{"detail":"Not Found"}` 404.
+6. The body is read up to `OPENJEV_MAX_BODY_BYTES` in the route, not in a middleware ahead of
+   authentication, and the 413 carries `server-timing`, which upstream's middleware answer does
+   not. A body that is not JSON gets FastAPI's `json_invalid` 422 shape with the parser's byte
+   offset and description; matching Python's character offset and `json` message, the
+   content-type rules and the rest of `Fixtures/wire/cases.json`'s `body_*` rows is #35's.
+7. `server-timing`'s `model` is `Decision.modelTime`, added to a task-local `ModelTimeRecorder`
+   that the headers middleware reads. A request the engine refuses reports `model;dur=0.0`,
+   where upstream would count any backend time it spent before refusing. `server` is clamped at
+   `0.0` without producing `-0.0`, and each value is written with `%.1f`, which rounds the
+   binary value as Python's `{:.1f}` does.
+8. The server target declares `swift-http-types` directly, pinned to the version Hummingbird
+   already resolved, because it names header fields. The Hummingbird files are wrapped in
+   `#if canImport(Hummingbird)`, so `OpenJevServer` still compiles for iOS, where the manifest
+   leaves Hummingbird out.
+
+Status. Proposed with issue #34.

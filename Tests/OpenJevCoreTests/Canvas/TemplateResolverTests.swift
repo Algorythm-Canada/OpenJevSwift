@@ -1,4 +1,5 @@
 import OpenJevCore
+import OpenJevTestSupport
 import Testing
 
 /// Compares ``TemplateResolver`` with Fixtures/templates/templates.json and

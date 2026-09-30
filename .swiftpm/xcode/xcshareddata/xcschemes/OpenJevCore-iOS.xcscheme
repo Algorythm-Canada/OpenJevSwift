@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- The iOS scheme of the CI iOS job, described in docs/development.md. It builds only the
-     targets that compile for iOS: OpenJevCore and its tests. Server code and MLX-only code stay
+     targets that compile for iOS: OpenJevCore, OpenJevTestSupport and OpenJevCoreTests. Server code and MLX-only code stay
      out of it. Add every later iOS-capable target here. -->
 <Scheme
    LastUpgradeVersion = "2660"
@@ -20,6 +20,20 @@
                BlueprintIdentifier = "OpenJevCore"
                BuildableName = "OpenJevCore"
                BlueprintName = "OpenJevCore"
+               ReferencedContainer = "container:">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "OpenJevTestSupport"
+               BuildableName = "OpenJevTestSupport"
+               BlueprintName = "OpenJevTestSupport"
                ReferencedContainer = "container:">
             </BuildableReference>
          </BuildActionEntry>

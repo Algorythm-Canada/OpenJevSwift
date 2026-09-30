@@ -11,19 +11,22 @@ import OpenJevCore
 /// - ``delay`` makes every batch take at least that long, for the queue and timing tests.
 ///
 /// Every batch is recorded in call order.
-final class StubQuestionReadBackend: QuestionReadBackend, @unchecked Sendable {
+public final class StubQuestionReadBackend: QuestionReadBackend, @unchecked Sendable {
     /// One recorded `readBatch` call.
-    struct Call {
-        var state: JSONValue
-        var stateText: String
-        var questions: [EncoderQuestion]
+    public struct Call: Sendable {
+        /// The state as sent.
+        public var state: JSONValue
+        /// The state as rendered for the model.
+        public var stateText: String
+        /// The questions of the batch, in order.
+        public var questions: [EncoderQuestion]
 
         /// The keys of the questions in the batch, in order.
-        var keys: [String] { questions.map(\.key) }
+        public var keys: [String] { questions.map(\.key) }
     }
 
     /// How a batch breaks the backend's contract.
-    enum Failure {
+    public enum Failure: Sendable {
         /// One distribution too few.
         case wrongDistributionCount
         /// One probability too many for the first question.
@@ -40,26 +43,33 @@ final class StubQuestionReadBackend: QuestionReadBackend, @unchecked Sendable {
     }
 
     /// The error ``Failure/throwing(_:)`` raises.
-    struct StubError: Error, Equatable {
-        var message: String
+    public struct StubError: Error, Equatable, Sendable {
+        /// The message the failure was configured with.
+        public var message: String
+
+        /// Creates the error.
+        public init(message: String) {
+            self.message = message
+        }
     }
 
-    let modelInfo: ModelInfo
-    let maxChoices: Int
-    let maxPromptTokens: Int?
+    public let modelInfo: ModelInfo
+    public let maxChoices: Int
+    public let maxPromptTokens: Int?
     /// The input tokens every batch bills.
-    let inputTokensPerBatch: Int
+    public let inputTokensPerBatch: Int
     /// How long every batch takes at least.
-    let delay: Duration?
+    public let delay: Duration?
     /// Distributions by question key, used instead of the stub's for the keys named.
-    let scripted: [String: [Double]]
+    public let scripted: [String: [Double]]
     /// The contract violation every batch commits, if any.
-    let failure: Failure?
+    public let failure: Failure?
 
     private let lock = NSLock()
     private var recorded: [Call] = []
 
-    init(
+    /// Creates a stub; by default it serves Laya and answers every batch as upstream's fake does.
+    public init(
         modelInfo: ModelInfo = KnownEncoderModels.laya,
         maxChoices: Int = 255,
         maxPromptTokens: Int? = nil,
@@ -78,18 +88,18 @@ final class StubQuestionReadBackend: QuestionReadBackend, @unchecked Sendable {
     }
 
     /// Every batch so far, in call order.
-    var calls: [Call] {
+    public var calls: [Call] {
         lock.withLock { recorded }
     }
 
     /// Upstream's stub distribution over `n` options: the second option 70%, the rest share 30%.
-    static func distribution(options n: Int) -> [Double] {
+    public static func distribution(options n: Int) -> [Double] {
         var probabilities = [Double](repeating: 0.3 / Double(n - 1), count: n)
         probabilities[1] = 0.7
         return probabilities
     }
 
-    func readBatch(
+    public func readBatch(
         state: JSONValue, stateText: String, questions: [EncoderQuestion]
     ) async throws -> BatchReadResult {
         lock.withLock {
