@@ -10,8 +10,10 @@
 # process, the configuration that was running is recorded as a failure with the device's newest
 # crash log for the app, and the rest run in a new launch. Each result is copied from the app's
 # Documents folder to docs/spikes/encoder-runtime/iphone/<package>-<units>.json; failures go to
-# docs/spikes/encoder-runtime/iphone/failures.txt. iOS launches apps only on an unlocked phone, so
-# each launch waits up to 30 minutes for it to be unlocked.
+# docs/spikes/encoder-runtime/iphone/failures.txt. A configuration that runs again replaces its
+# earlier result, or removes it if it fails, so the folder never mixes runs; a result that cannot be
+# copied from the phone is recorded as a failure and the script exits with status 1. iOS launches
+# apps only on an unlocked phone, so each launch waits up to 30 minutes for it to be unlocked.
 # TIMEOUT (seconds, default 7200) ends a launch that hangs; PASSES16 (default 3) is how many times
 # the corpus is read in calls of 16; COOLDOWN (default 30) is the app's pause in seconds between
 # configurations; SETTLE (default 0) is the longest the app waits, before each configuration, for
@@ -65,6 +67,7 @@ xcrun devicectl device install app --device "$DEVICE" "$APP" > /dev/null || exit
 
 mkdir -p "$OUT" "$LOGS"
 touch "$OUT/failures.txt"
+failed=0
 remaining=("$@")
 launch=0
 while [ ${#remaining[@]} -gt 0 ]; do
@@ -93,14 +96,22 @@ while [ ${#remaining[@]} -gt 0 ]; do
         units=${config##*:}
         name="$package-$units"
         if grep -q "^HARNESS_OK $package $units\$" "$log"; then
-            xcrun devicectl device copy from --device "$DEVICE" --domain-type appDataContainer \
+            rm -f "$OUT/$name.json"
+            if xcrun devicectl device copy from --device "$DEVICE" --domain-type appDataContainer \
                 --domain-identifier "$BUNDLE" --source "Documents/results/$name.json" \
-                --destination "$OUT/$name.json" > /dev/null 2>&1 \
-                && echo "$config: done" || echo "$config: result not copied"
+                --destination "$OUT/$name.json" > /dev/null 2>&1; then
+                echo "$config: done"
+            else
+                echo "$config: finished, but its result could not be copied from the phone" >> "$OUT/failures.txt"
+                echo "$config: result not copied (see failures.txt)"
+                failed=1
+            fi
         elif grep -q "^HARNESS_ERROR $package $units" "$log"; then
+            rm -f "$OUT/$name.json"
             grep "^HARNESS_ERROR $package $units" "$log" | head -1 >> "$OUT/failures.txt"
             echo "$config: error (see failures.txt)"
         elif [ "$config" = "$running" ] && ! grep -q '^HARNESS_DONE' "$log"; then
+            rm -f "$OUT/$name.json"
             crash=$(fetch_crash_log "$started")
             { echo "$config: the process ended while it ran${crash:+; newest device report since the launch began: $(basename "$crash"), which can belong to an earlier configuration of the launch}"
               grep -v '^HARNESS_RESULT ' "$log" | tail -3 | sed 's/^/    /'; } >> "$OUT/failures.txt"
@@ -115,3 +126,4 @@ while [ ${#remaining[@]} -gt 0 ]; do
     fi
     remaining=("${next[@]+"${next[@]}"}")
 done
+exit $failed

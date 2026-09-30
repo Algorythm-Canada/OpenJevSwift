@@ -381,6 +381,12 @@ neither is a candidate.
 
 ## The MLX alternative (estimated, not built)
 
+Issue #56 also asks for the encoder forward pass prototyped on random weights, for shape parity.
+This spike's brief limited the MLX part to an estimate and said not to implement it, so there is
+no prototype, and the gaps listed below come from reading the code, not from running it. The
+decision does not depend on it: Core ML ran both models on both machines. If MLX is revisited,
+that prototype is the first step of the port estimated below.
+
 Read in mlx-swift-lm at `c043fb3`, the revision the main package pins, and mlx-swift 0.32.2.
 
 What exists:

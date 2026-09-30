@@ -16,7 +16,7 @@ struct FixturePinTests {
     static let tokenizerRepository = "mlx-community/diffusiongemma-26B-A4B-it-4bit"
     static let tokenizerRevision = "a7a81407613811e8ba63af92ac0d852b809e191f"
     /// The encoder checkpoints Fixtures/encoders was computed with, as Tools/encoders/common.py
-    /// pins them. Those files use each checkpoint's own tokenizer.
+    /// pins them (checked below). Those files use each checkpoint's own tokenizer.
     static let verdictRevision = "8af2496eb63c7fa66d7d234e1f62629380030eb4"
     static let layaRevision = "1a793eb568e6718f15941d08f85432581df534e3"
 
@@ -62,6 +62,16 @@ struct FixturePinTests {
             contentsOf: Self.root.appendingPathComponent("THIRD_PARTY.md"), encoding: .utf8)
         #expect(thirdParty.contains("`\(Self.upstreamCommit)`"))
         #expect(thirdParty.contains("`\(Self.tokenizerRevision.prefix(8))`"))
+    }
+
+    @Test("The expected encoder pins are the ones Tools/encoders/common.py generates with")
+    func encoderScriptsAgree() throws {
+        let common = try String(
+            contentsOf: Self.root.appendingPathComponent("Tools/encoders/common.py"),
+            encoding: .utf8)
+        #expect(common.contains("\nUPSTREAM_COMMIT = \"\(Self.upstreamCommit)\"\n"))
+        #expect(common.contains("\nVERDICT_REVISION = \"\(Self.verdictRevision)\"\n"))
+        #expect(common.contains("\nLAYA_REVISION = \"\(Self.layaRevision)\"\n"))
     }
 
     /// What is wrong with one file's generator object, if anything.
