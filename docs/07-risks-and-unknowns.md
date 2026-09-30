@@ -5,8 +5,8 @@ estimates on 2026-09-29.
 
 | # | Risk or unknown | Likelihood | Impact | Mitigation | Resolved by |
 |---|---|---|---|---|---|
-| R1 | **Tokenizer parity.** swift-transformers' BPE differs from Hugging Face `tokenizers` for Gemma 4 on some inputs (special tokens, whitespace, non-ASCII, byte fallback). Any difference breaks template slot resolution or shifts positions. | Medium | Critical | Fixture corpus from Python covering labels, scaffold, markers, JSON states, CJK and emoji; fall back to a custom tokenizer loader if needed. | Tokenizer parity spike (milestone 2) |
-| R2 | **Chat template parity.** swift-jinja renders Gemma 4's 300-line template differently (whitespace control, `enable_thinking`, tools macros), or the template is not picked up from `chat_template.jinja`. | Medium | High | Compare rendered ids for `[system, user]` with generation prompt, thinking on and off; hand-rolled builder as fallback. | Chat template spike (milestone 2) |
+| R1 | **Tokenizer parity.** swift-transformers' BPE differs from Hugging Face `tokenizers` for Gemma 4 on some inputs (special tokens, whitespace, non-ASCII, byte fallback). Any difference breaks template slot resolution or shifts positions. | Resolved 2026-09-30 | Critical | Encoding matched on every fixture text (917 corpus rows, 2,634 engine encodings, 255 labels, special tokens). Two decode departures in swift-transformers 1.3.4 (trailing byte tokens dropped, `clean_up_tokenization_spaces` defaulting to true) are handled generally in `SwiftTransformersTokenizer` and pinned by tests; no custom loader. Load 3.6 s, 204 MB. | Spike #20 (D-008, [spikes/tokenizer-parity.md](spikes/tokenizer-parity.md)); follow-ups A to C there |
+| R2 | **Chat template parity.** swift-jinja renders Gemma 4's 300-line template differently (whitespace control, `enable_thinking`, tools macros), or the template is not picked up from `chat_template.jinja`. | Resolved 2026-09-30 | High | swift-transformers 1.3.4 reads `chat_template.jinja` itself; swift-jinja 2.5.1 rendered all 24 fixture prompts, thinking off and on, to the recorded text and ids. The image message shape renders through the same path. No hand-rolled builder. | Spike #21 (D-008, [spikes/chat-template.md](spikes/chat-template.md)); follow-up D there |
 | R3 | **Numeric parity of the model port.** BF16 accumulation, quantized matmul kernels, expert gather order, precise softmax and float32 softcap differ between MLX Swift and Python MLX; slot probabilities drift. | High (small drift) / Low (large drift) | High | Oracle logprobs from mlx-vlm on fixture canvases; tolerance-based conformance (D-014); test long prompts separately. | Backend validation spike; numeric parity tests |
 | R4 | **Memory.** 17 GB of weights plus prefill caches plus MLX's buffer pool (36 GB observed upstream) exceed 32 GB machines. | High | High | Bounded prefill cache (entries and tokens), `MLX.GPU.set(cacheLimit:)`, slot-only logits, document machine requirements; measure on 32/48/64 GB machines. | Runtime actor task; performance baseline task |
 | R5 | **Performance.** Swift port slower than Python MLX (0.2 to 0.4 s per 3-question read) because of expert gather paths or missing compiled kernels. | Medium | Medium | Profile; reuse `SwitchGLU` quantized paths; slot-only projection; optional `compile` of softcap and sampler. | Performance baseline task |
@@ -29,8 +29,11 @@ estimates on 2026-09-29.
 ## Unknowns that need experiments, not reading
 
 1. Does swift-transformers tokenize Gemma 4 identically to Python for the fixture corpus, and how
-   long does the 32 MB `tokenizer.json` take to load? (R1)
-2. Does swift-jinja render the shipped chat template identically? (R2)
+   long does the 32 MB `tokenizer.json` take to load? (R1) Answered by spike #20: encoding is
+   identical on every fixture text; decoding needed two general fixes in the adapter; loading
+   takes 3.6 s and 204 MB.
+2. Does swift-jinja render the shipped chat template identically? (R2) Answered by spike #21:
+   yes, text and ids, for every fixture prompt with thinking off and on.
 3. What tolerance do slot logprobs need between MLX Swift and Python MLX on the same 4-bit
    weights, and does the top label ever change on the fixture set? (R3)
 4. What is the resident memory of a Swift process serving reads on a 32 GB and a 48 GB machine

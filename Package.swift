@@ -80,6 +80,9 @@ var targets: [Target] = [
             url: "https://github.com/huggingface/swift-transformers.git",
             .upToNextMinor(from: "1.3.0")
         ),
+        // The same range swift-transformers declares, so one version of swift-jinja is resolved.
+        // OpenJevDiffusionGemma renders the chat template to text with it (decision D-008).
+        .package(url: "https://github.com/huggingface/swift-jinja.git", from: "2.4.2"),
     ]
     targets += [
         .target(
@@ -91,12 +94,22 @@ var targets: [Target] = [
                 .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
                 .product(name: "MLXVLM", package: "mlx-swift-lm"),
                 .product(name: "Tokenizers", package: "swift-transformers"),
+                .product(name: "Hub", package: "swift-transformers"),
+                .product(name: "Jinja", package: "swift-jinja"),
             ],
             swiftSettings: swiftSettings
         ),
+        // The tests also load the tokenizer through mlx-swift-lm's MLXHuggingFace macros, to
+        // confirm that path gives the same results as the direct one the module uses.
         .testTarget(
             name: "OpenJevDiffusionGemmaTests",
-            dependencies: ["OpenJevDiffusionGemma"],
+            dependencies: [
+                "OpenJevDiffusionGemma",
+                "OpenJevCore",
+                .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
+                .product(name: "MLXHuggingFace", package: "mlx-swift-lm"),
+                .product(name: "Tokenizers", package: "swift-transformers"),
+            ],
             swiftSettings: swiftSettings
         ),
     ]

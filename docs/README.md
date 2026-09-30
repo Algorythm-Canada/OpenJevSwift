@@ -13,5 +13,9 @@ Read in order the first time. Later, each document stands alone.
 9. [09-conformance-and-testing.md](09-conformance-and-testing.md): how correctness is proven.
 10. [10-other-models.md](10-other-models.md): the non-DiffusionGemma models upstream serves.
 
+[spikes/](spikes/) holds the written outcome of each spike: what was measured, how, and the
+minimal reproductions of anything that differed. The decision each one feeds is in
+06-decisions.md.
+
 All findings date from 2026-09-29. Upstream projects referenced here move quickly; pinned
 revisions are listed in [../THIRD_PARTY.md](../THIRD_PARTY.md).

@@ -116,6 +116,64 @@ fixtures and record which one is used.
 
 Status. Accepted for planning; two spikes in milestone 2 decide the details.
 
+Outcome of the spikes (#20 and #21, 2026-09-30; details in
+[spikes/tokenizer-parity.md](spikes/tokenizer-parity.md) and
+[spikes/chat-template.md](spikes/chat-template.md)).
+
+Parity, `SwiftTransformersTokenizer` against the Python fixtures, all run under Xcode's Test
+action with the pinned tokenizer files (digests checked against `special_tokens.json`):
+
+| Fixture | Matched | Mismatched |
+|---|---|---|
+| `tokenizer/corpus.json`, 917 rows: `ids`, `ids_with_special_tokens`, `decoded`, `decoded_skip_special_tokens` | 917 | 0 |
+| `tokenizer/engine_encodings.json`, 2,634 pairs | 2,634 | 0 |
+| `labels.json`: 255 labels and ids, 6 rejected candidates | 261 | 0 |
+| `tokenizer/special_tokens.json`: 23 named ids, `<\|video\|>`, `<end_of_turn>`, `engine` table (scaffold `[100, 45518, 107, 101]`) | 26 | 0 |
+| `chat-prompts/prompts.json`, 24 rows, thinking off and on: rendered text | 48 | 0 |
+| `chat-prompts/prompts.json`, 24 rows, thinking off and on: ids | 48 | 0 |
+| Replay tokenizer agreement: 3,252 texts, 917 decodes, 24 prompts | 4,241 | 0 |
+
+Three corpus decodes (`"\0"`, `"\u{2028}"`, `"\u{10FFFF}"`, each only byte tokens) mismatched
+before the adapter's decode fix, none after. Encoding never mismatched.
+
+Load: 3.6 s wall time for the 32 MB `tokenizer.json`, 204 MB of resident memory added, 386 MB
+peak resident for a process that had loaded nothing else (Apple silicon, macOS 27). Paid once
+per process.
+
+Tokenizer entry point: `SwiftTransformersTokenizer.load(from:)` builds
+`PreTrainedTokenizer(tokenizerConfig:tokenizerData:)` from
+`LanguageModelConfigurationFromHub(modelFolder:)`, the two steps of
+`Tokenizers.AutoTokenizer.from(modelFolder:)`, and sets `clean_up_tokenization_spaces` to
+false between them when the checkpoint does not set it, which is transformers' default since
+4.45 and not swift-transformers'. mlx-swift-lm's `#huggingFaceTokenizerLoader()` was loaded
+once and gives the same ids; it is not used because it hides the upstream tokenizer, brings
+`MLXHuggingFace`, the macro plugin and `MLXFoundationModels` into the model target, and adds
+nothing over the direct call.
+
+Chat template path: the engine. swift-transformers 1.3.4 reads `chat_template.jinja` on its
+own when loading from a folder and merges it into the configuration; `chatPromptIDs` calls
+`applyChatTemplate` with `addGenerationPrompt: true` and `additionalContext:
+["enable_thinking": thinking]`, and `chatPromptText` renders the same file with swift-jinja
+(`lstripBlocks`, `trimBlocks`) and the same context, because swift-transformers returns only
+ids. Every recorded text and id sequence matches, so no hand-rolled builder is written. The
+mlx-vlm image message shape (`content` as image parts then a text part) renders through the
+same template to one `<|image|>` (258880) per image directly before the text.
+
+Two decode departures in swift-transformers 1.3.4 are handled generally in the adapter and
+pinned by a test over the unmodified path: byte tokens at the end of a sequence are dropped by
+its `ByteFallbackDecoder`, and `clean_up_tokenization_spaces` defaults to true. Neither needs a
+custom loader; follow-up issues A to D in spikes/tokenizer-parity.md cover the upstream reports
+and the fixture rows that would record them.
+
+Holds for swift-transformers 1.3.4, swift-jinja 2.5.1, swift-huggingface 0.11.0, mlx-swift-lm
+`c043fb3`, tokenizer revision `a7a81407`, fixtures from transformers 5.17.0 and tokenizers
+0.23.2. `Tests/OpenJevDiffusionGemmaTests/Tokenization` is the permanent regression suite; it
+skips with a message when the tokenizer files are absent (`OPENJEV_TEST_TOKENIZER` or the
+Hugging Face cache).
+
+Status. Accepted: swift-transformers for the tokenizer, the shipped template through
+swift-jinja for prompts. Decided by spikes #20 and #21.
+
 ## D-009 Hummingbird 2 for the server
 
 Context. Structured-concurrency native, Swift 6 clean, small, streaming request bodies; Vapor 5
