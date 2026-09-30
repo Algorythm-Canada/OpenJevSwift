@@ -671,3 +671,59 @@ GPU would not show it in CI; the model's parity tests on developer machines rema
 that. Run `mlx-probe.yml` again when mlx-swift, Xcode or the runner image changes.
 
 Status. Proposed with issues #7 and #8.
+
+## D-029 Encoder engine and served models: where the port goes beyond or differs from the issue text
+
+Context. Issue #67 ports upstream's `EncoderEngine` contract (`encoders.py` lines 50 to 158) and
+`config.served_models` into `OpenJevCore` as `QuestionReadBackend`, `EncoderDecisionEngine`,
+`SystemOneService` and `ServedModels`. The issue's sketch predates the work on #10 and #17, and
+a few points needed choices it does not spell out.
+
+Decision.
+
+1. `QuestionReadBackend` exposes `modelInfo: ModelInfo` rather than the sketch's `modelName`:
+   the served name, description and release date travel together, so `ServedModels.encoder(_:)`
+   and the `/v1/models` listing come from the backend itself. `KnownEncoderModels` holds
+   upstream's `ENCODER_MODELS` texts word for word; `Fixtures/wire/models.json` is the oracle.
+2. `batchSize` is a setting of `EncoderEngineConfiguration` (`OPENJEV_ENCODER_BATCH`, 16), not a
+   property of the backend as the sketch had it: upstream reads it from `Settings`, and a
+   deployment tunes it per machine, not per model. The configuration also carries `maxQueue`
+   (512), `maxInflight` (1, upstream's one model thread; CLM and JevK5 may raise it) and `warmUp`
+   (true).
+3. `readBatch(state:stateText:questions:)` receives both the raw state and its `StateText`
+   rendering and returns a `BatchReadResult` struct rather than a tuple. Verdict reads the text;
+   Laya and CLM render the raw value themselves; JevK5 embeds it in its JSON prompt.
+4. `maxPromptTokens` is an optional the engine does not enforce. It has no tokenizer, and upstream's
+   encoder engines count tokens inside their own reads; Verdict and Laya truncate (`nil`), CLM and
+   JevK5 refuse. The property documents the contract for the backends and the routes listing.
+5. Batches of one request run in order, one backend call each, under the `maxInflight`
+   semaphore, as upstream's `read` loop does on its one thread. `modelTime` is the wall time inside
+   those calls, wait for a permit included, so the Server-Timing `model` value counts the read as
+   `test_server_timing_counts_the_read` expects. Nothing is read when every question is forced:
+   no backend call, `inputTokens` 0, `modelTime` zero.
+6. Every distribution a backend returns is checked (one per question, one value per option, all
+   finite, sum within 1e-6 of 1) and a violation throws `BackendContractError`, a new error type
+   that is neither a `SchemaError` nor an `OverloadedError`: a backend bug is not a client error,
+   and `Answer.make`'s preconditions would otherwise crash the process on a bad backend. Two rows
+   of `Fixtures/wire/answers.json` (`choice_layout`, `score_layout`) probe number rendering with
+   vectors that are not distributions; the encoder engine test checks that they are refused, and
+   compares the other thirteen byte for byte.
+7. The queue bound is upstream's `waiting >= max_queue` as written, as D-027 item 5 decided for
+   the diffusion engine: the issue's test line (`maxQueue 0` refusing the second concurrent
+   request) is tested with `maxQueue` 1, and `maxQueue` 0 is checked to refuse the first. The
+   message names the model: `"{model} is at capacity. Retry shortly."`.
+8. `warmUp()` is a method the CLI and server call after load, never run by `init`: an actor's
+   initializer cannot await the read, and a library user may not want it. Its questions are
+   `EncoderDecisionEngine.warmUpQuestions`, upstream's `WARMUP_QUESTIONS`, against the state
+   `warmup`, and the read does not count against the queue bound.
+9. The option refusal (`UnsupportedOptions.check`), the queue counter (`RequestQueue`) and the
+   answer reordering (`OrderedMap<Answer>.ordered(as:)`) were lifted out of `DecisionEngine` into
+   `RequestAdmission.swift` and are shared by both engines; `DecisionEngine`'s behaviour and its
+   `Fixtures/policies` tests are unchanged. The diffusion engine checks the options against its
+   backend's `BackendCapabilities`, the encoder engine against `.readsOnly`.
+10. `DecisionEngine` gains `decide(_:)` without a seed to satisfy `SystemOneService`; it forwards
+    to `decide(_:seed:)` with `nil`, so the route's seed derivation applies. Its `servedModels` is
+    `.diffusionGemma`. `EncoderEngineConfiguration` has no `servedModelVersion`: the encoder's
+    version is its backend's model name.
+
+Status. Proposed with issue #67.
