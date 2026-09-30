@@ -52,6 +52,16 @@ Authentication: `Authorization: Bearer <key>`. Jev requires it; OpenJev requires
 | `think` (OpenJev) | 0..4096 | Thought token budget before the read. |
 | `sequential` (OpenJev) | bool | Read chunks in order, conditioning on earlier answers. |
 
+pydantic validates these four fields in lax mode, so upstream accepts more than the types say
+(recorded in `Fixtures/wire/cases.json`). An integer field also takes `true` and `false` (1 and
+0), an integral float (`2.0`, but not `1e20`, which is `int_parsing_size`), and a decimal string
+with surrounding Unicode whitespace, a sign, single underscores between digits and an all-zero
+fraction (`" 3 "`, `"+3"`, `"1_0"`, `"3.00"`; not `"3."`, `"1e3"` or `"0x10"`). `sequential` also
+takes `0` and `1` as integers or floats and the strings `0`, `1`, `f`, `t`, `n`, `y`, `no`, `yes`,
+`off`, `on`, `false`, `true` in any ASCII case, without trimming. A choice option's description
+may be `null`; a score level may not. `null` for any optional field means unset. Unknown top-level
+fields are ignored.
+
 Jev's limits (documented): 64k tokens total context per request; 32k tokens for `state` plus the
 longest single question; text only; English is the primary language. OpenJev's limits: canvas
 64 tokens per read (questions are chunked, about 12 per read), 256 questions per request,
@@ -82,7 +92,9 @@ Exact key sets matter: a noul answer is `{type, noul}` only; choice is `{type, c
 probabilities, confidence}`; score is `{type, score, legend, probabilities, confidence}` with
 string keys `"0".."9"`. `probabilities` sums to 1 over the caller's options (encoder backends
 drop abstention mass and renormalise). `answers` preserves the request's question order. `model`
-is the served version, not the requested alias. `usage.output_tokens` is 0 except after `think`.
+is the served version, not the requested alias. `usage.output_tokens` is 0 except after `think`. A one-option choice or one-level score is
+answered without a read (probability and confidence `1.0`, score `0.0`), so a request made only
+of those gets 200 even with no backend.
 
 The Python SDK validates answers in strict mode, drops answer types it does not know with a
 warning, coerces score `legend` and `probabilities` keys to integers, exposes `.nouls`,
@@ -96,7 +108,7 @@ The SDK accepts both, but the fixtures compare bytes, so the Swift serialiser wi
 |---|---|---|
 | `Authorization` | request | `Bearer <key>` |
 | `x-typesafe-request-id`, `x-request-id` | response | `req_` + 32 hex characters, on every response including errors |
-| `server-timing` | response | `model;dur=41.2, server;dur=2.8, total;dur=44.0` (milliseconds; upstream extension) |
+| `server-timing` | response | `model;dur=41.2, server;dur=2.8, total;dur=44.0` (milliseconds; upstream extension). Absent on the 401, 403 and 413 answered before routing. |
 | `retry-after` | response | `1` on 529, `2` on 503 |
 | `retry-after-ms` | response | honoured by the SDK when present (Jev's gateway may send it) |
 | `X-TypeSafe-Retry-Count` (name per SDK constants) | request | attempt number on retries |
@@ -113,10 +125,30 @@ The SDK accepts both, but the fixtures compare bytes, so the Swift serialiser wi
 | 403 | `{"detail": {"error_type": "authentication_error", "message": "Must supply an API key! Check your request and try again."}}` | Missing key. |
 | 403 | `{"detail": {"error_type": "permission_error", "message": "Direct access to this origin is not allowed."}}` | Wrong or missing origin secret. |
 | 413 | `{"detail": {"error_type": "api_usage_error", "message": "request body is larger than N bytes"}}` | Body cap. |
-| 422 | `{"detail": [{"type", "loc", "msg", "input", "ctx"?, "url"?}]}` | Shape validation (missing `state`, empty `questions`, wrong field type, `samples: 33`, `steps: 9`). |
+| 422 | `{"detail": [{"type", "loc", "msg", "input", "ctx"?}]}` | Shape validation (missing `state`, empty `questions`, wrong field type, `samples: 33`, `steps: 9`). Every error is listed, in model field order. `url` never appears with the recorded FastAPI (0.142). |
+| 422 | `{"detail": [{"type": "json_invalid", "loc": ["body", <character offset>], "msg": "JSON decode error", "input": {}, "ctx": {"error": "<Python json message>"}}]}` | A body that is not valid JSON. |
+| 400 | `{"detail": "There was an error parsing the body"}` | A body that is not UTF-8. |
 | 429 | Jev only | Rate limit (250,000 tokens/s, 1,200 requests/min per account). OpenJev has no rate limiter. |
 | 503 | `{"detail": {"error_type": "api_error", "message": "inference backend unavailable: ..."}}` | Backend unreachable; forwarded model's server down. |
 | 529 | `{"detail": {"error_type": "overloaded_error", "message": "... at capacity. Retry shortly."}}` | Queue full. |
+
+Details of the 422 body, from the recordings:
+
+- `loc` starts with `body`. A missing or `null` body is one `missing` error at `["body"]`; a body
+  that is not an object is `model_attributes_type` at `["body"]`. A body without a JSON content
+  type (`application/json`, any `+json` type) is not parsed and fails the same way, with the
+  Python `bytes` repr as `input`.
+- A union adds its member label to `loc`: `str`, `dict[str,any]` and `list[any]` for `state`,
+  `instructions`, descriptions and score levels (one error per member), `str` and `ImageObject`
+  for an image. A question adds its tag, as in `["body", "questions", "q", "choice", "criteria"]`.
+  Score levels add their integer index.
+- `ctx` appears only for `too_short` (`{"field_type", "min_length", "actual_length"}`), the bounds
+  (`{"ge": 1}`, `{"le": 8}`), `union_tag_not_found` (`{"discriminator": "'type'"}`) and
+  `json_invalid`.
+- `input` is the offending value trimmed by upstream's `trim` (depth 4, 20 items, 500
+  characters). A `missing` error's input is the object the field is missing from.
+- A `union_tag_invalid` anywhere (a question `type` that is not `noul`, `choice` or `score`,
+  including a number or `null`) replaces the whole body with the 400 `"Invalid request."`.
 
 The Python SDK retries 408, 429 and every 5xx (and 529) by default: 2 retries, exponential
 backoff from 0.5 s to 5 s with 25% jitter, `Retry-After`/`retry-after-ms` honoured, a 30 s total
@@ -139,6 +171,8 @@ Base URL from `TYPESAFE_BASE_URL`, key from `TYPESAFE_API_KEY`, model from
 2. Byte-identical error bodies for every row of the table above, including FastAPI's 422 list
    shape with trimmed `input`.
 3. The same headers on every response.
-4. Python-style float formatting in responses, and Python-compatible `json.dumps` rendering of
-   objects and arrays that reach the model (`ensure_ascii=False`, default separators).
+4. Response bodies rendered as FastAPI's `JSONResponse` renders them: compact separators `,` and
+   `:`, `ensure_ascii=False`, Python float formatting, non-finite numbers refused; and
+   Python-compatible `json.dumps` rendering of objects and arrays that reach the model
+   (`ensure_ascii=False`, default separators).
 5. The same model names, aliases, descriptions and release dates in `/v1/models`.

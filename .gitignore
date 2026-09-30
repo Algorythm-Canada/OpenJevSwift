@@ -19,5 +19,11 @@ DerivedData/
 Models/
 .cache/
 
+# Pinned upstream reference checkouts, created by `make upstream`
+Upstream/
+
 # Session task checklist (kept local)
 TASKS.md
+
+# Python virtual environments for the fixture scripts
+.venv/
