@@ -1,11 +1,19 @@
-# Builds and tests the package on every pull request and on main. docs/development.md describes the
-# jobs, the toolchains they pin and how to run the same commands locally.
+# Builds and tests the package on every pull request and on main, except when the change touches
+# only Markdown files: nothing here reads them, and a macOS run costs eight minutes on an empty
+# cache. The repository's ruleset requires no status check, so a documentation-only pull request
+# stays mergeable without a run; if a required check is ever added, replace paths-ignore with a
+# job that reports success. docs/development.md describes the jobs, the toolchains they pin and how
+# to run the same commands locally.
 name: CI
 
 on:
   pull_request:
+    paths-ignore:
+      - "**.md"
   push:
     branches: [main]
+    paths-ignore:
+      - "**.md"
 
 permissions:
   contents: read
