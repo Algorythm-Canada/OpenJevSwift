@@ -242,3 +242,36 @@ Decision.
    regenerate and diff when the pin moves.
 
 Status. Proposed with issue #5.
+
+## D-018 Image checks: where the port goes beyond or differs from the issue text
+
+Context. Issue #18 ports upstream's `image_parts` and asks for a `SchemaError` type shared with
+the schema builder (#10) and the engine (#17). Porting it exactly needed a few choices the issue
+does not spell out.
+
+Decision.
+
+1. `SchemaError` is `{message, loc}` with `loc` defaulting to `["body"]`, as upstream's does, and
+   conforms to `CustomStringConvertible` (`body.images.3: message`) for logs.
+   `WireError.semantic400(_ error: SchemaError)` sends only the message; the `loc` is never sent.
+2. `ImagePart`'s fields are `let` and its initialiser builds `dataURL` from the content type and
+   the base64 text, so the data URL cannot drift from the parts that enter the seed key.
+3. The strict base64 check computes the decoded length without allocating the decoded bytes. It
+   accepts exactly what CPython 3.14's `base64.b64decode(data, validate=True)` accepts, checked
+   with `python3`: the standard alphabet only, a length that is a multiple of four, at most two
+   `=` and only at the end, non-zero trailing bits allowed (`QR==` is valid), no whitespace, no
+   non-ASCII. Whoever feeds the image to a vision encoder decodes it then.
+4. The data URL split, the `data:` and `;base64` tests, and the content type comparison work on
+   Unicode scalars, as Python's `str` operations do, not on Swift's `Character` with canonical
+   equivalence. The length bound counts scalars, which is Python's `len`.
+5. `{t!r}` in the unsupported type message is reproduced by an internal `String.pythonRepr`
+   (CPython's `unicode_repr` rules). Whether a non-ASCII character is printable comes from this
+   platform's Unicode tables, which can differ from the CPython build's for newly assigned
+   characters.
+6. The test that the 8 MB payload never reaches decoding measures time (under 500 ms) and also
+   sends a payload of the same length whose last character is invalid: it still gets the size
+   message, so the bound runs first. No test hook was added to the production type.
+7. An empty image list returns no parts. Upstream never calls `image_parts` for an empty or absent
+   list; the result is the same.
+
+Status. Proposed with issue #18.
