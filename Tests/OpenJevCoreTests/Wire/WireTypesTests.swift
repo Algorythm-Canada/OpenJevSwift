@@ -102,6 +102,7 @@ struct WireTypesTests {
             (.invalidRequest, 400, "api_usage_error", "Invalid request.", nil),
             (.semantic400("at most 8 images"), 400, nil, "at most 8 images", nil),
             (.modelRejected400("bad"), 400, nil, "the model rejected this request: bad", nil),
+            (.unparsableBody400, 400, nil, "There was an error parsing the body", nil),
             (
                 .authentication401, 401, "authentication_error",
                 "Cannot authenticate with the server. Please check your API key and try again.",
@@ -136,6 +137,12 @@ struct WireTypesTests {
             #expect(try encoder.string(error) == text)
             #expect(error.headers.first { $0.name == "retry-after" }?.value == retryAfter)
         }
+        let invalid = WireError.jsonInvalid422(message: "Expecting value", position: 10)
+        #expect(invalid.status == 422)
+        #expect(
+            try encoder.string(invalid)
+                == #"{"detail":[{"type":"json_invalid","loc":["body",10],"msg":"JSON decode error","#
+                + #""input":{},"ctx":{"error":"Expecting value"}}]}"#)
     }
 
     @Test("A 422 item writes ctx and url only when set, and validation422 trims")

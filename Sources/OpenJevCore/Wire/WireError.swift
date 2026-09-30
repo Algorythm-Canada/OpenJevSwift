@@ -261,6 +261,22 @@ public struct WireError: Error, Sendable, Hashable, WireEncodable {
         return WireError(status: 422, body: .validation(trimmed))
     }
 
+    /// 422 `json_invalid`, FastAPI's item for a body that is not valid JSON: `loc` is `body` and
+    /// the position of CPython's `JSONDecodeError` in characters, `ctx.error` its message, such as
+    /// `Expecting value` (see ``PythonJSONLoads``).
+    public static func jsonInvalid422(message: String, position: Int) -> WireError {
+        validation422([
+            ValidationErrorItem(
+                type: "json_invalid", loc: ["body", .index(position)], msg: "JSON decode error",
+                input: [:], ctx: ["error": .string(message)])
+        ])
+    }
+
+    /// 400 with the plain `detail` FastAPI gives a JSON body it could not read at all: bytes that
+    /// are not UTF-8, an integer longer than `int()` converts, or nesting deeper than the parser
+    /// follows.
+    public static let unparsableBody400 = semantic400("There was an error parsing the body")
+
     /// 400 `api_usage_error` with any message.
     public static func apiUsage400(_ message: String) -> WireError {
         typed(400, "api_usage_error", message)

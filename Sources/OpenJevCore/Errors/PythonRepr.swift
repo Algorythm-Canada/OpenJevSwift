@@ -1,5 +1,7 @@
 // Matches the output of CPython's `repr` for `str` (`unicode_repr` in Objects/unicodeobject.c),
-// which upstream OpenJev's `{value!r}` messages rely on. Written from the documented behaviour.
+// which upstream OpenJev's `{value!r}` messages rely on, and for `bytes` (`PyBytes_Repr` in
+// Objects/bytesobject.c), which its `trim` writes for a body FastAPI did not parse. Written from
+// the documented behaviour.
 
 extension String {
     /// The string as Python's `repr` writes it, for messages that upstream formats with `!r`.
@@ -64,5 +66,48 @@ extension String {
         default:
             return true
         }
+    }
+}
+
+extension String {
+    /// Python's `repr` of a `bytes` object, `b'...'`, cut to its first `maxLength` characters when
+    /// one is given, as `str(value)[:maxLength]` cuts it.
+    ///
+    /// The quote is `'`, or `"` when the bytes contain `'` and no `"`, decided over all the bytes
+    /// even when the result is cut. The chosen quote and the backslash are escaped; tab, newline
+    /// and carriage return become `\t`, `\n` and `\r`; every other byte below 0x20 or from 0x7F
+    /// up becomes `\xhh` in lowercase hex. The result is ASCII, so characters are bytes.
+    public static func pythonRepr(bytes: some Collection<UInt8>, maxLength: Int? = nil) -> String {
+        let limit = Swift.max(0, maxLength ?? .max)
+        let singleQuote = UInt8(ascii: "'")
+        let doubleQuote = UInt8(ascii: "\"")
+        let quote =
+            bytes.contains(singleQuote) && !bytes.contains(doubleQuote) ? doubleQuote : singleQuote
+        let hexDigits = Array("0123456789abcdef".utf8)
+        var out: [UInt8] = [UInt8(ascii: "b"), quote]
+        for byte in bytes {
+            if out.count >= limit {
+                break
+            }
+            switch byte {
+            case quote, UInt8(ascii: "\\"):
+                out += [UInt8(ascii: "\\"), byte]
+            case UInt8(ascii: "\t"):
+                out += [UInt8(ascii: "\\"), UInt8(ascii: "t")]
+            case UInt8(ascii: "\n"):
+                out += [UInt8(ascii: "\\"), UInt8(ascii: "n")]
+            case UInt8(ascii: "\r"):
+                out += [UInt8(ascii: "\\"), UInt8(ascii: "r")]
+            case 0x20..<0x7F:
+                out.append(byte)
+            default:
+                out += [
+                    UInt8(ascii: "\\"), UInt8(ascii: "x"), hexDigits[Int(byte >> 4)],
+                    hexDigits[Int(byte & 0x0F)],
+                ]
+            }
+        }
+        out.append(quote)
+        return String(decoding: out.prefix(limit), as: UTF8.self)
     }
 }

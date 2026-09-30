@@ -54,7 +54,8 @@ public protocol QuestionReadBackend: Sendable {
 /// entries, a value outside `[0, 1]` (NaN and the infinities included) or a sum far from 1.
 ///
 /// This is a bug in the backend, not in the request, so it is neither a ``SchemaError`` nor an
-/// ``OverloadedError``; the server should answer it as an internal error.
+/// ``OverloadedError``; the server answers it as it answers any backend failure, with the 503
+/// `inference backend unavailable: BackendContractError`.
 public struct BackendContractError: Error, Sendable, Hashable, CustomStringConvertible {
     /// What was wrong, naming the model and the question.
     public var message: String
