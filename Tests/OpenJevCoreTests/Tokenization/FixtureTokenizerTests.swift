@@ -25,6 +25,7 @@ struct FixtureTokenizerTests {
             let ids = try #require(row["ids"]?.arrayValue).compactMap(\.intValue)
             let withSpecial = try #require(row["ids_with_special_tokens"]?.arrayValue)
                 .compactMap(\.intValue)
+            #expect(try tokenizer.encode(text, addSpecialTokens: false) == ids)
             #expect(try tokenizer.encode(text, addSpecialTokens: true) == withSpecial)
             #expect(
                 try tokenizer.decode(ids, skipSpecialTokens: false)
