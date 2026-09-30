@@ -1,0 +1,107 @@
+# Builds and tests the package on every pull request and on main. docs/development.md describes the
+# jobs, the toolchains they pin and how to run the same commands locally.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      # TEMPORARY: runs this workflow from the branch that adds it. Removed before review.
+      - issue-7-ci
+
+permissions:
+  contents: read
+
+# One run per branch or pull request: a newer push cancels the run it supersedes. On main a run is
+# never cancelled once it has started, so every merged commit keeps its result.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  linux:
+    name: Linux (Swift 6.2)
+    runs-on: ubuntu-24.04
+    container: swift:6.2-noble
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Show the toolchain
+        id: toolchain
+        run: |
+          swift --version
+          # For example swift-6.2.4-RELEASE. It is part of the cache key, so a new toolchain
+          # starts from a clean build directory.
+          echo "id=$(swift --version 2>&1 | sed -n '1s/.*(\([^ )]*\).*/\1/p')" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the build directory
+        uses: actions/cache@v6
+        with:
+          path: .build/linux
+          key: linux-${{ steps.toolchain.outputs.id }}-${{ hashFiles('Package.resolved') }}
+          restore-keys: linux-${{ steps.toolchain.outputs.id }}-
+
+      - name: Build
+        run: swift build --build-tests --scratch-path .build/linux
+
+      - name: Test
+        run: |
+          unset OPENJEV_TEST_MODEL OPENJEV_LIVE_URL
+          swift test --scratch-path .build/linux 2>&1 | tee "$RUNNER_TEMP/swift-test.log"
+
+      - name: Check that only model tests were skipped
+        run: .github/scripts/check-test-log.sh "$RUNNER_TEMP/swift-test.log"
+
+  macos:
+    name: macOS (Xcode 26.6)
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      # Swift 6.3.3 meets mlx-swift's tools 6.3 floor and still defaults to the native build system,
+      # so the build needs no Metal Toolchain download.
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Show the toolchain
+        id: toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+          swift --version
+          if ! xcodebuild -version | head -1 | grep -q '^Xcode 26\.6'; then
+            echo "::error::Expected Xcode 26.6 at $DEVELOPER_DIR"
+            exit 1
+          fi
+          # For example swiftlang-6.3.3.1.2. It is part of the cache key, so a new toolchain
+          # starts from a clean build directory.
+          echo "id=$(swift --version 2>&1 | sed -n '1s/.*(\([^ )]*\).*/\1/p')" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the build directory
+        uses: actions/cache@v6
+        with:
+          path: .build
+          key: macos-${{ steps.toolchain.outputs.id }}-${{ hashFiles('Package.resolved') }}
+          restore-keys: macos-${{ steps.toolchain.outputs.id }}-
+
+      - name: Build
+        run: swift build --build-tests
+
+      - name: Test
+        run: |
+          unset OPENJEV_TEST_MODEL OPENJEV_LIVE_URL
+          swift test 2>&1 | tee "$RUNNER_TEMP/swift-test.log"
+
+      - name: Check that only model tests were skipped
+        run: .github/scripts/check-test-log.sh "$RUNNER_TEMP/swift-test.log"
+
+      # Runs even when the build or the tests failed, so one push reports both.
+      - name: Lint
+        if: ${{ !cancelled() && steps.toolchain.outcome == 'success' }}
+        run: make lint

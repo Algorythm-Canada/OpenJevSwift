@@ -1,0 +1,107 @@
+# Regenerates every fixture from the pinned upstream commit and the pinned tokenizer and fails when
+# the result differs from the committed files. FixturePinTests, which the CI workflow runs, checks
+# the pins the committed files record; this workflow checks that the files still come out of the
+# scripts byte for byte. docs/development.md describes when it runs.
+name: Fixtures
+
+on:
+  pull_request:
+    paths:
+      - Fixtures/**
+      - Tools/fixtures/**
+      - THIRD_PARTY.md
+      # UPSTREAM_OPENJEV_COMMIT and the fixture targets live in the Makefile.
+      - Makefile
+      - .github/workflows/fixtures.yml
+  # TEMPORARY: runs this workflow from the branch that adds it. Removed before review.
+  push:
+    branches: [issue-7-ci]
+  workflow_dispatch:
+  schedule:
+    # Mondays at 06:23 UTC, to catch a pin that can no longer be fetched or installed.
+    - cron: "23 6 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fixtures-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  regenerate:
+    name: Regenerate the fixtures
+    # Apple silicon, like the machine that wrote the committed files. CPython's math functions come
+    # from the platform's C library, and another one could change the last digit of a float.
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up CPython 3.14.7
+        id: python
+        uses: actions/setup-python@v7
+        with:
+          # The version the committed files record. Another one changes the "python" pin in every
+          # file.
+          python-version: "3.14.7"
+          cache: pip
+          cache-dependency-path: Tools/fixtures/requirements.txt
+
+      - name: Read the tokenizer revision
+        id: tokenizer
+        run: |
+          revision=$(sed -n 's/^TOKENIZER_REVISION = "\([0-9a-f]*\)"$/\1/p' Tools/fixtures/upstream_tables.py)
+          if [ -z "$revision" ]; then
+            echo "::error::TOKENIZER_REVISION not found in Tools/fixtures/upstream_tables.py"
+            exit 1
+          fi
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+
+      # The tokenizer files (about 32 MB) that upstream_tables.py downloads into the Hugging Face
+      # cache. The revision is a commit, so the files under it never change.
+      - name: Restore the tokenizer download
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/huggingface/hub
+          key: huggingface-${{ steps.tokenizer.outputs.revision }}
+
+      - name: Check out upstream OpenJev at the pinned commit
+        run: make upstream
+
+      - name: Create the fixture virtual environment
+        run: make fixtures-venv PYTHON="${{ steps.python.outputs.python-path }}"
+
+      - name: Regenerate the fixtures
+        run: make fixtures
+
+      - name: Fail if any fixture changed
+        run: |
+          # List new files in the diff as well as changed ones.
+          git add --intent-to-add Fixtures/
+          status=$(git status --porcelain Fixtures/)
+          if [ -z "$status" ]; then
+            echo "Regenerating gave the committed fixtures byte for byte."
+            exit 0
+          fi
+          echo "::error::Regenerating changed files under Fixtures/. Run make upstream, make fixtures-venv and make fixtures, then commit the result."
+          printf '%s\n' "$status"
+          git diff --stat -- Fixtures/
+          git diff -- Fixtures/ > "$RUNNER_TEMP/fixtures.diff"
+          # Fixture lines run to tens of kilobytes, so the log shows the first 1,000 lines of the
+          # diff cut to 1,000 characters each. The fixtures-diff artifact holds all of it.
+          cut -c 1-1000 "$RUNNER_TEMP/fixtures.diff" | head -n 1000 || true
+          exit 1
+
+      - name: Upload the fixture diff
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: fixtures-diff
+          path: ${{ runner.temp }}/fixtures.diff
+          if-no-files-found: ignore
+          retention-days: 14
