@@ -474,3 +474,34 @@ Decision.
    512 label-id check belongs to `Engine.one_read` and issue #17.
 
 Status. Proposed with issue #13.
+
+## D-026 Grouping and canvases: where the port goes beyond or differs from the issue text
+
+Context. Issue #14 ports `Engine.groups`, `Engine.canvas_width` and `Engine.build_canvas`, and
+the `canvas` and `canvas_step` settings they read. A few choices were needed that the issue does
+not spell out, and one return type differs from the issue's sketch.
+
+Decision.
+
+1. The vocabulary size, turn close and pad stay on `EngineTokens`, where #12 put them; no second
+   constants type.
+2. `CanvasGeometry(canvas:step:)` throws `CanvasGeometryError` for a value below 1 rather than
+   trapping. Upstream's `Settings` raises at startup for the same values, so a thrown error is the
+   closer port and the test can check it. `width(templateCount:)` computes the ceiling as
+   `(need + step - 1) / step`, which equals Python's `-(-need // step)` for positive operands; the
+   doc comment says so.
+3. `CanvasBuilder.build` returns a `SeededCanvas` with `tokens` and `noise` (the draws in slot
+   order) rather than a bare `[Int]`, so diagnostics need no second call and no second generator.
+   It stops with a precondition failure when the template does not fit the width or a slot is
+   outside the template. Upstream pads with `[PAD] * negative`, an empty list, and would send a
+   canvas longer than its declared width; `TemplateResolver` has already refused such a template.
+4. `ReadGrouping.rows(of:)` is public, so the fixture test compares the number `groups()`
+   compares with the canvas and later issues can log it.
+5. `ReadGrouping.groups` returns `[]` for no questions, as the issue asks; upstream returns
+   `[[]]` but only calls `groups()` when there is something to read.
+6. The fixture test reads `settings.step` as well as `settings.canvas`, defaulting to 16 and 64,
+   so a future fixture at another step needs no test change. The hand-written boundary tests
+   (a template one token under and one over the canvas, 30 nouls at canvas 32) use the test-only
+   `WordTokenizer` of D-025, because the fixtures do not record those trial texts.
+
+Status. Proposed with issue #14.
