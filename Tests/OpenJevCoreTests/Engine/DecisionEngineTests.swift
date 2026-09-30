@@ -270,6 +270,28 @@ struct DecisionEngineTests {
         #expect(serial.modelTime >= delay * 4)
     }
 
+    @Test("A request cancelled while waiting for a slot leaves the slots to the others")
+    func cancelledWaiter() async throws {
+        let delay = Duration.milliseconds(150)
+        let stub = StubBackend(delay: delay)
+        let engine = try DecisionEngine(
+            backend: stub, configuration: EngineConfiguration(maxInflight: 1))
+        let request = try quickstart(samples: 4)
+        let first = Task { try await engine.decide(request) }
+        while stub.reads.isEmpty {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        // The second request's reads queue behind the first's; cancel it while it waits.
+        let second = Task { try await engine.decide(request) }
+        try await Task.sleep(for: .milliseconds(20))
+        second.cancel()
+        await #expect(throws: CancellationError.self) { try await second.value }
+        #expect(try await first.value.inputTokens == 4 * 123)
+        // The permit was not leaked to the cancelled waiters: a third request runs through.
+        let third = try await engine.decide(quickstart())
+        #expect(third.inputTokens == 123)
+    }
+
     @Test("Concurrent requests on one engine get their own answers")
     func concurrentRequests() async throws {
         let stub = StubBackend(delay: .milliseconds(2))

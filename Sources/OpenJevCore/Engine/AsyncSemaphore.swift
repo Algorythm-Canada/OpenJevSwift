@@ -6,15 +6,23 @@ import Foundation
 /// waiting task, or returns it. A waiting task that is cancelled leaves the queue and throws
 /// `CancellationError`. The state is behind a lock so the semaphore can be shared by the engine
 /// actor and the tasks it spawns for concurrent reads.
+///
+/// The queue is first in, first out in O(1) per operation, as `asyncio`'s deque is: waiter ids
+/// sit in an array read from a moving head, and the continuations live in a dictionary keyed by
+/// id. Cancelling removes the continuation and leaves a stale id that `signal()` skips; the array
+/// is compacted once the head has passed half of it. With `max_queue` requests each waiting on
+/// up to 32 sample reads, an array shifted on every hand-off would make a drain quadratic.
 final class AsyncSemaphore: @unchecked Sendable {
-    private struct Waiter {
-        var id: UInt64
-        var continuation: CheckedContinuation<Void, any Error>
-    }
+    private typealias Continuation = CheckedContinuation<Void, any Error>
 
     private let lock = NSLock()
     private var permits: Int
-    private var waiters: [Waiter] = []
+    /// Waiter ids in arrival order, live from ``head`` on.
+    private var queue: [UInt64] = []
+    /// The index of the oldest entry of ``queue`` that has not been handed a permit.
+    private var head = 0
+    /// The continuation of every waiter that is still waiting, by id.
+    private var continuations: [UInt64: Continuation] = [:]
     private var nextID: UInt64 = 0
 
     /// Creates a semaphore with `permits` free permits.
@@ -35,8 +43,7 @@ final class AsyncSemaphore: @unchecked Sendable {
             return nextID
         }
         try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation {
-                (continuation: CheckedContinuation<Void, any Error>) in
+            try await withCheckedThrowingContinuation { (continuation: Continuation) in
                 let outcome: Result<Void, any Error>? = lock.withLock {
                     if Task.isCancelled {
                         return .failure(CancellationError())
@@ -45,7 +52,8 @@ final class AsyncSemaphore: @unchecked Sendable {
                         permits -= 1
                         return .success(())
                     }
-                    waiters.append(Waiter(id: id, continuation: continuation))
+                    continuations[id] = continuation
+                    queue.append(id)
                     return nil
                 }
                 if let outcome {
@@ -53,24 +61,29 @@ final class AsyncSemaphore: @unchecked Sendable {
                 }
             }
         } onCancel: {
-            let waiter = lock.withLock { () -> Waiter? in
-                guard let index = waiters.firstIndex(where: { $0.id == id }) else { return nil }
-                return waiters.remove(at: index)
-            }
-            waiter?.continuation.resume(throwing: CancellationError())
+            let waiting = lock.withLock { continuations.removeValue(forKey: id) }
+            waiting?.resume(throwing: CancellationError())
         }
     }
 
-    /// Returns a permit, waking the first waiter if there is one.
+    /// Returns a permit, waking the oldest waiter still waiting if there is one.
     func signal() {
-        let waiter = lock.withLock { () -> Waiter? in
-            if waiters.isEmpty {
-                permits += 1
-                return nil
+        let waiting = lock.withLock { () -> Continuation? in
+            while head < queue.count {
+                let id = queue[head]
+                head += 1
+                if let continuation = continuations.removeValue(forKey: id) {
+                    compactIfNeeded()
+                    return continuation
+                }
             }
-            return waiters.removeFirst()
+            // Every queued id was cancelled: the queue is stale and the permit is free.
+            queue.removeAll(keepingCapacity: true)
+            head = 0
+            permits += 1
+            return nil
         }
-        waiter?.continuation.resume()
+        waiting?.resume()
     }
 
     /// Runs `body` holding a permit.
@@ -78,5 +91,14 @@ final class AsyncSemaphore: @unchecked Sendable {
         try await wait()
         defer { signal() }
         return try await body()
+    }
+
+    /// Drops the consumed prefix of ``queue`` once it is at least half of the array, so the
+    /// shift costs O(1) amortised per hand-off. Called with the lock held.
+    private func compactIfNeeded() {
+        if head >= 64 && head * 2 >= queue.count {
+            queue.removeFirst(head)
+            head = 0
+        }
     }
 }
