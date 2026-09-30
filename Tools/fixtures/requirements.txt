@@ -1,0 +1,12 @@
+# The packages the fixture scripts import, for Tools/fixtures/.venv (make fixtures-venv).
+# Pinned so that a regeneration gives byte-identical files: every fixture records the versions
+# that wrote it, and the 422 texts and chat template rendering depend on pydantic and transformers.
+fastapi==0.142.1
+starlette==1.7.0
+pydantic==2.13.5
+pydantic-core==2.46.5
+httpx==0.28.1
+transformers==5.17.0
+tokenizers==0.23.2
+huggingface-hub==1.33.0
+jinja2==3.1.6

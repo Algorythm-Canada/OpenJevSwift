@@ -19,5 +19,6 @@ Regenerate from the repository root with any Python 3 (standard library only):
 python3 Tools/fixtures/python_json_tables.py
 ```
 
-The output is deterministic for a given Python version. Tests that need a table skip with a
-message when it is missing.
+The output is deterministic for a given Python version. `make fixtures` regenerates these tables
+together with every other fixture (see [../README.md](../README.md)). Tests that need a table skip
+with a message when it is missing.

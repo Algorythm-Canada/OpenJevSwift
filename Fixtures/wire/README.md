@@ -23,7 +23,8 @@ Tools/fixtures/.venv/bin/python Tools/fixtures/wire_tables.py
 ```
 
 Running the script twice with the same versions gives identical files. Never edit these files
-by hand.
+by hand. `make fixtures` regenerates these files together with every other fixture, from a
+virtual environment with pinned versions (see [../README.md](../README.md)).
 
 ## Files
 

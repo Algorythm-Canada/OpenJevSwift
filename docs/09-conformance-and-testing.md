@@ -28,6 +28,15 @@ Swift tests load these fixtures and assert byte equality (token ids, texts, JSON
 numeric equality where the computation is deterministic (softmax and entropy in double precision
 are compared to 1e-12).
 
+The generated layout (issue #6, indexed in [Fixtures/README.md](../Fixtures/README.md)) differs
+from the table in four places. `/v1/models` bodies are in `Fixtures/wire/models.json` (issue #5),
+not in a `models.json` of their own. Most error rows were already recorded in
+`Fixtures/wire/cases.json`; `errors/` adds the rest and indexes every row of the error table.
+`tokenizer/` also holds `engine_encodings.json`, every text upstream's engine tokenized, which
+with `chat-prompts/` lets `OpenJevCore` replay tokenizations on Linux without the tokenizer.
+`policies/auto_rereads.json` covers the automatic re-read policy with upstream's stub read
+reporting a higher entropy.
+
 ## Layer 2: model parity, tolerance-based
 
 Oracle: mlx-vlm 0.6.15 on the same `mlx-community` 4-bit checkpoint, driven by a small Python
