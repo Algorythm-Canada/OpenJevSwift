@@ -19,5 +19,8 @@ DerivedData/
 Models/
 .cache/
 
+# Pinned upstream reference checkouts, created by `make upstream`
+Upstream/
+
 # Session task checklist (kept local)
 TASKS.md

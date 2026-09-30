@@ -121,6 +121,20 @@ On macOS without the Metal Toolchain, run the tests with the native build system
 swift test --build-system native
 ```
 
+## Upstream reference source
+
+The issues cite upstream OpenJev by file and line (for example `api.py:128-146`). Check the pinned
+commit out inside the project so those references resolve without searching:
+
+```bash
+make upstream
+```
+
+This clones `razorback16/openjev` into `Upstream/openjev` and checks out `dcd2094`, the commit
+recorded in [THIRD_PARTY.md](../THIRD_PARTY.md). `Upstream/` is ignored by git; nothing under it
+is ever committed. When the pin moves, update `UPSTREAM_OPENJEV_COMMIT` in the `Makefile`,
+`THIRD_PARTY.md` and the fixture pins together.
+
 ## Continuous integration
 
 Issue #7 adds the workflows. They are intended to run here:
