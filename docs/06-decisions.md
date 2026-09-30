@@ -382,3 +382,62 @@ Decision.
    `templates/` and requires each of the three `json_state` texts to be one of those renderings.
 
 Status. Proposed with issue #11.
+
+## D-023 Random numbers and seeds: where the port goes beyond or differs from the issue text
+
+Context. Issue #15 ports CPython's `random.Random(seed)` seeding, `getrandbits` and `randrange`,
+and upstream's request seed (`api.py` lines 262 to 263) and derived seeds (`engine.py` lines 342
+and 383). A few choices were needed that the issue does not spell out.
+
+Decision.
+
+1. Seeds are `UInt64`, not arbitrary integers. `MT19937(seed:)` builds a one-word key below 2^32
+   and a two-word key above, as CPython does. Every seed upstream makes fits: the request seed is
+   32 bits and the derived seeds add `104729·k` or `7919·k` for small `k`. `MT19937(key:)` takes
+   the words directly for anything else.
+2. `SeedDerivation.seed(for:)` returns the 32-bit seed as `UInt64` so that `groupSeed` and
+   `sampleSeed` need no conversion. The API is `seedKey(state:questions:images:)`, which takes
+   the parts `ImageValidation` returned, then `seedBytes(for:)` and `seed(for:)`, each taking the
+   key.
+3. `PythonRandom.getrandbits` supports 1 to 64 bits and stops with a precondition failure
+   outside that range; `randrange` requires `n > 0`, where Python raises `ValueError`. Upstream
+   only calls `randrange(262144)`.
+4. SHA-256 is a pure Swift `OpenJevCore.SHA256` so the core stays Foundation-only on Linux. It is
+   public, so a file that also imports CryptoKit must qualify the name.
+5. The rows of `seeds.json`'s `upstream_only` are not tested: their bodies need Python's lenient
+   `json.loads`, which `JSONParser` does not reproduce (D-016).
+6. CPython (PSF-2.0) and the MT19937 reference code (BSD-3-Clause) it is built on are listed in
+   `THIRD_PARTY.md`, and `MT19937.swift` keeps the reference code's notice.
+
+Status. Proposed with issue #15.
+
+## D-024 Tokenizer protocol and labels: where the port goes beyond or differs from the issue text
+
+Context. Issue #12 defines the core's tokenizer protocol, ports `Engine._single_token_labels` and
+exposes the engine's marker sequences, with a replay tokenizer for the tests. A few choices were
+needed that the issue does not spell out, and the protocol differs from the issue's sketch.
+
+Decision.
+
+1. `DecisionTokenizer` is `encode(_:addSpecialTokens:) throws`, `decode(_:skipSpecialTokens:)
+   throws` and `chatPromptIDs(system:user:thinking:) throws`. The issue's `encode` and `decode`
+   do not throw and `decode` has no option; every method throws here so a replay tokenizer can
+   refuse an unrecorded input instead of returning wrong ids, and `skipSpecialTokens` mirrors the
+   corpus's two recorded decodes. `IDs` follows Swift's acronym casing. Errors are a
+   `TokenizerError` struct with a message.
+2. `LabelDiscovery.choiceLabels(using:)` returns a `LabelSet` with the labels and the single id
+   of each, which the template and read code need. `LabelDiscovery` also holds `prefix`,
+   `candidates`, `maxChoices` (255), `noulLabels` and `scoreLabels`. The schema builder's noul
+   labels now read `noulLabels`; its score labels stay `String(i)` because `maxScoreLevels` is
+   configurable, and at the default of 10 they equal `scoreLabels`.
+3. `EngineTokens.turnClose` is 106 and is documented as `<turn|>`, which it is in this
+   vocabulary; upstream's docs name it after `<end_of_turn>`, which is not a token here
+   (`Fixtures/tokenizer/special_tokens.json`). The marker texts are exposed as constants beside
+   the encoded sequences.
+4. The test-only `FixtureTokenizer` compares texts by their UTF-8 bytes, so NFC and NFD spellings
+   stay distinct as in Python. `encode` without special tokens tries `engine_encodings.json`
+   before `corpus.json`; with special tokens and for `decode` only the corpus is recorded.
+5. The schema fixture test builds with the labels discovered through `FixtureTokenizer` and
+   checks they equal `labels.json`, so the schemas tests exercise discovery end to end.
+
+Status. Proposed with issue #12.

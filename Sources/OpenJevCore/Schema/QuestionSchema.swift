@@ -136,7 +136,7 @@ public struct QuestionSchemaBuilder: Sendable {
     /// The labels of a read question with `count` answers.
     private func labels(_ kind: QuestionKind, count: Int) -> [String] {
         switch kind {
-        case .noul: return ["yes", "no"]
+        case .noul: return LabelDiscovery.noulLabels
         case .choice: return Array(choiceLabels.prefix(count))
         case .score: return (0..<count).map { String($0) }
         }
