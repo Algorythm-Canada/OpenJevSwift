@@ -1,5 +1,6 @@
 import Foundation
 import OpenJevCore
+import OpenJevTestSupport
 import Testing
 
 @Suite("Answer assembly")

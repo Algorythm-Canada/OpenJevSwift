@@ -1,4 +1,5 @@
 import OpenJevCore
+import OpenJevTestSupport
 import Testing
 
 /// Compares ``QuestionSchemaBuilder`` with upstream's `Engine.build_schema` in

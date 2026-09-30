@@ -14,37 +14,49 @@ import OpenJevCore
 ///   log-probability maps of `Fixtures/distributions/`, through ``ReadResult``'s raw initializer.
 ///
 /// Every ``CanvasRead`` and every think call is recorded in call order. ``delay`` makes each
-/// backend call take at least that long, for the concurrency tests.
-final class StubBackend: DecisionBackend, @unchecked Sendable {
+/// backend call take at least that long, for the concurrency and timing tests.
+public final class StubBackend: DecisionBackend, @unchecked Sendable {
     /// One recorded think call.
-    struct ThinkCall: Equatable {
-        var prompt: [Int]
-        var budget: Int
-        var stopIDs: [Int]
+    public struct ThinkCall: Equatable, Sendable {
+        /// The prompt ids.
+        public var prompt: [Int]
+        /// The token budget.
+        public var budget: Int
+        /// The ids that end the thought.
+        public var stopIDs: [Int]
+
+        /// Creates a recorded call.
+        public init(prompt: [Int], budget: Int, stopIDs: [Int]) {
+            self.prompt = prompt
+            self.budget = budget
+            self.stopIDs = stopIDs
+        }
     }
 
-    let tokenizer: any DecisionTokenizer
-    let maxPromptTokens: Int
-    let capabilities: BackendCapabilities
-    let modelName: String
+    public let tokenizer: any DecisionTokenizer
+    public let maxPromptTokens: Int
+    public let capabilities: BackendCapabilities
+    public let modelName: String
     /// The entropy every slot reports.
-    let entropy: Double
+    public let entropy: Double
     /// The prompt tokens every stub read bills.
-    let readPromptTokens: Int
+    public let readPromptTokens: Int
     /// How long every backend call takes at least.
-    let delay: Duration?
+    public let delay: Duration?
     /// The ids every think call generates.
-    let thought: [Int]
+    public let thought: [Int]
     /// Recorded raw maps by read seed; a read whose seed is named answers from these with
     /// `scriptedPromptTokens` billed, instead of the stub distribution.
-    let scripted: [UInt64: [[(tokenID: Int, logprob: Double)]]]
-    let scriptedPromptTokens: Int
+    public let scripted: [UInt64: [[(tokenID: Int, logprob: Double)]]]
+    /// The prompt tokens a scripted read bills.
+    public let scriptedPromptTokens: Int
 
     private let lock = NSLock()
     private var recordedReads: [CanvasRead] = []
     private var recordedThinks: [ThinkCall] = []
 
-    init(
+    /// Creates a stub; every argument defaults to what the recordings used.
+    public init(
         tokenizer: any DecisionTokenizer = FixtureTokenizer.shared,
         maxPromptTokens: Int = 32768,
         capabilities: BackendCapabilities = .all,
@@ -69,16 +81,16 @@ final class StubBackend: DecisionBackend, @unchecked Sendable {
     }
 
     /// Every read so far, in call order.
-    var reads: [CanvasRead] {
+    public var reads: [CanvasRead] {
         lock.withLock { recordedReads }
     }
 
     /// Every think call so far, in call order.
-    var thinks: [ThinkCall] {
+    public var thinks: [ThinkCall] {
         lock.withLock { recordedThinks }
     }
 
-    func read(_ read: CanvasRead) async throws -> ReadResult {
+    public func read(_ read: CanvasRead) async throws -> ReadResult {
         lock.withLock { recordedReads.append(read) }
         if let delay {
             try await Task.sleep(for: delay)
@@ -99,7 +111,8 @@ final class StubBackend: DecisionBackend, @unchecked Sendable {
         return ReadResult(slots: slots, promptTokens: readPromptTokens)
     }
 
-    func think(prompt: [Int], budget: Int, stopIDs: [Int]) async throws -> ThoughtGeneration {
+    public func think(prompt: [Int], budget: Int, stopIDs: [Int]) async throws -> ThoughtGeneration
+    {
         lock.withLock {
             recordedThinks.append(ThinkCall(prompt: prompt, budget: budget, stopIDs: stopIDs))
         }

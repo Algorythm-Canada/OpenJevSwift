@@ -1,4 +1,5 @@
 import OpenJevCore
+import OpenJevTestSupport
 import Testing
 
 /// Compares ``SystemText``, ``AnswerText`` and ``StateText`` with upstream's `system_text`,

@@ -1,5 +1,6 @@
 import Foundation
 import OpenJevCore
+import OpenJevTestSupport
 import Testing
 
 /// The image checks of ``ImageValidation``, against upstream's recorded responses and rule by rule.

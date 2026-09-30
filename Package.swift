@@ -18,6 +18,8 @@ var products: [Product] = [
 var dependencies: [Package.Dependency] = [
     .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "2.23.0"),
     .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.8.0"),
+    // Hummingbird's own dependency; the server names header fields with it directly.
+    .package(url: "https://github.com/apple/swift-http-types.git", from: "1.8.0"),
 ]
 
 var targets: [Target] = [
@@ -38,6 +40,11 @@ var targets: [Target] = [
                 package: "hummingbird",
                 condition: .when(platforms: [.macOS, .linux])
             ),
+            .product(
+                name: "HTTPTypes",
+                package: "swift-http-types",
+                condition: .when(platforms: [.macOS, .linux])
+            ),
         ],
         swiftSettings: swiftSettings
     ),
@@ -50,14 +57,36 @@ var targets: [Target] = [
         ],
         swiftSettings: swiftSettings
     ),
-    .testTarget(
-        name: "OpenJevCoreTests",
+    // What the test targets share: the fixture loaders, the fixture-replaying tokenizer and the
+    // stub backends. Test targets cannot import each other, so this is a library target, not a
+    // product. Foundation only, so it builds wherever OpenJevCore does, iOS included.
+    .target(
+        name: "OpenJevTestSupport",
         dependencies: ["OpenJevCore"],
         swiftSettings: swiftSettings
     ),
     .testTarget(
+        name: "OpenJevCoreTests",
+        dependencies: ["OpenJevCore", "OpenJevTestSupport"],
+        swiftSettings: swiftSettings
+    ),
+    .testTarget(
         name: "OpenJevServerTests",
-        dependencies: ["OpenJevServer"],
+        dependencies: [
+            "OpenJevServer",
+            "OpenJevCore",
+            "OpenJevTestSupport",
+            .product(
+                name: "HummingbirdTesting",
+                package: "hummingbird",
+                condition: .when(platforms: [.macOS, .linux])
+            ),
+            .product(
+                name: "HTTPTypes",
+                package: "swift-http-types",
+                condition: .when(platforms: [.macOS, .linux])
+            ),
+        ],
         swiftSettings: swiftSettings
     ),
 ]

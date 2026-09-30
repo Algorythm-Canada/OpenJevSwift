@@ -1,4 +1,5 @@
 import OpenJevCore
+import OpenJevTestSupport
 import Testing
 
 /// Compares ``ReadGrouping``, ``CanvasGeometry`` and ``CanvasBuilder`` with
