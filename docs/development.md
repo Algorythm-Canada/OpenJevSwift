@@ -135,6 +135,30 @@ recorded in [THIRD_PARTY.md](../THIRD_PARTY.md). `Upstream/` is ignored by git; 
 is ever committed. When the pin moves, update `UPSTREAM_OPENJEV_COMMIT` in the `Makefile`,
 `THIRD_PARTY.md` and the fixture pins together.
 
+## Fixtures
+
+The golden fixtures in [Fixtures/](../Fixtures/README.md) are generated from upstream's code at
+the pinned commit and, for most of them, the pinned DiffusionGemma tokenizer. Regenerate them
+from the repository root:
+
+```bash
+make upstream
+make fixtures-venv
+make fixtures
+```
+
+| Command | Runs |
+|---|---|
+| `make fixtures-venv` | Creates `Tools/fixtures/.venv` from `python3.14` (override with `PYTHON=...`) and installs `Tools/fixtures/requirements.txt` |
+| `make fixtures` | `python_json_tables.py`, `wire_tables.py` and `upstream_tables.py`, with `PYTHONHASHSEED=0` |
+
+The committed files were written by CPython 3.14.7 with the pinned packages. Another Python
+version changes the `python` pin recorded in every file, so use 3.14.7 to reproduce them byte
+for byte. The first run downloads the tokenizer files (about 32 MB) into the Hugging Face cache;
+no weights are downloaded, and generated fixture outputs are confined to `Fixtures/`. Running `make fixtures`
+twice gives no diff. `FixturePinTests` in `OpenJevCoreTests` fails when a file records another
+upstream commit or tokenizer revision.
+
 ## Continuous integration
 
 Issue #7 adds the workflows. They are intended to run here:

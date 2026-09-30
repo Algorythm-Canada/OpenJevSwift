@@ -27,3 +27,6 @@ TASKS.md
 
 # Python virtual environments for the fixture scripts
 .venv/
+
+# Python bytecode caches from the fixture scripts
+__pycache__/
