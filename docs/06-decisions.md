@@ -135,19 +135,55 @@ responsibility.
 
 Status. Accepted.
 
-## D-011 Encoder models: Core ML or MLX decided by a spike; JevK5 first among the extra models
+## D-011 Encoder models: Core ML for Verdict and Laya; JevK5 first among the extra models
 
 Context. Verdict (151M) and Laya (421M) are ModernBERT encoders with custom heads; Core ML would
 reach iOS and the Neural Engine, while an MLX port shares the codebase. JevK5 is Qwen3.5-4B with a
 merged LoRA and a next-token letter readout, which `MLXLLM`'s existing Qwen3.5 implementation
-can run today with no new model code.
+can run today with no new model code. Spike #56 converted both encoders to Core ML and measured
+them on an M3 Max and an iPhone 13 Pro Max (A15, iOS 27.0); the evidence is in
+[spikes/encoder-runtime.md](spikes/encoder-runtime.md).
 
-Decision. Implement JevK5 first among the additional models. Run one spike converting Verdict to
-Core ML and measuring accuracy parity and latency on macOS and iOS, and one comparing with an MLX
-ModernBERT port; choose per model. CLM (Qwen3-8B embeddings plus heads) is deferred until the
-others exist.
+Decision.
 
-Status. Open (spike).
+1. **Verdict runs on Core ML** on iOS and macOS, from the float16 package that
+   `Tools/encoders/convert_verdict.py` converts from the PyTorch checkpoint: one function per
+   input shape (batch 1 and 16 by 128, 256 and 512 tokens), weights stored once, 306 MB. On an
+   iPhone it uses `.cpuAndNeuralEngine` and reads one question per call: 9.7 ms at 128 tokens,
+   17 ms at 256 and 46 ms at 512, in 106 MB. On a Mac it uses `.cpuAndGPU` (7.5 to 20 ms a
+   question) and may read up to 16 questions per call.
+2. **Laya runs on Core ML** the same way (`convert_laya.py`, 128 to 1,024 tokens, 849 MB), with
+   the marker gather, the temperatures, the clamp and the 4-decimal rounding in Swift. It uses
+   `.cpuAndGPU` on the iPhone (82 ms at 128 tokens, 385 ms at 512, 1.35 s at 1,024, 855 MB) and
+   on the Mac (15 to 82 ms). FILL_D011_LAYA_ANE
+3. **No MLX port of ModernBERT.** It would take 5 to 6 days and about 700 lines to maintain, and it
+   could not use the Neural Engine, which ran Verdict about 2.5 times faster than the iPhone's GPU
+   with a third of the memory.
+4. **iOS 18 and macOS 15.** The multifunction packages need them. The iOS 17 alternative, one
+   program with enumerated input shapes, crashes Core ML's CPU backend on macOS 27.0.1 and iOS 27.0.
+   iOS 18 runs on the same iPhones as iOS 17 (XS, XR and later), so no device is lost; the library
+   keeps its iOS 17 platform and the encoder backends are available from iOS 18.
+5. **Packages are downloaded on first use,** verified by SHA-256 and compiled on the device, not
+   bundled in apps. The iOS package needs only the batch-1 functions.
+6. **Fallback.** When a device cannot meet an app's time budget (Laya at 1,024 tokens takes 1.35 s
+   on an A15), the app sends the read to an OpenJev server over the same wire API
+   (`/v1/systemone` with `verdict-1.4` or `laya-1.0`).
+7. Implement JevK5 first among the additional models; on iPhones it waits for a measurement on an
+   8 GB device (issue #55). CLM (Qwen3-8B embeddings plus heads) is deferred until the others
+   exist.
+
+Alternatives rejected. (a) An MLX ModernBERT port: see 3. (b) iOS 17 packages with enumerated
+shapes: see 4. (c) ONNX Runtime with its Core ML execution provider: a large binary dependency for
+two small models, and coremltools 9.0 cannot read the shipped ONNX export. (d) Server-only
+encoders: the iPhone numbers show on-device reads are affordable.
+
+Consequences. Issues #57 and #58 build on the spike's harness (tokenization, the prompt and
+sequence builders, calibration, the Core ML runner) and on Fixtures/encoders; the report lists their
+scope. The converted packages need a home and a release step. Core ML's own defects (the crash
+with enumerated shapes, a misleading `functionName` load error, silent fallbacks to the CPU) enter
+the backends' test matrix on every OS release.
+
+Status. Decided by spike #56 on 2026-09-30.
 
 ## D-012 Reads come first; text generation and `think` come later
 

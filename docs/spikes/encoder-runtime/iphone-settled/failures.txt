@@ -1,0 +1,10 @@
+launch 1 did not start (verdict-m18-fp16:cpuAndNeuralEngine,verdict-m18-fp16:cpuAndGPU,verdict-m18-fp16:cpuOnly,laya-m18-fp16:cpuAndGPU,verdict-m18-fp16:all,laya-e17-fp16:cpuAndNeuralEngine)
+    ERROR: The application failed to launch. (com.apple.dt.CoreDeviceError error 10002 (0x2712))
+           ----------------------------------------
+               The operation couldn?t be completed. Invalid argument (NSPOSIXErrorDomain error 22 (0x16))
+laya-e17-fp16:cpuAndNeuralEngine: stopped by hand (SIGTERM) at 17:25, after 22 minutes in its first load with ANECompilerService compiling; no result. The device kept no crash report for it; ANECompilerService.cpu_resource-2026-09-30-170833.ips records the compiler at 96% CPU for 94 s (no action taken). The script attached JetsamEvent-2026-09-30-165011.ips, which is from the laya-m18-fp16 cpuAndGPU configuration (16:48 to 16:56): memory pressure killed five system daemons, not the app
+    Launched application with org.openjevswift.encoderharness bundle identifier.
+    Waiting for the application to terminate...
+    App terminated due to signal 15.
+HARNESS_ERROR laya-m18-fp16 cpuAndNeuralEngine: Error Domain=com.apple.CoreML Code=0 "`MLModelConfiguration`'s `.functionName` property must be `nil` unless the model type is ML Program." UserInfo={NSLocalizedDescription=`MLModelConfiguration`'s `.functionName` property must be `nil` unless the model type is ML Program.}
+HARNESS_ERROR laya-m18-fp16 all: Error Domain=com.apple.CoreML Code=0 "`MLModelConfiguration`'s `.functionName` property must be `nil` unless the model type is ML Program." UserInfo={NSLocalizedDescription=`MLModelConfiguration`'s `.functionName` property must be `nil` unless the model type is ML Program.}

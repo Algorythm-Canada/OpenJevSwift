@@ -1,0 +1,3 @@
+# Filled by Tools/encoders/stage_harness.sh for device runs: weights, tokenizers, fixture copies.
+/App/Staged/*
+!/App/Staged/README.md

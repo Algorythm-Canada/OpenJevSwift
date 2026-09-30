@@ -15,6 +15,10 @@ struct FixturePinTests {
     /// The tokenizer the fixtures were computed with, as THIRD_PARTY.md pins it.
     static let tokenizerRepository = "mlx-community/diffusiongemma-26B-A4B-it-4bit"
     static let tokenizerRevision = "a7a81407613811e8ba63af92ac0d852b809e191f"
+    /// The encoder checkpoints Fixtures/encoders was computed with, as Tools/encoders/common.py
+    /// pins them. Those files use each checkpoint's own tokenizer.
+    static let verdictRevision = "8af2496eb63c7fa66d7d234e1f62629380030eb4"
+    static let layaRevision = "1a793eb568e6718f15941d08f85432581df534e3"
 
     /// The repository root, found relative to this source file.
     static let root = URL(fileURLWithPath: #filePath)
@@ -63,9 +67,11 @@ struct FixturePinTests {
     /// What is wrong with one file's generator object, if anything.
     ///
     /// python-json/ holds CPython reference tables, which involve neither upstream nor the
-    /// tokenizer. wire/ was recorded from upstream with a stand-in tokenizer. Every other file
-    /// comes from upstream's code with the real tokenizer and records both pins and the version
-    /// of the script that wrote it.
+    /// tokenizer. wire/ was recorded from upstream with a stand-in tokenizer. encoders/ holds the
+    /// Verdict and Laya reference outputs that Tools/encoders records through upstream's code
+    /// with each model's own tokenizer, so it pins the checkpoints instead of the tokenizer.
+    /// Every other file comes from upstream's code with the real tokenizer and records both pins
+    /// and the version of the script that wrote it.
     static func problems(in generator: JSONValue, of file: String) -> [String] {
         var out: [String] = []
         func expect(_ key: String, _ value: String) {
@@ -74,8 +80,10 @@ struct FixturePinTests {
                 out.append("\(file): generator.\(key) is \(found ?? "missing"), expected \(value)")
             }
         }
-        if generator["script"]?.stringValue?.hasPrefix("Tools/fixtures/") != true {
-            out.append("\(file): generator.script does not name a script in Tools/fixtures")
+        let encoders = file.hasPrefix("encoders/")
+        let scripts = encoders ? "Tools/encoders" : "Tools/fixtures"
+        if generator["script"]?.stringValue?.hasPrefix(scripts + "/") != true {
+            out.append("\(file): generator.script does not name a script in \(scripts)")
         }
         if generator["python"]?.stringValue == nil {
             out.append("\(file): generator.python is missing")
@@ -88,8 +96,13 @@ struct FixturePinTests {
         if file.hasPrefix("wire/") {
             return out
         }
-        expect("tokenizer_repo", tokenizerRepository)
-        expect("tokenizer_revision", tokenizerRevision)
+        if encoders {
+            expect("verdict_revision", verdictRevision)
+            expect("laya_revision", layaRevision)
+        } else {
+            expect("tokenizer_repo", tokenizerRepository)
+            expect("tokenizer_revision", tokenizerRevision)
+        }
         if generator["version"]?.intValue == nil {
             out.append("\(file): generator.version is missing")
         }

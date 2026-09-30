@@ -15,7 +15,7 @@ estimates on 2026-09-29.
 | R8 | **Order preservation.** Foundation JSON loses object order; a missed path (for example error `input` echo or `legend`) silently reorders criteria. | Medium | High | Own parser and serialiser; property tests round-tripping order; server never touches Foundation JSON for request bodies. | Ordered JSON task |
 | R9 | **Vision preprocessing parity.** Gemma 4 processor: resize policy, normalisation, token budget selection, placeholder expansion, `mm_token_type_ids`, bidirectional block overlay. Upstream needed a vLLM patch for the overlay. | High | Medium (images are an extension) | Reuse `MLXVLM` Gemma 4 processor if public; oracle `pixel_values` and expanded ids from mlx-vlm; hotdog fixture. | Vision processor task; vision live test |
 | R10 | **Generation loop parity.** Entropy-bound sampler, temperature schedule, self-conditioning, stopping, block commits. Affects `think` and chat quality, not reads. | High | Medium | Port from mlx-vlm with the Layr fork's Swift sampler as a second reference; live tests compare greedy outputs. | Generation milestone tasks |
-| R11 | **Encoder models on Apple.** Laya's `DecisionModel` head and Verdict's GLiClass head must be reproduced exactly, including per-option-count temperatures and abstention handling; ModernBERT has no MLX Swift implementation; Core ML conversion of custom heads may need tracing work. | Medium | Medium | Spike converting Verdict; parity against PyTorch outputs recorded as fixtures. | Encoder spike (milestone 6) |
+| R11 | **Encoder models on Apple.** Laya's `DecisionModel` head and Verdict's GLiClass head must be reproduced exactly, including per-option-count temperatures and abstention handling; ModernBERT has no MLX Swift implementation; Core ML conversion of custom heads may need tracing work. Now: both convert and match upstream within its own bfloat16 variation (findings below); what remains is Core ML's own defects (a CPU-backend crash with enumerated shapes, a misleading multifunction load error, silent CPU fallbacks) and Laya's speed on long states on phones. | Low | Medium | Spike #56: Core ML packages with iOS 18 multifunction shapes, parity fixtures in Fixtures/encoders, the Swift harness in Tools/encoders; test the shipped configurations on each OS release; a server read over the wire API as fallback; the MLX port (5 to 6 days) if Core ML regresses. | Spike #56 (2026-09-30); issues #57 and #58 |
 | R12 | **Upstream drift.** Upstream is 11 days old, adds a model a week, and has open PRs (ForJev backend). The pin will age. | Certain | Medium | Pinned commit in `THIRD_PARTY.md`; a recurring review task; fixtures regenerated per pin move. | Upstream tracking task |
 | R13 | **Hosted CI cannot run the model.** GitHub-hosted macOS runners have no room for 17 GB weights. Their virtual GPU does run MLX's kernels for small synthetic shapes, once the build includes MLX's Metal library (findings below). | Certain for the model | Low (model tests are opt-in) | Core tests on Linux and macOS runners; MLX synthetic tests on the `macos-26` GPU, built with Swift Build (D-028); model tests opt-in behind `OPENJEV_TEST_MODEL`; consider a self-hosted Apple silicon runner later. | CI task #7 and CI spike #8, both 2026-09-30 |
 | R14 | **Concurrency correctness.** MLX arrays are not `Sendable`; GPU work must stay on one execution context; Swift 6 strict concurrency will fight the natural design. | Medium | Medium | One runtime actor owns all MLX state; only value types cross its boundary; structured concurrency for group fan-out. | Runtime actor task |
@@ -40,7 +40,8 @@ estimates on 2026-09-29.
 6. Can CPython's float repr be reproduced exactly in Swift for the values that appear in JSON
    states? (R7)
 7. Does Core ML run Verdict's GLiClass model with identical probabilities after temperature
-   scaling, and at what latency on an iPhone? (R11)
+   scaling, and at what latency on an iPhone? (R11; answered below: within upstream's own bfloat16
+   variation, and 10 to 46 ms a question on an A15's Neural Engine)
 
 ## Findings for R13: MLX on hosted runners
 
@@ -95,3 +96,28 @@ Every host is an Apple M1 virtual machine with 3 CPUs and 7 GB of memory.
    was not probed; the workflow's `include_xlarge` input adds it.
 
 D-028 records the decision that follows: MLX synthetic tests run in CI on the `macos-26` GPU.
+
+## Findings for R11: the encoder models on Core ML
+
+Spike #56 answered unknown 7 on 2026-09-30, with the evidence in
+[spikes/encoder-runtime.md](spikes/encoder-runtime.md):
+
+1. **Parity.** Converted to float16 Core ML packages, both models stay inside the variation
+   upstream's own serving carries. Against PyTorch float32 on 200 questions, Verdict's calibrated
+   probabilities moved by at most 0.0018 on the GPU and 0.0082 on the iPhone's Neural
+   Engine, and Laya's by at most 0.0039 on the GPU; upstream's bfloat16 serving moves them by
+   0.0115 (Verdict) and 0.0191 (Laya). The top answer changed only on near ties (1 to 3 of 200 for
+   Verdict, the same questions float16 PyTorch flips). Tokenization and calibration match exactly.
+2. **Latency on an iPhone 13 Pro Max.** Verdict answers a question in 9.7, 17 and 46 ms at 128,
+   256 and 512 tokens on the Neural Engine, in 106 MB; Laya in 82, 152, 385 and 1,346 ms at 128 to
+   1,024 tokens on the GPU, in 855 MB. Each run took the phone to the serious thermal state within
+   minutes.
+3. **Core ML's CPU backend crashes on enumerated input shapes** on macOS 27.0.1 and iOS 27.0
+   (`BNNSGraphContextExecute_v2`), which rules out iOS 17 packages; iOS 18 multifunction packages
+   avoid it and cost no devices.
+4. **Laya needed two graph rewrites** before Core ML would plan it on the Neural Engine at all
+   (a one-hot type embedding, a rank-4 head), and its multifunction package still does not load
+   for the Neural Engine (FILL_R11_LAYA_ANE).
+5. **The residual risk** is Core ML itself: the crash, the misleading multifunction load error and
+   silent CPU fallbacks. The backends test the configurations they ship on each OS release, and
+   the MLX estimate (5 to 6 days) stays the fallback.

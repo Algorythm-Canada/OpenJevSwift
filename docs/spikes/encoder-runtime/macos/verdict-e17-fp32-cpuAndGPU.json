@@ -1,0 +1,168 @@
+{
+  "batch1" : {
+    "count" : 200,
+    "maxMs" : 209.56820800347487,
+    "meanMs" : 25.462448935177235,
+    "medianMs" : 23.496396002883557,
+    "minMs" : 9.202375003951602,
+    "p95Ms" : 39.14312499546213
+  },
+  "batch16ByLength" : {
+    "b16_s128" : {
+      "count" : 9,
+      "maxMs" : 142.15562500612577,
+      "meanMs" : 110.19915755686169,
+      "medianMs" : 106.41095800383482,
+      "minMs" : 87.33233399834717,
+      "p95Ms" : 142.15562500612577
+    },
+    "b16_s256" : {
+      "count" : 6,
+      "maxMs" : 332.4230830039596,
+      "meanMs" : 285.2267221690757,
+      "medianMs" : 282.41131250251783,
+      "minMs" : 256.1862920047133,
+      "p95Ms" : 332.4230830039596
+    },
+    "b16_s512" : {
+      "count" : 24,
+      "maxMs" : 899.4966669997666,
+      "meanMs" : 684.9629931663609,
+      "medianMs" : 650.6648545000644,
+      "minMs" : 537.5327090005158,
+      "p95Ms" : 899.0314999973634
+    }
+  },
+  "batch16PerCall" : {
+    "count" : 39,
+    "maxMs" : 899.4966669997666,
+    "meanMs" : 490.827297103048,
+    "medianMs" : 589.4780830058153,
+    "minMs" : 87.33233399834717,
+    "p95Ms" : 899.0314999973634
+  },
+  "batch16PerQuestion" : {
+    "count" : 39,
+    "maxMs" : 104.13130737470055,
+    "meanMs" : 34.068215750033765,
+    "medianMs" : 36.842380187863455,
+    "minMs" : 5.458270874896698,
+    "p95Ms" : 82.6083332503913
+  },
+  "batch1ByLength" : {
+    "s128" : {
+      "count" : 93,
+      "maxMs" : 108.03879200102529,
+      "meanMs" : 13.71331399970723,
+      "medianMs" : 11.95620799990138,
+      "minMs" : 9.202375003951602,
+      "p95Ms" : 18.46595799725037
+    },
+    "s256" : {
+      "count" : 6,
+      "maxMs" : 16.02450000063982,
+      "meanMs" : 15.553861000322891,
+      "medianMs" : 15.50881250295788,
+      "minMs" : 15.223082999000326,
+      "p95Ms" : 16.02450000063982
+    },
+    "s512" : {
+      "count" : 101,
+      "maxMs" : 209.56820800347487,
+      "meanMs" : 36.869588307532055,
+      "medianMs" : 34.663875005207956,
+      "minMs" : 22.3912500005099,
+      "p95Ms" : 41.33529200043995
+    }
+  },
+  "compileSeconds" : 0.14561112500086892,
+  "computePlan" : {
+    "costShare" : {
+      "gpu" : 1
+    },
+    "function" : "main",
+    "operations" : {
+      "gpu" : 1050,
+      "none" : 1282
+    }
+  },
+  "device" : {
+    "chip" : "Apple M3 Max",
+    "machine" : "arm64",
+    "model" : "Mac15,9",
+    "operatingSystem" : "Version 27.0.1 (Build 26A434)",
+    "physicalMemoryBytes" : 137438953472,
+    "processorCount" : 16
+  },
+  "firstLoadSeconds" : 2.2394925840053475,
+  "fixtureRevisions" : {
+    "laya" : "1a793eb568e6718f15941d08f85432581df534e3",
+    "script" : "Tools\/encoders\/reference.py",
+    "verdict" : "8af2496eb63c7fa66d7d234e1f62629380030eb4",
+    "version" : "1"
+  },
+  "footprintAfterLoadBytes" : 257950776,
+  "footprintAfterWarmupBytes" : {
+    "b16_s128" : 730367608,
+    "b16_s256" : 1073694328,
+    "b16_s512" : 1659536992,
+    "b1_s128" : 481969736,
+    "b1_s256" : 526108280,
+    "b1_s512" : 569247352
+  },
+  "footprintBeforeLoadBytes" : 7488184,
+  "functionLoadSeconds" : {
+    "main" : 0.2894216669956222
+  },
+  "kind" : "enumerated",
+  "lifetimePeakFootprintBytes" : 1810531936,
+  "model" : "verdict",
+  "package" : "verdict-e17-fp32",
+  "packageBytes" : 607433508,
+  "parityBatch1" : {
+    "maxAbsLogitDifference" : 2.574920654296875e-05,
+    "maxAbsProbabilityDifference" : 1.915269151053778e-06,
+    "meanAbsProbabilityDifference" : 2.6539924261699297e-07,
+    "nonFinite" : 0,
+    "questions" : 200,
+    "topLabelAgreement" : 200,
+    "topLabelChanges" : [
+
+    ]
+  },
+  "parityBatch16" : {
+    "maxAbsLogitDifference" : 2.467632293701172e-05,
+    "maxAbsProbabilityDifference" : 2.1883554195967214e-06,
+    "meanAbsProbabilityDifference" : 2.5659621678119333e-07,
+    "nonFinite" : 0,
+    "questions" : 200,
+    "topLabelAgreement" : 200,
+    "topLabelChanges" : [
+
+    ]
+  },
+  "peakFootprintDuringRunBytes" : 1810531936,
+  "secondLoadSeconds" : 0.2844062909935019,
+  "thermalEnd" : "fair",
+  "thermalStart" : "fair",
+  "tokenizationMatches" : "200\/200",
+  "tokenizePerQuestion" : {
+    "count" : 200,
+    "maxMs" : 192.27929200133076,
+    "meanMs" : 19.818378524651052,
+    "medianMs" : 18.65820799866924,
+    "minMs" : 0.9515839992673136,
+    "p95Ms" : 45.23133300244808
+  },
+  "tokenizerLoadSeconds" : 1.4315954169942415,
+  "units" : "cpuAndGPU",
+  "wallSeconds" : 41.3736473329991,
+  "warmupSeconds" : {
+    "b16_s128" : 1.9228689579977072,
+    "b16_s256" : 0.6069341249967692,
+    "b16_s512" : 0.8465280830059783,
+    "b1_s128" : 1.9222113750001881,
+    "b1_s256" : 0.516526082996279,
+    "b1_s512" : 0.8843707920023007
+  }
+}
