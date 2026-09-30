@@ -19,12 +19,14 @@ make fixtures
 
 `make upstream` checks out upstream at the pinned commit under `Upstream/openjev`.
 `make fixtures-venv` creates `Tools/fixtures/.venv` from CPython 3.14 with the packages pinned in
-`Tools/fixtures/requirements.txt`. `make fixtures` runs the three scripts in
+`Tools/fixtures/requirements.txt`. `make fixtures` runs the four scripts in
 [Tools/fixtures](../Tools/README.md). The first run downloads the tokenizer files of
 `mlx-community/diffusiongemma-26B-A4B-it-4bit` at revision
 `a7a81407613811e8ba63af92ac0d852b809e191f` (about 32 MB) into the Hugging Face cache, outside the
-repository. No model weights are downloaded. Running `make fixtures` twice gives no diff, and a
-fresh virtual environment built from the requirements file reproduces every file byte for byte.
+repository, with the checkpoint's `config.json`, `generation_config.json` and
+`model.safetensors.index.json`. No model weights are downloaded. Running `make fixtures` twice
+gives no diff, and a fresh virtual environment built from the requirements file reproduces every
+file byte for byte.
 
 ## Pins
 
@@ -33,6 +35,8 @@ Python version and the versions of the packages whose behaviour the file depends
 come from upstream's code also record `upstream` and `upstream_commit`. Every file written by
 `upstream_tables.py`, which loads the real tokenizer, also records `tokenizer_repo`,
 `tokenizer_revision` and the script's `version`.
+The files in `model/` come from the checkpoint alone, not from upstream's code: they record
+`model_repo`, `model_revision` and `version` instead of the upstream and tokenizer pins.
 `Tests/OpenJevCoreTests/Fixtures/FixturePinTests.swift` checks every file, so a fixture
 regenerated after a pin moved fails loudly. When a pin moves, update the Makefile,
 THIRD_PARTY.md, the scripts and that test together, then regenerate.
@@ -52,6 +56,7 @@ THIRD_PARTY.md, the scripts and that test together, then regenerate.
 | [distributions/](distributions/README.md) | Synthetic log-probability maps and the probabilities, entropies, confidences, answers and averages they give | `upstream_tables.py` | #16, #17 |
 | [policies/](policies/README.md) | Requests with `samples`, `steps`, `think`, `sequential` and images, and every read the engine makes for them | `upstream_tables.py` | #17 |
 | [errors/](errors/README.md) | Error responses that `wire/cases.json` does not hold, and an index of every error row in the wire contract | `upstream_tables.py` | #35, #38 |
+| [model/](model/README.md) | The checkpoint's `config.json` and `generation_config.json` verbatim, and its safetensors weight map | `checkpoint_tables.py` | #23, #27 |
 | [wire/](wire/README.md) | HTTP exchanges, answer bodies, request renderings and `/v1/models` listings, recorded with a stand-in tokenizer | `wire_tables.py` | #5, #35 |
 | [python-json/](python-json/README.md) | CPython `json.dumps` and float `repr` tables. These record the Python version, not the upstream commit. | `python_json_tables.py` | #3 |
 

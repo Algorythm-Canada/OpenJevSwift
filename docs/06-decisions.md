@@ -892,3 +892,53 @@ Decision.
    leaves Hummingbird out.
 
 Status. Proposed with issue #34.
+
+## D-031 DiffusionGemma configuration: where the port goes beyond or differs from the issue text
+
+Context. Issue #23 decodes the checkpoint's `config.json` into
+`DiffusionGemmaConfiguration` (`Sources/OpenJevDiffusionGemma/Model/Configuration.swift`), the
+first production file of the port D-004 and D-014 confirmed. Every later file under `Model/`
+reads it. Its defaults are mlx-vlm 0.6.15's `mlx_vlm/models/diffusion_gemma/config.py`, and a
+few points needed choices the issue does not spell out.
+
+Decision.
+
+1. The type covers the whole file: the top level (with mlx-vlm's `ModelConfig` defaults, plus
+   `tie_word_embeddings` true, `vision_soft_tokens_per_image` 280 and `initializer_range`
+   0.02), `text_config` with every `TextConfig` field and default, `quantization`,
+   `generation_config` and `vision_config`. `layer_types` and `rope_parameters` are derived as
+   config.py lines 40 to 59 derive them when absent. A layer type other than
+   `sliding_attention` and `full_attention`, in either key, is an error. The accessors the
+   model files need (`fullAttentionLayers`, `headDim(for:)`, `keyValueHeads(for:)`,
+   `ropeParameters(for:)`) follow language.py's `Attention`, including its fallbacks: a null
+   `num_global_key_value_heads` gives `num_key_value_heads`, and a layer type missing from
+   `rope_parameters` gives the default RoPE with theta 10,000.
+2. Unknown keys are ignored at every level, as mlx-vlm's `_config_kwargs` drops them. The file
+   carries `quantization_config` beside `quantization` with the same content; only
+   `quantization` is read, because that is the key mlx-vlm and MLXLMCommon's
+   `BaseConfiguration` read. It is decoded as `BaseConfiguration` decodes it: scalar keys are
+   the default, object keys are per-module overrides whose `mode` inherits the default's, and a
+   module set to `false` stays unquantized. `perLayerQuantization` gives MLXLMCommon's type for
+   `loadWeights`.
+3. `text_config` is required. mlx-vlm leaves a missing one `None` and fails later, far from the
+   cause; here the error names `text_config`. Every error is a
+   `DiffusionGemmaConfigurationError` whose description starts with the JSON key path, for
+   example `text_config.hidden_size: expected a number`. `num_hidden_layers` below 1 is an
+   error, where config.py would raise an `IndexError`.
+4. `vision_config` reuses mlx-swift-lm's public `Gemma4VisionConfiguration`: its keys and
+   defaults match this checkpoint. It is not Equatable, so the configuration holds it in a
+   private wrapper that compares its fields, which keeps equality synthesized.
+5. mlx-vlm keeps `generation_config` as an untyped dict with no defaults, so every field of
+   `DiffusionGemmaGenerationConfiguration` is optional. `load(from:)` also merges a
+   non-empty `generation_config.json` as mlx-vlm's `load_config` does: it replaces
+   `generation`, and its `eos_token_id` replaces the top-level one. For the pinned checkpoint
+   both files hold the same object.
+6. A verbatim copy of `config.json` cannot be a fixture, because every file under `Fixtures/`
+   starts with a `generator` object. `Tools/fixtures/checkpoint_tables.py` writes
+   `Fixtures/model/config.json` (`files` with the digests of the three files it reads, `config`
+   and `generation_config` verbatim) and `Fixtures/model/weight_map.json` (`total_size`,
+   `shards`, `weight_map`, for #27). Their generator records `model_repo` and `model_revision`,
+   the names `Fixtures/oracle/reads.json` already uses for the checkpoint, and no upstream
+   pins, because no upstream code is involved. `FixturePinTests` checks `model/` that way.
+
+Status. Proposed with issue #23.

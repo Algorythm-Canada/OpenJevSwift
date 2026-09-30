@@ -80,6 +80,8 @@ struct FixturePinTests {
     /// tokenizer. wire/ was recorded from upstream with a stand-in tokenizer. encoders/ holds the
     /// Verdict and Laya reference outputs that Tools/encoders records through upstream's code
     /// with each model's own tokenizer, so it pins the checkpoints instead of the tokenizer.
+    /// model/ holds the DiffusionGemma checkpoint's own JSON files, which involve no upstream
+    /// code, so it pins the checkpoint (the tokenizer's repository and revision) and not upstream.
     /// Every other file comes from upstream's code with the real tokenizer and records both pins
     /// and the version of the script that wrote it.
     static func problems(in generator: JSONValue, of file: String) -> [String] {
@@ -99,6 +101,14 @@ struct FixturePinTests {
             out.append("\(file): generator.python is missing")
         }
         if file.hasPrefix("python-json/") {
+            return out
+        }
+        if file.hasPrefix("model/") {
+            expect("model_repo", tokenizerRepository)
+            expect("model_revision", tokenizerRevision)
+            if generator["version"]?.intValue == nil {
+                out.append("\(file): generator.version is missing")
+            }
             return out
         }
         expect("upstream", "razorback16/openjev")

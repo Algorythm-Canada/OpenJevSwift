@@ -203,7 +203,7 @@ make fixtures
 | Command | Runs |
 |---|---|
 | `make fixtures-venv` | Creates `Tools/fixtures/.venv` from `python3.14` (override with `PYTHON=...`) and installs `Tools/fixtures/requirements.txt` |
-| `make fixtures` | `python_json_tables.py`, `wire_tables.py` and `upstream_tables.py`, with `PYTHONHASHSEED=0` |
+| `make fixtures` | `python_json_tables.py`, `wire_tables.py`, `upstream_tables.py` and `checkpoint_tables.py`, with `PYTHONHASHSEED=0` |
 
 The committed files were written by CPython 3.14.7 with the pinned packages. Another Python
 version changes the `python` pin recorded in every file, so use 3.14.7 to reproduce them byte

@@ -37,11 +37,12 @@ fixtures-venv:
 	$(FIXTURES_PYTHON) -m pip install --quiet --requirement Tools/fixtures/requirements.txt
 
 # Regenerate every file under Fixtures/ from the pinned upstream checkout and the pinned tokenizer.
-# The first run downloads the tokenizer (about 32 MB) into the Hugging Face cache. Running it
-# twice gives no diff.
+# The first run downloads the tokenizer (about 32 MB) and the checkpoint's small JSON files into
+# the Hugging Face cache. Running it twice gives no diff.
 fixtures:
 	@test -x $(FIXTURES_PYTHON) || { echo "$(FIXTURES_PYTHON) is missing; run make fixtures-venv"; exit 1; }
 	@test -d Upstream/openjev/.git || { echo "Upstream/openjev is missing; run make upstream"; exit 1; }
 	PYTHONHASHSEED=0 $(FIXTURES_PYTHON) Tools/fixtures/python_json_tables.py
 	PYTHONHASHSEED=0 $(FIXTURES_PYTHON) Tools/fixtures/wire_tables.py
 	PYTHONHASHSEED=0 $(FIXTURES_PYTHON) Tools/fixtures/upstream_tables.py
+	PYTHONHASHSEED=0 $(FIXTURES_PYTHON) Tools/fixtures/checkpoint_tables.py
