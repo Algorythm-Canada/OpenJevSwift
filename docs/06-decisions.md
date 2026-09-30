@@ -319,3 +319,41 @@ Decision.
    absent.
 
 Status. Proposed with issue #16.
+
+## D-021 Question schema: where the port goes beyond or differs from the issue text
+
+Context. Issue #10 ports `Engine.build_schema`, `text_of` and `FORMATS` from `engine.py` and the
+encoder backends' `build_schema` from `encoders.py`. A few choices were needed that the issue does
+not spell out.
+
+Decision.
+
+1. `TextOf.render` does not throw. A value that `PythonJSONWriter` cannot write (an infinite or
+   NaN float, or integer text that is not normalized digits) stops with a precondition failure.
+   `JSONParser` never produces one (D-016), so only a hand-built value can get there. Upstream's
+   `json.dumps` would write `NaN`; the writer does not support `allow_nan`.
+2. The question type is a public `QuestionKind` enum (`noul`, `choice`, `score`) shared by
+   `ReadQuestion` and `EncoderQuestion`. `ReadQuestion.choices` is the tuple array the issue
+   gives, so `ReadQuestion` and `QuestionSchema` are `Sendable` but not `Equatable`.
+3. The score limit message interpolates `maxScoreLevels`; at the default of 10 it is upstream's
+   text. The choice limit is `min(maxChoices, choiceLabels.count)`, and the message names that
+   number, as upstream's names `len(choice_labels)`.
+4. `AnswerFormat` also has `afterID` (the lead without the id), `lead(id:)` (Python's
+   `lead.format(id=...)`) and `forReadCount(_:)` (the 10-question rule), so later issues read the
+   format rules from one place. Its raw values are `lines` and `indexed`, the fixture names.
+5. `EncoderQuestion` keeps the question as sent (`question: Question`) rather than separate raw
+   instructions and criteria; `rawInstructions` reads it. Upstream's encoders rebuild
+   `{type, instructions, criteria}` from those two fields, which is that question. For a noul
+   sent without criteria upstream keeps `{}`, this port keeps `nil`; both mean no descriptions.
+   `EncoderQuestionSchemaBuilder` keeps upstream's fixed limit of 10 score levels.
+6. Both builders go through one internal `SchemaRules.entry(key:question:)`, which holds the
+   limits, the forced answers and the rendered answers; only the labels, ids and format are
+   the engine builder's own.
+7. A score with no levels cannot pass `RequestValidator`. Built by hand, it is read with no
+   labels, as upstream would.
+8. The fixture test checks the two `api_reachable: false` rows by asserting that
+   `RequestValidator` refuses them: there is no `Question` to build. The loader for the engine
+   fixtures, `Tests/OpenJevCoreTests/Schema/UpstreamFixtures.swift`, is shared with the prompt
+   tests of #11.
+
+Status. Proposed with issue #10.
