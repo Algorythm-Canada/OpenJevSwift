@@ -289,7 +289,7 @@ public struct DiffusionGemmaTextConfiguration: Codable, Equatable, Sendable {
     public let attentionDropout: Float
     /// `sliding_window`.
     public let slidingWindow: Int
-    /// `layer_types`, one per layer. When absent, ``defaultLayerTypes(count:)``.
+    /// `layer_types`, exactly one per layer. When absent, ``defaultLayerTypes(count:)``.
     public let layerTypes: [LayerType]
     /// `final_logit_softcapping`.
     public let finalLogitSoftcapping: Float
@@ -380,6 +380,14 @@ public struct DiffusionGemmaTextConfiguration: Codable, Equatable, Sendable {
 
         if let names = try c.decodeIfPresent([String].self, forKey: .layerTypes) {
             let base = keyPath(path, CodingKeys.layerTypes)
+            // language.py builds layer i from layer_types[i], and Transformers refuses a list
+            // of another length, so a mismatch is reported here rather than at model building.
+            guard names.count == numHiddenLayers else {
+                throw DiffusionGemmaConfigurationError.decodingFailed(
+                    keyPath: base,
+                    reason: "expected \(numHiddenLayers) entries, one per layer "
+                        + "(num_hidden_layers), found \(names.count)")
+            }
             layerTypes = try names.enumerated().map { index, name in
                 try Self.layerType(name, keyPath: "\(base)[\(index)]")
             }
@@ -455,8 +463,10 @@ public struct DiffusionGemmaTextConfiguration: Codable, Equatable, Sendable {
 ///
 /// The file mixes the two in one object, as MLXLMCommon's `BaseConfiguration` reads it:
 /// `group_size`, `bits` and `mode` are the default, and every key whose value is an object is a
-/// module path with its own `group_size` and `bits` (its `mode` is the default's when absent). A
-/// module path set to `false` is left unquantized, and other keys are ignored.
+/// module path with its own `group_size` and `bits`. An override without `mode` is `affine`, not
+/// the default's mode: MLXLMCommon decodes each override on its own, and mlx-vlm passes the
+/// object to `to_quantized`, whose `mode` defaults to `affine`. A module path set to `false` is
+/// left unquantized, and other keys are ignored.
 public struct DiffusionGemmaQuantization: Codable, Equatable, Sendable {
     /// One module's quantization.
     public struct Quantization: Codable, Hashable, Sendable {
@@ -480,15 +490,10 @@ public struct DiffusionGemmaQuantization: Codable, Equatable, Sendable {
         }
 
         public init(from decoder: any Decoder) throws {
-            try self.init(from: decoder, defaultMode: .affine)
-        }
-
-        /// Decodes the object, taking `defaultMode` when it has no `mode`.
-        init(from decoder: any Decoder, defaultMode: QuantizationMode) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             groupSize = try c.decode(Int.self, forKey: .groupSize)
             bits = try c.decode(Int.self, forKey: .bits)
-            mode = try c.decodeIfPresent(QuantizationMode.self, forKey: .mode) ?? defaultMode
+            mode = try c.decodeIfPresent(QuantizationMode.self, forKey: .mode) ?? .affine
         }
 
         /// The same settings as MLXLMCommon's type, for `loadWeights`.
@@ -554,8 +559,7 @@ public struct DiffusionGemmaQuantization: Codable, Equatable, Sendable {
                     unquantized.insert(key.stringValue)
                 }
             } else if (try? c.nestedContainer(keyedBy: AnyCodingKey.self, forKey: key)) != nil {
-                overrides[key.stringValue] = try Quantization(
-                    from: c.superDecoder(forKey: key), defaultMode: defaultQuantization.mode)
+                overrides[key.stringValue] = try c.decode(Quantization.self, forKey: key)
             }
         }
         self.overrides = overrides

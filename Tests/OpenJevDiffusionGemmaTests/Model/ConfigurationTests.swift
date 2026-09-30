@@ -179,6 +179,26 @@ struct ConfigurationTests {
         }
     }
 
+    @Test("An override without mode is affine, whatever the default's mode")
+    func overrideModeIsAffine() throws {
+        let config = try decode(
+            #"""
+            {"text_config": {},
+             "quantization": {"group_size": 32, "bits": 4, "mode": "mxfp4",
+                              "a.plain": {"group_size": 64, "bits": 8},
+                              "a.explicit": {"group_size": 32, "bits": 4, "mode": "mxfp4"}}}
+            """#)
+        let quantization = try #require(config.quantization)
+        #expect(quantization.defaultQuantization == .init(groupSize: 32, bits: 4, mode: .mxfp4))
+        #expect(quantization.quantization(forModule: "a.plain")?.mode == .affine)
+        #expect(quantization.quantization(forModule: "a.explicit")?.mode == .mxfp4)
+        #expect(quantization.quantization(forModule: "a.other")?.mode == .mxfp4)
+        let perLayer = quantization.perLayerQuantization
+        #expect(perLayer.quantization(layer: "a.plain")?.mode == .affine)
+        #expect(perLayer.quantization(layer: "a.explicit")?.mode == .mxfp4)
+        #expect(perLayer.quantization(layer: "a.other")?.mode == .mxfp4)
+    }
+
     @Test("generation_config in config.json equals generation_config.json")
     func generation() throws {
         let fixture = try CheckpointFixture.load()
@@ -297,8 +317,20 @@ struct ConfigurationTests {
                 "text_config.model_type: expected \"diffusion_gemma_text\""
             ),
             (
-                #"{"text_config": {"layer_types": ["full_attention", "diagonal_attention"]}}"#,
+                #"""
+                {"text_config": {"num_hidden_layers": 2,
+                                 "layer_types": ["full_attention", "diagonal_attention"]}}
+                """#,
                 "text_config.layer_types[1]: unknown layer type \"diagonal_attention\""
+            ),
+            (
+                #"{"text_config": {"layer_types": []}}"#,
+                "text_config.layer_types: expected 30 entries, one per layer (num_hidden_layers), "
+                    + "found 0"
+            ),
+            (
+                #"{"text_config": {"num_hidden_layers": 3, "layer_types": ["full_attention"]}}"#,
+                "text_config.layer_types: expected 3 entries"
             ),
             (
                 #"{"text_config": {"rope_parameters": {"diagonal_attention": {}}}}"#,

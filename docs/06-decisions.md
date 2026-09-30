@@ -1037,14 +1037,18 @@ Decision.
    carries `quantization_config` beside `quantization` with the same content; only
    `quantization` is read, because that is the key mlx-vlm and MLXLMCommon's
    `BaseConfiguration` read. It is decoded as `BaseConfiguration` decodes it: scalar keys are
-   the default, object keys are per-module overrides whose `mode` inherits the default's, and a
-   module set to `false` stays unquantized. `perLayerQuantization` gives MLXLMCommon's type for
-   `loadWeights`.
+   the default, object keys are per-module overrides, and a module set to `false` stays
+   unquantized. An override without `mode` is `affine`, not the default's mode, as both
+   MLXLMCommon and mlx-vlm (which hands the object to `to_quantized`) read it; issue #23's brief
+   said it inherits, which would load such a module with the wrong mode under a non-affine
+   default. `perLayerQuantization` gives MLXLMCommon's type for `loadWeights`.
 3. `text_config` is required. mlx-vlm leaves a missing one `None` and fails later, far from the
    cause; here the error names `text_config`. Every error is a
    `DiffusionGemmaConfigurationError` whose description starts with the JSON key path, for
    example `text_config.hidden_size: expected a number`. `num_hidden_layers` below 1 is an
-   error, where config.py would raise an `IndexError`.
+   error, where config.py would raise an `IndexError`, and so is a `layer_types` list whose
+   length differs from `num_hidden_layers`: language.py builds layer i from `layer_types[i]`, and
+   Transformers refuses such a list.
 4. `vision_config` reuses mlx-swift-lm's public `Gemma4VisionConfiguration`: its keys and
    defaults match this checkpoint. It is not Equatable, so the configuration holds it in a
    private wrapper that compares its fields, which keeps equality synthesized.
