@@ -209,7 +209,7 @@ cost nothing. No workflow uses the billed `-xlarge` runners unless asked to.
 
 | Workflow | When it runs | Job | Runner | What it runs |
 |---|---|---|---|---|
-| [ci.yml](../.github/workflows/ci.yml) | Every pull request and every push to `main` | `Linux` | `ubuntu-24.04` with the `swift:6.2-noble` container | `swift build --build-tests` and `swift test`, both with `--scratch-path .build/linux`, then the test log check |
+| [ci.yml](../.github/workflows/ci.yml) | Every pull request and every push to `main`, except changes that touch only Markdown files | `Linux` | `ubuntu-24.04` with the `swift:6.2-noble` container | `swift build --build-tests` and `swift test`, both with `--scratch-path .build/linux`, then the test log check |
 | | | `macOS` | `macos-26` with Xcode 26.6, selected with `DEVELOPER_DIR` | `swift build --build-tests` and `swift test`, both with `--build-system swiftbuild`, the test log check, then `make lint` |
 | [fixtures.yml](../.github/workflows/fixtures.yml) | Pull requests that change `Fixtures/`, `Tools/fixtures/`, `THIRD_PARTY.md`, the `Makefile` or the workflow; manual runs; Mondays at 06:23 UTC | `Regenerate the fixtures` | `macos-26` with CPython 3.14.7 from `actions/setup-python` | `make upstream`, `make fixtures-venv` and `make fixtures`, then fails if `git status --porcelain Fixtures/` lists a file, and prints and uploads the diff |
 | [mlx-probe.yml](../.github/workflows/mlx-probe.yml) | Manual runs only | `Probe <label>` | `macos-15`, `macos-26` and `xcode-27`, plus `macos-26-xlarge` when asked | The MLX runner probe of issue #8. Its findings are under R13 in [07-risks-and-unknowns.md](07-risks-and-unknowns.md). |
@@ -259,6 +259,12 @@ And took this long:
   fetched and installed.
 - **Superseded runs.** A newer push to a pull request cancels the run it replaces. Every commit on
   `main` runs in a concurrency group of its own, so no merged commit's run is cancelled.
+- **Documentation-only changes.** Both triggers carry `paths-ignore: ["**.md"]`, so a pull request
+  or push that changes only Markdown files starts no run; one that changes a Markdown file and
+  anything else runs as usual. The `Protect main` ruleset requires a review, not a status check,
+  so such a pull request is still mergeable. If a required status check is ever added, replace
+  `paths-ignore` with a job that detects the documentation-only case and reports success, or
+  GitHub will wait for a check that never runs.
 - **Fixture regeneration.** The job runs on Apple silicon because the committed files were written
   there: CPython takes its math functions from the platform's C library, and another library could
   change the last digit of a float. It reproduced every committed file byte for byte.
