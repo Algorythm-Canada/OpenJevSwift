@@ -569,3 +569,45 @@ Decision.
     delay, refuse capabilities and cap the prompt length.
 
 Status. Proposed with issue #17.
+
+## D-028 MLX synthetic tests run in CI on the hosted runner's GPU
+
+Context. Issue #8 asked whether GitHub-hosted macOS runners execute mlx-swift's Metal kernels well
+enough for unit tests on small synthetic shapes, or whether every MLX test must stay opt-in on
+developer machines. `mlx-probe.yml` ran mlx-swift 0.32.2 on `macos-15`, `macos-26` and `xcode-27`
+on 2026-09-30. The findings are under R13 in [07-risks-and-unknowns.md](07-risks-and-unknowns.md):
+the runners' paravirtual GPU runs every kernel the probe tried, including attention, 4-bit and
+expert-gathered 4-bit matmuls and RoPE, but only in a build that carries MLX's Metal library, and
+inside `swift test` only once MLX is pointed at it.
+
+Decision.
+
+1. MLX synthetic tests (small shapes, random or recorded weights, no checkpoint) run in CI, on the
+   GPU of the `macos-26` runner, in the `OpenJevDiffusionGemma` test target with every other test.
+2. The macOS job builds and tests with `--build-system swiftbuild`. Xcode 26.6 defaults to the
+   native build system, whose products carry no Metal library, and MLX cannot run without one, on
+   the GPU or the CPU.
+3. Every MLX test calls a helper that sets `GPU.metallib` to the copy of the library in the test
+   bundle before its first MLX call. Swift Build copies the library there, but MLX finds it only
+   through a `Bundle` object for the test bundle, and the Swift Testing runner creates none. The
+   first MLX test adds the helper from [development.md](development.md) ("MLX in tests").
+4. MLX tests compare with tolerances (D-014), never bit for bit: GPU results differ from the CPU's
+   in the last digits.
+5. Tests that need the weights stay opt-in behind `OPENJEV_TEST_MODEL`, and CI fails if any other
+   test skips. A synthetic test must fit the runner: 7 GB of memory, a 4.7 GB Metal working set
+   and three CPU cores.
+
+Alternatives rejected. (a) Run MLX tests on the CPU only: MLX loads its Metal library as soon as
+it creates a stream on a Mac, so a CPU-only test needs the same build and library and saves
+nothing, and the GPU is the path the model takes. (b) Keep every MLX test opt-in: the hosted GPU
+runs them, and the block, mask and cache code would go untested until someone ran it by hand.
+(c) Test with `xcodebuild test`, as mlx-swift's own CI does: the XCTest runner creates the bundle
+object and MLX finds its library unaided, but the job would trade `swift test` and its log for an
+Xcode scheme and a result bundle to save one line of test setup.
+
+Consequences. The macOS job builds the way Xcode 27, the reference toolchain, builds by default.
+The runners' GPU reports no Apple GPU family, so a kernel that behaves differently on a real Apple
+GPU would not show it in CI; the model's parity tests on developer machines remain the check for
+that. Run `mlx-probe.yml` again when mlx-swift, Xcode or the runner image changes.
+
+Status. Proposed with issues #7 and #8.
