@@ -20,8 +20,8 @@ a7a81407613811e8ba63af92ac0d852b809e191f) and writes what that code computes int
     errors/               error responses that Fixtures/wire/cases.json does not already hold
 
 Only the tokenizer files are downloaded (into the Hugging Face cache, about 32 MB, plus the
-model's config.json for its special token ids). No weights are loaded, and nothing is written
-outside Fixtures/. Every file starts with a "generator" object that names this script and its
+model's config.json for its special token ids). No weights are loaded. Generated fixture outputs
+are confined to Fixtures/. Every file starts with a "generator" object that names this script and its
 version, the upstream commit, the tokenizer repository and revision, and the Python and package
 versions that wrote it.
 
@@ -66,7 +66,7 @@ UPSTREAM_COMMIT = "dcd2094"
 TOKENIZER_REPO = "mlx-community/diffusiongemma-26B-A4B-it-4bit"
 TOKENIZER_REVISION = "a7a81407613811e8ba63af92ac0d852b809e191f"
 SEED = 20260929  # seeds every synthetic table
-NO_BACKEND = "http://127.0.0.1:9"  # nothing listens on the discard port
+NO_BACKEND = "http://127.0.0.1:9"  # recorded setting; requests use a deterministic mock below
 
 # Settings read the environment; clear it so the defaults are upstream's own.
 for _name in [n for n in os.environ if n.startswith("OPENJEV_")]:
@@ -128,6 +128,18 @@ def _recording_chat_prompt_ids(self, sys_text, state_text, thinking=False):
     if RECORDING[0] and key not in PROMPTED:
         PROMPTED[key] = (list(ids), SOURCE[0])
     return ids
+
+
+def _connect_error(request):
+    raise httpx.ConnectError("stub", request=request)
+
+
+def no_backend_client():
+    return httpx.AsyncClient(transport=httpx.MockTransport(_connect_error), base_url=NO_BACKEND)
+
+
+def install_no_backend(client):
+    client.app.state.engine.client = no_backend_client()
 
 
 Engine.enc = _recording_enc
@@ -806,6 +818,7 @@ def seed_cases(tok):
     headers = {"content-type": "application/json"}
     with patched((Engine, "decide", spy_decide)):
         with TestClient(create_app(Settings(upstream=NO_BACKEND), tokenizer=tok)) as client:
+            install_no_backend(client)
             for group, bodies in (("cases", seed_bodies()), ("upstream_only", upstream_only_bodies())):
                 for name, text in bodies:
                     captured.clear()
@@ -1152,6 +1165,7 @@ def policy_case(tok, name, body, settings_kwargs, entropy):
     log = PolicyLog()
     with policy_patches(log, entropy):
         with TestClient(create_app(Settings(**settings_kwargs), tokenizer=tok)) as client:
+            install_no_backend(client)
             r = client.post("/v1/systemone", content=compact(body).encode("utf-8"), headers=JSON_HEADERS)
     if r.status_code != 200:
         raise SystemExit(f"policies: {name}: {r.status_code} {r.text[:300]}")
@@ -1222,6 +1236,7 @@ def engine_error_cases(tok):
     for settings_kwargs, bodies in runs:
         kwargs = dict(upstream=NO_BACKEND, **settings_kwargs)
         with TestClient(create_app(Settings(**kwargs), tokenizer=tok)) as client:
+            install_no_backend(client)
             for name, body in bodies:
                 text, r = post(client, body)
                 out.append(record(name, kwargs, r, text))
@@ -1259,6 +1274,7 @@ def backend_error_cases(tok):
             return httpx.Response(spec["status"], text=spec["text"])
 
         with TestClient(create_app(Settings(**kwargs), tokenizer=tok), raise_server_exceptions=False) as client:
+            install_no_backend(client)
             client.app.state.engine.client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://vllm")
             text, r = post(client, small)
         note = None
@@ -1291,8 +1307,11 @@ def route_error_cases(tok):
             return httpx.Response(spec["status"], text=spec["text"], headers=spec.get("headers"))
 
         with TestClient(create_app(Settings(**kwargs), tokenizer=tok)) as client:
+            install_no_backend(client)
             if spec is not None:
                 client.app.state.routes = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+            else:
+                client.app.state.routes = no_backend_client()
             text, r = post(client, with_(QUICKSTART, model="remote-1.0"))
         out.append(record(name, kwargs, r, text, stub={"route": spec} if spec else None))
     return out

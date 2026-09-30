@@ -155,7 +155,7 @@ make fixtures
 The committed files were written by CPython 3.14.7 with the pinned packages. Another Python
 version changes the `python` pin recorded in every file, so use 3.14.7 to reproduce them byte
 for byte. The first run downloads the tokenizer files (about 32 MB) into the Hugging Face cache;
-no weights are downloaded and nothing outside `Fixtures/` is written. Running `make fixtures`
+no weights are downloaded, and generated fixture outputs are confined to `Fixtures/`. Running `make fixtures`
 twice gives no diff. `FixturePinTests` in `OpenJevCoreTests` fails when a file records another
 upstream commit or tokenizer revision.
 
