@@ -461,7 +461,11 @@ Decision.
    without a mutable property. The key is a `Hashable` struct (format, head as used, lead, and
    each question's id and labels), the same fields as upstream's `json.dumps` key, so `nil` and
    the scaffold share an entry. Errors are not cached. The limit is upstream's 4,096 by default
-   and configurable, and `count` is exposed for tests and diagnostics.
+   and configurable through the resolver's `cacheLimit`, and `count` is exposed for tests and
+   diagnostics. The resolver always creates its own cache; a cache cannot be injected, because
+   the key names neither the canvas nor the tokenizer (upstream's does not either, its cache
+   belonging to one engine), and a cache shared across resolvers with different canvases would
+   return a template that never met the smaller canvas's check.
 4. Every question must have at least two labels, which the schema builder guarantees. A
    hand-built question with fewer stops with a precondition failure at that question, where
    upstream would raise a `TypeError` from `base[None]`.

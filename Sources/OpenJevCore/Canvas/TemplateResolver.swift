@@ -43,6 +43,13 @@ public struct ResolvedTemplate: Sendable, Hashable {
 /// only mutable state, the cache, is a ``TemplateCache`` reference with its own lock. Copies
 /// share the cache, so the engine actor of #17 can hand the resolver to its concurrent group reads
 /// and to helpers outside the actor without forking the memo.
+///
+/// Each resolver creates its own cache and no other resolver can be given it. The cache key does
+/// not name the tokenizer or the canvas, as upstream's does not, because upstream's `_templates`
+/// belongs to one `Engine` with one tokenizer and one `Settings`. A cache shared across resolvers
+/// with different canvases would return a template that never met the smaller canvas's check, and
+/// one shared across tokenizers would return the wrong ids, so the sharing is by copying the
+/// resolver only.
 public struct TemplateResolver: Sendable {
     /// The tokenizer the templates are encoded with, upstream's `Engine.enc`.
     public let tokenizer: any DecisionTokenizer
@@ -51,19 +58,19 @@ public struct TemplateResolver: Sendable {
     /// The canvas length in tokens, upstream's `OPENJEV_CANVAS`. A template and its turn close
     /// must fit it.
     public let canvas: Int
-    /// The memo of resolved templates.
+    /// The memo of resolved templates, owned by this resolver and its copies.
     public let cache: TemplateCache
 
     /// Creates a resolver over `tokenizer` for a canvas of `canvas` tokens (upstream's default
-    /// is 64), with a fresh cache unless one is given.
+    /// is 64), with a fresh cache that clears past `cacheLimit` entries (upstream's 4,096).
     public init(
         tokenizer: any DecisionTokenizer, tokens: EngineTokens, canvas: Int = 64,
-        cache: TemplateCache = TemplateCache()
+        cacheLimit: Int = 4096
     ) {
         self.tokenizer = tokenizer
         self.tokens = tokens
         self.canvas = canvas
-        self.cache = cache
+        self.cache = TemplateCache(limit: cacheLimit)
     }
 
     /// The template and slots of `questions` in `format`.
