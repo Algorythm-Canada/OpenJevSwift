@@ -357,3 +357,27 @@ Decision.
    tests of #11.
 
 Status. Proposed with issue #10.
+
+## D-022 Prompt text: where the port goes beyond or differs from the issue text
+
+Context. Issue #11 ports `Engine.system_text`, `Engine.answer_text` and the state text of
+`Engine.decide`. A few choices were needed that the issue does not spell out.
+
+Decision.
+
+1. `SystemText` exposes its fixed strings as `opening`, `defaultInstructions` and
+   `chunkedSentence`, so tests and later issues (#13, #17) read them from one place, as
+   `AnswerFormat` does for the format strings (D-021).
+2. `SystemText.render` pairs a question's choices and labels with `zip`, as upstream does, so a
+   hand-built question with unequal counts lists the shorter one. The schema builder always makes
+   them equal.
+3. `AnswerText.render` stops with a precondition failure when the question and index counts
+   differ, as the issue asks, and also when an index is outside a question's labels. Upstream's
+   `zip` would drop the extra entries and its indexing would raise `IndexError`.
+4. `StateText.render` shares `TextOf`'s precondition for values `PythonJSONWriter` cannot write
+   (D-021, item 1). A string state is not stripped.
+5. `Fixtures/tokenizer/corpus.json` records the `json_state` texts but not the states they came
+   from. The test renders the state of every request in `schemas/`, `system-texts/` and
+   `templates/` and requires each of the three `json_state` texts to be one of those renderings.
+
+Status. Proposed with issue #11.

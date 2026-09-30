@@ -101,7 +101,9 @@ Rejected bodies are never logged, only the `loc` and reason.
 
 ## 5. The read algorithm (`engine.py`)
 
-Constants: `VOCAB = 262144`, `TURN_CLOSE = 106` (`<end_of_turn>`), `PAD = 0`, `TOPK = 20`,
+Constants: `VOCAB = 262144`, `TURN_CLOSE = 106` (`<turn|>` in this vocabulary; `<end_of_turn>`
+is not a single token, see [Fixtures/tokenizer/README.md](../Fixtures/tokenizer/README.md)),
+`PAD = 0`, `TOPK = 20`,
 `MAX_LABEL_IDS = 512` (vLLM's per-request cap on exact logprob ids, raised from 128 in the
 image), `MAX_CHOICES = 255`, `SCAFFOLD_TEXT = "<|channel>thought\n<channel|>"` (the empty
 thought block the chat template leaves for the model).
