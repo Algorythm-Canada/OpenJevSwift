@@ -1,5 +1,6 @@
 import Foundation
 import OpenJevCore
+import OpenJevTestSupport
 import Testing
 
 /// Loads Fixtures/seeds.json, which Tools/fixtures/upstream_tables.py writes from upstream's

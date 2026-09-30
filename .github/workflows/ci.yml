@@ -1,11 +1,19 @@
-# Builds and tests the package on every pull request and on main. docs/development.md describes the
-# jobs, the toolchains they pin and how to run the same commands locally.
+# Builds and tests the package on every pull request and on main, except when the change touches
+# only Markdown files: nothing here reads them, and a macOS run costs eight minutes on an empty
+# cache. The repository's ruleset requires no status check, so a documentation-only pull request
+# stays mergeable without a run; if a required check is ever added, replace paths-ignore with a
+# job that reports success. docs/development.md describes the jobs, the toolchains they pin and how
+# to run the same commands locally.
 name: CI
 
 on:
   pull_request:
+    paths-ignore:
+      - "**.md"
   push:
     branches: [main]
+    paths-ignore:
+      - "**.md"
 
 permissions:
   contents: read
@@ -122,3 +130,128 @@ jobs:
       - name: Lint
         if: ${{ !cancelled() && steps.toolchain.outcome == 'success' }}
         run: make lint
+
+  ios:
+    name: iOS
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      # The same toolchain as the macOS job.
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      # The committed shared scheme. It builds OpenJevCore and OpenJevCoreTests, and nothing that
+      # needs Hummingbird or MLX. docs/development.md holds the same commands for local runs.
+      SCHEME: OpenJevCore-iOS
+      # Every iOS runtime on the macos-26 image ships this device, and OS=latest picks the newest
+      # runtime. The step below fails with a readable message if that stops being true.
+      SIMULATOR: iPhone 17 Pro
+      # Shared by the test and the build-only step, so both use one set of SwiftPM checkouts.
+      DERIVED_DATA: .build/ios
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Show the toolchain
+        id: toolchain
+        run: |
+          sw_vers
+          # Read the version once: piped into head, xcodebuild aborts when head closes the pipe
+          # before the second line is written.
+          version=$(xcodebuild -version)
+          printf '%s\n' "$version"
+          swift --version
+          case "${version%%$'\n'*}" in
+            "Xcode 26.6"*) ;;
+            *)
+              echo "::error::Expected Xcode 26.6 at $DEVELOPER_DIR"
+              exit 1
+              ;;
+          esac
+          component=$(xcodebuild -showComponent MetalToolchain 2>&1 || true)
+          printf '%s\n' "$component"
+          echo "metal=$(awk -F': *' '/^Status:/ { print tolower($2); exit }' <<< "$component")" >> "$GITHUB_OUTPUT"
+          # For example swiftlang-6.3.3.1.3. It is part of the cache key, so a new toolchain
+          # starts from clean checkouts.
+          echo "id=$(swift --version 2>&1 | sed -n '1s/.*(\([^ )]*\).*/\1/p')" >> "$GITHUB_OUTPUT"
+
+      # The build-only step below compiles mlx-swift's Metal shaders, which needs the component.
+      # The image installs it for every Xcode 26, so this runs only if one ever ships without it.
+      - name: Download the Metal Toolchain
+        if: steps.toolchain.outputs.metal != 'installed'
+        run: |
+          echo "::warning::The image lacks the Metal Toolchain; downloading it"
+          xcodebuild -downloadComponent MetalToolchain
+
+      # xcodebuild keeps the SwiftPM checkouts and the clones they come from under the derived
+      # data directory. Keyed like the macOS job, so a new toolchain or a dependency change starts
+      # from an empty directory.
+      - name: Restore the SwiftPM checkouts
+        uses: actions/cache@v6
+        with:
+          path: ${{ env.DERIVED_DATA }}/SourcePackages
+          key: ios-${{ steps.toolchain.outputs.id }}-${{ hashFiles('Package.resolved') }}
+          restore-keys: ios-${{ steps.toolchain.outputs.id }}-
+
+      # xcodebuild wants a scheme whenever a derived data path is given, even to resolve.
+      - name: Resolve the packages
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -scheme "$SCHEME" \
+            -derivedDataPath "$DERIVED_DATA"
+
+      # A destination that names a device fails when the image holds no such device, or more than
+      # one of them on the newest runtime. Both produce a wall of xcodebuild output, so say it
+      # here instead. Switch the destination to an identifier if an image ever ships duplicates.
+      - name: Check that the simulator is unique
+        run: |
+          devices=$(xcrun simctl list devices available)
+          printf '%s\n' "$devices"
+          newest=$(awk '/^-- iOS /{ print $3 }' <<< "$devices" | sort -V | tail -1)
+          if [ -z "$newest" ]; then
+            echo "::error::the image has no available iOS simulator runtime"
+            exit 1
+          fi
+          # The device lines of that runtime read "    <name> (<identifier>) (<state>)". Matching
+          # the name followed by a parenthesis keeps iPhone 17 Pro apart from iPhone 17 Pro Max.
+          count=$(awk -v runtime="-- iOS $newest --" -v name="$SIMULATOR" '
+            $0 == runtime { inside = 1; next }
+            /^-- / { inside = 0 }
+            inside && $0 ~ "^ *" name " \\(" { found++ }
+            END { print found + 0 }
+          ' <<< "$devices")
+          echo "iOS $newest holds $count simulator(s) named $SIMULATOR"
+          if [ "$count" -ne 1 ]; then
+            echo "::error::expected exactly one $SIMULATOR on iOS $newest, found $count"
+            exit 1
+          fi
+
+      - name: Test on the simulator
+        run: |
+          unset OPENJEV_TEST_MODEL OPENJEV_LIVE_URL
+          xcodebuild test \
+            -scheme "$SCHEME" \
+            -destination "platform=iOS Simulator,name=$SIMULATOR,OS=latest" \
+            -derivedDataPath "$DERIVED_DATA" \
+            -resultBundlePath "$RUNNER_TEMP/$SCHEME.xcresult" \
+            2>&1 | tee "$RUNNER_TEMP/xcodebuild-test.log"
+
+      - name: Check that only model tests were skipped
+        run: .github/scripts/check-test-log.sh "$RUNNER_TEMP/xcodebuild-test.log"
+
+      - name: Upload the result bundle
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-xcresult
+          path: ${{ runner.temp }}/${{ env.SCHEME }}.xcresult
+          if-no-files-found: ignore
+          retention-days: 14
+
+      # OpenJevDiffusionGemma declares iOS 17 like the rest of the package, so it must keep
+      # compiling for iOS. Its tests stay out of the iOS job: they need weights that no iOS device
+      # holds. Runs even when the tests failed, so one push reports both.
+      - name: Build OpenJevDiffusionGemma for the simulator
+        if: ${{ !cancelled() && steps.toolchain.outcome == 'success' }}
+        run: |
+          xcodebuild build -quiet \
+            -scheme OpenJevDiffusionGemma \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$DERIVED_DATA"

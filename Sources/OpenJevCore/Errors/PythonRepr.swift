@@ -10,7 +10,7 @@ extension String {
     /// Python counts them printable, and are otherwise escaped as `\xhh`, `\uhhhh` or
     /// `\Uhhhhhhhh`. Printability uses the Unicode general category of this platform's Unicode
     /// tables, which can lag or lead the CPython build for newly assigned characters.
-    var pythonRepr: String {
+    public var pythonRepr: String {
         let scalars = unicodeScalars
         let quote: Unicode.Scalar = scalars.contains("'") && !scalars.contains("\"") ? "\"" : "'"
         var out = String.UnicodeScalarView()

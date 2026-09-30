@@ -59,7 +59,31 @@ mlx-vlm): not native, not shippable in apps.
 Consequences. The first hardware spike validates feasibility and tolerances against the fork and
 mlx-vlm before the port begins.
 
-Status. Accepted for planning; confirmed or revised by the backend spike.
+Outcome of spike #22 (2026-09-30; details in
+[spikes/backend-validation.md](spikes/backend-validation.md)). Confirmed, with one refinement.
+mlx-vlm is the only numeric oracle; the fork is a reference for code structure only.
+
+| Implementation of the read, against mlx-vlm 0.6.15 on 27 fixture reads | Bit-identical reads | Top label agreement (156 slots) | Max label probability difference |
+|---|---|---|---|
+| mlx-vlm's read path written out in Swift on ml-explore/mlx-swift 0.32.2 and mlx-swift-lm `c043fb3`, with the mlx-metal wheel's `mlx.metallib` and mlx-vlm's RoPE table | 27 | 156 | 0 |
+| The same code on mlx-swift's own kernels | 0 | 150 | 0.374 |
+| Layr-Labs/mlx-swift-lm `eeba2af` (`encode` then `denoise`) | 0 | 147 | 0.451 |
+| mlx-vlm itself with a 64-token chunked prefill | 0 | 148 | 0.618 |
+
+- **A port on upstream primitives can match mlx-vlm bit for bit.** With the same kernels, 321
+  intermediate tensors of the prefill, all 27 reads, the argmaxes of steps 2 and 3 and the
+  prefill caches of prompts up to 2,939 tokens are identical.
+- **The upstream pieces used:** `SwitchLinear`, `gatherSort` and `scatterUnsort`, `loadWeights`
+  with `BaseConfiguration.perLayerQuantization`, `MLXFast.RoPE` with explicit frequencies,
+  `MLXFast.rmsNorm`, `MLXFast.scaledDotProductAttention` and `QuantizedEmbedding.asLinear`.
+- **The pieces not used:** upstream's Gemma 4 router, whose rounding differs from mlx-vlm's, and
+  its `SwitchGLU` experts. DiffusionGemma's experts are a fused, quantized `gate_up_proj`.
+- **The fork cannot be made exact.** It runs on its own MLX fork (Layr-Labs/mlx-swift `0f4fe403`,
+  MLX 0.32.2 with kernel patches), and its differences from mlx-vlm are the size of mlx-vlm's own
+  under a chunked prefill. Depending on it would not improve parity.
+
+Status. Accepted: port mlx-vlm's DiffusionGemma onto upstream mlx-swift-lm primitives, with mlx-vlm
+as the numeric oracle. Decided by spike #22.
 
 ## D-005 Backend-agnostic core behind a `DecisionBackend` protocol
 
@@ -115,6 +139,66 @@ on and off; otherwise implement a hand-rolled Gemma 4 prompt builder verified ag
 fixtures and record which one is used.
 
 Status. Accepted for planning; two spikes in milestone 2 decide the details.
+
+Outcome of the spikes (#20 and #21, 2026-09-30; details in
+[spikes/tokenizer-parity.md](spikes/tokenizer-parity.md) and
+[spikes/chat-template.md](spikes/chat-template.md)).
+
+Parity, `SwiftTransformersTokenizer` against the Python fixtures, all run under Xcode's Test
+action with the pinned tokenizer files (digests checked against `special_tokens.json`):
+
+| Fixture | Matched | Mismatched |
+|---|---|---|
+| `tokenizer/corpus.json`, 917 rows: `ids`, `ids_with_special_tokens`, `decoded`, `decoded_skip_special_tokens` | 917 | 0 |
+| `tokenizer/engine_encodings.json`, 2,634 pairs | 2,634 | 0 |
+| `labels.json`: 255 labels and ids, 6 rejected candidates | 261 | 0 |
+| `tokenizer/special_tokens.json`: 23 named ids, `<\|video\|>`, `<end_of_turn>`, `engine` table (scaffold `[100, 45518, 107, 101]`) | 26 | 0 |
+| `chat-prompts/prompts.json`, 24 rows, thinking off and on: rendered text | 48 | 0 |
+| `chat-prompts/prompts.json`, 24 rows, thinking off and on: ids | 48 | 0 |
+| Replay tokenizer agreement: 3,252 texts, 917 decodes, 24 prompts | 4,241 | 0 |
+
+Three corpus decodes (`"\0"`, `"\u{2028}"`, `"\u{10FFFF}"`, each only byte tokens) mismatched
+before the adapter's decode fix, none after. Encoding never mismatched.
+
+Load: 3.6 s wall time for the 32 MB `tokenizer.json`, 204 MB of resident memory added, 386 MB
+peak resident for a process that had loaded nothing else (Apple silicon, macOS 27); the
+mlx-swift-lm macro path loaded cold the same way costs 3.8 s, 236 MB added and the same peak.
+Paid once per process.
+
+Tokenizer entry point: `SwiftTransformersTokenizer.load(from:)` builds
+`PreTrainedTokenizer(tokenizerConfig:tokenizerData:)` from
+`LanguageModelConfigurationFromHub(modelFolder:)`, the two steps of
+`Tokenizers.AutoTokenizer.from(modelFolder:)`, and sets `clean_up_tokenization_spaces` to
+false between them when the checkpoint does not set it, which is transformers' default since
+4.45 and not swift-transformers'. mlx-swift-lm's `#huggingFaceTokenizerLoader()` was loaded
+once and gives the same ids; it is not used because it hides the upstream tokenizer, brings
+`MLXHuggingFace`, the macro plugin and `MLXFoundationModels` into the model target, and adds
+nothing over the direct call.
+
+Chat template path: the engine. swift-transformers 1.3.4 reads `chat_template.jinja` on its
+own when loading from a folder and merges it into the configuration; `chatPromptIDs` calls
+`applyChatTemplate` with `addGenerationPrompt: true` and `additionalContext:
+["enable_thinking": thinking]`, and `chatPromptText` renders the same file with swift-jinja
+(`lstripBlocks`, `trimBlocks`) and the same context, because swift-transformers returns only
+ids. Every recorded text and id sequence matches, so no hand-rolled builder is written. The
+mlx-vlm image message shape (`content` as image parts then a text part) renders through the
+same template to one `<|image|>` (258880) per image directly before the text.
+
+Two decode departures in swift-transformers 1.3.4 are handled generally in the adapter and
+pinned by a test over the unmodified path: byte tokens at the end of a sequence are dropped by
+its `ByteFallbackDecoder`, and `clean_up_tokenization_spaces` defaults to true. Neither needs a
+custom loader; follow-up issues A to E in spikes/tokenizer-parity.md cover the upstream reports,
+the fixture rows that would record them, and running the suite in CI.
+
+Holds for swift-transformers 1.3.4, swift-jinja 2.5.1, swift-huggingface 0.11.0, mlx-swift-lm
+`c043fb3`, tokenizer revision `a7a81407`, fixtures from transformers 5.17.0 and tokenizers
+0.23.2. `Tests/OpenJevDiffusionGemmaTests/Tokenization` is the permanent regression suite. It
+needs the checkpoint's tokenizer files (`OPENJEV_TEST_TOKENIZER`, `OPENJEV_TEST_MODEL` or the
+Hugging Face cache) and otherwise skips as a model opt-in test, naming `OPENJEV_TEST_MODEL`, so
+hosted CI builds it but does not run it until follow-up E in spikes/tokenizer-parity.md.
+
+Status. Accepted: swift-transformers for the tokenizer, the shipped template through
+swift-jinja for prompts. Decided by spikes #20 and #21.
 
 ## D-009 Hummingbird 2 for the server
 
@@ -205,7 +289,7 @@ transfer. Library APIs take typed configuration and never read the environment.
 
 Status. Accepted for planning.
 
-## D-014 Answers are compared with tolerances, never bit for bit
+## D-014 Model parity: bit for bit under the oracle's kernels, bounded aggregates otherwise
 
 Context. Upstream itself observes that BF16 execution paths changed 5 to 6 of 777 argmaxes and
 that vLLM and Transformers kernels differ by up to 0.055 in probability for JevK5. MLX Swift
@@ -216,7 +300,49 @@ slot log-probabilities within a tolerance to be fixed by the parity spike (propo
 probability per label, top label agreement at 99% or better on the fixture set); identical wire
 shapes and errors (exact). See [09-conformance-and-testing.md](09-conformance-and-testing.md).
 
-Status. Accepted for planning; tolerance value open until the spike reports.
+Outcome of spike #22 (2026-09-30; numbers and method in
+[spikes/backend-validation.md](spikes/backend-validation.md)). The proposal is replaced.
+
+The read is chaotic in bfloat16: last-bit differences in a few kernels move label probabilities
+by up to 0.62. The same changes move top labels even where the oracle's top-two margin is 0.68.
+A chunked prefill in mlx-vlm itself, exact in real arithmetic, fails 0.02 on 67 of 156 slots.
+The fork fails it on 70 and a faithful Swift port on mlx-swift's kernels on 64. No per-label
+tolerance can be both met and useful. Model parity against `Fixtures/oracle/reads.json` therefore
+has two tiers.
+
+1. **Exact tier, the conformance test.** This runs on the reference machine, or any machine that
+   regenerates the oracle. The port runs with `MLX.GPU.metallib` set to the pinned mlx-metal
+   wheel's `mlx.metallib`, SHA-256 in the oracle's generator. Its full-attention layers use the
+   RoPE frequency table recorded in the oracle's `rope`. Under those conditions every read must
+   be identical: every `[token id, logprob]` pair, `slot_distribution`'s probabilities and
+   entropies, the argmaxes written by steps 2 and 3, the prompt token counts, and the prefill
+   cache digests of layers 0 and 29. Spike #22's transliteration meets this on all 27 reads.
+   Any deviation from mlx-vlm's operations fails it, including one that is exact in real
+   arithmetic, such as upstream's Gemma 4 router.
+2. **Native tier, the production check.** With mlx-swift's own kernels, the 27 reads must meet
+   every bound below. The table gives the legitimate range (mlx-vlm chunked or unsorted, the fork,
+   the Swift port on native kernels) and the planted bugs (self-conditioning skipped on step 1,
+   canvas RoPE from position 0, no sliding window for the canvas).
+
+| Aggregate over the fixture reads | Bound | Legitimate range | Planted bugs |
+|---|---|---|---|
+| Mean absolute label probability difference, all 1,763 labels | ≤ 0.02 | 0.0011 to 0.0100 | 0.0159 to 0.0562 |
+| The same over the 50 slots of the prompts over 1,024 tokens | ≤ 0.01 | 0.0000 to 0.0069 | 0.0142 to 0.0320 |
+| Mean absolute entropy difference, all 156 slots | ≤ 0.2 | 0.016 to 0.102 | 0.133 to 0.765 |
+| The same over the prompts over 1,024 tokens | ≤ 0.2 | 0.000 to 0.161 | 0.275 to 0.926 |
+| Top label agreement, all slots | ≥ 90% | 94.2% to 100% | 67.3% to 91.7% |
+| Top label agreement where the oracle's top-two margin is at least 0.5 | ≥ 97% | 99.2% to 100% | 76.7% to 98.3% |
+
+Each planted bug breaks at least one bound, and every legitimate implementation passes all of
+them. The window bug shows only in the long-prompt rows. Per-read and per-slot maxima are
+reported, never bounded: the legitimate maximum is 0.62. The argmaxes written between steps are
+compared only in the exact tier; under native kernels they flipped on 2 of 6 multi-step reads.
+Entropy never changed upstream's re-read decision: every fixture read has a slot entropy above
+0.1. Prompt ids, templates, slots, canvases, wire shapes and errors stay exact. Synthetic MLX tests
+(D-028) keep their CPU-reference tolerances. The bounds are calibrated on 27 reads; issue #31
+should widen the fixture set and recompute them with `Tools/oracle/tolerance_stats.py`.
+
+Status. Accepted: two tiers, with the bounds above. Decided by spike #22.
 
 ## D-015 Slot-only output projection is allowed
 
@@ -647,3 +773,113 @@ GPU would not show it in CI; the model's parity tests on developer machines rema
 that. Run `mlx-probe.yml` again when mlx-swift, Xcode or the runner image changes.
 
 Status. Proposed with issues #7 and #8.
+
+## D-029 Encoder engine and served models: where the port goes beyond or differs from the issue text
+
+Context. Issue #67 ports upstream's `EncoderEngine` contract (`encoders.py` lines 50 to 158) and
+`config.served_models` into `OpenJevCore` as `QuestionReadBackend`, `EncoderDecisionEngine`,
+`SystemOneService` and `ServedModels`. The issue's sketch predates the work on #10 and #17, and
+a few points needed choices it does not spell out.
+
+Decision.
+
+1. `QuestionReadBackend` exposes `modelInfo: ModelInfo` rather than the sketch's `modelName`:
+   the served name, description and release date travel together, so `ServedModels.encoder(_:)`
+   and the `/v1/models` listing come from the backend itself. `KnownEncoderModels` holds
+   upstream's `ENCODER_MODELS` texts word for word; `Fixtures/wire/models.json` is the oracle.
+2. `batchSize` is a setting of `EncoderEngineConfiguration` (`OPENJEV_ENCODER_BATCH`, 16), not a
+   property of the backend as the sketch had it: upstream reads it from `Settings`, and a
+   deployment tunes it per machine, not per model. The configuration also carries `maxQueue`
+   (512), `maxInflight` (1, upstream's one model thread; CLM and JevK5 may raise it) and `warmUp`
+   (true).
+3. `readBatch(state:stateText:questions:)` receives both the raw state and its `StateText`
+   rendering and returns a `BatchReadResult` struct rather than a tuple. Verdict reads the text;
+   Laya and CLM render the raw value themselves; JevK5 embeds it in its JSON prompt.
+4. `maxPromptTokens` is an optional the engine does not enforce. It has no tokenizer, and upstream's
+   encoder engines count tokens inside their own reads; Verdict and Laya truncate (`nil`), CLM and
+   JevK5 refuse. The property documents the contract for the backends and the routes listing.
+5. Batches of one request run in order, one backend call each, under the `maxInflight`
+   semaphore, as upstream's `read` loop does on its one thread. `modelTime` is the wall time inside
+   those calls, wait for a permit included, so the Server-Timing `model` value counts the read as
+   `test_server_timing_counts_the_read` expects. Nothing is read when every question is forced:
+   no backend call, `inputTokens` 0, `modelTime` zero.
+6. Every distribution a backend returns is checked (one per question, one value per option, every
+   value in `[0, 1]`, which also rules out NaN and the infinities, sum within 1e-6 of 1) and a
+   violation throws `BackendContractError`, a new error type
+   that is neither a `SchemaError` nor an `OverloadedError`: a backend bug is not a client error,
+   and `Answer.make`'s preconditions would otherwise crash the process on a bad backend. Two rows
+   of `Fixtures/wire/answers.json` (`choice_layout`, `score_layout`) probe number rendering with
+   vectors that are not distributions; the encoder engine test checks that they are refused, and
+   compares the other thirteen byte for byte.
+7. The queue bound is upstream's `waiting >= max_queue` as written, as D-027 item 5 decided for
+   the diffusion engine: the issue's test line (`maxQueue 0` refusing the second concurrent
+   request) is tested with `maxQueue` 1, and `maxQueue` 0 is checked to refuse the first. The
+   message names the model: `"{model} is at capacity. Retry shortly."`.
+8. `warmUp()` is a method the CLI and server call after load, never run by `init`: an actor's
+   initializer cannot await the read, and a library user may not want it. Its questions are
+   `EncoderDecisionEngine.warmUpQuestions`, upstream's `WARMUP_QUESTIONS`, against the state
+   `warmup`, and the read does not count against the queue bound.
+9. The option refusal (`UnsupportedOptions.check`), the queue counter (`RequestQueue`) and the
+   answer reordering (`OrderedMap<Answer>.ordered(as:)`) were lifted out of `DecisionEngine` into
+   `RequestAdmission.swift` and are shared by both engines; `DecisionEngine`'s behaviour and its
+   `Fixtures/policies` tests are unchanged. The diffusion engine checks the options against its
+   backend's `BackendCapabilities`, the encoder engine against `.readsOnly`.
+10. `DecisionEngine` gains `decide(_:)` without a seed to satisfy `SystemOneService`; it forwards
+    to `decide(_:seed:)` with `nil`, so the route's seed derivation applies. Its `servedModels` is
+    `.diffusionGemma`. `EncoderEngineConfiguration` has no `servedModelVersion`: the encoder's
+    version is its backend's model name.
+
+Status. Proposed with issue #67.
+
+## D-030 Server skeleton: where the port goes beyond or differs from the issue text
+
+Context. Issue #34 builds the Hummingbird application: `ServerSettings`, the three routes, the
+request id and `server-timing` headers and a `BackendProvider`. The error contract (#35),
+authentication (#36), capacity and shutdown (#37) and model routes (#38) have their own issues,
+and a few points needed choices the issue does not spell out.
+
+Decision.
+
+1. The fixture loaders, `FixtureTokenizer` and the two stub backends moved from
+   `OpenJevCoreTests` into a new library target, `OpenJevTestSupport`, because test targets
+   cannot import each other and the server tests need them. It is not a product. It does not
+   import Testing: the loaders throw `FixtureError` where they used `#require`, and each test
+   target turns `missingMessageText` into its own `Comment`. The iOS scheme builds it.
+2. The issue's `ModelRegistry` is the core's `ServedModels` (D-029): `GET /v1/models` lists the
+   service's `servedModels.listing`, and the unknown-model 400 uses its `accepts(_:)`. Routed
+   models are not listed and not forwarded yet; `OPENJEV_MODEL_ROUTES` is parsed and validated
+   at startup, and #38 uses it.
+3. `ServerSettings(environment:)` reads the environment as upstream does, with one
+   improvement. A missing variable is the default. An empty string is kept for a string
+   setting, is the default for `_env_num`'s two MLX cache settings, and is refused for every
+   other number, as Python's `int("")` is. Numbers parse as Python's `int` and `float` parse
+   them (whitespace, sign, `_` between digits, `inf` and `nan`; hex floats refused). Where
+   upstream raises a bare `ValueError` naming only the text, this port names the variable, with
+   `_env_num`'s `{NAME}={raw!r} is not a int` wording. An integer beyond `Int` is refused as not
+   an int, where Python would accept it. `OPENJEV_LOG_LEVEL` accepts uvicorn's level names plus
+   swift-log's `notice`, case-sensitively. The default backend is `mlx`, not upstream's `vllm`,
+   because this port has no vLLM backend. Settings that exist only for vLLM, CLM and JevK5 are
+   left out.
+4. `String.pythonRepr`, which `ImageValidation` already used, is public so the server's messages
+   format `{value!r}` the same way.
+5. The route applies upstream's order: body, shape, model name, questions cap, engine.
+   `SchemaError` becomes the plain-detail 400 and `OverloadedError` the 529 with
+   `retry-after: 1`. Any other error, which includes a backend failure until #35 maps
+   it to the 503, is logged and answered as Starlette's plain-text 500 `Internal Server Error`.
+   An unknown route is FastAPI's `{"detail":"Not Found"}` 404.
+6. The body is read up to `OPENJEV_MAX_BODY_BYTES` in the route, not in a middleware ahead of
+   authentication, and the 413 carries `server-timing`, which upstream's middleware answer does
+   not. A body that is not JSON gets FastAPI's `json_invalid` 422 shape with the parser's byte
+   offset and description; matching Python's character offset and `json` message, the
+   content-type rules and the rest of `Fixtures/wire/cases.json`'s `body_*` rows is #35's.
+7. `server-timing`'s `model` is `Decision.modelTime`, added to a task-local `ModelTimeRecorder`
+   that the headers middleware reads. A request the engine refuses reports `model;dur=0.0`,
+   where upstream would count any backend time it spent before refusing. `server` is clamped at
+   `0.0` without producing `-0.0`, and each value is written with `%.1f`, which rounds the
+   binary value as Python's `{:.1f}` does.
+8. The server target declares `swift-http-types` directly, pinned to the version Hummingbird
+   already resolved, because it names header fields. The Hummingbird files are wrapped in
+   `#if canImport(Hummingbird)`, so `OpenJevServer` still compiles for iOS, where the manifest
+   leaves Hummingbird out.
+
+Status. Proposed with issue #34.

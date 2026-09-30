@@ -26,7 +26,9 @@ OpenJevSwift/                          Swift package, tools 6.2, strict concurre
       Random/        MT19937, PythonRandom.randrange, SeedDerivation (SHA-256)
       Read/          SlotDistribution, Confidence, AnswerAssembly, ReadAveraging
       Engine/        DecisionBackend protocol, CanvasRead, ReadResult, EngineConfiguration,
-                     ReadOptions, DecisionEngine (auto re-read, samples, steps, think, sequential)
+                     ReadOptions, DecisionEngine (auto re-read, samples, steps, think, sequential);
+                     QuestionReadBackend protocol, EncoderEngineConfiguration,
+                     EncoderDecisionEngine (batched reads); SystemOneService, ServedModels
       Images/        Data-URL and {content_type, base64} validation (no decoding of pixels)
     OpenJevDiffusionGemma/             Apple silicon only. Depends on mlx-swift, MLXLMCommon,
                                        MLXVLM (Gemma 4 vision), swift-transformers Tokenizers.
@@ -36,8 +38,11 @@ OpenJevSwift/                          Swift package, tools 6.2, strict concurre
       Tokenization/  Tokenizer adapter, chat prompt builder, label discovery hookup
       Vision/        Processor parity, pixel embedding, block ids (later milestone)
       Generation/    Sampler, stopping rules, block loop, streaming detokenizer (later)
-    OpenJevServer/                     Hummingbird 2. Routes, validation, error contract,
-                                       auth, capacity, routes forwarding, settings.
+    OpenJevServer/                     Hummingbird 2. ServerSettings, BackendProvider,
+                                       OpenJevApplication (routes), request id and
+                                       server-timing middleware; later auth, capacity, forwarding.
+    OpenJevTestSupport/                Fixture loaders, FixtureTokenizer and the stub backends
+                                       the test targets share. Foundation only; not a product.
     openjev/                           CLI executable: serve, decide, models
   Tests/
     OpenJevCoreTests/                  Fixture-driven unit tests (no model)
@@ -50,7 +55,9 @@ OpenJevSwift/                          Swift package, tools 6.2, strict concurre
 ```
 
 Later milestones add `OpenJevEncoders` (Verdict, Laya) and `OpenJevLetterReadout` (JevK5 style
-on `MLXLLM` models) as separate targets so that iOS consumers never link the 26B model code.
+on `MLXLLM` models) as separate targets so that iOS consumers never link the 26B model code. Both
+implement `QuestionReadBackend` and run behind `EncoderDecisionEngine`, so the server holds either
+kind of engine as a `SystemOneService`.
 
 ## Module dependency graph
 
@@ -129,6 +136,55 @@ upstream's settings (canvas geometry, `autoThreshold`, `autoMax`, `maxInflight`,
 image limits, the template cache limit) and `ReadOptions` the request's `steps`, `samples`,
 `think` and `sequential` with upstream's defaults. `OverloadedError` is upstream's `Overloaded`.
 
+The encoder-style boundary (`Sources/OpenJevCore/Engine/`, issue #67), the sibling protocol of
+decision D-005 that Verdict, Laya, JevK5 and CLM implement, upstream's `EncoderEngine` contract:
+
+```swift
+public protocol QuestionReadBackend: Sendable {
+    var modelInfo: ModelInfo { get }       // served name, description and release date, upstream's ENCODER_MODELS
+    var maxChoices: Int { get }            // 24 for Verdict, 255 otherwise
+    var maxPromptTokens: Int? { get }      // nil when the backend truncates instead of refusing
+    func readBatch(state: JSONValue, stateText: String, questions: [EncoderQuestion]) async throws -> BatchReadResult
+}
+
+public actor EncoderDecisionEngine {
+    public init(backend: any QuestionReadBackend, configuration: EncoderEngineConfiguration = .default)
+    public func decide(_ request: SystemOneRequest) async throws -> Decision
+    public func warmUp() async throws        // upstream's WARMUP_QUESTIONS, called by the CLI and server after load
+}
+```
+
+`EncoderDecisionEngine` owns what upstream's `EncoderEngine` owns apart from the model: the
+`EncoderQuestionSchemaBuilder` over the backend's `maxChoices` (the same forced answers and
+limits as the diffusion engine), the refusal of `images`, `steps > 1`, `samples > 1`, `think` and
+`sequential` before any read (`"{model} does not support {field}"`), the queue bound
+(`"{model} is at capacity. Retry shortly."`), reads in batches of `batchSize` (16) in request
+order under a `maxInflight` semaphore (1, upstream's one model thread), the billing and
+`Answer.make`. A backend returns one distribution per question in the caller's option order
+(noul is `[P(true), 1 - P(true)]`); the engine checks the count, the `[0, 1]` range and the sum
+of every distribution and throws `BackendContractError` otherwise, a backend bug rather than a
+client error. Reads are deterministic, so the request seed is not used and `outputTokens` is 0.
+`EncoderEngineConfiguration` carries `batchSize` (`OPENJEV_ENCODER_BATCH`), `maxQueue`
+(`OPENJEV_MAX_QUEUE`), `maxInflight` and `warmUp` (`OPENJEV_WARMUP`).
+
+The two engines share the option refusal, the queue counter and the answer reordering
+(`RequestAdmission.swift`), and both conform to the protocol the server holds:
+
+```swift
+public protocol SystemOneService: Sendable {
+    var servedModels: ServedModels { get }   // upstream's config.served_models(backend)
+    func decide(_ request: SystemOneRequest) async throws -> Decision
+}
+
+public struct ServedModels { version: String; acceptedNames: Set<String>; listing: [ModelInfo] }
+// .diffusionGemma: "openjev-0.1", {openjev-latest, openjev-0.1, jev-latest, jev-preview}, upstream's MODELS
+// .encoder(modelInfo): modelInfo.name, {modelInfo.name, jev-latest, jev-preview}, [modelInfo]
+```
+
+`KnownEncoderModels` holds upstream's `ENCODER_MODELS` metadata (`laya-1.0`, `verdict-1.4`,
+`clm-v0.1`, `jevk5-0.2`) for the backends and for the routes listing; `Fixtures/wire/models.json`
+is the oracle for the listings and the accepted names.
+
 The in-process, public entry point for apps:
 
 ```swift
@@ -181,11 +237,25 @@ An `actor DiffusionGemmaRuntime: DecisionBackend`:
 
 ## The server
 
-Hummingbird 2 application with the routes in [02-jev-wire-api.md](02-jev-wire-api.md). Body
-handling reads up to the cap and rejects the rest; JSON is parsed by the core's order-preserving
-parser (Foundation's `JSONDecoder` cannot preserve object order). Middleware adds request ids,
-authentication and the server-timing header; per-request model time is accumulated through a
-task-local. Capacity is a counter plus a semaphore mirroring `max_inflight` and `max_queue`.
+Hummingbird 2 application with the routes in [02-jev-wire-api.md](02-jev-wire-api.md).
+`OpenJevApplication.make(settings:provider:)` asks a `BackendProvider` for the
+`SystemOneService` once, before binding `OPENJEV_HOST` and `OPENJEV_PORT`, as upstream's
+`lifespan` loads its engine. `DecisionBackendProvider` wraps a `DecisionBackend` in a
+`DecisionEngine`, and `QuestionReadBackendProvider` wraps a `QuestionReadBackend` in an
+`EncoderDecisionEngine`, each configured from the settings. Tests hand the router a stub-backed
+service; the CLI hands it the DiffusionGemma runtime or an encoder. `GET /v1/models` lists the
+service's `ServedModels`.
+
+`POST /v1/systemone` reads the body up to the cap (413 past it). JSON is parsed by the core's
+order-preserving parser (Foundation's `JSONDecoder` cannot preserve object order), checked by
+`RequestValidator`, then the model name and the questions cap are checked before
+`SystemOneService.decide`. `SchemaError` and `OverloadedError` become upstream's 400 and 529.
+`ResponseHeadersMiddleware` runs in front of every route. It turns a thrown `WireError` into its
+response, answers an unknown route as FastAPI's 404, and adds `x-typesafe-request-id`,
+`x-request-id` and `server-timing` to every response, errors included. The route adds the
+engine's `Decision.modelTime` to a task-local `ModelTimeRecorder`, and the middleware reports it
+as `model`. Authentication and capacity come later; capacity is the engines' counter and
+semaphore, mirroring `max_inflight` and `max_queue`.
 `OPENJEV_MODEL_ROUTES` forwarding uses `URLSession` or Hummingbird's client. Text generation
 routes are added only when a generation-capable backend is loaded.
 

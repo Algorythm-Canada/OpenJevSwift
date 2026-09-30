@@ -1,5 +1,6 @@
 import Foundation
 import OpenJevCore
+import OpenJevTestSupport
 import Testing
 
 /// Compares the wire types with upstream's recorded exchanges in Fixtures/wire.

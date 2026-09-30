@@ -1,7 +1,17 @@
 # Swift Package Manager
 .build/
-.swiftpm/
 Package.resolved.lock
+# Everything Xcode writes under .swiftpm stays ignored, xcuserdata and the per-user scheme
+# management plist included. The exception is the scheme files in xcschemes, which is where Xcode
+# writes a scheme marked Shared. The CI iOS job builds one of them (docs/development.md).
+.swiftpm/*
+!.swiftpm/xcode/
+.swiftpm/xcode/*
+!.swiftpm/xcode/xcshareddata/
+.swiftpm/xcode/xcshareddata/*
+!.swiftpm/xcode/xcshareddata/xcschemes/
+.swiftpm/xcode/xcshareddata/xcschemes/*
+!.swiftpm/xcode/xcshareddata/xcschemes/*.xcscheme
 *.xcodeproj
 *.xcworkspace
 !*.xcworkspace/contents.xcworkspacedata
