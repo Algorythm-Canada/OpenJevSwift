@@ -53,7 +53,7 @@ THIRD_PARTY.md, the scripts and that test together, then regenerate.
 | [policies/](policies/README.md) | Requests with `samples`, `steps`, `think`, `sequential` and images, and every read the engine makes for them | `upstream_tables.py` | #17 |
 | [errors/](errors/README.md) | Error responses that `wire/cases.json` does not hold, and an index of every error row in the wire contract | `upstream_tables.py` | #35, #38 |
 | [wire/](wire/README.md) | HTTP exchanges, answer bodies, request renderings and `/v1/models` listings, recorded with a stand-in tokenizer | `wire_tables.py` | #5, #35 |
-| [python-json/](python-json/README.md) | CPython `json.dumps` and float `repr` tables. These record the Python version, not the upstream commit. | `python_json_tables.py` | #3 |
+| [python-json/](python-json/README.md) | CPython `json.dumps` and float `repr` tables, and how `json.loads` ends on valid and malformed documents. These record the Python version, not the upstream commit. | `python_json_tables.py` | #3, #35 |
 
 `/v1/models` bodies for every backend are in `wire/models.json`, not in a `models.json` at this
 level. Model parity data from mlx-vlm (layer 2, issue #31) will also live here.
