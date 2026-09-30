@@ -120,11 +120,17 @@ def main():
 
     native = RESULTS / "transliteration_run.json"
     if native.exists():
-        rows = json.loads(native.read_text())["per_read"]
-        if rows and "logprobs" in rows[0]:
-            variants.append(("Swift transliteration, mlx-swift kernels", {
-                r["id"]: {"distributions": distributions_from_maps(by_id[r["id"]], r["logprobs"]),
-                          "written": r["written"]} for r in rows}))
+        run = json.loads(native.read_text())
+        rows = run["per_read"]
+        if run.get("metallib") or run.get("rope_frequencies_from") or run.get("cache_limit_gb"):
+            raise SystemExit(f"{native.relative_to(ROOT)} is not the native baseline; rerun Transliteration "
+                             "with no options")
+        if not rows or any("logprobs" not in r for r in rows):
+            raise SystemExit(f"{native.relative_to(ROOT)} has no per-read maps; rerun Transliteration "
+                             "without --summary-only")
+        variants.append(("Swift transliteration, mlx-swift kernels", {
+            r["id"]: {"distributions": distributions_from_maps(by_id[r["id"]], r["logprobs"]),
+                      "written": r["written"]} for r in rows}))
 
     for spec in extra:
         name, path = spec.split("=", 1)

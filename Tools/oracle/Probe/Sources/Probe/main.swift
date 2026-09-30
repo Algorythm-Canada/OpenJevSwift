@@ -490,11 +490,33 @@ if let directory = options.dumpDirectory {
     print("dumped \(dumped.count) reads to \(directory)")
 }
 
-let outPath =
-    options.out
-    ?? (options.cacheLimitGB == nil
-        ? "Tools/oracle/results/probe_run.json"
-        : "Tools/oracle/results/probe_run_cache_limit_\(Int(options.cacheLimitGB!))gb.json")
+/// The default result file names the configuration, so that no run overwrites another's: only
+/// the default run (the fork's own settings, two passes, no dump, no cache limit) writes
+/// probe_run.json.
+func defaultResultPath() -> String {
+    var name = "probe_run"
+    if !DiffusionGemmaExpertUnsortSwitch.enabled { name += "_expert_unsort_off" }
+    if options.passes != 2 { name += "_passes_\(options.passes)" }
+    if options.dumpDirectory != nil { name += "_dump" }
+    if let gigabytes = options.cacheLimitGB {
+        let size = gigabytes.rounded() == gigabytes ? String(Int(gigabytes)) : String(gigabytes)
+        name += "_cache_limit_\(size)gb"
+    }
+    return "Tools/oracle/results/\(name).json"
+}
+
+/// The fork reads DARKBLOOM_DIFFUSION_EXPERT_UNSORT once (DiffusionGemmaExpertReduction.enabled,
+/// which is internal); this repeats its rule for the file name only.
+enum DiffusionGemmaExpertUnsortSwitch {
+    static var enabled: Bool {
+        guard let value = ProcessInfo.processInfo.environment["DARKBLOOM_DIFFUSION_EXPERT_UNSORT"] else {
+            return true
+        }
+        return ["1", "true", "yes", "on"].contains(value.lowercased())
+    }
+}
+
+let outPath = options.out ?? defaultResultPath()
 let data = try JSONSerialization.data(withJSONObject: summary, options: [.prettyPrinted, .sortedKeys])
 try FileManager.default.createDirectory(
     at: URL(fileURLWithPath: outPath).deletingLastPathComponent(), withIntermediateDirectories: true)

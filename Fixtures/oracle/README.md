@@ -61,7 +61,9 @@ The fetch downloads 16.6 GB into the Hugging Face cache. The oracle runs every r
 second time from an emptied prefill cache and in reverse order, and writes nothing unless the two
 passes agree bit for bit. Running it again on the same machine gives no diff. Another GPU family
 may round some kernels differently; the `device` and `gpu_architecture` pins say where the file
-was made. `--check` compares a run with the committed file instead of writing it.
+was made. `--check` compares a run with the committed file instead of writing it: every
+top-level key (the pins, settings, fixture checks, RoPE table, prompts and reads). It fails
+unless both passes agree and nothing differs.
 
 Timings and memory are machine state, not fixture data, so they go to
 `Tools/oracle/results/oracle_run.json`.

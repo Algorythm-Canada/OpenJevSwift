@@ -122,7 +122,7 @@ Determinism holds at every level:
 
 - **Within a run:** every read runs twice in one process. The second pass empties the prefill cache and goes in reverse order, so a read cached in the first pass is computed from scratch in the second, and the other way round. Both passes agree bit for bit, cache digests included, so cached and uncached prefills also give identical reads.
 - **Across runs:** running the generator again in a new process rewrites `reads.json` byte for byte (`git diff --exit-code` is clean).
-- **Cache limit:** with `--cache-limit-gb 4` (upstream's `OPENJEV_MLX_CACHE_LIMIT_GB`), all 27 reads and 12 prompts are identical to the committed file.
+- **Cache limit:** with `--cache-limit-gb 4` (upstream's `OPENJEV_MLX_CACHE_LIMIT_GB`), `--check` finds no difference in any top-level key of the committed file: pins, settings, fixture checks, RoPE table, prompts and reads.
 
 `Fixtures/oracle/reads.json` is 330,596 bytes. It also records the RoPE table and the metallib hash
 that the exact tier below needs.
@@ -431,9 +431,21 @@ The rest of the evidence comes from these runs:
 - `Transliteration` with `TRANSLITERATION_BUG` set to `skip_self_conditioning`, `rope_offset_zero`, `no_window` or `upstream_router`.
 - `Tools/oracle/tolerance_stats.py` and `Tools/oracle/summarize_runs.py`, which rebuild the tables.
 
-Their outputs are in `Tools/oracle/results/`. The planted-bug runs are summarized in
-`tolerance_stats.json` rather than kept whole. With Xcode 27 the first build of each scratch
-package takes about 4 minutes; later builds take seconds.
+The D-014 table, planted bugs included:
+
+```bash
+for bug in skip_self_conditioning rope_offset_zero no_window upstream_router; do TRANSLITERATION_BUG=$bug swift run --package-path Tools/oracle/UpstreamProbe -c release Transliteration; done
+Tools/oracle/.venv/bin/python Tools/oracle/tolerance_stats.py Tools/oracle/results/fork_reads.json "planted bug: skip self-conditioning=Tools/oracle/results/transliteration_run_planted_bug_skip_self_conditioning.json" "planted bug: RoPE offset 0=Tools/oracle/results/transliteration_run_planted_bug_rope_offset_zero.json" "planted bug: no sliding window=Tools/oracle/results/transliteration_run_planted_bug_no_window.json" "upstream Gemma4 router=Tools/oracle/results/transliteration_run_planted_bug_upstream_router.json"
+```
+
+Their outputs are in `Tools/oracle/results/`. Without `--out`, the probe and the transliteration
+name each result file after the run's options. Only a default run writes the native baselines,
+`probe_run.json` and `transliteration_run.json`. Only the wheel's metallib together with the
+oracle's RoPE table writes `transliteration_run_exact.json`. That file and
+`transliteration_run_cache_limit_4gb.json` were written with `--summary-only`, which leaves out
+per-read slot maps equal to the oracle's or to the unlimited run's. The planted-bug runs are
+summarized in `tolerance_stats.json` rather than kept whole. With Xcode 27 the first build of each
+scratch package takes about 4 minutes; later builds take seconds.
 
 ## Deviations from the brief
 

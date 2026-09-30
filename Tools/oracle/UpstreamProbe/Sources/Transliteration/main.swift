@@ -4,6 +4,9 @@
 // of the first and last layer with the oracle's digests.
 //
 //     swift run --package-path Tools/oracle/UpstreamProbe -c release Transliteration [--cache-limit-gb 4]
+//
+// Without --out the result goes to a file under Tools/oracle/results named after the options
+// (see defaultResultPath), never over another configuration's file.
 
 import CryptoKit
 import Darwin
@@ -123,6 +126,7 @@ var metallibOverride: String?
 var stagesFile: String?
 var freqsFrom: String?
 var oracleRope = false
+var summaryOnly = false
 var stagesPrompt: String?
 var index = 1
 let arguments = CommandLine.arguments
@@ -137,6 +141,10 @@ while index < arguments.count {
         stagesFile = arguments[index + 1]
         stagesPrompt = arguments[index + 2]
         index += 2
+    case "--summary-only":
+        // Leave the per-read slot maps and written argmaxes out of the result file (the exact
+        // tier's equal the oracle's; a cache-limited run's equal its unlimited run's).
+        summaryOnly = true
     case "--oracle-rope":
         // Use the proportional RoPE table recorded in the oracle (reads.json "rope").
         oracleRope = true
@@ -359,14 +367,18 @@ for read in oracle.reads {
     agree += readAgree
     slots += read.slots.count
     let other = results[1][read.id]!
-    rows.append([
+    var row: [String: Any] = [
         "id": read.id, "bit_exact": bitExact, "max_probability_difference": readProbability,
         "max_entropy_difference": readEntropy, "top_label_agreement": readAgree, "slots": read.slots.count,
         "written_equal": got.written == read.written,
-        "logprobs": got.logprobs, "written": got.written,
         "timing_pass_1": ["seconds": got.seconds, "prefill_seconds": got.prefillSeconds, "prefill_cached": got.cached],
         "timing_pass_2": ["seconds": other.seconds, "prefill_seconds": other.prefillSeconds, "prefill_cached": other.cached],
-    ])
+    ]
+    if !summaryOnly {
+        row["logprobs"] = got.logprobs
+        row["written"] = got.written
+    }
+    rows.append(row)
     print(
         read.id.padding(toLength: 36, withPad: " ", startingAt: 0),
         bitExact ? "yes      " : "NO       ",
@@ -389,17 +401,49 @@ for (key, value) in memory.sorted(by: { $0.key < $1.key }) {
 }
 let summary: [String: Any] = [
     "stack": "ml-explore/mlx-swift 0.32.2, ml-explore/mlx-swift-lm c043fb3",
-    "cache_limit_gb": cacheLimitGB as Any, "metallib": metallibOverride as Any,
+    "cache_limit_gb": cacheLimitGB as Any, "metallib": metallibRecord() as Any,
     "rope_frequencies_from": oracleRope ? "oracle" : (freqsFrom as Any),
     "load_seconds": loadSeconds, "memory": memory,
     "bit_exact_reads": exact, "reads": oracle.reads.count, "deterministic": deterministic,
     "top_label_agreement": agree, "slots": slots, "max_probability_difference": maxProbability,
     "max_entropy_difference": maxEntropy, "cache_checks": cacheChecks, "per_read": rows,
 ]
-let path = outPath
-    ?? (cacheLimitGB == nil
-        ? "Tools/oracle/results/transliteration_run.json"
-        : "Tools/oracle/results/transliteration_run_cache_limit_\(Int(cacheLimitGB!))gb.json")
+/// The --metallib file as the result records it: its path relative to the working directory when
+/// it lies inside it (never an absolute home path), and its SHA-256, which the oracle's generator
+/// also records.
+func metallibRecord() -> [String: String]? {
+    guard let metallibOverride else { return nil }
+    let url = URL(fileURLWithPath: metallibOverride).standardizedFileURL
+    let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).standardizedFileURL.path + "/"
+    let shown = url.path.hasPrefix(root) ? String(url.path.dropFirst(root.count)) : url.lastPathComponent
+    let hash = (try? Data(contentsOf: url)).map { data in
+        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+    return ["path": shown, "sha256": hash ?? "unreadable"]
+}
+
+/// The default result file names the configuration, so that no run overwrites another's: only a
+/// run on mlx-swift's own kernels with nothing overridden writes transliteration_run.json, the
+/// native baseline tolerance_stats.py reads, and only the wheel's metallib together with the
+/// oracle's RoPE table writes transliteration_run_exact.json.
+func defaultResultPath() -> String {
+    let table = oracleRope || freqsFrom != nil
+    var name = "transliteration_run"
+    switch (metallibOverride != nil, table) {
+    case (true, true): name += "_exact"
+    case (true, false): name += "_wheel_metallib"
+    case (false, true): name += "_oracle_rope"
+    case (false, false): break
+    }
+    if !plantedBug.isEmpty { name += "_planted_bug_\(plantedBug)" }
+    if let cacheLimitGB {
+        let size = cacheLimitGB.rounded() == cacheLimitGB ? String(Int(cacheLimitGB)) : String(cacheLimitGB)
+        name += "_cache_limit_\(size)gb"
+    }
+    return "Tools/oracle/results/\(name).json"
+}
+
+let path = outPath ?? defaultResultPath()
 try JSONSerialization.data(withJSONObject: summary, options: [.prettyPrinted, .sortedKeys])
     .write(to: URL(fileURLWithPath: path))
 print("wrote \(path)")

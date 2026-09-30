@@ -147,6 +147,10 @@ def main():
             "written_mismatches": [x["id"] for x in rows if not x["written_equal"]],
             "seconds": time.perf_counter() - started,
         }
+        if overall["reads_bit_identical"] == overall["reads"]:
+            # A variant that reproduces the oracle exactly adds nothing per slot.
+            for row in rows:
+                row.pop("per_slot", None)
         results[variant] = {"overall": overall, "reads": rows}
         print(f"{variant:26s} max|dp| {overall['max_probability_difference']:.3e}  top "
               f"{overall['top_label_agreement']}/{overall['slots']}  max|dH| {overall['max_entropy_difference']:.3e}  "

@@ -24,7 +24,9 @@ other way round. The two passes must agree bit for bit, or nothing is written.
 Timings and memory depend on the machine and on whatever else runs on it, so they go to a
 separate file (by default Tools/oracle/results/oracle_run.json), never into the fixture. With
 `--check` nothing is written to Fixtures: the run is compared with the committed reads.json,
-which is how `--cache-limit-gb 4` is shown to leave every logprob unchanged.
+every top-level key of it (the pins, settings, fixture checks, RoPE table, prompts and reads),
+and the script fails unless both passes agree and nothing differs. That is how
+`--cache-limit-gb 4` is shown to leave the oracle unchanged.
 
 Usage, from the repository root (Tools/oracle/requirements.txt pins the environment):
 
@@ -406,6 +408,29 @@ def dumps(value):
     return json.dumps(value, ensure_ascii=False, allow_nan=False)
 
 
+def compare_with_committed(payload, committed):
+    """What differs between a run's payload and the committed reads.json, key by key: the names
+    of differing generator pins, the ids of differing reads, the keys of differing prompts, and
+    True for any other top-level key that differs. Empty when the run reproduces the file."""
+    fresh = json.loads(dumps(payload))
+    differences = {}
+    for key in sorted(set(fresh) | set(committed)):
+        mine, theirs = fresh.get(key), committed.get(key)
+        if mine == theirs:
+            continue
+        if key == "reads" and isinstance(mine, list) and isinstance(theirs, list):
+            by_mine = {r.get("id"): r for r in mine}
+            by_theirs = {r.get("id"): r for r in theirs}
+            ids = sorted(i for i in set(by_mine) | set(by_theirs) if by_mine.get(i) != by_theirs.get(i))
+            differences[key] = ids or ["order"]
+        elif key in ("prompts", "generator") and isinstance(mine, dict) and isinstance(theirs, dict):
+            names = sorted(k for k in set(mine) | set(theirs) if mine.get(k) != theirs.get(k))
+            differences[key] = names or ["order"]
+        else:
+            differences[key] = True
+    return differences
+
+
 def write_json(path, payload):
     """One top-level key per line and one list entry per line (the layout of the other
     fixtures): readable diffs, small files."""
@@ -497,19 +522,10 @@ def main():
     comparison = None
     if args.check:
         committed = json.loads(OUT.read_text(encoding="utf-8"))
-        want = {r["id"]: r for r in committed["reads"]}
-        mismatched = [r["id"] for r in payload["reads"] if want.get(r["id"]) != json.loads(dumps(r))]
-        if committed.get("rope") != json.loads(dumps(payload["rope"])):
-            mismatched.append("rope")
-        prompt_mismatch = [k for k, v in payload["prompts"].items()
-                           if committed["prompts"].get(k) != json.loads(dumps(v))]
-        comparison = {"reads_differing_from_committed": mismatched,
-                      "prompts_differing_from_committed": prompt_mismatch}
+        comparison = {"differences_from_committed": compare_with_committed(payload, committed)}
         print(f"against the committed reads.json: {comparison}", file=sys.stderr)
     elif deterministic:
         write_json(OUT, payload)
-    else:
-        raise SystemExit("the two passes disagree; reads.json was not written")
 
     run = {
         "generator": {k: v for k, v in generator().items()},
@@ -526,8 +542,11 @@ def main():
     }
     write_json(Path(args.run_out), run)
     rt.close()
-    if comparison and (comparison["reads_differing_from_committed"] or comparison["prompts_differing_from_committed"]):
-        raise SystemExit(1)
+    # The run file is written either way, so a failed run leaves its evidence behind.
+    if not deterministic:
+        raise SystemExit("the two passes disagree" + ("" if args.check else "; reads.json was not written"))
+    if comparison and comparison["differences_from_committed"]:
+        raise SystemExit(f"the run differs from the committed reads.json: {comparison['differences_from_committed']}")
 
 
 if __name__ == "__main__":
