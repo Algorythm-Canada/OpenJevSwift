@@ -101,8 +101,8 @@ public enum Question: Sendable, Hashable, WireEncodable {
 
 /// An image sent with a request, ahead of the state.
 ///
-/// This type holds the image as sent. Whether its content type, encoding and size are acceptable
-/// is decided later, by the image checks of issue #18.
+/// This type holds the image as sent. ``ImageValidation/parts(_:limits:)`` decides whether its
+/// content type, encoding and size are acceptable.
 public enum ImageInput: Sendable, Hashable, WireEncodable {
     /// A string, which upstream expects to be `data:image/...;base64,...`.
     case dataURL(String)

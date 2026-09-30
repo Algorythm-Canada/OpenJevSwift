@@ -281,6 +281,12 @@ public struct WireError: Error, Sendable, Hashable, WireEncodable {
         WireError(status: 400, body: .plain(PlainDetailBody(detail: detail)))
     }
 
+    /// 400 with a plain `detail` for a ``SchemaError``. The body is the error's message; its
+    /// `loc` is for the log and is not sent, as upstream's `semantic_error` does.
+    public static func semantic400(_ error: SchemaError) -> WireError {
+        semantic400(error.message)
+    }
+
     /// 400 with a plain `detail`, for an inference backend that refused a request with a 4xx.
     public static func modelRejected400(_ reason: String) -> WireError {
         semantic400("the model rejected this request: \(reason)")
