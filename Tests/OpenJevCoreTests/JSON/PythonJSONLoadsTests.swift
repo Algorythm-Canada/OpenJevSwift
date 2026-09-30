@@ -130,15 +130,33 @@ struct PythonJSONLoadsTests {
         #expect(Array(PythonJSONLoads.document([1, 2])) == [1, 2])
     }
 
-    @Test("Nesting deeper than any parser allows is scanned without recursion")
+    /// CPython 3.14.7's answers for these documents: 50,000 levels fit its stack and 200,000 do
+    /// not, and an error before the nesting gets that deep is raised first. The documents are
+    /// too large for the fixture table.
+    @Test("Deep nesting is scanned without recursion, up to CPython's RecursionError")
     func deepNesting() {
-        let depth = 1_000_000
+        let depth = 50_000
         let open = [UInt8](repeating: UInt8(ascii: "["), count: depth)
         #expect(
             PythonJSONLoads.outcome(of: open)
                 == .decodeError(message: "Expecting value", position: depth))
         let closed = open + [UInt8](repeating: UInt8(ascii: "]"), count: depth)
         #expect(PythonJSONLoads.outcome(of: closed) == .accepted)
+
+        let tooDeep = [UInt8](repeating: UInt8(ascii: "["), count: 200_000)
+        #expect(PythonJSONLoads.outcome(of: tooDeep) == .nestingTooDeep)
+        let objects = Array(String(repeating: #"{"a":"#, count: 200_000).utf8) + [0x31]
+        #expect(PythonJSONLoads.outcome(of: objects) == .nestingTooDeep)
+        #expect(
+            PythonJSONLoads.outcome(of: Array("[1,}".utf8) + tooDeep)
+                == .decodeError(message: "Expecting value", position: 3))
+        // The last level the scanner follows, and the first it does not.
+        let limit = PythonJSONLoads.maximumNesting
+        let deepest =
+            [UInt8](repeating: UInt8(ascii: "["), count: limit)
+            + [UInt8](repeating: UInt8(ascii: "]"), count: limit)
+        #expect(PythonJSONLoads.outcome(of: deepest) == .accepted)
+        #expect(PythonJSONLoads.outcome(of: [UInt8(ascii: "[")] + deepest) == .nestingTooDeep)
     }
 
     @Test("Positions count characters, not bytes")

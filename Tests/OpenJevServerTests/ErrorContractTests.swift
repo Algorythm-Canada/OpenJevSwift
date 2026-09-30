@@ -115,8 +115,8 @@
                     settings, backend: Self.unreachableBackend())
                 let response = try await Self.replay(row, settings: settings, service: service)
                 try ServerHarness.expectRecorded(response, row, name)
-                // The only responses upstream sends without server-timing are the ones its
-                // middleware answers before routing.
+                // Among these rows, the only responses upstream sends without server-timing are
+                // the ones its middleware answers before routing.
                 if row["server_timing_present"]?.boolValue == false {
                     let status = row["response"]?["status"]?.intValue ?? 0
                     #expect([401, 403, 413].contains(status), "\(name): no server-timing")
@@ -289,6 +289,12 @@
                 #expect(deep.status == .badRequest)
                 let unparsable = #"{"detail":"There was an error parsing the body"}"#
                 #expect(ServerHarness.text(deep) == unparsable)
+
+                // Past CPython's stack: its RecursionError, which FastAPI answers with the 400.
+                let beyondTheStack = try await ServerHarness.send(
+                    client, .post, "/v1/systemone", headers: json,
+                    body: Array(repeating: UInt8(ascii: "["), count: 200_000))
+                #expect(ServerHarness.text(beyondTheStack) == unparsable)
 
                 // A syntax error past the parser's depth is found where CPython finds it.
                 let truncated =
@@ -566,9 +572,12 @@
                 #expect(!RequestBodyReader.isJSON(HeaderText(bytes: Array(text.utf8))), "\(text)")
             }
             #expect(!RequestBodyReader.isJSON(nil))
-            // A Latin-1 no-break space is whitespace to Python's str.strip().
+            // Given the bytes, a Latin-1 no-break space is whitespace to Python's str.strip().
+            // Over HTTP/1 a lone 0xA0 arrives as U+FFFD, which is not (D-031).
             let spaced = HeaderText(bytes: Array("application/json".utf8) + [0xA0])
             #expect(RequestBodyReader.isJSON(spaced))
+            let decoded = String(decoding: Array("application/json".utf8) + [0xA0], as: UTF8.self)
+            #expect(!RequestBodyReader.isJSON(HeaderText(bytes: Array(decoded.utf8))))
         }
 
         /// Each body is sent with a JSON content type; the answers are upstream's for the same

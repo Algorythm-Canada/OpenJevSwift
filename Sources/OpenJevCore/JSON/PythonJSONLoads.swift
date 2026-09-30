@@ -1,9 +1,10 @@
 // A port of CPython 3.14's `json.loads` error behaviour: `Modules/_json.c`
 // (`scanstring_unicode`, `_parse_object_unicode`, `_parse_array_unicode`, `scan_once_unicode`,
 // `_match_number_unicode`) and `Lib/json/decoder.py` and `Lib/json/__init__.py` (`decode`,
-// `raw_decode`, `detect_encoding`), with the `ValueError` of `int()` past 4,300 digits. PSF-2.0.
-// See THIRD_PARTY.md. Checked against CPython itself: Fixtures/python-json/decode_errors.json
-// records what `json.loads` does with each of its documents.
+// `raw_decode`, `detect_encoding`), with the `ValueError` of `int()` past 4,300 digits and the
+// `RecursionError` of nesting past the stack. PSF-2.0. See THIRD_PARTY.md. Checked against CPython
+// itself: Fixtures/python-json/decode_errors.json records what `json.loads` does with each of its
+// documents.
 
 /// What CPython's `json.loads(body)` does with the bytes of a request body, which is how
 /// Starlette's `Request.json()` reads one.
@@ -14,16 +15,26 @@
 ///
 /// Only UTF-8 is read. `json.loads` also recognizes UTF-16 and UTF-32 by a byte order mark or by
 /// NUL bytes among the first four, and decodes UTF-8 with `surrogatepass`, which lets an encoded
-/// surrogate through; here those bytes are simply not UTF-8.
+/// surrogate through; here such bytes are read as UTF-8, which refuses an encoded surrogate and
+/// reads a NUL as the character it is.
 public enum PythonJSONLoads {
     /// The most digits `int()` converts, CPython's default `sys.int_max_str_digits`.
     public static let maximumIntegerDigits = 4300
 
+    /// The deepest nesting `json.loads` follows before its `RecursionError`, where CPython 3.14.7
+    /// runs out of an 8 MiB stack, the size of the Linux main thread uvicorn reads a body on
+    /// (58,081 levels measured on Apple silicon).
+    ///
+    /// The real level depends on the thread's stack, the build and the version: 116,208 levels on
+    /// macOS's 16 MiB main thread with 3.14.7, 9,998 with 3.13 and 1,497 with 3.12, which
+    /// upstream's container runs.
+    public static let maximumNesting = 58_000
+
     /// How `json.loads` ends on a document.
     public enum Outcome: Sendable, Hashable {
         /// It returns a value. That includes documents ``JSONParser`` refuses: `NaN`, `Infinity`,
-        /// `-Infinity`, a float beyond `Double`, a lone surrogate escape and nesting of any depth
-        /// (CPython stops only when its C stack runs out).
+        /// `-Infinity`, a float beyond `Double`, a lone surrogate escape and nesting deeper than
+        /// the parser follows, up to ``PythonJSONLoads/maximumNesting``.
         case accepted
         /// The bytes are not UTF-8: a `UnicodeDecodeError`.
         case notUTF8
@@ -34,6 +45,9 @@ public enum PythonJSONLoads {
         /// An integer with more than ``maximumIntegerDigits`` digits, before any other error:
         /// the `ValueError` `int()` raises.
         case integerTooLong
+        /// Nesting deeper than ``maximumNesting``, before any other error: the `RecursionError`
+        /// CPython raises when its stack runs out.
+        case nestingTooDeep
     }
 
     /// The UTF-8 byte order mark, which `json.loads` drops.
@@ -48,7 +62,8 @@ public enum PythonJSONLoads {
     /// How `json.loads` ends on `bytes`: the byte order mark is dropped, the rest must be UTF-8,
     /// and then CPython's scanner runs, which stops at the first error.
     ///
-    /// It keeps its own stack, so deep nesting cannot overflow the thread's stack.
+    /// It keeps its own stack of at most ``maximumNesting`` containers, so deep nesting cannot
+    /// overflow the thread's stack.
     public static func outcome(of bytes: some Collection<UInt8>) -> Outcome {
         let text = Array(Self.document(bytes))
         guard isUTF8(text) else {
@@ -61,6 +76,8 @@ public enum PythonJSONLoads {
                 return .accepted
             case .integerTooLong:
                 return .integerTooLong
+            case .nestingTooDeep:
+                return .nestingTooDeep
             case .error(let message, let byteOffset):
                 return .decodeError(
                     message: message, position: characterCount(of: buffer.prefix(byteOffset)))
@@ -116,6 +133,7 @@ private struct Scanner {
     enum End {
         case accepted
         case integerTooLong
+        case nestingTooDeep
         case error(String, Int)
     }
 
@@ -157,6 +175,9 @@ private struct Scanner {
                     }
                     expectation = .afterValue
                 case UInt8(ascii: "{"):
+                    guard containers.count < PythonJSONLoads.maximumNesting else {
+                        return .nestingTooDeep
+                    }
                     containers.append(true)
                     index = skipWhitespace(from: index + 1)
                     if index < count, bytes[index] == UInt8(ascii: "}") {
@@ -167,6 +188,9 @@ private struct Scanner {
                         expectation = .key
                     }
                 case UInt8(ascii: "["):
+                    guard containers.count < PythonJSONLoads.maximumNesting else {
+                        return .nestingTooDeep
+                    }
                     containers.append(false)
                     index = skipWhitespace(from: index + 1)
                     if index < count, bytes[index] == UInt8(ascii: "]") {

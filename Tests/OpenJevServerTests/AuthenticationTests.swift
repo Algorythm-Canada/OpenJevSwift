@@ -64,8 +64,10 @@
             }
         }
 
-        /// `auth.removeprefix("Bearer ").strip()`: the exact prefix, then Python's whitespace,
-        /// which among Latin-1 characters includes U+001C, U+0085 and U+00A0.
+        /// `auth.removeprefix("Bearer ").strip()` over the bytes `refusal(for:)` is given: the
+        /// exact prefix, then Python's whitespace, which among Latin-1 characters includes U+001C,
+        /// U+0085 and U+00A0. A lone 0x85 or 0xA0 never reaches it over HTTP/1, where NIO turns
+        /// it into U+FFFD (``nioDecodedValues()``).
         @Test("The key follows Bearer and Python's strip, as upstream reads it")
         func apiKey() throws {
             // A value of spaces is empty once the field drops its surrounding whitespace, so it
@@ -102,9 +104,10 @@
             #expect(wrong == .authentication401)
         }
 
-        /// A header is Latin-1 to Starlette, so a key with an accent matches the Latin-1 byte and
-        /// not its UTF-8 spelling, as with upstream behind a real server.
-        @Test("A non-ASCII key compares as upstream compares it")
+        /// A header is Latin-1 to Starlette, so given the bytes, a key with an accent matches the
+        /// Latin-1 byte and not its UTF-8 spelling, as upstream does. Over HTTP/1 the lone byte
+        /// arrives as U+FFFD, so such a key is never matched (``nioDecodedValues()``).
+        @Test("A non-ASCII key compares as upstream compares the bytes it is given")
         func nonASCIIKey() throws {
             let refusal = { (value: [UInt8]) in
                 AuthenticationMiddleware.refusal(
@@ -112,6 +115,29 @@
             }
             #expect(try refusal(Array("Bearer sk-".utf8) + [0xE9]) == nil)
             #expect(try refusal(Array("Bearer sk-é".utf8)) == .authentication401)
+        }
+
+        /// NIO's HTTP/1 decoder reads each header value with `String(decoding:as: UTF8.self)`,
+        /// and Hummingbird's field is made from that string, so a byte that is not UTF-8 arrives
+        /// as U+FFFD. Such a value is refused, never accepted and never a crash, where upstream,
+        /// which reads the raw bytes, would strip a 0xA0 or match a Latin-1 key (D-031).
+        @Test("Header bytes that are not UTF-8 arrive as NIO decodes them, and are refused")
+        func nioDecodedValues() throws {
+            func decoded(_ bytes: [UInt8]) -> HTTPFields {
+                [.authorization: String(decoding: bytes, as: UTF8.self)]
+            }
+            let padded = decoded(Array("Bearer sk-test".utf8) + [0xA0])
+            #expect(
+                AuthenticationMiddleware.refusal(for: padded, originSecret: "", apiKey: "sk-test")
+                    == .authentication401)
+            let latin1 = decoded(Array("Bearer sk-".utf8) + [0xE9])
+            #expect(
+                AuthenticationMiddleware.refusal(for: latin1, originSecret: "", apiKey: "sk-é")
+                    == .authentication401)
+            let utf8 = decoded(Array("Bearer sk-test".utf8))
+            #expect(
+                AuthenticationMiddleware.refusal(for: utf8, originSecret: "", apiKey: "sk-test")
+                    == nil)
         }
 
         @Test("The first of repeated headers counts, as Starlette's Headers.get reads it")

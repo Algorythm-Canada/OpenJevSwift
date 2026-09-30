@@ -96,12 +96,13 @@
         /// CPython gives, at the place the parser stopped: "Expecting value" at `NaN`,
         /// `Infinity`, `-Infinity` or a float beyond `Double`; "Invalid \uXXXX escape" at a lone
         /// surrogate's `u`; and the 400 for nesting deeper than the parser's 1,024 levels,
-        /// which is what upstream answers once CPython's stack runs out.
+        /// which is what upstream answers once CPython's stack runs out, as it does here past
+        /// ``PythonJSONLoads/maximumNesting``.
         static func refusal<Body: Collection<UInt8>>(
             for error: JSONParseError, body: Body, document: Body.SubSequence
         ) -> WireError {
             switch PythonJSONLoads.outcome(of: body) {
-            case .notUTF8, .integerTooLong:
+            case .notUTF8, .integerTooLong, .nestingTooDeep:
                 return .unparsableBody400
             case .decodeError(let message, let position):
                 return .jsonInvalid422(message: message, position: position)

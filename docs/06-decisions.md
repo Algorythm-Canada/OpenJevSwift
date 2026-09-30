@@ -861,8 +861,8 @@ Decision.
 
 1. A body `JSONParser` refuses is scanned again by `PythonJSONLoads`, a port of CPython 3.14's
    scanner (`Modules/_json.c`), which reports only how `json.loads` ends: the first
-   `JSONDecodeError` with its message and position, a `UnicodeDecodeError`, or the `ValueError`
-   of `int()` past 4,300 digits. The parser's own errors cannot give CPython's answer: the same
+   `JSONDecodeError` with its message and position, a `UnicodeDecodeError`, the `ValueError` of
+   `int()` past 4,300 digits, or the `RecursionError` of nesting past the stack (item 2). The parser's own errors cannot give CPython's answer: the same
    offset can be "Expecting value" or "Expecting property name enclosed in double quotes"
    depending on the container, "Unterminated string starting at" points at the opening quote,
    and CPython reads `01`, `1.` and `1e` in part and fails on what follows. Positions count
@@ -873,15 +873,22 @@ Decision.
 2. Where CPython accepts what the stricter parser refuses (D-016), the answer is the closest one
    CPython gives, at the place the parser stopped: "Expecting value" at `NaN`, `Infinity`,
    `-Infinity` or a float beyond `Double`, "Invalid \uXXXX escape" at a lone surrogate's `u`, and
-   the 400 "There was an error parsing the body" for nesting deeper than 1,024 levels, which is
-   what upstream answers once CPython's stack runs out (a `RecursionError`: past about 3 million
-   levels with CPython 3.14.7, 100,000 with 3.13, 1,000 with 3.9). Upstream parses those bodies
-   and answers from the value: a 422, then a 500 when the value cannot be written as JSON
-   (`NaN` in `state`), or a read. An integer of more than 4,300 digits is the 400, as upstream.
+   the 400 "There was an error parsing the body" for nesting deeper than the parser's 1,024
+   levels. Upstream parses those bodies and answers from the value: a 422, then a 500 when the
+   value cannot be written as JSON (`NaN` in `state`), or a read. An integer of more than 4,300
+   digits is the 400, as upstream. CPython itself gives up on deep nesting with a
+   `RecursionError`, which FastAPI answers with the same 400, at a level that depends on the
+   version and the stack: 1,497 levels with CPython 3.12, which upstream's container runs, 9,998
+   with 3.13, and with 3.14.7, which recorded the fixtures, where the thread's stack runs out:
+   58,081 levels on an 8 MiB stack, the size of the Linux main thread uvicorn reads a body on,
+   and 116,208 on macOS's 16 MiB main thread. `PythonJSONLoads` stops at 58,000 levels
+   (`maximumNesting`), so a malformed body nested deeper is the 400, as upstream answers it
+   there, and one nested between 1,024 and 58,000 levels gets CPython's message.
 3. The body is read as FastAPI reads it. An empty body is no body, whatever its content type. A
    JSON content type is `application/json` or `application/` ending in `+json`, the media type
    read as `email.message` reads it: the text before the first `;`, stripped of Python's
-   whitespace and lowercased, with exactly one `/`. Any other content type, or none, hands pydantic
+   whitespace and lowercased, with exactly one `/` (a lone 0x85 or 0xA0 byte arrives as U+FFFD,
+   item 6, and is not stripped). Any other content type, or none, hands pydantic
    the bytes: the 422 `model_attributes_type` whose `input` is Python's bytes repr cut at 500
    characters without a marker, as `trim` writes `str(value)[:500]`. `String.pythonRepr(bytes:)`
    writes it. A UTF-8 byte order mark is dropped, as `json.loads` decodes `utf-8-sig`.
@@ -891,8 +898,10 @@ Decision.
 4. `AuthenticationMiddleware` and then `BodyCapMiddleware` run inside
    `ResponseHeadersMiddleware`, upstream's `check_auth(...) or await read_capped_body(...)`, so a
    refusal carries both request ids and `server-timing`. Upstream's middleware answers the 401,
-   403 and 413 without `server-timing`, and the fixtures record `server_timing_present` false for
-   exactly those rows; this server sets it on every response, as D-030 item 6 did for the 413.
+   403 and 413 without `server-timing`, and `Fixtures/wire/cases.json` records
+   `server_timing_present` false for exactly those rows (in `Fixtures/errors/cases.json` only
+   upstream's two bare 500s lack it too); this server sets it on every response, as D-030 item 6
+   did for the 413.
    The cap applies to `POST` only. `Content-Length` is read as Python's `int()` reads it
    (whitespace, a sign, `_` between digits): past the cap is the 413 before a byte is read, a
    value `int()` refuses is ignored and the body counted, and an integer too large for `Int` is
@@ -905,16 +914,20 @@ Decision.
    Upstream answers `//v1/models` with a 404; here it needs the key. Hummingbird does not
    percent-decode a path, so `/%761/models` is a 404 here, where Starlette decodes it to
    `/v1/models` and upstream authenticates it; neither serves it without the key.
-6. A header is read as Starlette reads it: the first field of the name, one Latin-1 character
-   per byte. `removeprefix("Bearer ")` is the exact text, `strip()` removes Python's whitespace
-   among the Latin-1 characters (U+0009 to U+000D, U+001C to U+0020, U+0085, U+00A0), `encode()`
-   writes UTF-8, and the comparison runs over every byte up to the longer length with a length
-   difference counted as one more mismatch, never returning early. A non-ASCII value therefore
-   never matches an ASCII setting and never fails in any other way; with a non-ASCII setting the
-   Latin-1 byte matches and the UTF-8 spelling does not, as behind uvicorn. swift-http-types
-   drops the whitespace around a field value, as h11 does in front of upstream, so `" s3"`
-   arrives as `s3` and a key of spaces as the missing key's 403; upstream's own tests, which call
-   `check_auth` with such strings directly, would give 403 and 401 there.
+6. A header is read as Starlette reads it: the first field of the name, one Latin-1 character per
+   byte of the value that reaches the server. `removeprefix("Bearer ")` is the exact text, `strip()`
+   removes Python's whitespace among the Latin-1 characters (U+0009 to U+000D, U+001C to U+0020,
+   U+0085, U+00A0), `encode()` writes UTF-8, and the comparison runs over every byte up to the
+   longer length with a length difference counted as one more mismatch, never returning early. What
+   reaches the server differs from what reaches Starlette in two ways. NIO's HTTP/1 decoder reads
+   each header value as UTF-8 and turns a byte that is not UTF-8 into U+FFFD, so a lone 0x85, 0xA0
+   or Latin-1 letter arrives changed: a key padded with 0xA0 is refused where upstream strips the
+   byte, and a non-ASCII setting can never be matched, where upstream accepts its Latin-1 bytes.
+   Such a request is refused, never failed another way. A value in UTF-8, as in every recorded case,
+   compares as upstream compares it. swift-http-types also drops the whitespace around a field
+   value, as h11 does in front of upstream, so `" s3"` arrives as `s3` and a key of spaces as the
+   missing key's 403; upstream's own tests, which call `check_auth` with such strings directly,
+   would give 403 and 401 there.
 7. A backend refuses a request with `BackendRefusal(reason:)`, next to `BackendContractError`,
    upstream's `Upstream`. The server answers `WireError.modelRejected400` with the reason's first
    500 Unicode scalars, as `str(msg)[:500]` keeps them. Any other error a service throws is the

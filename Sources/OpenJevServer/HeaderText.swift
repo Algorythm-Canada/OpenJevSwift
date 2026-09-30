@@ -10,9 +10,12 @@
     /// A header value as Starlette gives it to upstream: the bytes of the first field with the
     /// name, each byte one Latin-1 character (U+0000 to U+00FF).
     ///
-    /// Keeping the bytes, rather than the field's `value` string, reproduces Python exactly:
-    /// `str.strip()` removes the Latin-1 whitespace characters, `str.encode()` writes each byte
-    /// from 0x80 up as two UTF-8 bytes, and non-ASCII values compare as upstream compares them.
+    /// Keeping the bytes, rather than the field's `value` string, reproduces Python exactly for
+    /// the bytes that reach the server: `str.strip()` removes the Latin-1 whitespace characters,
+    /// `str.encode()` writes each byte from 0x80 up as two UTF-8 bytes, and non-ASCII values
+    /// compare as upstream compares them. Behind Hummingbird's HTTP/1 server those bytes are
+    /// UTF-8: NIO reads every header value as UTF-8 and turns a byte that is not UTF-8 into
+    /// U+FFFD, so such a value arrives changed (decision D-031).
     struct HeaderText: Equatable {
         /// The characters, one per byte.
         var bytes: [UInt8]
