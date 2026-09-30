@@ -143,6 +143,7 @@ struct ConfidenceTests {
         .enabled(if: DistributionFixtures.exists, DistributionFixtures.missingMessage))
     func recorded() throws {
         let cases = try DistributionFixtures.load().confidences
+        #expect(cases.count == 38, "\(cases.count) recorded confidences")
         for entry in cases {
             #expect(Confidence.compute(entry.probabilities) == entry.confidence, "\(entry.name)")
         }
@@ -218,6 +219,7 @@ struct SlotDistributionTests {
         .enabled(if: DistributionFixtures.exists, DistributionFixtures.missingMessage))
     func recorded() throws {
         let slots = try DistributionFixtures.load().slots
+        #expect(slots.count == 42, "\(slots.count) recorded slot distributions")
         for slot in slots {
             let result = SlotDistribution.compute(top: slot.top, labelIDs: slot.labelIDs)
             #expect(result.probabilities == slot.probabilities, "\(slot.name)")

@@ -310,13 +310,14 @@ Decision.
    never gets there because forced answers set 1.0 directly, and `Answer.make` with `[1.0]` for a
    single-option choice or single-level score gives exactly upstream's forced answer.
 4. `ReadAveraging` lives in its own file, `Read/ReadAveraging.swift`.
-5. The tests for `Fixtures/distributions/` (issue #6) read every `.json` file there: an array of
-   entries, or an object with the array under `entries` or `rows`. An entry
-   `{top, label_ids, probs, entropy}` checks `slot_distribution`, with `top` an object in the
-   backend's order; an entry `{probabilities, confidence}` checks `confidence`. Both compare
-   exactly, because these are pure functions of the same doubles (D-014's tolerances apply to
-   model logprobs, not to this arithmetic). The tests skip with a message while the folder is
-   absent.
+5. The tests for `Fixtures/distributions/distributions.json` (issue #6) read its
+   `slot_distribution` rows (`{name, top, label_ids, result: {probs, entropy}}`, with `top` as
+   `[token id, logprob]` pairs in the backend's order) and its `confidence` rows
+   (`{name, p, result}`). Rows that record an upstream exception are skipped: the empty map is
+   item 2's precondition, and one option gives 1.0 by item 3. Both compare exactly, because
+   these are pure functions of the same doubles (D-014's tolerances apply to model logprobs,
+   not to this arithmetic). The loader was first written against a guessed layout, before #6
+   landed, and was brought in line with the real file on the branch for #10 and #11.
 
 Status. Proposed with issue #16.
 
