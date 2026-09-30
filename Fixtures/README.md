@@ -26,6 +26,7 @@ upstream commit and tokenizer revision it came from, so a stale fixture is visib
 | `policies/` | Requests with `samples`, `steps`, `think` or `sequential` and the reads the engine must make |
 | `errors/` | Recorded HTTP responses (status, body, headers) for every error in the wire contract |
 | `models.json` | `/v1/models` bodies for each backend |
+| `wire/` | Upstream's recorded HTTP exchanges (every validation, error, auth and body-cap case), answer bodies from `to_answer`, request bodies with their compact renderings, and `/v1/models` listings for every backend. Recorded from upstream's FastAPI app with a stand-in tokenizer and no model; see [wire/README.md](wire/README.md). Added by issue #5. |
 | `python-json/` | CPython `json.dumps` and float `repr` reference tables for the JSON writer and parser. These come from CPython, not from upstream, and record the Python version instead of the upstream commit. Added by issue #3. |
 
 The model parity data recorded from mlx-vlm (slot log-probabilities for each fixture canvas) is

@@ -24,3 +24,6 @@ Upstream/
 
 # Session task checklist (kept local)
 TASKS.md
+
+# Python virtual environments for the fixture scripts
+.venv/

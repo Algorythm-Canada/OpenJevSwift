@@ -208,3 +208,37 @@ for every value the parser can produce, including `ensure_ascii` escaping U+007F
 
 Status. Proposed with issue #3. The HTTP layer (the 422 body for invalid JSON) decides whether any
 of these cases must instead reproduce upstream's behaviour.
+
+## D-017 Wire types follow the recorded oracle, not the issue text, where they differ
+
+Context. Issue #5 describes the wire types. Recording upstream's FastAPI app
+(`Tools/fixtures/wire_tables.py`, fastapi 0.142.1, pydantic 2.13.5, Python 3.14.7) showed places
+where the issue text, or the brief it was worked from, does not match what upstream does.
+
+Decision.
+
+1. Wire types encode and decode through `JSONValue` (`init(json:)`, `var json`, `WireEncoder`),
+   not `Codable`. `JSONEncoder` loses key order and writes `1.0` as `1`. `Usage` and `ModelInfo`
+   also conform to `Codable` as a convenience; wire output never uses it.
+2. `steps`, `samples`, `think` and `sequential` are coerced as pydantic's lax mode does, not
+   strictly: `"3"`, `" 3 "`, `"1_0"`, `"3.00"`, `true` and `2.0` are integers, and `"yes"`, `"off"`,
+   `1` and `1.0` are Booleans. Rejecting them would turn upstream's 200 into a 422.
+3. Names: the error enum is `WireError` (a struct with a status, a body and headers) rather than
+   `OpenJevError`; the bodies are `TypedErrorBody` and `PlainDetailBody`. `NoulCriteria` exposes
+   `whenTrue` and `whenFalse` because `true` and `false` are Swift keywords; the wire keys are
+   unchanged.
+4. The recordings live in `Fixtures/wire/` (`cases.json`, `answers.json`, `requests.json`,
+   `models.json`) rather than `Fixtures/requests/` and `Fixtures/errors/`. Issue #6 can fold them
+   into its layout.
+5. A decode followed by an encode reproduces pydantic's `model_dump(exclude_unset=True)` except
+   that an extension field or a noul `criteria` sent as `null` is dropped. Upstream treats `null`
+   and absent the same, so no behaviour changes; forwarding sends the original bytes.
+6. `RequestValidator` checks shape only. The empty choice, more than 255 options, more than 10
+   levels and more than 256 questions stay semantic 400s from the schema builder (#10); images
+   are #18's; the unknown model is the server's (#38); the `json_invalid` 422, with Python's
+   decoder messages and character offsets, is the HTTP layer's (#35).
+7. The contract is pinned to the pydantic version in the fixture headers. Upstream only requires
+   `fastapi>=0.115`, so a deployment with another pydantic may word messages differently;
+   regenerate and diff when the pin moves.
+
+Status. Proposed with issue #5.
