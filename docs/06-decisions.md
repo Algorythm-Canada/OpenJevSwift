@@ -382,3 +382,31 @@ Decision.
    `templates/` and requires each of the three `json_state` texts to be one of those renderings.
 
 Status. Proposed with issue #11.
+
+## D-023 Random numbers and seeds: where the port goes beyond or differs from the issue text
+
+Context. Issue #15 ports CPython's `random.Random(seed)` seeding, `getrandbits` and `randrange`,
+and upstream's request seed (`api.py` lines 262 to 263) and derived seeds (`engine.py` lines 342
+and 383). A few choices were needed that the issue does not spell out.
+
+Decision.
+
+1. Seeds are `UInt64`, not arbitrary integers. `MT19937(seed:)` builds a one-word key below 2^32
+   and a two-word key above, as CPython does. Every seed upstream makes fits: the request seed is
+   32 bits and the derived seeds add `104729·k` or `7919·k` for small `k`. `MT19937(key:)` takes
+   the words directly for anything else.
+2. `SeedDerivation.seed(for:)` returns the 32-bit seed as `UInt64` so that `groupSeed` and
+   `sampleSeed` need no conversion. The API is `seedKey(state:questions:images:)`, which takes
+   the parts `ImageValidation` returned, then `seedBytes(for:)` and `seed(for:)`, each taking the
+   key.
+3. `PythonRandom.getrandbits` supports 1 to 64 bits and stops with a precondition failure
+   outside that range; `randrange` requires `n > 0`, where Python raises `ValueError`. Upstream
+   only calls `randrange(262144)`.
+4. SHA-256 is a pure Swift `OpenJevCore.SHA256` so the core stays Foundation-only on Linux. It is
+   public, so a file that also imports CryptoKit must qualify the name.
+5. The rows of `seeds.json`'s `upstream_only` are not tested: their bodies need Python's lenient
+   `json.loads`, which `JSONParser` does not reproduce (D-016).
+6. CPython (PSF-2.0) and the MT19937 reference code (BSD-3-Clause) it is built on are listed in
+   `THIRD_PARTY.md`, and `MT19937.swift` keeps the reference code's notice.
+
+Status. Proposed with issue #15.
