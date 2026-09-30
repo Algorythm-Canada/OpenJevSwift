@@ -8,6 +8,9 @@ import OpenJevCore
 /// Upstream's `Settings`, for everything that is not vLLM-specific: the same names, defaults and
 /// startup validation, so deployment documentation and compose files transfer (decision D-013).
 ///
+/// The fields are constants, as upstream's frozen dataclass is: a value exists only once the
+/// checks have passed, so no later change can reach an engine's preconditions.
+///
 /// The library never reads the process environment. The CLI passes its environment to
 /// ``init(environment:)``; everything else uses the memberwise initializer, whose arguments all
 /// default to upstream's values. Both refuse the values upstream refuses, with upstream's
@@ -26,68 +29,68 @@ public struct ServerSettings: Sendable, Hashable {
     }
 
     /// The address to bind, `OPENJEV_HOST`.
-    public var host: String
+    public let host: String
     /// The port to bind, `OPENJEV_PORT`.
-    public var port: Int
+    public let port: Int
     /// The backend to load, `OPENJEV_BACKEND`: `mlx` or an encoder model's backend name.
-    public var backend: String
+    public let backend: String
     /// The MLX weights and tokenizer, `OPENJEV_MLX_MODEL`.
-    public var mlxModel: String
+    public let mlxModel: String
     /// The longest prompt in tokens on MLX, `OPENJEV_MLX_MAX_PROMPT`.
-    public var mlxMaxPrompt: Int
+    public let mlxMaxPrompt: Int
     /// The MLX buffer pool ceiling in GB, `OPENJEV_MLX_CACHE_LIMIT_GB`. `nil` leaves MLX alone;
     /// 0 disables the cache, which is a real choice and not the same as leaving it unset.
-    public var mlxCacheLimitGB: Double?
+    public let mlxCacheLimitGB: Double?
     /// The prefill cache size in entries, `OPENJEV_MLX_PROMPT_CACHE`.
-    public var mlxPromptCache: Int
+    public let mlxPromptCache: Int
     /// The canvas length in tokens, `OPENJEV_CANVAS`.
-    public var canvas: Int
+    public let canvas: Int
     /// The canvas width rounding, `OPENJEV_CANVAS_STEP`.
-    public var canvasStep: Int
+    public let canvasStep: Int
     /// Reads in flight at once, `OPENJEV_MAX_INFLIGHT`.
-    public var maxInflight: Int
+    public let maxInflight: Int
     /// Decisions waiting before a 529, `OPENJEV_MAX_QUEUE`.
-    public var maxQueue: Int
+    public let maxQueue: Int
     /// Questions per request before a 400, `OPENJEV_MAX_QUESTIONS`.
-    public var maxQuestions: Int
+    public let maxQuestions: Int
     /// The request body cap before a 413, `OPENJEV_MAX_BODY_BYTES`.
-    public var maxBodyBytes: Int
+    public let maxBodyBytes: Int
     /// Seconds before a forwarded request is a 503, `OPENJEV_FORWARD_TIMEOUT`.
-    public var forwardTimeout: Double
+    public let forwardTimeout: Double
     /// The Bearer token clients must send, `OPENJEV_API_KEY`; empty means no key is required.
-    public var apiKey: String
+    public let apiKey: String
     /// The `X-Origin-Secret` a front proxy sends, `OPENJEV_ORIGIN_SECRET`; empty means none.
-    public var originSecret: String
+    public let originSecret: String
     /// The entropy above which a group is re-read, `OPENJEV_AUTO_THRESHOLD`.
-    public var autoThreshold: Double
+    public let autoThreshold: Double
     /// The most reads of one group, `OPENJEV_AUTO_MAX`.
-    public var autoMax: Int
+    public let autoMax: Int
     /// Images per request, `OPENJEV_MAX_IMAGES`.
-    public var maxImages: Int
+    public let maxImages: Int
     /// Bytes per decoded image, `OPENJEV_MAX_IMAGE_BYTES`.
-    public var maxImageBytes: Int
+    public let maxImageBytes: Int
     /// Generations in flight at once, `OPENJEV_GEN_MAX_INFLIGHT`.
-    public var genMaxInflight: Int
+    public let genMaxInflight: Int
     /// Generations waiting before a 529, `OPENJEV_GEN_MAX_QUEUE`.
-    public var genMaxQueue: Int
+    public let genMaxQueue: Int
     /// The longest generation in tokens, `OPENJEV_GEN_MAX_TOKENS`.
-    public var genMaxTokens: Int
+    public let genMaxTokens: Int
     /// Whether to warm the model up before serving, `OPENJEV_WARMUP`; anything but `0` is true.
-    public var warmup: Bool
+    public let warmup: Bool
     /// The Laya checkpoint, `OPENJEV_LAYA_MODEL`.
-    public var layaModel: String
+    public let layaModel: String
     /// The Verdict checkpoint, `OPENJEV_VERDICT_MODEL`.
-    public var verdictModel: String
+    public let verdictModel: String
     /// The device an encoder runs on, `OPENJEV_DEVICE`; empty picks the default.
-    public var device: String
+    public let device: String
     /// Questions per encoder batch, `OPENJEV_ENCODER_BATCH`.
-    public var encoderBatch: Int
+    public let encoderBatch: Int
     /// Other System One models served by other OpenJev servers, `OPENJEV_MODEL_ROUTES`
     /// (`name=url,name=url`), in the order given. A request for one of them is passed through
     /// unchanged; the forwarding itself is issue #38's.
-    public var modelRoutes: OrderedMap<String>
+    public let modelRoutes: OrderedMap<String>
     /// The log level, `OPENJEV_LOG_LEVEL`.
-    public var logLevel: LogLevel
+    public let logLevel: LogLevel
 
     /// Creates settings; every argument defaults to upstream's value.
     ///
