@@ -410,3 +410,34 @@ Decision.
    `THIRD_PARTY.md`, and `MT19937.swift` keeps the reference code's notice.
 
 Status. Proposed with issue #15.
+
+## D-024 Tokenizer protocol and labels: where the port goes beyond or differs from the issue text
+
+Context. Issue #12 defines the core's tokenizer protocol, ports `Engine._single_token_labels` and
+exposes the engine's marker sequences, with a replay tokenizer for the tests. A few choices were
+needed that the issue does not spell out, and the protocol differs from the issue's sketch.
+
+Decision.
+
+1. `DecisionTokenizer` is `encode(_:addSpecialTokens:) throws`, `decode(_:skipSpecialTokens:)
+   throws` and `chatPromptIDs(system:user:thinking:) throws`. The issue's `encode` and `decode`
+   do not throw and `decode` has no option; every method throws here so a replay tokenizer can
+   refuse an unrecorded input instead of returning wrong ids, and `skipSpecialTokens` mirrors the
+   corpus's two recorded decodes. `IDs` follows Swift's acronym casing. Errors are a
+   `TokenizerError` struct with a message.
+2. `LabelDiscovery.choiceLabels(using:)` returns a `LabelSet` with the labels and the single id
+   of each, which the template and read code need. `LabelDiscovery` also holds `prefix`,
+   `candidates`, `maxChoices` (255), `noulLabels` and `scoreLabels`. The schema builder's noul
+   labels now read `noulLabels`; its score labels stay `String(i)` because `maxScoreLevels` is
+   configurable, and at the default of 10 they equal `scoreLabels`.
+3. `EngineTokens.turnClose` is 106 and is documented as `<turn|>`, which it is in this
+   vocabulary; upstream's docs name it after `<end_of_turn>`, which is not a token here
+   (`Fixtures/tokenizer/special_tokens.json`). The marker texts are exposed as constants beside
+   the encoded sequences.
+4. The test-only `FixtureTokenizer` compares texts by their UTF-8 bytes, so NFC and NFD spellings
+   stay distinct as in Python. `encode` without special tokens tries `engine_encodings.json`
+   before `corpus.json`; with special tokens and for `decode` only the corpus is recorded.
+5. The schema fixture test builds with the labels discovered through `FixtureTokenizer` and
+   checks they equal `labels.json`, so the schemas tests exercise discovery end to end.
+
+Status. Proposed with issue #12.

@@ -45,10 +45,14 @@ struct QuestionSchemaTests {
     @Test(
         "Every recorded schema and schema error is reproduced",
         .enabled(
-            if: UpstreamFixtures.exists("schemas/schemas.json", "labels.json"),
+            if: UpstreamFixtures.exists("schemas/schemas.json", "labels.json")
+                && FixtureTokenizer.exists,
             UpstreamFixtures.missingMessage))
     func recordedSchemas() throws {
-        let labels = try UpstreamFixtures.choiceLabels()
+        // The labels the engine would discover from the tokenizer, which must be the recorded
+        // ones.
+        let labels = try LabelDiscovery.choiceLabels(using: FixtureTokenizer.shared).labels
+        #expect(labels == (try UpstreamFixtures.choiceLabels()))
         #expect(labels.count == 255)
         let cases = try UpstreamFixtures.cases("schemas/schemas.json")
         var failures: [String] = []
