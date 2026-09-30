@@ -282,11 +282,10 @@ And took this long:
   key is the compiler's build identifier, the macOS build system and the hash of
   `Package.resolved`, so a new toolchain or a dependency change starts from an empty directory.
   The iOS cache therefore saves the clone, not the compiling, and the job takes about ten minutes
-  either way; caching its build products would mean caching gigabytes of MLX intermediates. A
+  either way. Caching its build products would mean caching gigabytes of MLX intermediates. A
   cache that `main` saved serves every pull request; one that a pull request saved serves only
-  that pull request. The fixtures job
-  caches pip downloads, keyed on `requirements.txt`, and the tokenizer download, keyed on the
-  tokenizer revision. Its scheduled runs skip both caches: `huggingface_hub` serves a cached
+  that pull request. The fixtures job caches pip downloads, keyed on `requirements.txt`, and the
+  tokenizer download, keyed on the tokenizer revision. Its scheduled runs skip both caches: `huggingface_hub` serves a cached
   revision without asking the Hub, so only a fresh download shows that the pins can still be
   fetched and installed.
 - **Superseded runs.** A newer push to a pull request cancels the run it replaces. Every commit on
