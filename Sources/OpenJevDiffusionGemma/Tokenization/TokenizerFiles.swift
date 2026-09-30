@@ -7,7 +7,8 @@ import Foundation
 /// pipeline), `tokenizer_config.json` (the special token names) and `chat_template.jinja` (the
 /// Gemma 4 chat template, which `tokenizer_config.json` does not embed). `config.json` is the
 /// model configuration and is optional here. The directory is validated once, when the value is
-/// created, so a missing file is reported by name before any loading starts.
+/// created, so a missing file is reported by name before any loading starts, and the locations
+/// are immutable afterwards so they always describe one validated directory.
 public struct TokenizerFiles: Sendable, Hashable {
     /// The file names a tokenizer directory must hold.
     public static let requiredNames = [
@@ -15,15 +16,15 @@ public struct TokenizerFiles: Sendable, Hashable {
     ]
 
     /// The directory the files were found in.
-    public var directory: URL
+    public let directory: URL
     /// `tokenizer.json`.
-    public var tokenizerData: URL
+    public let tokenizerData: URL
     /// `tokenizer_config.json`.
-    public var tokenizerConfig: URL
+    public let tokenizerConfig: URL
     /// `chat_template.jinja`.
-    public var chatTemplate: URL
+    public let chatTemplate: URL
     /// `config.json`, when the directory has one.
-    public var modelConfig: URL?
+    public let modelConfig: URL?
 
     /// Locates the files in `directory`.
     ///

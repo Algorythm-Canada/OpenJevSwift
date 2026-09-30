@@ -17,5 +17,6 @@ Read in order the first time. Later, each document stands alone.
 minimal reproductions of anything that differed. The decision each one feeds is in
 06-decisions.md.
 
-All findings date from 2026-09-29. Upstream projects referenced here move quickly; pinned
-revisions are listed in [../THIRD_PARTY.md](../THIRD_PARTY.md).
+The numbered documents' findings date from 2026-09-29; each spike outcome under spikes/ carries
+its own date. Upstream projects referenced here move quickly; pinned revisions are listed in
+[../THIRD_PARTY.md](../THIRD_PARTY.md).

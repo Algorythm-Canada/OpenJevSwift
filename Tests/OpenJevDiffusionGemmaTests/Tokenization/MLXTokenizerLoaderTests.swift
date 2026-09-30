@@ -18,15 +18,31 @@ import Tokenizers
     "mlx-swift-lm tokenizer loader path",
     .enabled(if: TokenizerFixtures.available, TokenizerFixtures.missingMessage))
 struct MLXTokenizerLoaderTests {
+    /// The macro path is loaded and measured before the direct tokenizer is touched, so when
+    /// this test runs alone in a fresh process the figures are a cold load, comparable with
+    /// `TokenizerParityTests/loads()` run alone. In a full run they are a warm second load.
     @Test("The MLXHuggingFace loader gives the same ids and text as the direct loader")
     func sameResults() async throws {
-        let direct = try await TokenizerFixtures.tokenizer()
         let loader = #huggingFaceTokenizerLoader()
+        let before = ProcessMemory.current()
         let clock = ContinuousClock()
         let start = clock.now
         let bridged = try await loader.load(from: TokenizerFixtures.tokenizerDirectory)
         let wallTime = clock.now - start
+        let after = ProcessMemory.current()
         #expect(String(describing: type(of: bridged)).contains("TokenizerBridge"))
+        #expect(wallTime < .seconds(30), "loading took \(wallTime)")
+        SpikeReport.record(
+            "tokenizer-load",
+            """
+            mlx-swift-lm #huggingFaceTokenizerLoader() load wall time: \(wallTime)
+            resident before: \(ProcessMemory.megabytes(before.residentBytes))
+            resident after: \(ProcessMemory.megabytes(after.residentBytes))
+            resident added: \(ProcessMemory.megabytes(after.residentBytes - before.residentBytes))
+            peak resident (ru_maxrss): \(ProcessMemory.megabytes(after.peakResidentBytes))
+            type: \(type(of: bridged))
+            """)
+        let direct = try await TokenizerFixtures.tokenizer()
 
         let rows = try TokenizerFixtures.cases("tokenizer/corpus.json")
         var disagreements: [String] = []
@@ -73,10 +89,6 @@ struct MLXTokenizerLoaderTests {
                 #expect(ids == expected, "\(row["name"]?.stringValue ?? "") \(key)")
             }
         }
-        SpikeReport.record(
-            "tokenizer-load",
-            "mlx-swift-lm #huggingFaceTokenizerLoader() second load wall time: \(wallTime) "
-                + "(same process, after the direct load); type \(type(of: bridged))")
     }
 
     /// The two decode departures docs/spikes/tokenizer-parity.md records, as swift-transformers

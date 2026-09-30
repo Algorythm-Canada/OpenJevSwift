@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import OpenJevCore
 import OpenJevDiffusionGemma
@@ -119,31 +120,73 @@ enum TokenizerFixtures {
     }
 }
 
-/// Writes the figures the spike report needs to a file under the temporary directory, so they
-/// can be read after a test run without parsing the test log. The directory is printed once.
+/// Writes the figures the spike report needs to files under the temporary directory, so they
+/// can be read after a test run without parsing the test log.
+///
+/// Each test process writes to its own directory, named after its process id and start time,
+/// so one directory holds exactly one run and never mixes with an earlier one. Appends are
+/// serialized with a lock because Swift Testing runs tests in parallel.
 enum SpikeReport {
-    /// The directory the reports are written to.
-    static let directory = URL(fileURLWithPath: NSTemporaryDirectory())
-        .appendingPathComponent("openjev-spikes")
+    /// The directory this process writes to: `openjev-spikes/<pid>-<start time>` under the
+    /// temporary directory.
+    static let directory: URL = {
+        let process = ProcessInfo.processInfo
+        let started = Int(Date().timeIntervalSince1970)
+        return URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("openjev-spikes")
+            .appendingPathComponent("\(process.processIdentifier)-\(started)")
+    }()
+
+    /// Serializes appends from parallel tests.
+    private static let lock = NSLock()
 
     /// Appends `text` to `name`.txt in the report directory.
     static func record(_ name: String, _ text: String) {
+        lock.lock()
+        defer { lock.unlock() }
         do {
             try FileManager.default.createDirectory(
                 at: directory, withIntermediateDirectories: true)
             let url = directory.appendingPathComponent("\(name).txt")
-            let handle: FileHandle
-            if FileManager.default.fileExists(atPath: url.path) {
-                handle = try FileHandle(forWritingTo: url)
-                try handle.seekToEnd()
-            } else {
+            if !FileManager.default.fileExists(atPath: url.path) {
                 try Data().write(to: url)
-                handle = try FileHandle(forWritingTo: url)
             }
+            let handle = try FileHandle(forWritingTo: url)
             defer { try? handle.close() }
+            try handle.seekToEnd()
             try handle.write(contentsOf: Data((text + "\n").utf8))
         } catch {
             print("SpikeReport: could not write \(name): \(error)")
         }
+    }
+}
+
+/// The test process's memory use, read from the kernel, for measuring a load the module does
+/// not measure itself (the mlx-swift-lm loader path).
+struct ProcessMemory {
+    /// Resident memory in bytes, `mach_task_basic_info.resident_size`.
+    var residentBytes: Int
+    /// Peak resident memory in bytes, `rusage.ru_maxrss`, which macOS reports in bytes.
+    var peakResidentBytes: Int
+
+    /// The current figures. A failed kernel call gives zero for its figure.
+    static func current() -> ProcessMemory {
+        var usage = rusage()
+        let peak = getrusage(RUSAGE_SELF, &usage) == 0 ? Int(usage.ru_maxrss) : 0
+        var info = mach_task_basic_info()
+        var count = mach_msg_type_number_t(
+            MemoryLayout<mach_task_basic_info>.size / MemoryLayout<natural_t>.size)
+        let result = withUnsafeMutablePointer(to: &info) { pointer in
+            pointer.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), $0, &count)
+            }
+        }
+        let resident = result == KERN_SUCCESS ? Int(info.resident_size) : 0
+        return ProcessMemory(residentBytes: resident, peakResidentBytes: peak)
+    }
+
+    /// `bytes` as megabytes with one decimal.
+    static func megabytes(_ bytes: Int) -> String {
+        String(format: "%.1f MB", Double(bytes) / (1024 * 1024))
     }
 }

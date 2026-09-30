@@ -55,9 +55,11 @@ run alone):
 | Load wall time | 3.6 s (3.6 to 3.8 s over four runs) |
 | Resident memory added by the load | 204 MB (175 to 224 MB over runs sharing the process with other tests) |
 | Peak resident of the process after loading | 386 MB |
-| Second load in the same process, through mlx-swift-lm's macro | 3.6 s |
+| mlx-swift-lm `#huggingFaceTokenizerLoader()` path, cold, run alone in a fresh process (`MLXTokenizerLoaderTests/sameResults()`): wall time | 3.8 s |
+| The same: resident memory added, peak resident | 236 MB, 386 MB |
+| The same path as a second load in a process that already holds the direct tokenizer | 3.6 s |
 
-The time is the whole of `LanguageModelConfigurationFromHub` plus `PreTrainedTokenizer.init`:
+The two paths cost the same, as expected of the same code. The time is the whole of `LanguageModelConfigurationFromHub` plus `PreTrainedTokenizer.init`:
 parsing the 32 MB JSON with yyjson into `Config` values, then building the vocabulary, merges
 and added-token structures for 262,144 entries. It is paid once per process. Where the time
 goes inside was not profiled; if start-up matters later, that is the place to look.
@@ -77,7 +79,8 @@ the tests (`MLXTokenizerLoaderTests`). The macro expands to a `TokenizerLoader` 
 private `TokenizerBridge` struct that forwards `encode`, `decode`, `convertTokenToId` and
 `applyChatTemplate`. It gives the same ids as the direct loader for every corpus text and
 every chat prompt, the same decodes except the three trailing-byte rows, and the type name
-`TokenizerBridge`. OpenJevSwift will not use it, because:
+`TokenizerBridge`. Loaded cold in a fresh process it takes 3.8 s and 236 MB, the same as the
+direct path within run-to-run noise. OpenJevSwift will not use it, because:
 
 - it hides the upstream `Tokenizers.Tokenizer`, so the configuration cannot be adjusted and
   the object cannot be shared with code that needs the `Tokenizers` API;

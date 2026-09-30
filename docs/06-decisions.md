@@ -137,8 +137,9 @@ Three corpus decodes (`"\0"`, `"\u{2028}"`, `"\u{10FFFF}"`, each only byte token
 before the adapter's decode fix, none after. Encoding never mismatched.
 
 Load: 3.6 s wall time for the 32 MB `tokenizer.json`, 204 MB of resident memory added, 386 MB
-peak resident for a process that had loaded nothing else (Apple silicon, macOS 27). Paid once
-per process.
+peak resident for a process that had loaded nothing else (Apple silicon, macOS 27); the
+mlx-swift-lm macro path loaded cold the same way costs 3.8 s, 236 MB added and the same peak.
+Paid once per process.
 
 Tokenizer entry point: `SwiftTransformersTokenizer.load(from:)` builds
 `PreTrainedTokenizer(tokenizerConfig:tokenizerData:)` from
