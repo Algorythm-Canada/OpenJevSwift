@@ -163,6 +163,8 @@ class CoreMLRunner:
         self.loaded = {}
         if kind == "enumerated":
             self.loaded[None] = ct.models.CompiledMLModel(self.compiled, compute_units=compute_units)
+        # compile_model, and for an enumerated package its load; a multifunction package loads each
+        # function in model(), when a batch first needs it.
         self.load_seconds = time.perf_counter() - started
         # coremltools 9.0 can release an input's buffer from a Core ML thread after predict
         # returns, without the Python lock, which crashed the interpreter once in a multifunction

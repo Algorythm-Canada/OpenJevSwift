@@ -39,20 +39,23 @@ public struct PackageSpec: Codable, Sendable {
     }
 
     /// Every package the converters write.
-    public static let all: [PackageSpec] = [
-        .verdict("verdict-e17-fp16", kind: .enumerated),
-        .verdict("verdict-e17-fp32", kind: .enumerated),
-        .verdict("verdict-m18-fp16", kind: .multifunction),
-        .laya("laya-e17-fp16", kind: .enumerated),
-        .laya("laya-m18-fp16", kind: .multifunction),
-        // int8 weights, float16 computation (convert_*.py --only ...-w8).
-        .verdict("verdict-m18-w8", kind: .multifunction),
-        .laya("laya-m18-w8", kind: .multifunction),
-        // One program for one fixed shape (convert_laya.py --only laya-f18-b1s128-fp16, ...); the
-        // harness measures the questions that fit.
-        .laya("laya-f18-b1s128-fp16", kind: .enumerated, batches: [1], lengths: [128]),
-        .laya("laya-f18-b1s1024-fp16", kind: .enumerated, batches: [1], lengths: [1024]),
-    ]
+    public static let all: [PackageSpec] =
+        [
+            .verdict("verdict-e17-fp16", kind: .enumerated),
+            .verdict("verdict-e17-fp32", kind: .enumerated),
+            .verdict("verdict-m18-fp16", kind: .multifunction),
+            .laya("laya-e17-fp16", kind: .enumerated),
+            .laya("laya-m18-fp16", kind: .multifunction),
+            // int8 weights, float16 computation (convert_*.py --only ...-w8).
+            .verdict("verdict-m18-w8", kind: .multifunction),
+            .laya("laya-m18-w8", kind: .multifunction),
+        ]
+        // One program for one fixed shape, batch 1 (convert_laya.py --only
+        // laya-f18-b1s128-fp16, ...); the harness measures the questions that fit.
+        + layaLengths.map { length in
+            PackageSpec.laya(
+                "laya-f18-b1s\(length)-fp16", kind: .enumerated, batches: [1], lengths: [length])
+        }
 
     public static func named(_ name: String) -> PackageSpec? {
         all.first { $0.name == name }

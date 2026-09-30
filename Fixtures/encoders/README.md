@@ -54,8 +54,8 @@ revisions.
 
 Verdict refuses a choice with more than 24 options, so the fixture's 40-, 55-, 100- and
 255-option choices are cut to their first N options (`truncated_choices`). The corpus has 96
-nouls, 60 choices (2 to 24 options: every per_k entry of Verdict's calibrator, and 7, 12 and 20
-options, which fall back to its global temperature) and 44 scores (2, 3, 4 and 10 levels); 5 JSON
+nouls, 60 choices (2 to 24 options: every per_k entry of Verdict's calibrator that a question can
+reach, and 7, 12 and 20 options, which fall back to its global temperature) and 44 scores (2, 3, 4 and 10 levels); 5 JSON
 states; 7 states with non-ASCII text; 70 Verdict prompts over 512 tokens and 25 Laya sequences
 whose state is cut at 1,024 tokens.
 

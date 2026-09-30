@@ -70,10 +70,12 @@ def write(name, payload):
 # the engine (pydantic's model_dump: type, instructions, criteria). Verdict refuses a choice with
 # more than 24 options, so the fixture's 40-, 55-, 100- and 255-option choices are cut to their
 # first N options below; that covers 6, 7, 10, 12, 16, 20 and 24 options, which with the
-# fixture's own 2- to 8-option choices reaches every per_k entry in Verdict's calibrator (k is the
-# option count plus the abstention label) and three counts that fall back to its global
-# temperature. Forced questions (one option or one level) and the images request are left out:
-# neither model reads them.
+# fixture's own 2- to 8-option choices reaches every per_k entry in Verdict's calibrator that a
+# question can reach (k is the option count plus the abstention label, so k = 2 would take a
+# one-option choice, which is forced) and three counts that fall back to its global temperature.
+# Left out: the requests with forced questions (one option or one level, which neither model
+# reads), the images request, the requests the schema refuses, nouls_24 under its own state (it is
+# read under the long conversation below) and single_noul and nouls_30, plain nouls like nouls_8's.
 #
 # The fixture's states are short. Three long states are made from its text states, so that some
 # prompts truncate: a 16-message transcript (about 415 tokens: Verdict truncates it only with a

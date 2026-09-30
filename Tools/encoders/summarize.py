@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 ORDER = ["verdict-m18-fp16", "verdict-m18-w8", "verdict-e17-fp16", "verdict-e17-fp32", "laya-m18-fp16", "laya-m18-w8",
-         "laya-e17-fp16", "laya-f18-b1s128-fp16", "laya-f18-b1s1024-fp16"]
+         "laya-e17-fp16"] + [f"laya-f18-b1s{s}-fp16" for s in (128, 256, 512, 1024)]
 UNITS = ["cpuOnly", "cpuAndGPU", "cpuAndNeuralEngine", "all"]
 
 
@@ -101,14 +101,15 @@ def main():
           f"{device['processorCount']} cores, {device['physicalMemoryBytes'] / 2**30:.0f} GiB\n")
 
     print("| Package | Units | Compile s | Load s (first, second) | Batch 1 median ms | Batch 1 p95 ms "
-          "| Batch 16 per call median ms | Batch 16 p95 ms | Batch 16 per question ms | Peak footprint MB "
-          "| Thermal |")
-    print("|---|---|---|---|---|---|---|---|---|---|---|")
+          "| Batch 16 per call median ms | Batch 16 p95 ms | Batch 16 per question ms "
+          "| Peak footprint during reads MB | Process peak so far MB | Thermal |")
+    print("|---|---|---|---|---|---|---|---|---|---|---|---|")
     for r in rows:
         print(f"| {r['package']} | {r['units']} | {r['compileSeconds']:.1f} | {r['firstLoadSeconds']:.1f}, "
               f"{r['secondLoadSeconds']:.1f} | {ms(r['batch1'])} | {ms(r['batch1'], 'p95Ms')} | "
               f"{ms(r['batch16PerCall'])} | {ms(r['batch16PerCall'], 'p95Ms')} | {ms(r['batch16PerQuestion'])} | "
-              f"{mb(r['peakFootprintDuringRunBytes'])} | {r['thermalStart']} to {r['thermalEnd']} |")
+              f"{mb(r['peakFootprintDuringRunBytes'])} | {mb(r['lifetimePeakFootprintBytes'])} | "
+              f"{r['thermalStart']} to {r['thermalEnd']} |")
 
     print("\n| Package | Units | Batch 1 median ms at 128, 256, 512, 1024 tokens | Batch 16 median ms at 128, 256, 512, 1024 "
           "| Function loads s | Footprint after first call MB |")
@@ -137,8 +138,10 @@ def main():
 
     failures = folder / "failures.txt"
     if failures.exists() and failures.read_text().strip():
-        print("\nFailures:\n")
-        print(failures.read_text())
+        print("\nFailures, as `failures.txt` records them:\n")
+        print("```text")
+        print(failures.read_text().rstrip("\n"))
+        print("```")
 
 
 if __name__ == "__main__":

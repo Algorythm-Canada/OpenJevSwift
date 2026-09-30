@@ -47,7 +47,10 @@ public struct BenchmarkResult: Codable, Sendable {
     public let footprintAfterLoadBytes: UInt64
     /// The footprint after each shape's first call, with at most one function loaded.
     public let footprintAfterWarmupBytes: [String: UInt64]
+    /// The largest footprint sampled from the first warmup call to the end of the reads; compiling,
+    /// the test loads and the compute-plan query come before it.
     public let peakFootprintDuringRunBytes: UInt64
+    /// The process's peak footprint so far, earlier configurations of the same launch included.
     public let lifetimePeakFootprintBytes: UInt64
     public let thermalStart: String
     public let thermalEnd: String

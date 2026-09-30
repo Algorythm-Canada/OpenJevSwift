@@ -58,10 +58,9 @@ VARIANTS = {
 # are checked from Swift only: the Python check reads every question, and most fit only one of them.
 EXTRA = {
     "laya-m18-w8": ("multifunction", "w8", ct.target.iOS18, ["CPU_AND_GPU"]),
-    "laya-f18-b1s128-fp16": ("fixed", "fp16", ct.target.iOS18, []),
-    "laya-f18-b1s1024-fp16": ("fixed", "fp16", ct.target.iOS18, []),
+    **{f"laya-f18-b1s{s}-fp16": ("fixed", "fp16", ct.target.iOS18, []) for s in LENGTHS},
 }
-FIXED = {"laya-f18-b1s128-fp16": (1, 3, 128), "laya-f18-b1s1024-fp16": (1, 3, 1024)}
+FIXED = {f"laya-f18-b1s{s}-fp16": (1, 3, s) for s in LENGTHS}
 
 
 def head_layer(layer, h, padding):
@@ -250,7 +249,7 @@ def main():
         report["packages"] = dict(previous)
     for name, (kind, precision, target, units) in variants.items():
         path = common.MODELS / f"{name}.mlpackage"
-        entry = {"kind": kind, "precision": precision, "minimum_deployment_target": str(target).split(".")[-1]}
+        entry = {"kind": kind, "precision": precision, "minimum_deployment_target": target.name}
         if args.skip_convert and name in previous:
             entry.update({k: previous[name][k] for k in ("conversion_seconds", "operations") if k in previous[name]})
         if not args.skip_convert:
@@ -283,7 +282,9 @@ def main():
                 print(f"{name} {unit} batch {batch}: max |dp| {result['max_abs_probability_difference_unrounded']:.2e}, "
                       f"top labels {result['top_label_agreement']}, rounded {result['rounded_answers_identical']}",
                       flush=True)
-            entry.setdefault("python_load_seconds", {})[unit] = round(runner.load_seconds, 2)
+            # A multifunction package loads each function inside the reads, so only its compile is timed.
+            key = "python_load_seconds" if kind == "enumerated" else "python_compile_seconds"
+            entry.setdefault(key, {})[unit] = round(runner.load_seconds, 2)
             runner.close()
         report["packages"][name] = entry
         save(report)

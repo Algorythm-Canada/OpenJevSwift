@@ -19,90 +19,106 @@ against PyTorch on 200 questions, and measured on a MacBook Pro (M3 Max) and an 
   9.7 ms at 128 tokens, 17 ms at 256 and 46 ms at 512 (batch 1, median, starting from a cool
   phone), with the app at 106 MB. That is about 2.5 times faster than the iPhone's GPU, with a third
   of its memory.
-- **Laya on the iPhone uses the GPU.** FILL_LAYA_ANSWER
+- **Laya on the iPhone uses the Neural Engine, from one package per length.** A question takes 27.9
+  ms at 128 tokens, 57.1 at 256, 137 at 512 and 513 at 1,024, 2.6 to 2.9 times faster than on the
+  iPhone's GPU, with the app at 106 MB or less, loading included, against 855 MB. Core ML does not
+  load Laya's multifunction package wherever the Neural Engine is allowed, so each length is its own
+  845 MB package holding one fixed shape.
 - **On the Mac, both use the GPU.** Verdict takes 7.5 to 20 ms per question and Laya 15 to 82 ms.
 - **The packages need iOS 18.** Core ML's CPU backend crashes on the enumerated-shape packages iOS
-  17 would need, on macOS 27.0.1 and on iOS 27.0. iOS 18 multifunction packages avoid the crash, and
-  iOS 18 runs on the same iPhones as iOS 17.
-- **Long Laya reads should go to a server.** A 1,024-token Laya read takes 1.3 s on the iPhone, so
-  an app should send such reads to an OpenJev server over the same wire API.
+  17 would need, on macOS 27.0.1 and on iOS 27.0. iOS 18 multifunction packages avoid the crash, as
+  do packages with one fixed shape, and iOS 18 runs on the same iPhones as iOS 17.
+- **A server is the fallback.** A 1,024-token Laya read takes 0.51 s on the iPhone. An app whose
+  time budget is shorter, or that has not downloaded the package a read needs, sends the read to an
+  OpenJev server over the same wire API.
 
 ## Decision, per model
 
 | | Verdict | Laya |
 |---|---|---|
 | Runtime | Core ML | Core ML |
-| Package | `verdict-m18-fp16`: iOS 18 and macOS 15, one function per shape, float16, 306 MB | `laya-m18-fp16`: the same, 849 MB, with the two graph rewrites described under Conversion |
-| iPhone compute units | `.cpuAndNeuralEngine` | `.cpuAndGPU` FILL_LAYA_UNITS_NOTE |
+| Package | `verdict-m18-fp16`: iOS 18 and macOS 15, one function per shape, float16, 306 MB | iPhone: `laya-f18-b1s128-fp16` to `laya-f18-b1s1024-fp16`, one program for one shape each, float16, 845 MB each; Mac: `laya-m18-fp16`, one function per shape, 849 MB; both with the two graph rewrites described under Conversion |
+| iPhone compute units | `.cpuAndNeuralEngine` | `.cpuAndNeuralEngine` |
 | Mac compute units | `.cpuAndGPU` | `.cpuAndGPU` |
-| Batch | one question per call on the iPhone; up to 16 per call on the Mac GPU | one question per call |
+| Batch | one question per call on the iPhone; up to 16 per call on the Mac GPU | the same; the iPhone packages hold batch 1 only |
 | Avoid | `.all` (flaky loads) and the enumerated packages wherever a CPU segment runs (the crash) | the same |
-| iPhones | iOS 18 devices (XS, XR and later); measured on an A15 with 6 GB | the same; 855 MB at peak on the GPU |
-| Fallback | a server read over the same wire API when a request's reads exceed the app's time budget | a server read for states near 1,024 tokens, and whenever the app's budget is short |
+| iPhones | iOS 18 devices (XS, XR and later); measured on an A15 with 6 GB | the same; 106 MB at peak, loading included |
+| Fallback | a server read over the same wire API when a request's reads exceed the app's time budget | the same, and while the package for a length is not downloaded |
 
 Why not MLX: an MLX port needs 5 to 6 days and about 700 lines, and MLX cannot use the Neural
 Engine, which on the iPhone ran Verdict about 2.5 times faster than the GPU with a third of the
-memory. On the Mac and on the iPhone's GPU, Core ML already runs both models with no model code
-to maintain. Revisit MLX only if Core ML's packaging problems (below) reach the configurations
-chosen here.
+memory, and Laya 2.6 to 2.9 times faster in an eighth of it. On both machines Core ML already runs
+both models with no model code to maintain. Revisit MLX only if Core ML's packaging problems (below)
+reach the configurations chosen here.
 
 ### Packaging: download on first use, not the app bundle
 
-- **Size.** 306 MB and 849 MB are too large to put in every copy of an app, and an app update
-  should not be the only way to update a model.
-- **First launch.** After a download, `MLModel.compileModel(at:)` takes 1.2 s (Verdict) and 2.7 s
-  (Laya) on the iPhone. The first load of each function then takes 7 to 9 s for Verdict's batch-1
-  functions on the Neural Engine (14 to 43 s for its batch-16 functions) and 3 to 11 s for Laya's
-  on the GPU; once Core ML has cached them, a load takes about 0.2 s. An app should compile and
-  load the functions it will use right after the download, in the background, not on the first
-  read.
+- **Size.** Verdict's package is 306 MB; Laya's is 849 MB on the Mac and 845 MB per sequence length
+  on the iPhone, 3.4 GB for all four. That is too large to put in every copy of an app, and an app
+  update should not be the only way to update a model. An iPhone downloads Laya's package for a
+  length when a state first needs it, so an app that only sees short states downloads one.
+- **First launch.** After a download, `MLModel.compileModel(at:)` takes 1.2 s for Verdict and 1.7 to
+  1.9 s for each Laya package on the iPhone. The first load then takes 7 to 9 s for each of
+  Verdict's batch-1 functions on the Neural Engine (14 to 43 s for its batch-16 functions) and 33 to
+  56 s for a Laya package. Once Core ML has cached them a Verdict function loads in about 0.2 s, but
+  a second load of a Laya package in the same process still took 21 to 29 s. An app should compile
+  and load what it will use right after the download, in the background, and keep Laya loaded while
+  it runs.
 - **Where.** Publish each converted package with its SHA-256 next to the pinned checkpoint
   revisions (the organisation's Hugging Face account is one place; both checkpoints are
   Apache-2.0, so the packages carry the upstream license). Keep the compiled model in Application
   Support, excluded from backup.
-- **Which functions.** An iPhone that reads one question at a time needs only the batch-1
-  functions. Leaving the batch-16 functions out of the iOS package saves their compile time and
-  the memory they take when loaded.
+- **Which functions.** An iPhone that reads one question at a time needs only Verdict's batch-1
+  functions and Laya's batch-1 packages. Leaving the batch-16 functions out of Verdict's iOS
+  package saves their compile time and the memory they take when loaded.
 
 ## Measurements
 
 ### iPhone 13 Pro Max (A15, 6 GB, iOS 27.0), the numbers that decide it
 
-The settled run waited for the nominal thermal state before each configuration, and every
-configuration reached the serious state before it finished. Batch 1 is the median latency of a
-single question; batch 16 is the median latency of a call divided by 16.
+The settled run waited up to five or ten minutes for the nominal thermal state before each
+configuration, and every configuration that ran longer than two minutes reached the serious state
+before it finished. Batch 1 is the median latency of a single question; batch 16 is the median
+latency of a call divided by 16.
 
-| Model, compute units | Batch 1 ms at 128 | 256 | 512 | 1,024 | Batch 16 ms per question at 128 | at 512 | Peak footprint MB | Max probability difference | Top answers kept |
+| Model, compute units | Batch 1 ms at 128 | 256 | 512 | 1,024 | Batch 16 ms per question at 128 | at 512 | Peak footprint during the reads MB | Max probability difference | Top answers kept |
 |---|---|---|---|---|---|---|---|---|---|
 | Verdict, Neural Engine | 9.7 | 17.0 | 46.2 |  | 7.8 | 84.8 | 106 | 0.0073 | 197 of 200 |
 | Verdict, all | 13.8 | 18.5 | 47.0 |  | 7.8 | 97.8 | 176 | 0.0073 | 197 of 200 |
 | Verdict, CPU | 22.1 | 38.7 | 88.8 |  | 17.8 | 141.3 | 264 | 0.0106 | 197 of 200 |
 | Verdict, GPU | 26.8 | 49.1 | 107.8 |  | 23.2 | 173.9 | 289 | 0.0018 | 199 of 200 |
 | Laya, GPU | 81.7 | 151.7 | 385.2 | 1,346.4 | 146.3 | 619.6 | 855 | 0.0021 | 200 of 200 |
+| Laya, Neural Engine, one package per length | 27.9 | 57.1 | 137 | 513 |  |  | 82 | 0.0181 | 199 of 200 |
 
-The CPU beats the GPU on this phone for Verdict. The Neural Engine is fastest and lightest by far,
-and batching 16 questions pays only at 128 tokens (7.8 against 9.7 ms per question) and loses at
-512 (85 against 46 ms). The first run of the Verdict packages, without waiting for the phone to
+The CPU beats the GPU on this phone for Verdict. The Neural Engine is fastest and lightest by far
+for both models. For Verdict, batching 16 questions pays only at 128 tokens (7.8 against 9.7 ms per
+question) and loses at 512 (85 against 46 ms). Laya's Neural Engine row comes from four packages,
+each read by the questions that fit it; the 1,024-token package read all 200, and its one changed
+top answer is a three-way near tie (0.309, 0.311 and 0.312 in the reference). Before the reads,
+getting the model ready (compiling, two test loads, the compute-plan query and the load for the
+reads) took the process higher for Laya's packages: to 69, 79, 82 and 106 MB for the four lengths.
+Which of those steps adds the extra is not known. For Verdict's Neural Engine row and the GPU rows,
+the reads were the peak. The first run of the Verdict packages, without waiting for the phone to
 cool, is in [encoder-runtime/iphone](encoder-runtime/iphone/): later configurations of that run
 started in the serious or critical state and ran up to twice as slow.
 
 ### MacBook Pro (M3 Max, 128 GB, macOS 27.0.1)
 
-| Model, compute units | Batch 1 ms at 128 | 256 | 512 | 1,024 | Batch 16 ms per question at 128 | at 512 | Peak footprint MB | Max probability difference | Top answers kept |
+| Model, compute units | Batch 1 ms at 128 | 256 | 512 | 1,024 | Batch 16 ms per question at 128 | at 512 | Peak footprint during the reads MB | Max probability difference | Top answers kept |
 |---|---|---|---|---|---|---|---|---|---|
 | Verdict, GPU | 7.5 | 14.2 | 20.3 |  | 4.3 | 19.3 | 994 | 0.0014 | 199 of 200 |
 | Verdict, Neural Engine | 4.2 | 10.8 | 30.8 |  | 5.0 | 35.0 | 108 | 0.0076 | 198 of 200 |
 | Verdict, CPU | 14.2 | 26.3 | 50.8 |  | 8.9 | 49.8 | 287 | 0.0106 | 197 of 200 |
 | Laya, GPU | 14.7 | 23.4 | 42.0 | 82.1 | 8.6 | 35.9 | 2,856 | 0.0039 | 200 of 200 |
 | Laya, CPU | 36.9 | 69.7 | 141.2 | 354.2 | 23.8 | 143.8 | 9,948 | 0.0136 | 200 of 200 |
-| Laya, Neural Engine, one-shape packages | 10.7 |  |  | 209.4 |  |  | 64 and 87 | 0.0111 and 0.0147 | 93 of 94 and 200 of 200 |
+| Laya, Neural Engine, one package per length | 10.7 | 26.2 | 72.4 | 209.4 |  |  | 87 | 0.0147 | 200 of 200 |
 
 On the Mac the Neural Engine answers short prompts one at a time faster than the GPU (Verdict 4.2
 against 7.5 ms at 128 tokens; Laya 10.7 against 14.7 ms, from a package with only that shape), but
-the GPU is faster from 512 tokens (Laya 82 against 209 ms at 1,024), at batch 16, and closer to
-PyTorch. A server batches, so the Mac uses the GPU for both models. The GPU's footprint is large
-(1 GB for Verdict, 2.9 GB for Laya), which a server can afford; on the Neural Engine both models
-stay near 100 MB. The complete tables, for every package and compute-unit setting on both
+the GPU is faster from 256 or 512 tokens (Laya 82 against 209 ms at 1,024), at batch 16, and
+closer to PyTorch. A server batches, so the Mac uses the GPU for both models. The GPU's footprint
+is large (1 GB for Verdict, 2.9 GB for Laya), which a server can afford; on the Neural Engine both
+models stay near 100 MB. The complete tables, for every package and compute-unit setting on both
 machines, are at the end of this report.
 
 ## Where Core ML fails
@@ -118,15 +134,17 @@ machines, are at the end of this report.
 | `verdict-e17-fp32` | CPU, GPU, all | runs | runs |
 | `verdict-e17-fp32` | CPU and Neural Engine | crash in BNNS (SIGTRAP) | runs, all on the CPU |
 | `laya-m18-fp16` | CPU, GPU | runs | GPU runs; CPU not run |
-| `laya-m18-fp16` | CPU and Neural Engine, all | fails to load (the `functionName` error) | FILL_LAYA_M18_ANE_IOS |
+| `laya-m18-fp16` | CPU and Neural Engine, all | fails to load (the `functionName` error) | fails to load (the `functionName` error) about six minutes into the load, as estimated from the launch times |
+| `laya-f18-b1s*-fp16`, one shape each | CPU and Neural Engine | runs, 1,167 of 1,183 operations on the Neural Engine | runs, the same plan |
 | `laya-e17-fp16` | CPU | crash in BNNS (SIGSEGV) | not run |
 | `laya-e17-fp16` | GPU, all | runs | not run |
 | `laya-e17-fp16` | CPU and Neural Engine | crash in BNNS (SIGTRAP) after a 192 s first load | first load still compiling after 40 minutes (before the rewrites) and 22 minutes (after); both stopped by hand |
 
 The `functionName` error reads "`MLModelConfiguration`'s `.functionName` property must be `nil`
 unless the model type is ML Program", for a package that is an ML program. The iPhone's failure
-log is [encoder-runtime/iphone/failures.txt](encoder-runtime/iphone/failures.txt); the Mac's is
-[encoder-runtime/macos/failures.txt](encoder-runtime/macos/failures.txt).
+logs are [encoder-runtime/iphone/failures.txt](encoder-runtime/iphone/failures.txt) and
+[encoder-runtime/iphone-settled/failures.txt](encoder-runtime/iphone-settled/failures.txt); the
+Mac's is [encoder-runtime/macos/failures.txt](encoder-runtime/macos/failures.txt).
 
 ### Why the packages need iOS 18
 
@@ -153,6 +171,9 @@ enumerated shapes:
 | That layer's attention (SDPA) | enumerated | crash | crash | runs |
 | That layer's attention (eager) | enumerated | returns NaN | crash | runs |
 | That layer's MLP, LayerNorm or QKV projection | enumerated | runs | crash | runs |
+
+The reduced models were built with throwaway scripts that are not in the branch; `run_macos.sh
+verdict-e17-fp16` reproduces the crash itself.
 
 An iOS 18 multifunction package holds one fixed shape per function and stores the weights once,
 so it avoids the crash at no cost in size. iOS 18 runs on the same iPhones as iOS 17 (XS, XR and
@@ -192,12 +213,13 @@ iOS 18 and macOS 15.
 
 ## Reference outputs and the precision floor (part A)
 
-The corpus is 200 questions in 26 requests, all taken from Fixtures/schemas/schemas.json: 96
-nouls, 60 choices with 2 to 24 options, 44 scores with 2 to 10 levels, 5 JSON states, 7 states
-with non-ASCII text, and long states built from the fixture's own texts, so that 70 Verdict
-prompts pass 512 tokens and 25 Laya states are cut at 1,024. The fixture's choices over 24 options
-are cut to their first N options, which reaches every per_k entry of Verdict's calibrator and
-three option counts that use its global temperature.
+The corpus is 200 questions in 26 requests, all taken from Fixtures/schemas/schemas.json: 96 nouls,
+60 choices with 2 to 24 options, 44 scores with 2 to 10 levels, 5 JSON states, 7 states with
+non-ASCII text, and long states built from the fixture's own texts, so that 70 Verdict prompts pass
+512 tokens and 25 Laya states are cut at 1,024. The fixture's choices over 24 options are cut to
+their first N options, which reaches every per_k entry of Verdict's calibrator that a question can
+reach (k from 3 to 25; k = 2 would take a one-option choice, which is forced) and three option
+counts that use its global temperature.
 [Fixtures/encoders](../../Fixtures/encoders/README.md) describes every field.
 
 Upstream itself serves both models in bfloat16 on a GPU ("the answers match fp32's to within
@@ -285,7 +307,8 @@ Verdict:
 | verdict-m18-w8 | CPU_AND_GPU batch 1 | 0.313 | 2.61e-02 | 2.4e-03 | 199/200 |
 | verdict-m18-w8 | CPU_AND_GPU batch 16 | 0.294 | 2.49e-02 | 2.4e-03 | 199/200 |
 
-Laya, whose probabilities are compared before laya's rounding; the rounded answers can match only when a difference stays under 5e-5:
+Laya, whose probabilities are compared before laya's rounding; the rounded answers can match only
+when a difference stays under 5e-5:
 
 | Package | Units, batch | Max abs logit difference | Max abs probability difference | Mean abs probability difference | Top answers kept | Rounded answers identical |
 |---|---|---|---|---|---|---|
@@ -348,8 +371,9 @@ neither is a candidate.
    functions under `.all`, and every Laya function wherever the Neural Engine is allowed, on the
    Mac and on the iPhone, before and after the rewrites in point 6 (a package with only the four
    batch-1 functions, tried before them, failed the same way). A package that holds one program
-   for one fixed shape loads: after the rewrites, `laya-f18-b1s128-fp16` and `laya-f18-b1s1024-fp16`
-   run on the Mac's Neural Engine with 1,167 of their 1,183 operations there.
+   for one fixed shape loads: after the rewrites, `laya-f18-b1s128-fp16` to `laya-f18-b1s1024-fp16`
+   run on the Neural Engine of both machines, with 1,167 of their 1,183 operations there. Why the
+   multifunction package fails is not known; Verdict's loads.
 8. **coremltools' Python binding** crashed the interpreter once while releasing an input after a
    multifunction prediction (`_PyObject_Free` from `-[MLFeatureValue dealloc]` in
    `-[MLE5ExecutionStream _reset]`). The Python runner keeps its inputs alive, and the CPU and
@@ -417,26 +441,41 @@ cannot use the Neural Engine.
 
 Both:
 
-- **Runtime.** Core ML, from the multifunction float16 packages (`*-m18-fp16`), minimum iOS 18
-  and macOS 15, with the compute units in the decision table. The backend loads the function a
-  batch needs and keeps one or two loaded; each loaded function holds its own copy of the weights
-  once it has run.
+- **Runtime.** Core ML, float16, minimum iOS 18 and macOS 15, with the packages and compute units in
+  the decision table: the multifunction packages (`*-m18-fp16`) everywhere except Laya on the
+  iPhone, which uses one package per length (`laya-f18-b1s*-fp16`). A backend on a multifunction
+  package loads the function a batch needs and keeps one or two loaded; each loaded function holds
+  its own copy of the weights once it has run.
 - **Packaging.** Download on first use, verify the SHA-256, compile once with
-  `MLModel.compileModel(at:)`, keep the compiled model in Application Support, and load the batch-1
-  functions in the background after the download. On macOS the server uses the same packages.
+  `MLModel.compileModel(at:)`, keep the compiled model in Application Support, and load Verdict's
+  batch-1 functions and Laya's packages in the background after the download. On macOS the server
+  uses the multifunction packages of both models.
 - **Conversion.** `Tools/encoders/convert_verdict.py` and `convert_laya.py` are the pipeline;
   re-run them when a checkpoint revision, coremltools or the minimum OS moves, and gate a new
   package on the parity they print.
 - **Tokenizer.** swift-transformers 1.3.4 (`AutoTokenizer.from(modelFolder:)`) reproduces every
   recorded token id. Tokenizing costs 9 ms per question at the median on the iPhone; tokenizing a
   request's state once for all its questions would save most of it.
-- **Tests.** Fixtures/encoders is the oracle. Tokenization compares exactly, calibration within
-  1e-6, and model outputs with the tolerances measured here: a probability within 0.01 of float32
-  PyTorch and the top answer unchanged except on the listed near ties.
-- **Wire contract.** Unchanged from upstream's `EncoderEngine`: `build_schema`, the 400s for
-  images, steps, samples, think and sequential, at most 16 questions per pass, and
-  `usage.input_tokens` as the attention-mask sum.
-- **Batch.** One question per call on the iPhone; up to 16 on the Mac GPU.
+- **Tests.** Fixtures/encoders is the oracle. Tokenization compares exactly and calibration within
+  1e-6. Model outputs are compared with bounds in the style of D-014, set from what every Core ML
+  configuration measured here met, next to upstream's own bfloat16 serving:
+
+  | Against PyTorch float32, over the 200 questions | Bound | Core ML float16, every configuration measured | Upstream's bfloat16 |
+  |---|---|---|---|
+  | Largest probability difference | ≤ 0.02 | 0.0014 to 0.0181 | 0.0115 (Verdict), 0.0191 (Laya) |
+  | Mean probability difference | ≤ 0.003 | 0.0002 to 0.0018 | 0.0016, 0.0014 |
+  | Top answer unchanged where the reference's top-two margin is at least 0.01 | all | all (every change had a margin of 0.0021 or less) | all |
+
+  The encoders are not chaotic the way DiffusionGemma's read is, so a largest difference can be
+  bounded. #57 and #58 should check that planted bugs (a wrong temperature bucket, a missing
+  abstention drop, a marker off by one) break at least one bound.
+- **Contract.** Each backend is a `QuestionReadBackend` (D-029) behind `EncoderDecisionEngine`,
+  which keeps the schema, the refusals, the queue and the batching. `readBatch` receives up to
+  `OPENJEV_ENCODER_BATCH` (16) questions and returns their distributions with `inputTokens`, the
+  attention-mask sum, as upstream bills it. `maxChoices` is 24 for Verdict and 255 for Laya;
+  `maxPromptTokens` is `nil` for both, since they truncate.
+- **Batch.** On the iPhone a backend runs a batch one question per Core ML call, through the
+  batch-1 functions; on the Mac it runs the batch in one call, through the batch-16 functions.
 
 #57, Verdict:
 
@@ -460,7 +499,11 @@ Both:
 - Float16 moves probabilities by up to 0.004 on the GPU, so laya's 4-decimal answers differ from
   PyTorch's in most questions while the top answers hold; tests compare before rounding, and the
   rounding needs its own test against the recorded answers.
-- FILL_58_ANE
+- On the iPhone, load Laya's package for each length the app has downloaded, keep them loaded,
+  and read each question with the smallest that holds its sequence; a question longer than every
+  downloaded length goes to the server while the next package downloads. Re-test the multifunction
+  package on the Neural Engine with each iOS release: when it loads, one 849 MB download replaces
+  the four.
 
 ## Is #55 (JevK5 on an iPhone) worth trying next?
 
@@ -484,17 +527,23 @@ wire API.
 
 ## Problems and open items
 
-1. **Thermal state.** Every configuration took the phone from nominal to serious within one to
-   seven minutes, and the first run's later configurations started in the critical state and ran
-   up to twice as slow. Sustained reads on a phone will run slower than the settled numbers.
+1. **Thermal state.** Every configuration that ran longer than two minutes took the phone from
+   nominal to serious, and the first run's later configurations started in the critical state and
+   ran up to twice as slow. Sustained reads on a phone will run slower than the settled numbers.
 2. **Core ML bugs worth reporting to Apple** (Feedback Assistant; not filed): the BNNS crash with
    enumerated shapes (`run_macos.sh verdict-e17-fp16`), the misleading `functionName` load error
    (`run_macos.sh laya-m18-fp16`), the silent CPU fallback of the unmodified Laya program
    (`laya_ane_plan.py`), and the SIGKILL of `verdict-e17-fp16` under `.all` on the phone with no
    crash or jetsam report.
-3. **Laya on the Neural Engine.** FILL_OPEN_LAYA_ANE
-4. **One device.** Only an A15 with 6 GB was measured. Older supported iPhones (A12 to A14, 3 to
-   4 GB) are slower, and Laya's GPU path peaked at 855 MB.
+3. **Laya's multifunction package on the Neural Engine.** It fails to load on both machines, so
+   an iPhone needs one 845 MB package per length. The one-shape packages also load slowly: a
+   second load in the same process took 21 to 29 s, against 0.2 s for Verdict's functions.
+   #58 should measure the load after an app relaunch before it settles how the app keeps Laya
+   loaded.
+4. **One device.** Only an A15 with 6 GB was measured. Older supported iPhones (A12 to A14, 3 to 4
+   GB) are slower. Laya's Neural Engine path peaked at 106 MB, loading included, its GPU path at 855
+   MB, and during the GPU run the system killed five background daemons for memory
+   (`JetsamEvent-2026-09-30-165011.ips`).
 5. **The Laya rounding.** Swift must round Laya's probabilities to 4 decimals exactly as Python's
    `round` does before renormalising; #58 needs its own test for it against the recorded answers.
 
@@ -507,10 +556,21 @@ Tools/encoders/.venv/bin/python -m pip install -r Tools/encoders/requirements.tx
 Tools/encoders/.venv/bin/python Tools/encoders/reference.py
 Tools/encoders/.venv/bin/python Tools/encoders/convert_verdict.py
 Tools/encoders/.venv/bin/python Tools/encoders/convert_laya.py
+Tools/encoders/.venv/bin/python Tools/encoders/convert_laya.py --only laya-f18-b1s128-fp16,laya-f18-b1s256-fp16,laya-f18-b1s512-fp16,laya-f18-b1s1024-fp16
 swift test --package-path Tools/encoders/Harness
 Tools/encoders/run_macos.sh
 DEVELOPMENT_TEAM=<team> RESULTS_DIR=$PWD/docs/spikes/encoder-runtime/iphone-settled SETTLE=600 COOLDOWN=0 PASSES16=1 Tools/encoders/run_ios.sh <device id> verdict-m18-fp16:cpuAndNeuralEngine laya-m18-fp16:cpuAndGPU
+DEVELOPMENT_TEAM=<team> RESULTS_DIR=$PWD/docs/spikes/encoder-runtime/iphone-settled SETTLE=300 COOLDOWN=0 PASSES16=1 Tools/encoders/run_ios.sh <device id> laya-f18-b1s128-fp16:cpuAndNeuralEngine laya-f18-b1s256-fp16:cpuAndNeuralEngine laya-f18-b1s512-fp16:cpuAndNeuralEngine laya-f18-b1s1024-fp16:cpuAndNeuralEngine
 Tools/encoders/.venv/bin/python Tools/encoders/summarize.py docs/spikes/encoder-runtime/iphone-settled
+```
+
+`run_macos.sh` without arguments measures the five main packages under every compute-unit
+setting. The one-shape packages were measured on the Mac under `cpuAndNeuralEngine` only, with the
+harness command that `run_macos.sh` runs:
+
+```bash
+swift build --package-path Tools/encoders/Harness -c release --product encoder-harness
+"$(swift build --package-path Tools/encoders/Harness -c release --show-bin-path)/encoder-harness" --package laya-f18-b1s128-fp16 --units cpuAndNeuralEngine --root "$PWD" --output docs/spikes/encoder-runtime/macos/laya-f18-b1s128-fp16-cpuAndNeuralEngine.json
 ```
 
 [Tools/encoders/README.md](../../Tools/encoders/README.md) describes each step. The reference run
@@ -518,19 +578,28 @@ takes about 37 minutes, and the converters about 5 and 15.
 
 ## All results
 
+Generated by `Tools/encoders/summarize.py` from the result files. The peak footprint during reads
+is sampled from the first warmup call to the last read; the process peak so far also covers
+compiling and loading, and on the iPhone every earlier configuration of the same launch.
+
 ### iPhone, settled run
 
-Each configuration waited for the nominal thermal state before it started (`iphone-settled/`).
+Each configuration waited up to five or ten minutes for the nominal thermal state before it
+started (`iphone-settled/`); the thermal column shows the state at its start and its end.
 
 Device: iPhone14,3 (D64AP), Version 27.0 (Build 24A437), 6 cores, 6 GiB
 
-| Package | Units | Compile s | Load s (first, second) | Batch 1 median ms | Batch 1 p95 ms | Batch 16 per call median ms | Batch 16 p95 ms | Batch 16 per question ms | Peak footprint MB | Thermal |
-|---|---|---|---|---|---|---|---|---|---|---|
-| verdict-m18-fp16 | cpuOnly | 1.2 | 1.2, 0.0 | 83.5 | 90.8 | 2,004.1 | 2,381.1 | 125.3 | 264 | nominal to serious |
-| verdict-m18-fp16 | cpuAndGPU | 1.2 | 1.5, 0.1 | 103.8 | 114.2 | 2,715.6 | 5,217.0 | 169.7 | 289 | nominal to serious |
-| verdict-m18-fp16 | cpuAndNeuralEngine | 1.2 | 7.4, 0.2 | 42.5 | 51.6 | 1,350.1 | 1,465.9 | 84.5 | 106 | nominal to serious |
-| verdict-m18-fp16 | all | 1.1 | 6.2, 0.2 | 43.2 | 47.8 | 1,514.5 | 1,709.3 | 94.7 | 176 | nominal to serious |
-| laya-m18-fp16 | cpuAndGPU | 2.7 | 14.6, 0.2 | 299.3 | 1,380.9 | 9,987.5 | 24,491.9 | 624.2 | 855 | nominal to serious |
+| Package | Units | Compile s | Load s (first, second) | Batch 1 median ms | Batch 1 p95 ms | Batch 16 per call median ms | Batch 16 p95 ms | Batch 16 per question ms | Peak footprint during reads MB | Process peak so far MB | Thermal |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| verdict-m18-fp16 | cpuOnly | 1.2 | 1.2, 0.0 | 83.5 | 90.8 | 2,004.1 | 2,381.1 | 125.3 | 264 | 289 | nominal to serious |
+| verdict-m18-fp16 | cpuAndGPU | 1.2 | 1.5, 0.1 | 103.8 | 114.2 | 2,715.6 | 5,217.0 | 169.7 | 289 | 289 | nominal to serious |
+| verdict-m18-fp16 | cpuAndNeuralEngine | 1.2 | 7.4, 0.2 | 42.5 | 51.6 | 1,350.1 | 1,465.9 | 84.5 | 106 | 106 | nominal to serious |
+| verdict-m18-fp16 | all | 1.1 | 6.2, 0.2 | 43.2 | 47.8 | 1,514.5 | 1,709.3 | 94.7 | 176 | 855 | nominal to serious |
+| laya-m18-fp16 | cpuAndGPU | 2.7 | 14.6, 0.2 | 299.3 | 1,380.9 | 9,987.5 | 24,491.9 | 624.2 | 855 | 855 | nominal to serious |
+| laya-f18-b1s128-fp16 | cpuAndNeuralEngine | 1.9 | 33.5, 20.8 | 27.9 | 49.3 |  |  |  | 58 | 69 | nominal to fair |
+| laya-f18-b1s256-fp16 | cpuAndNeuralEngine | 1.7 | 34.2, 27.4 | 57.1 | 61.3 |  |  |  | 44 | 79 | nominal to serious |
+| laya-f18-b1s512-fp16 | cpuAndNeuralEngine | 1.7 | 34.2, 29.3 | 136.6 | 138.7 |  |  |  | 71 | 82 | nominal to serious |
+| laya-f18-b1s1024-fp16 | cpuAndNeuralEngine | 1.7 | 56.2, 28.2 | 512.7 | 560.7 |  |  |  | 82 | 106 | nominal to serious |
 
 | Package | Units | Batch 1 median ms at 128, 256, 512, 1024 tokens | Batch 16 median ms at 128, 256, 512, 1024 | Function loads s | Footprint after first call MB |
 |---|---|---|---|---|---|
@@ -539,6 +608,10 @@ Device: iPhone14,3 (D64AP), Version 27.0 (Build 24A437), 6 cores, 6 GiB
 | verdict-m18-fp16 | cpuAndNeuralEngine | 9.7, 17.0, 46.2, none | 125.6, 437.1, 1,356.4, none | b16_s128 14.0, b16_s256 43.1, b16_s512 38.8, b1_s128 0.2, b1_s256 7.1, b1_s512 9.1 | 43 to 102 |
 | verdict-m18-fp16 | all | 13.8, 18.5, 47.0, none | 124.5, 379.2, 1,565.3, none | b16_s128 11.8, b16_s256 42.0, b16_s512 45.8, b1_s128 0.2, b1_s256 9.2, b1_s512 14.6 | 54 to 126 |
 | laya-m18-fp16 | cpuAndGPU | 81.7, 151.7, 385.2, 1,346.4 | 2,340.6, 4,741.3, 9,913.5, 22,201.8 | b16_s1024 3.3, b16_s128 4.9, b16_s256 3.4, b16_s512 2.9, b1_s1024 9.0, b1_s128 8.0, b1_s256 11.4, b1_s512 10.2 | 74 to 601 |
+| laya-f18-b1s128-fp16 | cpuAndNeuralEngine | 27.9, none, none, none | none, none, none, none | main 19.6 | 57 to 57 |
+| laya-f18-b1s256-fp16 | cpuAndNeuralEngine | none, 57.1, none, none | none, none, none, none | main 22.9 | 44 to 44 |
+| laya-f18-b1s512-fp16 | cpuAndNeuralEngine | none, none, 136.6, none | none, none, none, none | main 17.1 | 68 to 68 |
+| laya-f18-b1s1024-fp16 | cpuAndNeuralEngine | none, none, none, 512.7 | none, none, none, none | main 30.4 | 74 to 74 |
 
 | Package | Units | Max abs probability difference (batch 1, 16) | Mean (batch 1) | Max abs logit difference | Top answers kept (batch 1, 16) | Non-finite | Tokenization | Planned cost by device |
 |---|---|---|---|---|---|---|---|---|
@@ -547,17 +620,25 @@ Device: iPhone14,3 (D64AP), Version 27.0 (Build 24A437), 6 cores, 6 GiB
 | verdict-m18-fp16 | cpuAndNeuralEngine | 7.35e-03, 8.19e-03 | 9.9e-04 | 0.227 | 197, 198 of 200 | 0, 0 | 200/200 | ANE 67%, CPU 33% |
 | verdict-m18-fp16 | all | 7.35e-03, 8.19e-03 | 9.9e-04 | 0.227 | 197, 198 of 200 | 0, 0 | 200/200 | ANE 75%, GPU 25% |
 | laya-m18-fp16 | cpuAndGPU | 2.14e-03, 2.14e-03 | 1.8e-04 | 0.022 | 200, 200 of 200 | 0, 0 | 200/200 | GPU 100% |
+| laya-f18-b1s128-fp16 | cpuAndNeuralEngine | 9.82e-03, not run | 7.2e-04 | 0.067 | 94, not run of 94 | 0, not run | 200/200 | ANE 99%, CPU 1% of operations |
+| laya-f18-b1s256-fp16 | cpuAndNeuralEngine | 1.32e-02, not run | 7.1e-04 | 0.081 | 98, not run of 99 | 0, not run | 200/200 | ANE 99%, CPU 1% of operations |
+| laya-f18-b1s512-fp16 | cpuAndNeuralEngine | 1.81e-02, not run | 6.6e-04 | 0.127 | 133, not run of 134 | 0, not run | 200/200 | ANE 99%, CPU 1% of operations |
+| laya-f18-b1s1024-fp16 | cpuAndNeuralEngine | 1.81e-02, not run | 6.7e-04 | 0.127 | 199, not run of 200 | 0, not run | 200/200 | ANE 99%, CPU 1% of operations |
 
-Failures:
+Failures, as `failures.txt` records them:
 
+```text
 launch 1 did not start (verdict-m18-fp16:cpuAndNeuralEngine,verdict-m18-fp16:cpuAndGPU,verdict-m18-fp16:cpuOnly,laya-m18-fp16:cpuAndGPU,verdict-m18-fp16:all,laya-e17-fp16:cpuAndNeuralEngine)
     ERROR: The application failed to launch. (com.apple.dt.CoreDeviceError error 10002 (0x2712))
            ----------------------------------------
                The operation couldn?t be completed. Invalid argument (NSPOSIXErrorDomain error 22 (0x16))
-laya-e17-fp16:cpuAndNeuralEngine: stopped by hand (SIGTERM) at 17:25, after 22 minutes in its first load with ANECompilerService compiling; no result; device report JetsamEvent-2026-09-30-165011.ips
+laya-e17-fp16:cpuAndNeuralEngine: stopped by hand (SIGTERM) at 17:25, after 22 minutes in its first load with ANECompilerService compiling; no result. The device kept no crash report for it; ANECompilerService.cpu_resource-2026-09-30-170833.ips records the compiler at 96% CPU for 94 s (no action taken). The script attached JetsamEvent-2026-09-30-165011.ips, which is from the laya-m18-fp16 cpuAndGPU configuration (16:48 to 16:56): memory pressure killed five system daemons, not the app
     Launched application with org.openjevswift.encoderharness bundle identifier.
     Waiting for the application to terminate...
     App terminated due to signal 15.
+HARNESS_ERROR laya-m18-fp16 cpuAndNeuralEngine: Error Domain=com.apple.CoreML Code=0 "`MLModelConfiguration`'s `.functionName` property must be `nil` unless the model type is ML Program." UserInfo={NSLocalizedDescription=`MLModelConfiguration`'s `.functionName` property must be `nil` unless the model type is ML Program.}
+HARNESS_ERROR laya-m18-fp16 all: Error Domain=com.apple.CoreML Code=0 "`MLModelConfiguration`'s `.functionName` property must be `nil` unless the model type is ML Program." UserInfo={NSLocalizedDescription=`MLModelConfiguration`'s `.functionName` property must be `nil` unless the model type is ML Program.}
+```
 
 ### iPhone, first run
 
@@ -565,18 +646,18 @@ Twelve Verdict configurations in one launch with 30-second pauses, and the Laya 
 
 Device: iPhone14,3 (D64AP), Version 27.0 (Build 24A437), 6 cores, 6 GiB
 
-| Package | Units | Compile s | Load s (first, second) | Batch 1 median ms | Batch 1 p95 ms | Batch 16 per call median ms | Batch 16 p95 ms | Batch 16 per question ms | Peak footprint MB | Thermal |
-|---|---|---|---|---|---|---|---|---|---|---|
-| verdict-m18-fp16 | cpuOnly | 1.1 | 1.4, 0.0 | 85.5 | 95.7 | 2,058.8 | 6,434.4 | 128.7 | 275 | serious to serious |
-| verdict-m18-fp16 | cpuAndGPU | 1.1 | 2.4, 0.1 | 106.6 | 140.6 | 2,566.6 | 2,601.0 | 160.4 | 367 | serious to serious |
-| verdict-m18-fp16 | cpuAndNeuralEngine | 1.2 | 6.9, 0.2 | 42.1 | 46.4 | 1,295.9 | 1,446.5 | 81.0 | 114 | nominal to serious |
-| verdict-e17-fp16 | cpuAndGPU | 0.7 | 1.4, 0.2 | 109.8 | 124.2 | 3,197.1 | 3,736.5 | 201.0 | 235 | serious to serious |
-| verdict-e17-fp16 | cpuAndNeuralEngine | 0.7 | 121.4, 0.1 | 65.7 | 80.0 | 1,558.5 | 1,811.3 | 97.4 | 90 | critical to critical |
-| verdict-e17-fp32 | cpuOnly | 1.3 | 8.0, 0.0 | 233.3 | 331.3 | 8,462.2 | 9,123.3 | 529.5 | 407 | critical to critical |
-| verdict-e17-fp32 | cpuAndGPU | 1.9 | 3.9, 0.4 | 254.7 | 336.5 | 4,698.3 | 4,891.7 | 293.6 | 400 | critical to critical |
-| verdict-e17-fp32 | cpuAndNeuralEngine | 3.0 | 8.8, 0.0 | 342.2 | 478.8 | 9,307.7 | 10,240.6 | 581.7 | 408 | critical to critical |
-| verdict-e17-fp32 | all | 1.3 | 3.8, 0.4 | 126.7 | 154.1 | 5,068.9 | 6,457.3 | 319.8 | 569 | critical to critical |
-| laya-m18-fp16 | cpuAndGPU | 1.8 | 16.4, 0.2 | 302.7 | 2,038.1 | 11,958.4 | 31,378.2 | 747.4 | 856 | fair to serious |
+| Package | Units | Compile s | Load s (first, second) | Batch 1 median ms | Batch 1 p95 ms | Batch 16 per call median ms | Batch 16 p95 ms | Batch 16 per question ms | Peak footprint during reads MB | Process peak so far MB | Thermal |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| verdict-m18-fp16 | cpuOnly | 1.1 | 1.4, 0.0 | 85.5 | 95.7 | 2,058.8 | 6,434.4 | 128.7 | 275 | 367 | serious to serious |
+| verdict-m18-fp16 | cpuAndGPU | 1.1 | 2.4, 0.1 | 106.6 | 140.6 | 2,566.6 | 2,601.0 | 160.4 | 367 | 367 | serious to serious |
+| verdict-m18-fp16 | cpuAndNeuralEngine | 1.2 | 6.9, 0.2 | 42.1 | 46.4 | 1,295.9 | 1,446.5 | 81.0 | 114 | 114 | nominal to serious |
+| verdict-e17-fp16 | cpuAndGPU | 0.7 | 1.4, 0.2 | 109.8 | 124.2 | 3,197.1 | 3,736.5 | 201.0 | 235 | 367 | serious to serious |
+| verdict-e17-fp16 | cpuAndNeuralEngine | 0.7 | 121.4, 0.1 | 65.7 | 80.0 | 1,558.5 | 1,811.3 | 97.4 | 90 | 569 | critical to critical |
+| verdict-e17-fp32 | cpuOnly | 1.3 | 8.0, 0.0 | 233.3 | 331.3 | 8,462.2 | 9,123.3 | 529.5 | 407 | 407 | critical to critical |
+| verdict-e17-fp32 | cpuAndGPU | 1.9 | 3.9, 0.4 | 254.7 | 336.5 | 4,698.3 | 4,891.7 | 293.6 | 400 | 400 | critical to critical |
+| verdict-e17-fp32 | cpuAndNeuralEngine | 3.0 | 8.8, 0.0 | 342.2 | 478.8 | 9,307.7 | 10,240.6 | 581.7 | 408 | 408 | critical to critical |
+| verdict-e17-fp32 | all | 1.3 | 3.8, 0.4 | 126.7 | 154.1 | 5,068.9 | 6,457.3 | 319.8 | 569 | 569 | critical to critical |
+| laya-m18-fp16 | cpuAndGPU | 1.8 | 16.4, 0.2 | 302.7 | 2,038.1 | 11,958.4 | 31,378.2 | 747.4 | 856 | 856 | fair to serious |
 
 | Package | Units | Batch 1 median ms at 128, 256, 512, 1024 tokens | Batch 16 median ms at 128, 256, 512, 1024 | Function loads s | Footprint after first call MB |
 |---|---|---|---|---|---|
@@ -604,8 +685,9 @@ Device: iPhone14,3 (D64AP), Version 27.0 (Build 24A437), 6 cores, 6 GiB
 | verdict-e17-fp32 | all | 1.83e-06, 1.81e-06 | 2.5e-07 | 2.6e-05 | 200, 200 of 200 | 0, 0 | 200/200 | GPU 100% |
 | laya-m18-fp16 | cpuAndGPU | 2.14e-03, 2.14e-03 | 1.8e-04 | 0.022 | 200, 200 of 200 | 0, 0 | 200/200 | GPU 100% |
 
-Failures:
+Failures, as `failures.txt` records them:
 
+```text
 # Written by Tools/encoders/run_ios.sh. The report names on three lines were corrected by hand:
 # the first version of the script picked the newest report by name, not by time.
 HARNESS_ERROR verdict-m18-fp16 all: Error Domain=com.apple.CoreML Code=0 "`MLModelConfiguration`'s `.functionName` property must be `nil` unless the model type is ML Program." UserInfo={NSLocalizedDescription=`MLModelConfiguration`'s `.functionName` property must be `nil` unless the model type is ML Program.}
@@ -622,27 +704,34 @@ laya-e17-fp16:cpuAndNeuralEngine: stopped by hand (SIGTERM) after 40 minutes in 
     Launched application with org.openjevswift.encoderharness bundle identifier.
     Waiting for the application to terminate...
     App terminated due to signal 15.
+```
 
 ### Mac
 
-One process per configuration (`macos/`). The first `verdict-e17-fp16` GPU run was disturbed (non-monotonic by length, in the fair thermal state) and was repeated on an idle machine; the file holds the repeat.
+One process per configuration (`macos/`). The first `verdict-e17-fp16` GPU run was disturbed
+(non-monotonic by length, in the fair thermal state) and was repeated on an idle machine; the file
+holds the repeat.
 
 Device: arm64 (Mac15,9), Version 27.0.1 (Build 26A434), 16 cores, 128 GiB
 
-| Package | Units | Compile s | Load s (first, second) | Batch 1 median ms | Batch 1 p95 ms | Batch 16 per call median ms | Batch 16 p95 ms | Batch 16 per question ms | Peak footprint MB | Thermal |
-|---|---|---|---|---|---|---|---|---|---|---|
-| verdict-m18-fp16 | cpuOnly | 0.6 | 1.3, 0.0 | 49.6 | 52.5 | 732.2 | 914.2 | 46.5 | 287 | nominal to nominal |
-| verdict-m18-fp16 | cpuAndGPU | 0.5 | 1.4, 0.1 | 16.1 | 23.7 | 277.6 | 352.7 | 17.3 | 994 | fair to nominal |
-| verdict-m18-fp16 | cpuAndNeuralEngine | 0.5 | 5.1, 0.2 | 30.7 | 32.4 | 559.0 | 578.2 | 34.9 | 108 | nominal to nominal |
-| verdict-e17-fp16 | cpuAndGPU | 0.1 | 1.6, 0.2 | 16.1 | 16.8 | 193.5 | 213.5 | 12.1 | 1,054 | nominal to nominal |
-| verdict-e17-fp16 | all | 0.1 | 5.6, 0.5 | 16.8 | 29.4 | 332.2 | 425.6 | 20.8 | 1,101 | fair to fair |
-| verdict-e17-fp32 | cpuOnly | 0.2 | 2.3, 0.0 | 129.8 | 182.7 | 2,064.6 | 2,183.5 | 129.7 | 468 | fair to fair |
-| verdict-e17-fp32 | cpuAndGPU | 0.1 | 2.2, 0.3 | 23.5 | 39.1 | 589.5 | 899.0 | 36.8 | 1,811 | fair to fair |
-| verdict-e17-fp32 | all | 0.2 | 3.1, 0.4 | 23.3 | 41.6 | 625.0 | 690.2 | 39.2 | 1,759 | fair to fair |
-| laya-m18-fp16 | cpuOnly | 0.9 | 3.4, 0.0 | 135.6 | 409.7 | 2,330.6 | 6,106.0 | 145.7 | 9,948 | fair to fair |
-| laya-m18-fp16 | cpuAndGPU | 0.9 | 3.2, 0.1 | 41.7 | 83.7 | 577.1 | 1,459.8 | 36.1 | 2,856 | nominal to nominal |
-| laya-e17-fp16 | cpuAndGPU | 0.2 | 3.2, 0.5 | 41.8 | 87.5 | 579.8 | 1,557.8 | 36.2 | 2,888 | fair to fair |
-| laya-e17-fp16 | all | 0.2 | 181.8, 0.1 | 74.4 | 214.0 | 1,240.7 | 4,181.0 | 77.5 | 861 | fair to nominal |
+| Package | Units | Compile s | Load s (first, second) | Batch 1 median ms | Batch 1 p95 ms | Batch 16 per call median ms | Batch 16 p95 ms | Batch 16 per question ms | Peak footprint during reads MB | Process peak so far MB | Thermal |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| verdict-m18-fp16 | cpuOnly | 0.6 | 1.3, 0.0 | 49.6 | 52.5 | 732.2 | 914.2 | 46.5 | 287 | 287 | nominal to nominal |
+| verdict-m18-fp16 | cpuAndGPU | 0.5 | 1.4, 0.1 | 16.1 | 23.7 | 277.6 | 352.7 | 17.3 | 994 | 994 | fair to nominal |
+| verdict-m18-fp16 | cpuAndNeuralEngine | 0.5 | 5.1, 0.2 | 30.7 | 32.4 | 559.0 | 578.2 | 34.9 | 108 | 114 | nominal to nominal |
+| verdict-e17-fp16 | cpuAndGPU | 0.1 | 1.6, 0.2 | 16.1 | 16.8 | 193.5 | 213.5 | 12.1 | 1,054 | 1,054 | nominal to nominal |
+| verdict-e17-fp16 | all | 0.1 | 5.6, 0.5 | 16.8 | 29.4 | 332.2 | 425.6 | 20.8 | 1,101 | 1,101 | fair to fair |
+| verdict-e17-fp32 | cpuOnly | 0.2 | 2.3, 0.0 | 129.8 | 182.7 | 2,064.6 | 2,183.5 | 129.7 | 468 | 468 | fair to fair |
+| verdict-e17-fp32 | cpuAndGPU | 0.1 | 2.2, 0.3 | 23.5 | 39.1 | 589.5 | 899.0 | 36.8 | 1,811 | 1,811 | fair to fair |
+| verdict-e17-fp32 | all | 0.2 | 3.1, 0.4 | 23.3 | 41.6 | 625.0 | 690.2 | 39.2 | 1,759 | 1,759 | fair to fair |
+| laya-m18-fp16 | cpuOnly | 0.9 | 3.4, 0.0 | 135.6 | 409.7 | 2,330.6 | 6,106.0 | 145.7 | 9,948 | 9,948 | fair to fair |
+| laya-m18-fp16 | cpuAndGPU | 0.9 | 3.2, 0.1 | 41.7 | 83.7 | 577.1 | 1,459.8 | 36.1 | 2,856 | 2,856 | nominal to nominal |
+| laya-e17-fp16 | cpuAndGPU | 0.2 | 3.2, 0.5 | 41.8 | 87.5 | 579.8 | 1,557.8 | 36.2 | 2,888 | 2,888 | fair to fair |
+| laya-e17-fp16 | all | 0.2 | 181.8, 0.1 | 74.4 | 214.0 | 1,240.7 | 4,181.0 | 77.5 | 861 | 861 | fair to nominal |
+| laya-f18-b1s128-fp16 | cpuAndNeuralEngine | 0.1 | 12.8, 5.6 | 10.7 | 13.6 |  |  |  | 64 | 77 | fair to nominal |
+| laya-f18-b1s256-fp16 | cpuAndNeuralEngine | 0.1 | 17.8, 7.1 | 26.2 | 29.9 |  |  |  | 69 | 73 | fair to fair |
+| laya-f18-b1s512-fp16 | cpuAndNeuralEngine | 0.1 | 19.0, 8.4 | 72.4 | 74.8 |  |  |  | 65 | 76 | fair to nominal |
+| laya-f18-b1s1024-fp16 | cpuAndNeuralEngine | 0.1 | 23.8, 10.7 | 209.4 | 215.1 |  |  |  | 87 | 88 | nominal to nominal |
 
 | Package | Units | Batch 1 median ms at 128, 256, 512, 1024 tokens | Batch 16 median ms at 128, 256, 512, 1024 | Function loads s | Footprint after first call MB |
 |---|---|---|---|---|---|
@@ -658,6 +747,10 @@ Device: arm64 (Mac15,9), Version 27.0.1 (Build 26A434), 16 cores, 128 GiB
 | laya-m18-fp16 | cpuAndGPU | 14.7, 23.4, 42.0, 82.1 | 138.1, 278.1, 574.1, 1,397.2 | b16_s1024 1.8, b16_s128 1.8, b16_s256 1.9, b16_s512 1.9, b1_s1024 2.0, b1_s128 0.1, b1_s256 1.9, b1_s512 2.0 | 430 to 2,345 |
 | laya-e17-fp16 | cpuAndGPU | 14.9, 23.4, 42.0, 83.8 | 138.3, 278.2, 578.7, 1,392.9 | main 0.4 | 458 to 2,650 |
 | laya-e17-fp16 | all | 12.4, 28.1, 78.3, 207.7 | 205.3, 490.8, 1,237.3, 4,176.6 | main 185.4 | 325 to 633 |
+| laya-f18-b1s128-fp16 | cpuAndNeuralEngine | 10.7, none, none, none | none, none, none, none | main 5.6 | 62 to 62 |
+| laya-f18-b1s256-fp16 | cpuAndNeuralEngine | none, 26.2, none, none | none, none, none, none | main 7.3 | 67 to 67 |
+| laya-f18-b1s512-fp16 | cpuAndNeuralEngine | none, none, 72.4, none | none, none, none, none | main 8.4 | 62 to 62 |
+| laya-f18-b1s1024-fp16 | cpuAndNeuralEngine | none, none, none, 209.4 | none, none, none, none | main 10.7 | 85 to 85 |
 
 | Package | Units | Max abs probability difference (batch 1, 16) | Mean (batch 1) | Max abs logit difference | Top answers kept (batch 1, 16) | Non-finite | Tokenization | Planned cost by device |
 |---|---|---|---|---|---|---|---|---|
@@ -673,9 +766,14 @@ Device: arm64 (Mac15,9), Version 27.0.1 (Build 26A434), 16 cores, 128 GiB
 | laya-m18-fp16 | cpuAndGPU | 3.95e-03, 3.95e-03 | 2.0e-04 | 0.029 | 200, 200 of 200 | 0, 0 | 200/200 | GPU 100% |
 | laya-e17-fp16 | cpuAndGPU | 3.95e-03, 3.95e-03 | 2.0e-04 | 0.029 | 200, 200 of 200 | 0, 0 | 200/200 | GPU 100% |
 | laya-e17-fp16 | all | 1.27e-02, 1.27e-02 | 6.3e-04 | 0.079 | 200, 200 of 200 | 0, 0 | 200/200 | ANE 85%, GPU 15% |
+| laya-f18-b1s128-fp16 | cpuAndNeuralEngine | 1.11e-02, not run | 6.8e-04 | 0.074 | 93, not run of 94 | 0, not run | 200/200 | ANE 99%, CPU 1% of operations |
+| laya-f18-b1s256-fp16 | cpuAndNeuralEngine | 1.11e-02, not run | 6.9e-04 | 0.074 | 98, not run of 99 | 0, not run | 200/200 | ANE 99%, CPU 1% of operations |
+| laya-f18-b1s512-fp16 | cpuAndNeuralEngine | 1.47e-02, not run | 6.5e-04 | 0.096 | 134, not run of 134 | 0, not run | 200/200 | ANE 99%, CPU 1% of operations |
+| laya-f18-b1s1024-fp16 | cpuAndNeuralEngine | 1.47e-02, not run | 6.4e-04 | 0.096 | 200, not run of 200 | 0, not run | 200/200 | ANE 99%, CPU 1% of operations |
 
-Failures:
+Failures, as `failures.txt` records them:
 
+```text
 verdict-e17-fp16 cpuOnly: exit status 139
     verdict-e17-fp16 cpuOnly: tokenized 200 questions, 200 match the reference
     verdict-e17-fp16 cpuOnly: compiled in 0.129 s, loads 1.106 s and 0.001 s
@@ -701,3 +799,4 @@ laya-e17-fp16 cpuOnly: exit status 139
 laya-e17-fp16 cpuAndNeuralEngine: exit status 133
     laya-e17-fp16 cpuAndNeuralEngine: tokenized 200 questions, 200 match the reference
     laya-e17-fp16 cpuAndNeuralEngine: compiled in 0.162 s, loads 192.477 s and 0.081 s
+```

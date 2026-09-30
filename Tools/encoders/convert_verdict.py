@@ -201,7 +201,7 @@ def main():
         report["packages"] = dict(previous)
     for name, (kind, precision, target, units) in variants.items():
         path = common.MODELS / f"{name}.mlpackage"
-        entry = {"kind": kind, "precision": precision, "minimum_deployment_target": str(target).split(".")[-1]}
+        entry = {"kind": kind, "precision": precision, "minimum_deployment_target": target.name}
         if args.skip_convert and name in previous:
             entry.update({k: previous[name][k] for k in ("conversion_seconds", "operations") if k in previous[name]})
         if not args.skip_convert:
@@ -231,7 +231,9 @@ def main():
                 entry["parity"][f"{unit} batch {batch}"] = result
                 print(f"{name} {unit} batch {batch}: max |dp| {result['max_abs_probability_difference']:.2e}, "
                       f"top labels {result['top_label_agreement']}", flush=True)
-            entry.setdefault("python_load_seconds", {})[unit] = round(runner.load_seconds, 2)
+            # A multifunction package loads each function inside the reads, so only its compile is timed.
+            key = "python_load_seconds" if kind == "enumerated" else "python_compile_seconds"
+            entry.setdefault(key, {})[unit] = round(runner.load_seconds, 2)
             runner.close()
         report["packages"][name] = entry
         save(report)
