@@ -509,3 +509,63 @@ Decision.
    `WordTokenizer` of D-025, because the fixtures do not record those trial texts.
 
 Status. Proposed with issue #14.
+
+## D-027 Decision engine: where the port goes beyond or differs from the issue text
+
+Context. Issue #17 ports `Engine.decide`, `read_group`, `_sequential` and the contracts of
+`one_read` and `think` into `DecisionEngine` behind the `DecisionBackend` protocol, with a stub
+backend that reproduces the reads `Fixtures/policies/` was recorded with. A few choices were needed
+that the issue does not spell out, and some signatures differ from the issue's sketch.
+
+Decision.
+
+1. `ReadPrompt` is an enum with `.tokens([Int])` and `.image(systemText:stateText:images:)`, not
+   a struct. The two shapes are exclusive, which is what an enum says.
+2. `DecisionBackend.think(prompt:budget:stopIDs:)` returns `ThoughtGeneration`, the ids as
+   generated plus the prompt tokens, rather than the issue's `Thought` (prefix, thought tokens,
+   prompt tokens). The engine cuts the ids at the first thought-close id and appends the close
+   marker, `Engine.think` lines 317 to 330, so that step is implemented and tested once.
+   `read(_:)` returns `ReadResult`, one `SlotRead` distribution per slot plus the prompt tokens;
+   `ReadResult(tops:labelIDs:promptTokens:)` takes the raw maps and runs
+   `SlotDistribution.compute`, so a real backend follows upstream's `one_read`. The protocol also
+   has `capabilities` and `modelName`, which the capability check of upstream's encoder engines
+   needs (`"{model} does not support {field}"`).
+3. `decide(_:seed:)` takes an optional request seed. Upstream's `Engine.decide` receives the seed
+   from the route, which derives it (`SeedDerivation`); `nil` does the same here. The `read_group`
+   rows of `Fixtures/distributions/distributions.json` were recorded at seed 1000 and are replayed
+   through it.
+4. `decide` returns `Decision` with `modelTime: Duration`, the time inside backend calls
+   including the wait for a permit, summed over the calls, rather than a task-local. Reads of one
+   request run at once, so it can exceed the request's wall time, as upstream's Server-Timing
+   `model` value does.
+5. The queue bound is upstream's `waiting >= max_queue` as written: `maxQueue` 1 admits one
+   request and refuses a second concurrent one, and `maxQueue` 0 refuses every request. The
+   issue's test line (`maxQueue 0` refusing the second concurrent request) describes `maxQueue`
+   1 under that rule; the test uses 1 and also checks that 0 refuses the first.
+6. The 512 label-id limit is `DecisionEngine.checkLabelLimit(_:)`, public and static, called
+   before every read. It cannot be reached through `decide` with the real labels, whose whole
+   union is at most 267 ids, so the test drives it with the slots of
+   `label_ids_over_read_limit` in `Fixtures/templates/errors.json`, which D-025 item 6 left to
+   this issue.
+7. The thought prompt and every token read prompt, the prefix included, are checked against
+   `maxPromptTokens` with `MlxEngine`'s message (`"the request is {n} tokens; the limit is
+   {max}"`), as `MlxEngine.one_read` and `MlxEngine.think` check them. Upstream's vLLM engine
+   has no such check; a backend with no limit sets `maxPromptTokens` to `Int.max`.
+8. `think` is used when it is not 0 and `samples` when it is above 0, Python's truthiness of
+   `opts["think"]` and `opts["samples"]`; `RequestValidator` keeps both in range anyway. A
+   backend that returns a different number of slot reads than slots is a precondition failure,
+   as D-020 treats contract violations.
+9. The concurrent work runs outside the actor: an internal `GroupReader` holds the read
+   policies, the backend and the `maxInflight` semaphore (an internal `AsyncSemaphore`, no
+   dependency), and the actor holds only `waiting`. Results are placed by group and read index,
+   so the answer order never depends on scheduling. The fixture tests match reads to the
+   recording by seed, which is unique within a case, because the recording's order across
+   concurrent calls is asyncio's.
+10. `CanvasRead` is `Hashable`, so tests compare recorded calls; `CanvasGeometry.standard` is
+    upstream's default geometry, since `CanvasGeometry.init` throws. `EngineConfiguration` keeps
+    `servedModelVersion` (`openjev-0.1`) for building a response outside the server.
+11. `StubBackend` lives in the test target. It reproduces upstream's `fake_read` and
+    `fake_think`, records every call, and can answer named seeds from recorded raw maps, take a
+    delay, refuse capabilities and cap the prompt length.
+
+Status. Proposed with issue #17.

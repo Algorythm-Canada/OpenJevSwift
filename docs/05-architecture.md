@@ -24,8 +24,9 @@ OpenJevSwift/                          Swift package, tools 6.2, strict concurre
       Prompt/        SystemText, AnswerTemplate (FORMATS), LabelDiscovery
       Canvas/        TemplateResolver (slots), Grouping, CanvasBuilder, CanvasWidth
       Random/        MT19937, PythonRandom.randrange, SeedDerivation (SHA-256)
-      Read/          SlotDistribution, Confidence, AnswerAssembly, ReadPolicy (auto re-read,
-                     samples, steps, think, sequential), DecisionEngine, DecisionBackend protocol
+      Read/          SlotDistribution, Confidence, AnswerAssembly, ReadAveraging
+      Engine/        DecisionBackend protocol, CanvasRead, ReadResult, EngineConfiguration,
+                     ReadOptions, DecisionEngine (auto re-read, samples, steps, think, sequential)
       Images/        Data-URL and {content_type, base64} validation (no decoding of pixels)
     OpenJevDiffusionGemma/             Apple silicon only. Depends on mlx-swift, MLXLMCommon,
                                        MLXVLM (Gemma 4 vision), swift-transformers Tokenizers.
@@ -94,34 +95,48 @@ public struct SystemOneResponse: Sendable, Codable {
 }
 ```
 
-The engine and backend boundary:
+The engine and backend boundary (`Sources/OpenJevCore/Engine/`, issue #17):
 
 ```swift
 public protocol DecisionBackend: Sendable {
-    var tokenizer: any DecisionTokenizer { get }     // encode(addSpecialTokens: false), chatPromptIds(...)
-    var maxPromptTokens: Int { get }
-    func read(_ read: CanvasRead) async throws -> SlotLogprobs   // one prompt, one canvas, N steps
-    func think(prompt: [Int], budget: Int) async throws -> Thought  // optional capability
+    var tokenizer: any DecisionTokenizer { get }   // encode(addSpecialTokens: false), chatPromptIDs(...)
+    var maxPromptTokens: Int { get }               // OPENJEV_MLX_MAX_PROMPT
+    var capabilities: BackendCapabilities { get }  // steps, samples, think, sequential, images
+    var modelName: String { get }                  // for "{model} does not support {field}"
+    func read(_ read: CanvasRead) async throws -> ReadResult          // one prompt, one canvas, N steps
+    func think(prompt: [Int], budget: Int, stopIDs: [Int]) async throws -> ThoughtGeneration
 }
 
 public actor DecisionEngine {
-    public init(backend: any DecisionBackend, configuration: EngineConfiguration)
-    public func decide(_ request: DecisionRequest) async throws -> Decision
+    public init(backend: any DecisionBackend, configuration: EngineConfiguration = .default) throws
+    public func decide(_ request: SystemOneRequest, seed: UInt64? = nil) async throws -> Decision
 }
+
+public struct Decision { answers: OrderedMap<Answer>; inputTokens: Int; outputTokens: Int; modelTime: Duration }
 ```
 
-`CanvasRead` carries the prompt token ids (or an image prompt description), the canvas, the slot
-positions and label ids, and the step count. `SlotLogprobs` is, per slot, a map from token id to
-log-probability covering the top 20 tokens and every label. This mirrors upstream's
-`MlxRuntime.read` contract exactly, so the Python fixtures apply.
+`CanvasRead` carries the prompt (`ReadPrompt.tokens(ids)` for a text state, a thought or earlier
+answers, or `ReadPrompt.image(systemText:stateText:images:)`, which the backend's processor
+expands), the system and state texts, the template, the slot positions and label ids, the seeded
+canvas, the step count and the seed. `ReadResult` is one `SlotRead` per slot (the label
+probabilities and the top-k entropy) plus the prompt tokens processed; its
+`init(tops:labelIDs:promptTokens:)` takes each slot's raw map from token id to log-probability
+(the top 20 tokens and every label, upstream's `MlxRuntime.read` contract) and runs
+`SlotDistribution.compute`, so a real backend returns raw logprobs and the Python fixtures apply.
+`ThoughtGeneration` is the ids a backend generated after the thought-open marker; the engine cuts
+them at the first thought-close id and appends the close marker. `EngineConfiguration` holds
+upstream's settings (canvas geometry, `autoThreshold`, `autoMax`, `maxInflight`, `maxQueue`, the
+image limits, the template cache limit) and `ReadOptions` the request's `steps`, `samples`,
+`think` and `sequential` with upstream's defaults. `OverloadedError` is upstream's `Overloaded`.
 
 The in-process, public entry point for apps:
 
 ```swift
 let model = try await OpenJev.DiffusionGemma.load(.fourBit)   // downloads or opens a local dir
-let engine = DecisionEngine(backend: model, configuration: .default)
-let decision = try await engine.decide(.init(
-    state: .text("Everything is down and we have a demo at noon."),
+let engine = try DecisionEngine(backend: model, configuration: .default)
+let decision = try await engine.decide(SystemOneRequest(
+    model: "jev-latest",
+    state: "Everything is down and we have a demo at noon.",
     questions: [
         "urgent": .noul(instructions: "Does the customer need a reply within the hour?"),
         "team":   .choice(instructions: "Which team should handle it?",
