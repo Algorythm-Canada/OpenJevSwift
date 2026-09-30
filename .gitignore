@@ -1,8 +1,9 @@
 # Swift Package Manager
 .build/
 Package.resolved.lock
-# Everything Xcode writes under .swiftpm stays ignored, xcuserdata included. The one exception is
-# the shared scheme the CI iOS job builds, which is committed (docs/development.md).
+# Everything Xcode writes under .swiftpm stays ignored, xcuserdata and the per-user scheme
+# management plist included. The exception is the scheme files in xcschemes, which is where Xcode
+# writes a scheme marked Shared. The CI iOS job builds one of them (docs/development.md).
 .swiftpm/*
 !.swiftpm/xcode/
 .swiftpm/xcode/*
