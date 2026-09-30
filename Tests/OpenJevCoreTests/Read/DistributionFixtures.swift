@@ -85,6 +85,8 @@ enum DistributionFixtures {
                 }
             }
         }
+        try #require(!slots.isEmpty, "no slot distribution entries")
+        try #require(!confidences.isEmpty, "no confidence entries")
         return (slots, confidences)
     }
 

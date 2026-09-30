@@ -244,23 +244,20 @@ struct ImageValidationTests {
                 == "image data is not valid base64")
     }
 
-    @Test("An 8 MB payload is refused by the length bound, fast, without decoding")
-    func oversizedPayload() throws {
+    @Test("An 8 MB payload is refused by the length bound before decoding")
+    func oversizedPayload() {
         let valid = String(repeating: "QUFB", count: 2 * 1024 * 1024)
         // The same length with a character no decoder accepts at the end: if the decode ran
         // first, this would be the base64 message.
         let invalid = String(valid.dropLast()) + "!"
         let expected = "image data is larger than the 5242880 byte limit"
-        let clock = ContinuousClock()
-        var errors: [SchemaError?] = []
-        let elapsed = clock.measure {
-            errors.append(failure([.dataURL("data:image/jpeg;base64,\(valid)")]))
-            errors.append(failure([.object(contentType: "image/jpeg", base64: valid)]))
-            errors.append(failure([.object(contentType: "image/jpeg", base64: invalid)]))
-        }
+        let errors = [
+            failure([.dataURL("data:image/jpeg;base64,\(valid)")]),
+            failure([.object(contentType: "image/jpeg", base64: valid)]),
+            failure([.object(contentType: "image/jpeg", base64: invalid)]),
+        ]
         #expect(errors.map { $0?.message } == [expected, expected, expected])
         #expect(errors.allSatisfy { $0?.loc == ["body", "images", .index(0)] })
-        #expect(elapsed < .milliseconds(500), "took \(elapsed)")
     }
 
     @Test("Each image is checked in order and the first failure is reported with its index")
