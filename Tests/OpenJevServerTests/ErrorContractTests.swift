@@ -504,7 +504,9 @@
         }
 
         /// `int()` reads `Content-Length`: whitespace, a sign and `_` between digits are fine,
-        /// a value that does not parse is ignored and the body is counted instead.
+        /// a value that does not parse is ignored and the body is counted instead. Past 4,300
+        /// digits, leading zeros included, `int()` raises, so the value is ignored too; the
+        /// answers are CPython's.
         @Test("Content-Length is read as Python's int() reads it")
         func contentLengthParsing() {
             let exceeds = { (text: String) in
@@ -519,6 +521,13 @@
             #expect(exceeds("abc") == nil)
             #expect(exceeds("5, 5") == nil)
             #expect(exceeds("") == nil)
+            let nines = String(repeating: "9", count: 4300)
+            #expect(exceeds(nines) == true)
+            #expect(exceeds(nines + "9") == nil)
+            #expect(exceeds("-" + nines) == false)
+            #expect(exceeds("-" + nines + "9") == nil)
+            #expect(exceeds(String(repeating: "0", count: 4296) + "1024") == true)
+            #expect(exceeds(String(repeating: "0", count: 4300) + "1") == nil)
         }
 
         @Test("A Content-Length that does not parse is ignored and the body counted")
@@ -527,11 +536,14 @@
             let service = try await ServerHarness.diffusionService(
                 settings, backend: Self.unreachableBackend())
             let small = try WireEncoder().bytes(json: Self.smallRequest)
-            let response = try await ServerHarness.respond(
-                settings: settings, service: service, method: .post, path: "/v1/systemone",
-                headers: ["content-type": "application/json", "content-length": "abc"],
-                body: ChunkedBody(small, chunkSize: 16))
-            #expect(response.status == .serviceUnavailable)
+            // 4,301 digits is past CPython's limit for int(), so this huge value is ignored too.
+            for declared in ["abc", "1" + String(repeating: "0", count: 4300)] {
+                let response = try await ServerHarness.respond(
+                    settings: settings, service: service, method: .post, path: "/v1/systemone",
+                    headers: ["content-type": "application/json", "content-length": declared],
+                    body: ChunkedBody(small, chunkSize: 16))
+                #expect(response.status == .serviceUnavailable, "\(declared.prefix(8))")
+            }
         }
 
         @Test("A GET is never capped and its body never read")

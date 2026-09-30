@@ -61,8 +61,9 @@
     /// Upstream's reading of `Content-Length`: Python's `int()` of the header's text.
     enum ContentLength {
         /// Whether the value declares more than `limit` bytes, as `int(value) > limit` decides,
-        /// or `nil` when `int()` refuses the value, which upstream ignores. An integer too large
-        /// for `Int` is past any limit when positive and under it when negative.
+        /// or `nil` when `int()` refuses the value, which upstream ignores. That includes a value
+        /// of more than 4,300 digits, CPython's limit. An integer too large for `Int` is past any
+        /// limit when positive and under it when negative.
         static func exceeds(_ value: HeaderText, limit: Int) -> Bool? {
             let text = String(decoding: value.utf8, as: UTF8.self)
             if let length = PythonNumber.integer(text) {

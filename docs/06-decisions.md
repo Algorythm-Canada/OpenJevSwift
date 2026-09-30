@@ -948,9 +948,9 @@ Decision.
    upstream's two bare 500s lack it too); this server sets it on every response, as D-030 item 6
    did for the 413.
    The cap applies to `POST` only. `Content-Length` is read as Python's `int()` reads it
-   (whitespace, a sign, `_` between digits): past the cap is the 413 before a byte is read, a
-   value `int()` refuses is ignored and the body counted, and an integer too large for `Int` is
-   past the cap when positive. A body is counted as it arrives and refused at the first chunk
+   (whitespace, a sign, `_` between digits, at most 4,300 digits counting leading zeros): past
+   the cap is the 413 before a byte is read, a value `int()` refuses is ignored and the body
+   counted, and an integer too large for `Int` is past the cap when positive. A body is counted as it arrives and refused at the first chunk
    that passes the cap. The route reads the collected buffer; `collect(upTo:)` keeps it bounded
    should it ever be mounted without the middleware.
 5. Upstream authenticates and caps paths that start with `/v1/`. Hummingbird's router skips

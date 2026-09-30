@@ -194,6 +194,23 @@ struct ServerSettingsTests {
         #expect(PythonNumber.integer(text) == nil)
     }
 
+    /// CPython's `int()` refuses a string of more than 4,300 digits, `sys.int_max_str_digits`,
+    /// counting leading zeros but not the sign, the underscores or the whitespace.
+    @Test("Past 4,300 digits Python's int refuses, however small the value")
+    func pythonIntegerDigitLimit() {
+        let zeros = String(repeating: "0", count: 4299)
+        #expect(PythonNumber.integer(zeros + "5") == 5)
+        #expect(PythonNumber.integer(zeros + "05") == nil)
+        #expect(PythonNumber.integer("-" + zeros + "5") == -5)
+        #expect(PythonNumber.integer(" +" + zeros + "5\t") == 5)
+        let underscored = Array(repeating: String(repeating: "0", count: 100), count: 43)
+            .joined(separator: "_")
+        #expect(PythonNumber.integer(underscored) == 0)
+        #expect(PythonNumber.integer(underscored + "_1") == nil)
+        #expect(PythonNumber.isInteger(String(repeating: "9", count: 4300)))
+        #expect(!PythonNumber.isInteger(String(repeating: "9", count: 4301)))
+    }
+
     @Test(
         "Floats parse as Python's float parses them",
         arguments: [
