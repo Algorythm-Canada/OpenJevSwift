@@ -444,9 +444,19 @@ enum PythonNumber {
 
     /// `int(text)`, or `nil` where Python raises or the value does not fit an `Int`.
     static func integer(_ text: String) -> Int? {
+        guard isInteger(text) else { return nil }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard matches(trimmed, #"[+-]?"# + digits) else { return nil }
         return Int(trimmed.replacingOccurrences(of: "_", with: ""))
+    }
+
+    /// Whether `int(text)` succeeds, however large the result.
+    static func isInteger(_ text: String) -> Bool {
+        matches(text.trimmingCharacters(in: .whitespacesAndNewlines), #"[+-]?"# + digits)
+    }
+
+    /// Whether the text, without its surrounding whitespace, starts with `-`.
+    static func isNegative(_ text: String) -> Bool {
+        text.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("-")
     }
 
     /// `float(text)`, or `nil` where Python raises. Out of range is infinity, as in Python.

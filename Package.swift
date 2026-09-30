@@ -20,6 +20,10 @@ var dependencies: [Package.Dependency] = [
     .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.8.0"),
     // Hummingbird's own dependency; the server names header fields with it directly.
     .package(url: "https://github.com/apple/swift-http-types.git", from: "1.8.0"),
+    // Hummingbird's own dependencies too: the server tests capture log lines with swift-log and
+    // hand requests to the router over swift-nio's testing channel.
+    .package(url: "https://github.com/apple/swift-log.git", from: "1.15.1"),
+    .package(url: "https://github.com/apple/swift-nio.git", from: "2.103.0"),
 ]
 
 var targets: [Target] = [
@@ -84,6 +88,16 @@ var targets: [Target] = [
             .product(
                 name: "HTTPTypes",
                 package: "swift-http-types",
+                condition: .when(platforms: [.macOS, .linux])
+            ),
+            .product(
+                name: "Logging",
+                package: "swift-log",
+                condition: .when(platforms: [.macOS, .linux])
+            ),
+            .product(
+                name: "NIOEmbedded",
+                package: "swift-nio",
                 condition: .when(platforms: [.macOS, .linux])
             ),
         ],
