@@ -51,8 +51,9 @@ and [36734546044](https://github.com/Algorythm-Canada/OpenJevSwift/actions/runs/
 probe is a throwaway package on mlx-swift 0.32.2. It runs a float32 matmul (64, 256 and 1,024
 square), an MLXNN block (`Linear`, GELU, `RMSNorm` and `MultiHeadAttention` with a causal mask),
 and the kernels DiffusionGemma relies on (a bfloat16 matmul, a 4-bit matmul, an expert-gathered
-4-bit matmul and RoPE). It runs them on the CPU and on the GPU, as an executable and inside
-`swift test`, once per build system. Python MLX 0.32.2, the MLX core that mlx-swift 0.32.2 vendors,
+4-bit matmul and RoPE). The executable runs every check on the CPU and GPU once per build system.
+With Swift Build, `swift test` separately runs the matmul and attention checks on both devices, with
+and without setting `GPU.metallib`. Python MLX 0.32.2, the MLX core that mlx-swift 0.32.2 vendors,
 checks the GPU independently of how SwiftPM builds the shaders.
 
 | Label | Image | Host | Xcode | mlx-swift 0.32.2 | Python MLX on the GPU |
