@@ -1,0 +1,514 @@
+# The runner probe of issue #8: can GitHub-hosted macOS runners execute MLX's Metal kernels? It
+# writes a throwaway Swift package that depends on the mlx-swift release OpenJevSwift pins, builds
+# it with the native build system (no Metal shaders) and with Swift Build (which compiles them),
+# and runs a matmul, a small MLXNN block and the kernels DiffusionGemma leans on (bfloat16, 4-bit
+# and expert-gathered 4-bit matmuls, RoPE) on the CPU and on the GPU, first as an executable and
+# then inside swift test, where MLX has to find its Metal library from a test bundle. A Python MLX
+# build of the same MLX core checks the GPU independently of how SwiftPM builds the shaders. Every
+# job writes its findings to the run summary; docs/07-risks-and-unknowns.md (R13) records them.
+name: MLX runner probe
+
+on:
+  workflow_dispatch:
+    inputs:
+      include_xlarge:
+        description: Also probe macos-26-xlarge (M2 Pro with GPU acceleration, billed per minute)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  MLX_SWIFT_VERSION: 0.32.2
+  # mlx-swift 0.32.2 vendors MLX core at v0.32.2.
+  MLX_PYTHON_VERSION: 0.32.2
+
+jobs:
+  probe:
+    name: Probe ${{ matrix.runner }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        # macos-15 and macos-26 are the generally available Apple silicon images; xcode-27 is the
+        # public preview with the reference toolchain.
+        runner: [macos-15, macos-26, xcode-27, macos-26-xlarge]
+        exclude:
+          - runner: ${{ inputs.include_xlarge && 'none' || 'macos-26-xlarge' }}
+    steps:
+      - name: Describe the host
+        run: |
+          sw_vers
+          uname -m
+          sysctl -n machdep.cpu.brand_string hw.ncpu hw.memsize
+          ls -d /Applications/Xcode*.app
+          mkdir -p "$RUNNER_TEMP/probe-logs"
+
+      - name: Select the newest released Xcode on the image
+        run: |
+          app=$(python3 - <<'PY'
+          import glob, os, subprocess
+          def version(app):
+              out = subprocess.run([app + "/Contents/Developer/usr/bin/xcodebuild", "-version"],
+                                   capture_output=True, text=True).stdout.split()
+              return tuple(int(part) for part in out[1].split("."))
+          apps = [a for a in glob.glob("/Applications/Xcode_*.app")
+                  if "beta" not in a and not os.path.islink(a)]
+          print(max(apps, key=version))
+          PY
+          )
+          echo "Selected $app"
+          echo "DEVELOPER_DIR=$app/Contents/Developer" >> "$GITHUB_ENV"
+
+      - name: Show the toolchain
+        id: toolchain
+        run: |
+          # Read xcodebuild's output whole: piped into head or an awk that exits early, it aborts
+          # when the pipe closes before it has written everything.
+          version=$(xcodebuild -version)
+          printf '%s\n' "$version"
+          swift --version
+          component=$(xcodebuild -showComponent MetalToolchain 2>&1 || true)
+          printf '%s\n' "$component"
+          status=$(awk -F': *' '/^Status:/ { print tolower($2); exit }' <<< "$component")
+          echo "Metal Toolchain: ${status:-unknown}"
+          {
+            echo "metal=${status:-unknown}"
+            echo "xcode=${version%%$'\n'*}"
+            echo "swift=$(swift --version 2>&1 | sed -n '1s/.*Swift version \([0-9.]*\).*/\1/p')"
+          } >> "$GITHUB_OUTPUT"
+
+      # Swift Build compiles mlx-swift's .metal sources and stops without the component.
+      - name: Download the Metal Toolchain
+        id: metal
+        if: steps.toolchain.outputs.metal != 'installed'
+        continue-on-error: true
+        run: |
+          start=$SECONDS
+          xcodebuild -downloadComponent MetalToolchain
+          echo "seconds=$((SECONDS - start))" >> "$GITHUB_OUTPUT"
+          xcodebuild -showComponent MetalToolchain
+
+      - name: Write the probe package
+        run: |
+          probe="$RUNNER_TEMP/mlx-probe"
+          mkdir -p "$probe/Sources/mlx-probe" "$probe/Tests/mlx-probe-tests"
+          echo "PROBE=$probe" >> "$GITHUB_ENV"
+          cat > "$probe/Package.swift" <<EOF
+          // swift-tools-version: 6.2
+          // A throwaway package for issue #8. It needs nothing from OpenJevSwift, only the same mlx-swift
+          // release, so it runs on any runner that can load that release's manifest.
+          import PackageDescription
+
+          let package = Package(
+              name: "mlx-probe",
+              platforms: [.macOS(.v14)],
+              dependencies: [
+                  .package(url: "https://github.com/ml-explore/mlx-swift", exact: "${MLX_SWIFT_VERSION}")
+              ],
+              targets: [
+                  .executableTarget(
+                      name: "mlx-probe",
+                      dependencies: [
+                          .product(name: "MLX", package: "mlx-swift"),
+                          .product(name: "MLXNN", package: "mlx-swift"),
+                      ]
+                  ),
+                  .testTarget(
+                      name: "mlx-probe-tests",
+                      dependencies: [
+                          .product(name: "MLX", package: "mlx-swift"),
+                          .product(name: "MLXNN", package: "mlx-swift"),
+                      ]
+                  ),
+              ]
+          )
+          EOF
+          cat > "$probe/Sources/mlx-probe/main.swift" <<'EOF'
+          // Runs a matmul and a small MLXNN block on one MLX device and prints where they ran, how long
+          // they took and how far the results are from the CPU's. Usage: mlx-probe cpu|gpu
+          import Foundation
+          import MLX
+          import MLXNN
+          import Metal
+
+          guard CommandLine.arguments.count == 2, let type = DeviceType(rawValue: CommandLine.arguments[1])
+          else {
+              print("usage: mlx-probe cpu|gpu")
+              exit(2)
+          }
+
+          func seconds(_ body: () -> Void) -> Double {
+              let start = DispatchTime.now().uptimeNanoseconds
+              body()
+              return Double(DispatchTime.now().uptimeNanoseconds - start) / 1e9
+          }
+
+          func milliseconds(_ value: Double) -> String { String(format: "%.2f ms", value * 1000) }
+
+          // What Metal itself reports, before MLX touches it.
+          if let metal = MTLCreateSystemDefaultDevice() {
+              print("metal.name: \(metal.name)")
+              print("metal.architecture: \(metal.architecture.name)")
+              let families: [(String, MTLGPUFamily)] = [
+                  ("apple7", .apple7), ("apple8", .apple8), ("apple9", .apple9), ("metal3", .metal3),
+              ]
+              let supported = families.map { "\($0.0)=\(metal.supportsFamily($0.1))" }
+              print("metal.families: \(supported.joined(separator: " "))")
+              print("metal.recommendedMaxWorkingSetSize: \(metal.recommendedMaxWorkingSetSize >> 20) MiB")
+          } else {
+              print("metal.name: none (MTLCreateSystemDefaultDevice returned nil)")
+          }
+
+          // Whether the build put MLX's Metal library (the compiled GPU kernels) next to the executable.
+          let directory = Bundle.main.executableURL!.resolvingSymlinksInPath().deletingLastPathComponent()
+          let files = FileManager.default.enumerator(atPath: directory.path)?.compactMap { $0 as? String }
+          let metallibs = (files ?? []).filter { $0.hasSuffix(".metallib") }
+          print("build.metallib: \(metallibs.isEmpty ? "none" : metallibs.joined(separator: " "))")
+
+          var failures = 0
+
+          @MainActor
+          func check(_ name: String, _ body: () throws -> String) {
+              do {
+                  print("PASS \(name): \(try withError { try body() })")
+              } catch {
+                  failures += 1
+                  print("FAIL \(name): \(error)")
+              }
+          }
+
+          Device.withDefaultDevice(Device(type)) {
+              print("mlx.defaultDevice: \(Device.defaultDevice())")
+
+              check("matmul") {
+                  var results: [String] = []
+                  for n in [64, 256, 1024] {
+                      let a = MLXRandom.normal([n, n], key: MLXRandom.key(1))
+                      let b = MLXRandom.normal([n, n], key: MLXRandom.key(2))
+                      eval(a, b)
+                      var product = matmul(a, b)
+                      let first = seconds { eval(product) }
+                      let repeated =
+                          seconds {
+                              for _ in 0..<10 {
+                                  product = matmul(a, b)
+                                  eval(product)
+                              }
+                          } / 10
+                      let reference = matmul(a, b, stream: .cpu)
+                      let difference = abs(product - reference).max().item(Float.self)
+                      results.append(
+                          "\(n)x\(n) first \(milliseconds(first)), then \(milliseconds(repeated)),"
+                              + " max |x - cpu| \(difference)")
+                  }
+                  return results.joined(separator: "; ")
+              }
+
+              check("MLXNN block: Linear, GELU, RMSNorm, MultiHeadAttention with a causal mask") {
+                  let x = MLXRandom.normal([2, 128, 256], key: MLXRandom.key(3))
+                  let linear = Linear(256, 256)
+                  let norm = RMSNorm(dimensions: 256)
+                  let attention = MultiHeadAttention(dimensions: 256, numHeads: 8)
+                  let mask = MultiHeadAttention.createAdditiveCausalMask(128)
+                  eval(x, mask, linear, norm, attention)
+                  func forward() -> MLXArray {
+                      let h = norm(gelu(linear(x)))
+                      return attention(h, keys: h, values: h, mask: mask)
+                  }
+                  var y = forward()
+                  let first = seconds { eval(y) }
+                  let repeated =
+                      seconds {
+                          for _ in 0..<10 {
+                              y = forward()
+                              eval(y)
+                          }
+                      } / 10
+                  let reference = Device.withDefaultDevice(.cpu) { forward() }
+                  let difference = abs(y - reference).max().item(Float.self)
+                  return "shape \(y.shape), first \(milliseconds(first)), then \(milliseconds(repeated)),"
+                      + " max |x - cpu| \(difference)"
+              }
+
+              check("DiffusionGemma kernels: bfloat16 matmul, 4-bit and expert-gathered 4-bit matmul, RoPE") {
+                  let x = MLXRandom.normal([8, 512], key: MLXRandom.key(4))
+                  let w = MLXRandom.normal([256, 512], key: MLXRandom.key(5)) * 0.05
+                  let (wq, scales, biases) = quantized(w, groupSize: 64, bits: 4)
+                  // Four experts of a mixture-of-experts layer, one chosen per token.
+                  let experts = MLXRandom.normal([4, 128, 512], key: MLXRandom.key(6)) * 0.05
+                  let (eq, eScales, eBiases) = quantized(experts, groupSize: 64, bits: 4)
+                  let chosen = MLXArray([0, 3, 1, 2, 2, 0, 1, 3] as [Int32])
+                  let heads = MLXRandom.normal([1, 4, 32, 64], key: MLXRandom.key(7))
+                  eval(x, w, wq, scales, eq, eScales, chosen, heads)
+                  func kernels() -> [MLXArray] {
+                      [
+                          matmul(x.asType(.bfloat16), w.asType(.bfloat16).T).asType(.float32),
+                          quantizedMatmul(
+                              x, wq, scales: scales, biases: biases, transpose: true, groupSize: 64, bits: 4),
+                          gatherQuantizedMatmul(
+                              x.reshaped([8, 1, 512]), eq, scales: eScales, biases: eBiases,
+                              rhsIndices: chosen, transpose: true, groupSize: 64, bits: 4),
+                          MLXFast.RoPE(
+                              heads, dimensions: 64, traditional: false, base: 10_000, scale: 1, offset: 5),
+                      ]
+                  }
+                  let results = kernels()
+                  let first = seconds { eval(results) }
+                  let reference = Device.withDefaultDevice(.cpu) { kernels() }
+                  let differences = zip(results, reference).map { abs($0 - $1).max().item(Float.self) }
+                  let dequantizedWeights = dequantized(
+                      wq, scales: scales, biases: biases, groupSize: 64, bits: 4)
+                  let quantization = abs(results[1] - matmul(x, dequantizedWeights.T)).max().item(Float.self)
+                  return "first \(milliseconds(first)), max |x - cpu| bfloat16 \(differences[0]),"
+                      + " 4-bit \(differences[1]), experts \(differences[2]), RoPE \(differences[3]);"
+                      + " 4-bit against the dequantized weights \(quantization)"
+              }
+
+              let used = type == .gpu && failures == 0 ? "yes" : "no"
+              print("mlx.gpuUsed: \(used), peak memory \(Memory.peakMemory >> 20) MiB")
+          }
+
+          exit(failures == 0 ? 0 : 1)
+          EOF
+          cat > "$probe/Tests/mlx-probe-tests/ProbeTests.swift" <<'EOF'
+          // Runs MLX inside a Swift Testing test, where the process is the test runner rather than the
+          // probe. Swift Build copies MLX's Metal library into the test bundle's resources, but MLX looks
+          // there only through a Bundle object for the test bundle, which the runner does not create. With
+          // PROBE_SET_METALLIB=1 the test points MLX at the library before MLX first touches Metal.
+          import Foundation
+          import MLX
+          import MLXNN
+          import Testing
+
+          private final class TestBundle {}
+
+          @Test(
+              "MLX runs a matmul and an attention block inside a test", .serialized,
+              arguments: [DeviceType.cpu, .gpu])
+          func mlxInsideATest(type: DeviceType) throws {
+              if ProcessInfo.processInfo.environment["PROBE_SET_METALLIB"] == "1" {
+                  let metallib = Bundle(for: TestBundle.self).resourceURL?.appending(
+                      path: "mlx-swift_Cmlx.bundle/Contents/Resources/default.metallib")
+                  if let metallib, FileManager.default.fileExists(atPath: metallib.path) {
+                      GPU.metallib = metallib
+                  }
+                  print("probe test: GPU.metallib is \(GPU.metallib?.path ?? "not set")")
+              }
+              try Device.withDefaultDevice(Device(type)) {
+                  try withError {
+                      let a = MLXRandom.normal([256, 256], key: MLXRandom.key(1))
+                      let b = MLXRandom.normal([256, 256], key: MLXRandom.key(2))
+                      let difference = abs(matmul(a, b) - matmul(a, b, stream: .cpu)).max().item(Float.self)
+                      #expect(difference < 1e-3)
+                      let x = MLXRandom.normal([1, 16, 64], key: MLXRandom.key(3))
+                      let attention = MultiHeadAttention(dimensions: 64, numHeads: 4)
+                      let mask = MultiHeadAttention.createAdditiveCausalMask(16)
+                      let y = attention(x, keys: x, values: x, mask: mask)
+                      eval(y)
+                      #expect(y.shape == [1, 16, 64])
+                      print("probe test ran on \(Device.defaultDevice()), max |x - cpu| \(difference)")
+                  }
+              }
+          }
+          EOF
+          cat "$probe/Package.swift"
+
+      - name: Build with the native build system
+        id: build-native
+        continue-on-error: true
+        run: |
+          start=$SECONDS
+          status=0
+          swift build --package-path "$PROBE" --scratch-path "$PROBE/.build-native" \
+            --build-system native > "$RUNNER_TEMP/build-native.log" 2>&1 || status=$?
+          echo "seconds=$((SECONDS - start))" >> "$GITHUB_OUTPUT"
+          grep -v '^\[' "$RUNNER_TEMP/build-native.log" | tail -n 40
+          if [ "$status" -ne 0 ]; then exit "$status"; fi
+          bin=$(swift build --package-path "$PROBE" --scratch-path "$PROBE/.build-native" \
+            --build-system native --show-bin-path)
+          echo "bin=$bin" >> "$GITHUB_OUTPUT"
+
+      - name: Run on the CPU, native build
+        id: native-cpu
+        if: steps.build-native.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 10
+        run: |
+          "${{ steps.build-native.outputs.bin }}/mlx-probe" cpu 2>&1 | tee "$RUNNER_TEMP/probe-logs/native-cpu.log"
+
+      - name: Run on the GPU, native build
+        id: native-gpu
+        if: steps.build-native.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 10
+        run: |
+          "${{ steps.build-native.outputs.bin }}/mlx-probe" gpu 2>&1 | tee "$RUNNER_TEMP/probe-logs/native-gpu.log"
+
+      - name: Build with Swift Build
+        id: build-swiftbuild
+        continue-on-error: true
+        run: |
+          start=$SECONDS
+          status=0
+          swift build --package-path "$PROBE" --scratch-path "$PROBE/.build-swiftbuild" \
+            --build-system swiftbuild > "$RUNNER_TEMP/build-swiftbuild.log" 2>&1 || status=$?
+          echo "seconds=$((SECONDS - start))" >> "$GITHUB_OUTPUT"
+          grep -v '^\[' "$RUNNER_TEMP/build-swiftbuild.log" | tail -n 40
+          if [ "$status" -ne 0 ]; then exit "$status"; fi
+          bin=$(swift build --package-path "$PROBE" --scratch-path "$PROBE/.build-swiftbuild" \
+            --build-system swiftbuild --show-bin-path)
+          echo "bin=$bin" >> "$GITHUB_OUTPUT"
+
+      - name: Run on the CPU, Swift Build
+        id: swiftbuild-cpu
+        if: steps.build-swiftbuild.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 10
+        run: |
+          "${{ steps.build-swiftbuild.outputs.bin }}/mlx-probe" cpu 2>&1 | tee "$RUNNER_TEMP/probe-logs/swiftbuild-cpu.log"
+
+      - name: Run on the GPU, Swift Build
+        id: swiftbuild-gpu
+        if: steps.build-swiftbuild.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 10
+        run: |
+          "${{ steps.build-swiftbuild.outputs.bin }}/mlx-probe" gpu 2>&1 | tee "$RUNNER_TEMP/probe-logs/swiftbuild-gpu.log"
+
+      # A test runs in the test runner's process. Swift Build copies MLX's Metal library into the
+      # test bundle, and the second run points MLX at it the way an MLX test in this repository
+      # would have to.
+      - name: Test inside swift test, Swift Build
+        id: swiftbuild-test
+        if: steps.build-swiftbuild.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 15
+        run: |
+          swift test --package-path "$PROBE" --scratch-path "$PROBE/.build-swiftbuild" \
+            --build-system swiftbuild 2>&1 | tee "$RUNNER_TEMP/probe-logs/swiftbuild-test.log"
+
+      - name: Test inside swift test with GPU.metallib set, Swift Build
+        id: swiftbuild-test-metallib
+        if: steps.build-swiftbuild.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 15
+        env:
+          PROBE_SET_METALLIB: "1"
+        run: |
+          swift test --package-path "$PROBE" --scratch-path "$PROBE/.build-swiftbuild" \
+            --build-system swiftbuild 2>&1 | tee "$RUNNER_TEMP/probe-logs/swiftbuild-test-metallib.log"
+
+      # The Python wheels ship MLX's Metal library ready built, so this checks the GPU with the
+      # same MLX core however SwiftPM builds the shaders, including on images whose Swift cannot
+      # load mlx-swift's manifest.
+      - name: Cross-check with Python MLX
+        id: python
+        continue-on-error: true
+        timeout-minutes: 10
+        run: |
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/python" -m pip install --quiet "mlx==$MLX_PYTHON_VERSION"
+          "$RUNNER_TEMP/venv/bin/python" - <<'EOF' 2>&1 | tee "$RUNNER_TEMP/probe-logs/python.log"
+          import time
+
+          import mlx.core as mx
+
+          print("mlx", mx.__version__, "metal available:", mx.metal.is_available())
+          try:
+              print("device info:", mx.device_info())
+          except Exception as error:
+              print("device info unavailable:", repr(error))
+          failures = 0
+          a = mx.random.normal((1024, 1024), key=mx.random.key(1))
+          b = mx.random.normal((1024, 1024), key=mx.random.key(2))
+          reference = mx.matmul(a, b, stream=mx.cpu)
+          mx.eval(reference)
+          for name, device in (("cpu", mx.cpu), ("gpu", mx.gpu)):
+              try:
+                  start = time.perf_counter()
+                  product = mx.matmul(a, b, stream=device)
+                  mx.eval(product)
+                  elapsed = time.perf_counter() - start
+                  difference = mx.abs(product - reference).max(stream=mx.cpu).item()
+                  print(f"PASS {name}: 1024x1024 matmul {elapsed * 1000:.2f} ms, max |x - cpu| {difference}")
+              except Exception as error:
+                  failures += 1
+                  print(f"FAIL {name}: {error!r}")
+          raise SystemExit(failures)
+          EOF
+
+      - name: Summarize
+        if: always()
+        env:
+          RUNNER_LABEL: ${{ matrix.runner }}
+          XCODE: ${{ steps.toolchain.outputs.xcode }}
+          SWIFT: ${{ steps.toolchain.outputs.swift }}
+          METAL: ${{ steps.toolchain.outputs.metal }}
+          METAL_DOWNLOAD: ${{ steps.metal.outcome }}
+          METAL_SECONDS: ${{ steps.metal.outputs.seconds }}
+          NATIVE_BUILD: ${{ steps.build-native.outcome }}
+          NATIVE_SECONDS: ${{ steps.build-native.outputs.seconds }}
+          NATIVE_CPU: ${{ steps.native-cpu.outcome }}
+          NATIVE_GPU: ${{ steps.native-gpu.outcome }}
+          SWIFTBUILD_BUILD: ${{ steps.build-swiftbuild.outcome }}
+          SWIFTBUILD_SECONDS: ${{ steps.build-swiftbuild.outputs.seconds }}
+          SWIFTBUILD_CPU: ${{ steps.swiftbuild-cpu.outcome }}
+          SWIFTBUILD_GPU: ${{ steps.swiftbuild-gpu.outcome }}
+          SWIFTBUILD_TEST: ${{ steps.swiftbuild-test.outcome }}
+          SWIFTBUILD_TEST_METALLIB: ${{ steps.swiftbuild-test-metallib.outcome }}
+          PYTHON_MLX: ${{ steps.python.outcome }}
+        run: |
+          download=
+          case "$METAL_DOWNLOAD" in
+            success | failure) download=", download ${METAL_DOWNLOAD} in ${METAL_SECONDS:-?} s" ;;
+          esac
+          # system_profiler lists no displays in these virtual machines, so the GPU row comes from
+          # what Metal told the probe, or from the Python cross-check where no probe ran.
+          logs=("$RUNNER_TEMP"/probe-logs/*.log)
+          metal() { awk -F': ' -v key="$1" '$1 == key { print $2; exit }' "${logs[@]}" 2>/dev/null || true; }
+          gpu=$(metal metal.name)
+          if [ -z "$gpu" ]; then
+            gpu=$(sed -n "s/.*'device_name': '\([^']*\)'.*/\1/p" "$RUNNER_TEMP/probe-logs/python.log" 2>/dev/null || true)
+          fi
+          {
+            echo "## $RUNNER_LABEL"
+            echo
+            echo "| Item | Value |"
+            echo "|---|---|"
+            echo "| Host | $(sw_vers -productName) $(sw_vers -productVersion) ($(sw_vers -buildVersion)), $(sysctl -n machdep.cpu.brand_string), $(sysctl -n hw.ncpu) CPUs, $(( $(sysctl -n hw.memsize) >> 30 )) GB |"
+            families=$(metal metal.families)
+            working_set=$(metal metal.recommendedMaxWorkingSetSize)
+            echo "| GPU | ${gpu:-unknown}${families:+; $families}${working_set:+; working set $working_set} |"
+            echo "| Toolchain | $XCODE, Swift $SWIFT, Metal Toolchain ${METAL}${download} |"
+            echo
+            echo "| Probe | Outcome |"
+            echo "|---|---|"
+            echo "| Native build | ${NATIVE_BUILD} in ${NATIVE_SECONDS:-?} s |"
+            echo "| Native build, CPU run | ${NATIVE_CPU:-skipped} |"
+            echo "| Native build, GPU run | ${NATIVE_GPU:-skipped} |"
+            echo "| Swift Build | ${SWIFTBUILD_BUILD} in ${SWIFTBUILD_SECONDS:-?} s |"
+            echo "| Swift Build, CPU run | ${SWIFTBUILD_CPU:-skipped} |"
+            echo "| Swift Build, GPU run | ${SWIFTBUILD_GPU:-skipped} |"
+            echo "| Swift Build, MLX inside swift test | ${SWIFTBUILD_TEST:-skipped} |"
+            echo "| Swift Build, MLX inside swift test with GPU.metallib set | ${SWIFTBUILD_TEST_METALLIB:-skipped} |"
+            echo "| Python MLX $MLX_PYTHON_VERSION, CPU and GPU | ${PYTHON_MLX:-skipped} |"
+            echo
+            for log in "$RUNNER_TEMP"/probe-logs/*.log; do
+              [ -f "$log" ] || continue
+              echo "<details><summary>$(basename "$log" .log)</summary>"
+              echo
+              echo '```'
+              # Leave out swift test's build progress lines.
+              grep -v '^\[' "$log" || true
+              echo '```'
+              echo "</details>"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat "$GITHUB_STEP_SUMMARY"

@@ -1,5 +1,7 @@
 # OpenJevSwift
 
+[![CI](https://github.com/Algorythm-Canada/OpenJevSwift/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Algorythm-Canada/OpenJevSwift/actions/workflows/ci.yml) [![Fixtures](https://github.com/Algorythm-Canada/OpenJevSwift/actions/workflows/fixtures.yml/badge.svg?branch=main)](https://github.com/Algorythm-Canada/OpenJevSwift/actions/workflows/fixtures.yml)
+
 A native Swift implementation of [OpenJev](https://github.com/razorback16/openjev), the open,
 Jev-compatible "System One" decision server. Send it a state and typed questions (`noul`,
 `choice`, `score`); it returns a probability distribution and a confidence for every answer,

@@ -86,10 +86,17 @@ identity.
 
 ## Continuous integration
 
-- Linux job: build `OpenJevCore` and `OpenJevServer` (stub backend), run fixture tests. Cheap and
-  fast; catches order and serialisation bugs.
-- macOS Apple silicon job: build everything, run core and server tests, run MLX unit tests on
-  synthetic small shapes if the runner's GPU allows (a spike decides), run swift-format.
+[development.md](development.md) lists the workflows, runners and toolchains.
+
+- Linux job: build `OpenJevCore`, `OpenJevServer` (stub backend) and `openjev`, run their tests,
+  fixture tests included. Cheap and fast; catches order and serialisation bugs.
+- macOS Apple silicon job: build everything with Swift Build, run every test target, and run
+  swift-format. MLX unit tests on synthetic small shapes run there on the runner's GPU (issue #8
+  and D-028).
+- Both jobs fail when a test skips for any reason other than an unset `OPENJEV_TEST_MODEL` or
+  `OPENJEV_LIVE_URL`, so a fixture test cannot stop testing without failing.
+- A fixtures workflow regenerates every fixture from the pinned upstream commit and tokenizer and
+  fails when the result differs from the committed files.
 - Model and live tests never run on hosted CI. They are run by developers with the weights and
   recorded in the pull request. A self-hosted Apple silicon runner is a later option. The
   tokenizer parity suite of `OpenJevDiffusionGemmaTests` needs the checkpoint's tokenizer files

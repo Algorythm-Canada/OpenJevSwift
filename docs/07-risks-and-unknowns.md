@@ -17,7 +17,7 @@ estimates on 2026-09-29.
 | R10 | **Generation loop parity.** Entropy-bound sampler, temperature schedule, self-conditioning, stopping, block commits. Affects `think` and chat quality, not reads. | High | Medium | Port from mlx-vlm with the Layr fork's Swift sampler as a second reference; live tests compare greedy outputs. | Generation milestone tasks |
 | R11 | **Encoder models on Apple.** Laya's `DecisionModel` head and Verdict's GLiClass head must be reproduced exactly, including per-option-count temperatures and abstention handling; ModernBERT has no MLX Swift implementation; Core ML conversion of custom heads may need tracing work. | Medium | Medium | Spike converting Verdict; parity against PyTorch outputs recorded as fixtures. | Encoder spike (milestone 6) |
 | R12 | **Upstream drift.** Upstream is 11 days old, adds a model a week, and has open PRs (ForJev backend). The pin will age. | Certain | Medium | Pinned commit in `THIRD_PARTY.md`; a recurring review task; fixtures regenerated per pin move. | Upstream tracking task |
-| R13 | **Hosted CI cannot run the model.** GitHub-hosted macOS runners have no room for 17 GB weights; MLX unit tests may or may not run on their GPUs. | High | Low (tests are opt-in) | Core tests on Linux and macOS runners; model tests opt-in behind an environment variable; consider a self-hosted Apple silicon runner later. | CI task and CI spike |
+| R13 | **Hosted CI cannot run the model.** GitHub-hosted macOS runners have no room for 17 GB weights. Their virtual GPU does run MLX's kernels for small synthetic shapes, once the build includes MLX's Metal library (findings below). | Certain for the model | Low (model tests are opt-in) | Core tests on Linux and macOS runners; MLX synthetic tests on the `macos-26` GPU, built with Swift Build (D-028); model tests opt-in behind `OPENJEV_TEST_MODEL`; consider a self-hosted Apple silicon runner later. | CI task #7 and CI spike #8, both 2026-09-30 |
 | R14 | **Concurrency correctness.** MLX arrays are not `Sendable`; GPU work must stay on one execution context; Swift 6 strict concurrency will fight the natural design. | Medium | Medium | One runtime actor owns all MLX state; only value types cross its boundary; structured concurrency for group fan-out. | Runtime actor task |
 | R15 | **Sliding-window decoder masks for long prompts.** The rotating cache's physical order differs from temporal order; masks and the "last 1023 positions" slice are easy to get subtly wrong for prompts over 1024 tokens. | Medium | High | Dedicated parity test with a 3,000-token state against the oracle. | Decoder pass task; numeric parity tests |
 | R16 | **Licensing and trademarks.** "Jev" is TypeSafe's mark; Gemma Terms of Use govern the weights; ported MIT code needs attribution. | Low | Medium | Disclaimers (D-002), notices (D-010), no weights in the repository. | Done in docs; kept current |
@@ -38,8 +38,63 @@ estimates on 2026-09-29.
    weights, and does the top label ever change on the fixture set? (R3)
 4. What is the resident memory of a Swift process serving reads on a 32 GB and a 48 GB machine
    with the default cache budgets, and what cache limit keeps it under 24 GB? (R4)
-5. Do GitHub-hosted macOS runners run MLX Metal kernels for small synthetic tests? (R13)
+5. Do GitHub-hosted macOS runners run MLX Metal kernels for small synthetic tests? (R13; answered
+   below: yes, with a build that carries MLX's Metal library)
 6. Can CPython's float repr be reproduced exactly in Swift for the values that appear in JSON
    states? (R7)
 7. Does Core ML run Verdict's GLiClass model with identical probabilities after temperature
    scaling, and at what latency on an iPhone? (R11)
+
+## Findings for R13: MLX on hosted runners
+
+Issue #8 asked whether GitHub-hosted Apple silicon runners execute mlx-swift's Metal kernels well
+enough for unit tests on small synthetic shapes. [mlx-probe.yml](../.github/workflows/mlx-probe.yml)
+answered it on 2026-09-30 in runs [36732539925](https://github.com/Algorythm-Canada/OpenJevSwift/actions/runs/36732539925)
+and [36734546044](https://github.com/Algorythm-Canada/OpenJevSwift/actions/runs/36734546044). The
+probe is a throwaway package on mlx-swift 0.32.2. It runs a float32 matmul (64, 256 and 1,024
+square), an MLXNN block (`Linear`, GELU, `RMSNorm` and `MultiHeadAttention` with a causal mask),
+and the kernels DiffusionGemma relies on (a bfloat16 matmul, a 4-bit matmul, an expert-gathered
+4-bit matmul and RoPE). The executable runs every check on the CPU and GPU once per build system.
+With Swift Build, `swift test` separately runs the matmul and attention checks on both devices, with
+and without setting `GPU.metallib`. Python MLX 0.32.2, the MLX core that mlx-swift 0.32.2 vendors,
+checks the GPU independently of how SwiftPM builds the shaders.
+
+| Label | Image | Host | Xcode | mlx-swift 0.32.2 | Python MLX on the GPU |
+|---|---|---|---|---|---|
+| `macos-15` | 20260907.0337.1 | macOS 15.7.9 | 26.3, the newest on the image: Swift 6.2.4 | Does not resolve: the manifest needs tools 6.3 | Runs |
+| `macos-26` | 20260907.0351.1 | macOS 26.6.2 | 26.6: Swift 6.3.3, Metal Toolchain installed | Runs with Swift Build; the native build cannot run MLX | Runs |
+| `xcode-27` (preview) | 20260921.0210.1 | macOS 27.0 | 27.0: Swift 6.4, Metal Toolchain downloaded (839 MB in about 20 s) | Runs with Swift Build; the native build cannot run MLX | Runs |
+
+Every host is an Apple M1 virtual machine with 3 CPUs and 7 GB of memory.
+
+1. **Metal is a paravirtual GPU, and MLX's kernels run on it.** Metal reports
+   `Apple Paravirtual device`, architecture `air64_v27`, a recommended working set of 4,778 MiB,
+   and none of the Apple GPU families 7 to 9 or Metal 3. Every probe kernel ran on it, and the GPU
+   results agree with the CPU's: float32 matmuls within 4.6e-5, the attention block within 9.5e-7,
+   the 4-bit and expert-gathered 4-bit matmuls within 1.2e-6, RoPE within 1.1e-5, and the bfloat16
+   matmul exactly. The GPU's 4-bit matmul is within 1.2e-6 of a float32 matmul on the dequantized
+   weights. Python MLX ran its matmul on the GPU of all three images, `macos-15` included.
+2. **The build system decides whether MLX runs at all.** Xcode 26.6's `swift build` uses the native
+   build system, which leaves out mlx-swift's Metal shaders. Without that Metal library MLX cannot
+   create a stream, so the CPU runs fail as well as the GPU runs, with
+   `Failed to load the default metallib`. Swift Build compiles the shaders, and every executable
+   run of that build passed. `macos-26` has the Metal Toolchain Swift Build needs, installed with the image.
+3. **Inside `swift test`, MLX must be pointed at the library.** Swift Build copies the library
+   into the test bundle, but MLX looks for it through `Bundle` objects and the Swift Testing runner
+   creates none for the test bundle. The probe's test failed that way on `macos-26` and `xcode-27`,
+   and passed on both, on the CPU and the GPU, once it set `GPU.metallib` to the copy in the test
+   bundle. [development.md](development.md) ("MLX in tests") has the helper.
+4. **CPU fallback saves nothing.** A CPU-only test needs the same build and the same Metal library,
+   because MLX loads the library as soon as it creates a stream on a Mac. CPU results match the CPU
+   reference exactly, GPU results within the tolerances above, and the model runs on the GPU.
+5. **Time and cost.** On `macos-26` the probe built in 115 to 160 s with either build system. Its
+   steady GPU times were 3.6 ms for a 1,024-square matmul (CPU 8.0 ms) and 2.8 ms for the attention
+   block (CPU 47 ms). The first GPU call of a kernel compiles its pipeline, about 0.3 s for a matmul
+   and 1.2 to 1.6 s for the whole attention block, once per test process. The repository's macOS
+   job, which builds everything with Swift Build, took 8 minutes with an empty cache, 270 s of it
+   building, and 3 minutes with a warm one. Synthetic tests on small shapes add seconds to that, well
+   inside the 5-minute target. The standard runners cost nothing for this public repository.
+   `macos-26-xlarge` (M2 Pro, which GitHub describes as GPU accelerated) is billed per minute and
+   was not probed; the workflow's `include_xlarge` input adds it.
+
+D-028 records the decision that follows: MLX synthetic tests run in CI on the `macos-26` GPU.
