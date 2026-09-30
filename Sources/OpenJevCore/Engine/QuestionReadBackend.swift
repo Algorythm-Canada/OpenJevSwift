@@ -51,7 +51,7 @@ public protocol QuestionReadBackend: Sendable {
 }
 
 /// A backend returned something its contract forbids: a distribution with the wrong number of
-/// entries, a value that is not finite or a sum far from 1.
+/// entries, a value outside `[0, 1]` (NaN and the infinities included) or a sum far from 1.
 ///
 /// This is a bug in the backend, not in the request, so it is neither a ``SchemaError`` nor an
 /// ``OverloadedError``; the server should answer it as an internal error.

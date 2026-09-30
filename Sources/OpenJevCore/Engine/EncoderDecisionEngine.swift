@@ -142,7 +142,8 @@ public actor EncoderDecisionEngine {
     }
 
     /// Checks one batch's result against the contract: one distribution per question, each with
-    /// one finite value per option, summing to 1 within 1e-6.
+    /// one value in `[0, 1]` per option (which rules out NaN and the infinities), summing to 1
+    /// within 1e-6.
     ///
     /// - Throws: ``BackendContractError`` naming the model and the question.
     private nonisolated func validate(_ result: BatchReadResult, for batch: [EncoderQuestion])
@@ -160,9 +161,10 @@ public actor EncoderDecisionEngine {
                     "\(modelName) returned \(probabilities.count) probabilities for question "
                         + "\(question.key.pythonRepr), which has \(expected) options")
             }
-            guard probabilities.allSatisfy(\.isFinite) else {
+            // A NaN fails both comparisons, so this also rejects values that are not finite.
+            guard probabilities.allSatisfy({ $0 >= 0 && $0 <= 1 }) else {
                 throw BackendContractError(
-                    "\(modelName) returned a probability that is not finite for question "
+                    "\(modelName) returned a probability outside [0, 1] for question "
                         + "\(question.key.pythonRepr): \(probabilities)")
             }
             let total = probabilities.reduce(0, +)

@@ -158,9 +158,9 @@ limits as the diffusion engine), the refusal of `images`, `steps > 1`, `samples 
 (`"{model} is at capacity. Retry shortly."`), reads in batches of `batchSize` (16) in request
 order under a `maxInflight` semaphore (1, upstream's one model thread), the billing and
 `Answer.make`. A backend returns one distribution per question in the caller's option order
-(noul is `[P(true), 1 - P(true)]`); the engine checks the count, finiteness and sum of every
-distribution and throws `BackendContractError` otherwise, a backend bug rather than a client
-error. Reads are deterministic, so the request seed is not used and `outputTokens` is 0.
+(noul is `[P(true), 1 - P(true)]`); the engine checks the count, the `[0, 1]` range and the sum
+of every distribution and throws `BackendContractError` otherwise, a backend bug rather than a
+client error. Reads are deterministic, so the request seed is not used and `outputTokens` is 0.
 `EncoderEngineConfiguration` carries `batchSize` (`OPENJEV_ENCODER_BATCH`), `maxQueue`
 (`OPENJEV_MAX_QUEUE`), `maxInflight` and `warmUp` (`OPENJEV_WARMUP`).
 

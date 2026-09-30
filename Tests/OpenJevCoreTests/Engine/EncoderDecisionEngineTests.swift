@@ -392,8 +392,16 @@ struct EncoderDecisionEngineTests {
 
     @Test("A distribution that breaks the contract is an internal error, not a request error")
     func contractViolations() async throws {
+        // The out-of-range stub keeps the sum at 1, so only the range check can catch it.
+        let outOfRange = StubQuestionReadBackend(failure: .outOfRange)
+        let rangeError = await #expect(throws: BackendContractError.self) {
+            try await engine(outOfRange).decide(
+                request(questions: ["q": .noul(instructions: nil, criteria: nil)]))
+        }
+        #expect(rangeError?.message.contains("outside [0, 1]") == true)
         let failures: [StubQuestionReadBackend.Failure] = [
-            .wrongDistributionCount, .wrongProbabilityCount, .notFinite, .sumFarFromOne,
+            .wrongDistributionCount, .wrongProbabilityCount, .notFinite, .outOfRange,
+            .sumFarFromOne,
         ]
         for failure in failures {
             let stub = StubQuestionReadBackend(failure: failure)

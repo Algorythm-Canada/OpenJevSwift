@@ -701,8 +701,9 @@ Decision.
    those calls, wait for a permit included, so the Server-Timing `model` value counts the read as
    `test_server_timing_counts_the_read` expects. Nothing is read when every question is forced:
    no backend call, `inputTokens` 0, `modelTime` zero.
-6. Every distribution a backend returns is checked (one per question, one value per option, all
-   finite, sum within 1e-6 of 1) and a violation throws `BackendContractError`, a new error type
+6. Every distribution a backend returns is checked (one per question, one value per option, every
+   value in `[0, 1]`, which also rules out NaN and the infinities, sum within 1e-6 of 1) and a
+   violation throws `BackendContractError`, a new error type
    that is neither a `SchemaError` nor an `OverloadedError`: a backend bug is not a client error,
    and `Answer.make`'s preconditions would otherwise crash the process on a bad backend. Two rows
    of `Fixtures/wire/answers.json` (`choice_layout`, `score_layout`) probe number rendering with

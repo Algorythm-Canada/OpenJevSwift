@@ -30,6 +30,9 @@ final class StubQuestionReadBackend: QuestionReadBackend, @unchecked Sendable {
         case wrongProbabilityCount
         /// A NaN in the first question's distribution.
         case notFinite
+        /// 0.5 moved from the first question's first value to its second (a noul becomes
+        /// `[-0.2, 1.2]`), so the sum is unchanged but two values leave [0, 1].
+        case outOfRange
         /// Every probability doubled, so the sum is 2.
         case sumFarFromOne
         /// The batch throws the given error instead of answering.
@@ -107,6 +110,9 @@ final class StubQuestionReadBackend: QuestionReadBackend, @unchecked Sendable {
             probabilities[0].append(0.0)
         case .notFinite:
             probabilities[0][0] = .nan
+        case .outOfRange:
+            probabilities[0][0] -= 0.5
+            probabilities[0][1] += 0.5
         case .sumFarFromOne:
             probabilities = probabilities.map { $0.map { $0 * 2 } }
         case .throwing(let message):
