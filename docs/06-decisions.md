@@ -441,3 +441,36 @@ Decision.
    checks they equal `labels.json`, so the schemas tests exercise discovery end to end.
 
 Status. Proposed with issue #12.
+
+## D-025 Template slots and cache: where the port goes beyond or differs from the issue text
+
+Context. Issue #13 ports `Engine.resolve_template` and the `_templates` cache. A few choices were
+needed that the issue does not spell out, and two signatures differ from the issue's sketch.
+
+Decision.
+
+1. `TemplateResolver.resolve` throws untyped, not `throws(SchemaError)`. The tokenizer's
+   `encode` throws (D-024) and its failure is not a request problem: the caller must be able to
+   tell a `SchemaError` (a 400) from a tokenizer failure (a 500), so the tokenizer's error passes
+   through unchanged. Upstream's `enc` never raises for a `str`, so this path is new.
+2. The slot type is nested as `ResolvedTemplate.Slot`, with `position` and `labelIDs`, rather
+   than a top-level `Slot`, to keep the core's namespace to types that stand alone.
+3. The cache is `TemplateCache`, a final class with an `NSLock`, and `TemplateResolver` is a
+   `Sendable` struct holding it by reference. Copies of the resolver share one memo, so the engine
+   actor of #17, its concurrent group reads and any caller outside the actor use the same cache
+   without a mutable property. The key is a `Hashable` struct (format, head as used, lead, and
+   each question's id and labels), the same fields as upstream's `json.dumps` key, so `nil` and
+   the scaffold share an entry. Errors are not cached. The limit is upstream's 4,096 by default
+   and configurable, and `count` is exposed for tests and diagnostics.
+4. Every question must have at least two labels, which the schema builder guarantees. A
+   hand-built question with fewer stops with a precondition failure at that question, where
+   upstream would raise a `TypeError` from `base[None]`.
+5. The hand-written tests use `WordTokenizer`, a test-only stand-in that splits letters, digits
+   and other characters and hashes each piece, because the fixtures do not record the texts of
+   upstream's `test_indexed_format_with_mixed_types` (40-option choices) nor the 4,098 templates
+   the cache-limit test needs. Only token counts and the one-slot property matter to those tests.
+   In #13 the mixed schema is resolved as one group; #14 adds the grouping.
+6. `label_ids_over_read_limit` in `Fixtures/templates/errors.json` is skipped with a comment: the
+   512 label-id check belongs to `Engine.one_read` and issue #17.
+
+Status. Proposed with issue #13.
