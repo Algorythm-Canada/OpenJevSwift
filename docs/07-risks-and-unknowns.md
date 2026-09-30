@@ -59,7 +59,7 @@ checks the GPU independently of how SwiftPM builds the shaders.
 |---|---|---|---|---|---|
 | `macos-15` | 20260907.0337.1 | macOS 15.7.9 | 26.3, the newest on the image: Swift 6.2.4 | Does not resolve: the manifest needs tools 6.3 | Runs |
 | `macos-26` | 20260907.0351.1 | macOS 26.6.2 | 26.6: Swift 6.3.3, Metal Toolchain installed | Runs with Swift Build; the native build cannot run MLX | Runs |
-| `xcode-27` (preview) | 20260921.0210.1 | macOS 27.0 | 27.0: Swift 6.4, Metal Toolchain downloaded (839 MB in 19 s) | Runs with Swift Build; the native build cannot run MLX | Runs |
+| `xcode-27` (preview) | 20260921.0210.1 | macOS 27.0 | 27.0: Swift 6.4, Metal Toolchain downloaded (839 MB in about 20 s) | Runs with Swift Build; the native build cannot run MLX | Runs |
 
 Every host is an Apple M1 virtual machine with 3 CPUs and 7 GB of memory.
 
@@ -73,14 +73,13 @@ Every host is an Apple M1 virtual machine with 3 CPUs and 7 GB of memory.
 2. **The build system decides whether MLX runs at all.** Xcode 26.6's `swift build` uses the native
    build system, which leaves out mlx-swift's Metal shaders. Without that Metal library MLX cannot
    create a stream, so the CPU runs fail as well as the GPU runs, with
-   `Failed to load the default metallib`. Swift Build compiles the shaders, and every run of that
-   build passed. `macos-26` has the Metal Toolchain Swift Build needs, installed with the image.
+   `Failed to load the default metallib`. Swift Build compiles the shaders, and every executable
+   run of that build passed. `macos-26` has the Metal Toolchain Swift Build needs, installed with the image.
 3. **Inside `swift test`, MLX must be pointed at the library.** Swift Build copies the library
    into the test bundle, but MLX looks for it through `Bundle` objects and the Swift Testing runner
    creates none for the test bundle. The probe's test failed that way on `macos-26` and `xcode-27`,
    and passed on both, on the CPU and the GPU, once it set `GPU.metallib` to the copy in the test
-   bundle.
-   [development.md](development.md) ("MLX in tests") has the helper.
+   bundle. [development.md](development.md) ("MLX in tests") has the helper.
 4. **CPU fallback saves nothing.** A CPU-only test needs the same build and the same Metal library,
    because MLX loads the library as soon as it creates a stream on a Mac. CPU results match the CPU
    reference exactly, GPU results within the tolerances above, and the model runs on the GPU.
@@ -89,10 +88,9 @@ Every host is an Apple M1 virtual machine with 3 CPUs and 7 GB of memory.
    block (CPU 47 ms). The first GPU call of a kernel compiles its pipeline, about 0.3 s for a matmul
    and 1.2 to 1.6 s for the whole attention block, once per test process. The repository's macOS
    job, which builds everything with Swift Build, took 8 minutes with an empty cache, 270 s of it
-   building, and @@WARM@@ with a warm one. Synthetic tests on small shapes add seconds to that, well
+   building, and 3 minutes with a warm one. Synthetic tests on small shapes add seconds to that, well
    inside the 5-minute target. The standard runners cost nothing for this public repository.
    `macos-26-xlarge` (M2 Pro, which GitHub describes as GPU accelerated) is billed per minute and
    was not probed; the workflow's `include_xlarge` input adds it.
 
 D-028 records the decision that follows: MLX synthetic tests run in CI on the `macos-26` GPU.
-

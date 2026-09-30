@@ -9,11 +9,6 @@
 name: MLX runner probe
 
 on:
-  # TEMPORARY: workflow_dispatch works only once the file is on main, so the branch that adds the
-  # probe runs it on push. Removed before review.
-  push:
-    branches: [issue-7-ci]
-    paths: [.github/workflows/mlx-probe.yml]
   workflow_dispatch:
     inputs:
       include_xlarge:
@@ -52,7 +47,6 @@ jobs:
           sw_vers
           uname -m
           sysctl -n machdep.cpu.brand_string hw.ncpu hw.memsize
-          system_profiler SPDisplaysDataType
           ls -d /Applications/Xcode*.app
           mkdir -p "$RUNNER_TEMP/probe-logs"
 
@@ -475,8 +469,8 @@ jobs:
           case "$METAL_DOWNLOAD" in
             success | failure) download=", download ${METAL_DOWNLOAD} in ${METAL_SECONDS:-?} s" ;;
           esac
-          # system_profiler reports no displays in these virtual machines, so the GPU row comes
-          # from what Metal told the probe, or from the Python cross-check where no probe ran.
+          # system_profiler lists no displays in these virtual machines, so the GPU row comes from
+          # what Metal told the probe, or from the Python cross-check where no probe ran.
           logs=("$RUNNER_TEMP"/probe-logs/*.log)
           metal() { awk -F': ' -v key="$1" '$1 == key { print $2; exit }' "${logs[@]}" 2>/dev/null || true; }
           gpu=$(metal metal.name)
@@ -489,7 +483,9 @@ jobs:
             echo "| Item | Value |"
             echo "|---|---|"
             echo "| Host | $(sw_vers -productName) $(sw_vers -productVersion) ($(sw_vers -buildVersion)), $(sysctl -n machdep.cpu.brand_string), $(sysctl -n hw.ncpu) CPUs, $(( $(sysctl -n hw.memsize) >> 30 )) GB |"
-            echo "| GPU | ${gpu:-unknown}; $(metal metal.families); working set $(metal metal.recommendedMaxWorkingSetSize) |"
+            families=$(metal metal.families)
+            working_set=$(metal metal.recommendedMaxWorkingSetSize)
+            echo "| GPU | ${gpu:-unknown}${families:+; $families}${working_set:+; working set $working_set} |"
             echo "| Toolchain | $XCODE, Swift $SWIFT, Metal Toolchain ${METAL}${download} |"
             echo
             echo "| Probe | Outcome |"

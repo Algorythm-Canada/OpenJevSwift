@@ -5,10 +5,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches:
-      - main
-      # TEMPORARY: runs this workflow from the branch that adds it. Removed before review.
-      - issue-7-ci
+    branches: [main]
 
 permissions:
   contents: read

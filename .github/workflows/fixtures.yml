@@ -13,9 +13,6 @@ on:
       # UPSTREAM_OPENJEV_COMMIT and the fixture targets live in the Makefile.
       - Makefile
       - .github/workflows/fixtures.yml
-  # TEMPORARY: runs this workflow from the branch that adds it. Removed before review.
-  push:
-    branches: [issue-7-ci]
   workflow_dispatch:
   schedule:
     # Mondays at 06:23 UTC, to catch a pin that can no longer be fetched or installed.

@@ -227,8 +227,8 @@ And took this long:
 | Job | Empty cache | Warm cache |
 |---|---|---|
 | `Linux` | 3.5 minutes: build 128 s, tests 14 s | 1.5 minutes: build 26 s, tests 20 s |
-| `macOS` | 8 minutes: build 270 s with Swift Build (355 s with the native build system), tests 52 s | @@MACOS_WARM@@ |
-| `Regenerate the fixtures` | 41 s | @@FIXTURES_WARM@@ |
+| `macOS` | 8 minutes: build 270 s with Swift Build (355 s with the native build system), tests 52 s | 3 minutes: cache restore 33 s, build 76 s, tests 37 s |
+| `Regenerate the fixtures` | 41 s | 39 s |
 
 - **Why Swift Build on macOS.** Xcode 26.6's `swift build` uses the native build system, which does
   not compile mlx-swift's Metal shaders, and MLX cannot run at all without them. Swift Build
