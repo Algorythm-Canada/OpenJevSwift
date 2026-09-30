@@ -39,8 +39,9 @@ OpenJevSwift/                          Swift package, tools 6.2, strict concurre
       Vision/        Processor parity, pixel embedding, block ids (later milestone)
       Generation/    Sampler, stopping rules, block loop, streaming detokenizer (later)
     OpenJevServer/                     Hummingbird 2. ServerSettings, BackendProvider,
-                                       OpenJevApplication (routes), request id and
-                                       server-timing middleware; later auth, capacity, forwarding.
+                                       OpenJevApplication (routes), request id, server-timing,
+                                       authentication and body cap middleware, the body reader
+                                       and the refusal log; later capacity, forwarding.
     OpenJevTestSupport/                Fixture loaders, FixtureTokenizer and the stub backends
                                        the test targets share. Foundation only; not a product.
     openjev/                           CLI executable: serve, decide, models
@@ -246,16 +247,25 @@ Hummingbird 2 application with the routes in [02-jev-wire-api.md](02-jev-wire-ap
 service; the CLI hands it the DiffusionGemma runtime or an encoder. `GET /v1/models` lists the
 service's `ServedModels`.
 
-`POST /v1/systemone` reads the body up to the cap (413 past it). JSON is parsed by the core's
-order-preserving parser (Foundation's `JSONDecoder` cannot preserve object order), checked by
-`RequestValidator`, then the model name and the questions cap are checked before
-`SystemOneService.decide`. `SchemaError` and `OverloadedError` become upstream's 400 and 529.
 `ResponseHeadersMiddleware` runs in front of every route. It turns a thrown `WireError` into its
 response, answers an unknown route as FastAPI's 404, and adds `x-typesafe-request-id`,
-`x-request-id` and `server-timing` to every response, errors included. The route adds the
-engine's `Decision.modelTime` to a task-local `ModelTimeRecorder`, and the middleware reports it
-as `model`. Authentication and capacity come later; capacity is the engines' counter and
-semaphore, mirroring `max_inflight` and `max_queue`.
+`x-request-id` and `server-timing` to every response, errors included. Inside it, as upstream's
+`request_id_and_auth` does for `/v1/` paths, `AuthenticationMiddleware` checks the origin secret
+and the API key (`check_auth`) and `BodyCapMiddleware` reads a `POST` body up to the cap, the 413
+before a byte is read when `Content-Length` declares more (`read_capped_body`). `/health` is
+never authenticated.
+
+`POST /v1/systemone` reads the body as FastAPI does (`RequestBodyReader`): only a JSON content
+type is parsed, by the core's order-preserving parser (Foundation's `JSONDecoder` cannot preserve
+object order), and a body it refuses gets CPython's `json_invalid` message and position from
+`PythonJSONLoads`. The body is checked by `RequestValidator`, then the model name and the
+questions cap are checked before `SystemOneService.decide`. `SchemaError`, `OverloadedError` and
+`BackendRefusal` become upstream's 400, 529 and 400 `the model rejected this request`; any other
+error of the service is the 503 naming its type. `RefusalLog` logs the refusals upstream logs,
+where and why, never the body. The route adds the engine's `Decision.modelTime` to a task-local
+`ModelTimeRecorder`, and the middleware reports it as `model`. Capacity comes later; it is the
+engines' counter and semaphore, mirroring `max_inflight` and `max_queue`. Decisions D-030 and
+D-031 record where the server differs from upstream.
 `OPENJEV_MODEL_ROUTES` forwarding uses `URLSession` or Hummingbird's client. Text generation
 routes are added only when a generation-capable backend is loaded.
 

@@ -14,7 +14,8 @@ import OpenJevCore
 ///   log-probability maps of `Fixtures/distributions/`, through ``ReadResult``'s raw initializer.
 ///
 /// Every ``CanvasRead`` and every think call is recorded in call order. ``delay`` makes each
-/// backend call take at least that long, for the concurrency and timing tests.
+/// backend call take at least that long, for the concurrency and timing tests, and ``failure``
+/// makes each one throw, for the error contract tests.
 public final class StubBackend: DecisionBackend, @unchecked Sendable {
     /// One recorded think call.
     public struct ThinkCall: Equatable, Sendable {
@@ -50,6 +51,9 @@ public final class StubBackend: DecisionBackend, @unchecked Sendable {
     public let scripted: [UInt64: [[(tokenID: Int, logprob: Double)]]]
     /// The prompt tokens a scripted read bills.
     public let scriptedPromptTokens: Int
+    /// The error every read and every think call throws, after recording the call, instead of
+    /// answering; `nil` answers.
+    public let failure: (any Error)?
 
     private let lock = NSLock()
     private var recordedReads: [CanvasRead] = []
@@ -66,7 +70,8 @@ public final class StubBackend: DecisionBackend, @unchecked Sendable {
         delay: Duration? = nil,
         thought: [Int] = [7, 8, 9],
         scripted: [UInt64: [[(tokenID: Int, logprob: Double)]]] = [:],
-        scriptedPromptTokens: Int = 100
+        scriptedPromptTokens: Int = 100,
+        failure: (any Error)? = nil
     ) {
         self.tokenizer = tokenizer
         self.maxPromptTokens = maxPromptTokens
@@ -78,6 +83,7 @@ public final class StubBackend: DecisionBackend, @unchecked Sendable {
         self.thought = thought
         self.scripted = scripted
         self.scriptedPromptTokens = scriptedPromptTokens
+        self.failure = failure
     }
 
     /// Every read so far, in call order.
@@ -94,6 +100,9 @@ public final class StubBackend: DecisionBackend, @unchecked Sendable {
         lock.withLock { recordedReads.append(read) }
         if let delay {
             try await Task.sleep(for: delay)
+        }
+        if let failure {
+            throw failure
         }
         if let tops = scripted[read.seed] {
             return ReadResult(
@@ -118,6 +127,9 @@ public final class StubBackend: DecisionBackend, @unchecked Sendable {
         }
         if let delay {
             try await Task.sleep(for: delay)
+        }
+        if let failure {
+            throw failure
         }
         return ThoughtGeneration(generated: thought, promptTokens: 100)
     }

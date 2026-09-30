@@ -70,10 +70,16 @@ The package declares macOS 14 and iOS 17 as minimum deployment targets.
 | [mlx-swift](https://github.com/ml-explore/mlx-swift) | exactly 0.32.2 | 0.32.2 | `MLX`, `MLXNN` | macOS hosts |
 | [mlx-swift-lm](https://github.com/ml-explore/mlx-swift-lm) | revision `c043fb3b1ccf00f54ef8882a1e8da45c6e32e6f8` | that revision | `MLXLMCommon`, `MLXVLM` | macOS hosts |
 | [swift-transformers](https://github.com/huggingface/swift-transformers) | 1.3.0 up to the next minor | 1.3.4 | `Tokenizers` | macOS hosts |
-| [hummingbird](https://github.com/hummingbird-project/hummingbird) | 2.23.0 or later | 2.27.0 | `Hummingbird` | all hosts |
+| [swift-jinja](https://github.com/huggingface/swift-jinja) | 2.4.2 or later | 2.5.1 | `Jinja` | macOS hosts |
+| [hummingbird](https://github.com/hummingbird-project/hummingbird) | 2.23.0 or later | 2.27.0 | `Hummingbird`, `HummingbirdTesting` (server tests) | all hosts |
 | [swift-argument-parser](https://github.com/apple/swift-argument-parser) | 1.8.0 or later | 1.8.2 | `ArgumentParser` | all hosts |
+| [swift-http-types](https://github.com/apple/swift-http-types) | 1.8.0 or later | 1.8.0 | `HTTPTypes` | all hosts |
+| [swift-log](https://github.com/apple/swift-log) | 1.15.1 or later | 1.15.1 | `Logging` (server tests) | all hosts |
+| [swift-nio](https://github.com/apple/swift-nio) | 2.103.0 or later | 2.103.0 | `NIOEmbedded` (server tests) | all hosts |
 
-`Package.resolved` is committed. It pins these five packages and their 28 transitive dependencies.
+`Package.resolved` is committed. It pins these nine packages and their 24 transitive dependencies.
+swift-http-types, swift-log and swift-nio are Hummingbird's own dependencies, declared at the
+versions it already resolved.
 `swift-collections` is not a direct dependency. Issue #3 adds it if the JSON model adopts
 `OrderedDictionary`. The product names match [05-architecture.md](05-architecture.md).
 

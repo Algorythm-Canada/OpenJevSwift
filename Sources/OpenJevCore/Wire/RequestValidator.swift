@@ -22,7 +22,7 @@
 /// elsewhere: an unknown model is the server's (issue #38), and too many questions, empty choice
 /// criteria, more than 255 options or 10 levels are the question schema builder's (issue #10).
 /// The image content checks are issue #18's, and the 422 for a body that is not valid JSON is
-/// the HTTP layer's (issue #35).
+/// the server's, which reads the body as FastAPI does.
 public struct RequestValidator: Sendable {
     /// Creates a validator.
     public init() {}
@@ -42,6 +42,17 @@ public struct RequestValidator: Sendable {
         return request
     }
 
+    /// Every problem pydantic reports for a body, in its order, as upstream's handler logs them:
+    /// the items of the 422 ``validate(_:)`` throws, and also each `union_tag_invalid`, the
+    /// problem pydantic reports for a question whose `type` is not `noul`, `choice` or `score`,
+    /// which ``validate(_:)`` answers with ``WireError/invalidRequest`` instead. Empty for a
+    /// valid body.
+    public func problems(_ body: JSONValue?) -> [ValidationProblem] {
+        var run = Run()
+        _ = run.request(body)
+        return run.problems
+    }
+
     /// Validates one question, with `loc` paths that start at the question.
     func validateQuestion(_ value: JSONValue) throws(WireError) -> Question {
         var run = Run()
@@ -51,6 +62,28 @@ public struct RequestValidator: Sendable {
             preconditionFailure("a question with no errors was not built")
         }
         return question
+    }
+}
+
+/// One problem with a request body: where it is and pydantic's error type.
+///
+/// Upstream's handler logs each problem of a refused body as `loc: type`, with the `loc`
+/// components joined by `.`, and never the body itself.
+public struct ValidationProblem: Sendable, Hashable, CustomStringConvertible {
+    /// Where the problem is, starting with `body`.
+    public var loc: [LocComponent]
+    /// pydantic's error type, such as `missing` or `union_tag_invalid`.
+    public var type: String
+
+    /// Creates a problem.
+    public init(loc: [LocComponent], type: String) {
+        self.loc = loc
+        self.type = type
+    }
+
+    /// `body.questions.q: union_tag_invalid`, as upstream's `log_invalid` writes it.
+    public var description: String {
+        "\(loc.map(\.description).joined(separator: ".")): \(type)"
     }
 }
 
@@ -71,6 +104,8 @@ private let maximumIntegerText = 4300
 /// One validation pass, collecting errors as it goes.
 private struct Run {
     var errors: [ValidationErrorItem] = []
+    /// The location and type of every error and every unknown question type, in order.
+    var problems: [ValidationProblem] = []
     var sawUnknownQuestionType = false
 
     /// Throws the collected result, if there is one.
@@ -88,6 +123,7 @@ private struct Run {
         ctx: JSONValue? = nil
     ) {
         errors.append(ValidationErrorItem(type: type, loc: loc, msg: msg, input: input, ctx: ctx))
+        problems.append(ValidationProblem(loc: loc, type: type))
     }
 
     mutating func missing(_ loc: [LocComponent], in container: JSONValue) {
@@ -214,8 +250,10 @@ private struct Run {
         let kind = tag.stringValue ?? ""
         guard kind == "noul" || kind == "choice" || kind == "score" else {
             // pydantic reports union_tag_invalid, and upstream's handler answers any request
-            // that has one with the generic 400, so the item itself never reaches the wire.
+            // that has one with the generic 400, so the item itself never reaches the wire;
+            // only its location and type are logged, with the other problems.
             sawUnknownQuestionType = true
+            problems.append(ValidationProblem(loc: loc, type: "union_tag_invalid"))
             return nil
         }
         let loc = loc + [.key(kind)]

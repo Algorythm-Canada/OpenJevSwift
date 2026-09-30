@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Write the CPython reference tables for OpenJevCore's JSON writer and parser.
+"""Write the CPython reference tables for OpenJevCore's JSON writer, parser and decode errors.
 
 The tables record what CPython's json module produces, so that the Swift tests compare against
 Python itself rather than against expectations written by hand. The script uses only the standard
@@ -12,6 +12,7 @@ Usage (from the repository root):
 The output goes to Fixtures/python-json/. Each file records the Python version that wrote it.
 """
 
+import base64
 import json
 import math
 import random
@@ -173,6 +174,245 @@ def document_table(rng):
     return rows
 
 
+# Documents for decode_errors.json: what json.loads does with the bytes of a request body. The
+# named ones cover every message CPython's scanner (Modules/_json.c) raises and the places where
+# it is more lenient than RFC 8259; the rest are seeded mutations of request-like documents.
+NAMED_DOCUMENTS = [
+    ("empty", b""),
+    ("whitespace_only", b" \t\r\n "),
+    ("open_object", b"{"),
+    ("open_array", b"["),
+    ("open_string", b'"'),
+    ("key_without_colon", b'{"a"'),
+    ("colon_without_value", b'{"a":'),
+    ("value_without_close", b'{"a":1'),
+    ("comma_without_key", b'{"a":1,'),
+    ("object_trailing_comma", b'{"a":1,}'),
+    ("object_trailing_comma_spaced", b'{"a":1 , }'),
+    ("array_trailing_comma", b"[1,]"),
+    ("array_trailing_comma_newline", b"[1,\n]"),
+    ("array_comma_without_value", b"[1,"),
+    ("array_without_close", b"[1"),
+    ("array_missing_comma", b"[1 2]"),
+    ("array_double_comma", b"[1,,2]"),
+    ("array_leading_comma", b"[,1]"),
+    ("object_leading_comma", b"{,}"),
+    ("object_double_comma", b'{"a":1,,"b":2}'),
+    ("object_double_colon", b'{"a"::1}'),
+    ("object_number_key", b"{1:2}"),
+    ("object_single_quotes", b"{'a':1}"),
+    ("object_missing_colon", b'{"a" 1}'),
+    ("object_missing_comma", b'{"a":1 "b":2}'),
+    ("mismatched_close_array", b'{"a":[1}'),
+    ("mismatched_close_object", b'{"a":{"b":1]}'),
+    ("extra_data", b"{} {}"),
+    ("extra_close", b"[1]]"),
+    ("extra_word", b"true false"),
+    ("trailing_whitespace", b"{}  \n"),
+    ("trailing_nul", b'{"a":1}\x00'),
+    ("lone_close_bracket", b"]"),
+    ("lone_close_brace", b"}"),
+    ("lone_comma", b","),
+    ("lone_colon", b":"),
+    ("truncated_null", b"nul"),
+    ("truncated_true", b"tru"),
+    ("truncated_false", b"fals"),
+    ("misspelled_null", b"nulx"),
+    ("null_in_array", b"[null]"),
+    ("minus_alone", b"-"),
+    ("minus_letter", b"-x"),
+    ("double_minus", b"--1"),
+    ("leading_zero", b"01"),
+    ("leading_zero_in_array", b"[01]"),
+    ("fraction_without_digits", b"1."),
+    ("fraction_before_exponent", b"1.e5"),
+    ("exponent_without_digits", b"1e"),
+    ("exponent_sign_without_digits", b"1e+"),
+    ("exponent_without_digits_in_array", b"[1e+]"),
+    ("exponent_without_digits_in_object", b'{"a":1.5e}'),
+    ("number_then_letter", b"[1e5x]"),
+    ("leading_dot", b".5"),
+    ("leading_plus", b"+1"),
+    ("minus_in_object", b'{"a":-}'),
+    ("negative_zero", b'{"a":-0}'),
+    ("nan", b"NaN"),
+    ("infinity", b"Infinity"),
+    ("negative_infinity", b"-Infinity"),
+    ("nan_in_array", b"[NaN, Infinity, -Infinity]"),
+    ("truncated_infinity", b"[Infinit"),
+    ("lowercase_nan", b"nan"),
+    ("lowercase_inf", b"inf"),
+    ("float_overflow", b"1e400"),
+    ("float_overflow_negative", b"[-1e400]"),
+    ("integer_4300_digits", b"1" * 4300),
+    ("integer_4301_digits", b"1" * 4301),
+    ("negative_integer_4300_digits", b"-" + b"1" * 4300),
+    ("negative_integer_4301_digits", b"-" + b"1" * 4301),
+    ("float_4301_digits", b"1" * 4301 + b".5"),
+    ("exponent_4301_digits", b"1" * 4301 + b"e5"),
+    ("long_integer_then_error", b"[" + b"1" * 4301 + b",}"),
+    ("error_then_long_integer", b"[1,}" + b"1" * 4301),
+    ("lone_high_surrogate", b'"\\ud83d"'),
+    ("lone_low_surrogate", b'"\\ude00"'),
+    ("high_surrogate_then_letter", b'"\\ud83dx"'),
+    ("high_surrogate_then_escape", b'"\\ud83d\\u0041"'),
+    ("high_surrogate_then_short_escape", b'"\\ud83d\\u12"'),
+    ("high_surrogate_then_bad_escape", b'"\\ud83d\\uZZZZ"'),
+    ("surrogate_pair", b'"\\ud83d\\ude00"'),
+    ("short_unicode_escape", b'"\\u12"'),
+    ("bad_unicode_escape", b'"\\u12G4"'),
+    ("empty_unicode_escape", b'"\\u"'),
+    ("unicode_escape_then_end", b'"\\u0041'),
+    ("unicode_escape_cut", b'"\\u004'),
+    ("unicode_escape_with_non_ascii", '"\\u00é"'.encode()),
+    ("unicode_escape_cut_with_non_ascii", '"\\u0é'.encode()),
+    ("invalid_escape", b'"\\x"'),
+    ("backslash_at_end", b'"\\'),
+    ("backslash_at_end_after_text", b'"a\\'),
+    ("control_character", b'"\x01"'),
+    ("tab_in_string", b'"\t"'),
+    ("newline_in_string", b'"\n"'),
+    ("escaped_nul", b'{"a":"b\\u0000"}'),
+    ("non_ascii_then_control", '"é\x02"'.encode()),
+    ("non_ascii_then_invalid_escape", '"é\\q"'.encode()),
+    ("non_ascii_key_then_bad_value", '{"é": x}'.encode()),
+    ("non_ascii_trailing_comma", '["é", ]'.encode()),
+    ("non_ascii_value", "é".encode()),
+    ("non_ascii_in_object", '{"a":é}'.encode()),
+    ("line_separator_in_array", "[ ]".encode()),
+    ("astral_then_error", '{"😀": "中文" x}'.encode()),
+    ("vertical_tab", b"[\x0b1]"),
+    ("form_feed", b"[1\x0c]"),
+    ("no_break_space_after", '{"a":1} '.encode()),
+    ("no_break_space_before", " {}".encode()),
+    ("byte_order_mark", b"\xef\xbb\xbf{}"),
+    ("byte_order_mark_then_error", b"\xef\xbb\xbf{,}"),
+    ("byte_order_mark_alone", b"\xef\xbb\xbf"),
+    ("two_byte_order_marks", b"\xef\xbb\xbf\xef\xbb\xbf{}"),
+    ("invalid_utf8", b'{"state": "\xff"}'),
+    ("invalid_utf8_after_error", b'{,"\xff"}'),
+    ("truncated_utf8", b'{"state": "\xc3'),
+    ("overlong_utf8", b'"\xc0\xaf"'),
+    ("wire_truncated", b'{"state": '),
+    ("wire_single_quotes", b"{'state': 'x'}"),
+    ("wire_trailing_comma", b'{"state": "x",}'),
+    ("wire_missing_colon", b'{"state" "x"}'),
+    ("wire_missing_comma", b'{"state": "x" "model": "y"}'),
+    ("wire_extra_data", b"{} {}"),
+    ("wire_unterminated_string", b'{"state": "x'),
+    ("wire_control_character", b'{"state": "a\x01b"}'),
+    ("wire_invalid_escape", b'{"state": "\\q"}'),
+    ("wire_non_ascii_before_error", '{"state": "éé", }'.encode()),
+    ("deep_arrays_truncated", b"[" * 3000 + b"]" * 2999),
+    ("deep_objects_then_error", b'{"a":' * 2000 + b"1" + b"}" * 1999 + b","),
+    ("deep_arrays", b"[" * 3000 + b"]" * 3000),
+]
+
+MUTATION_SEEDS = [
+    b'{"state":"x","model":"jev-latest","questions":{"a":{"type":"noul"}}}',
+    b'{"state": {"name": "Ada", "tags": ["a", "b", {"deep": [1, [2, [3, {}]]]}]}, '
+    b'"n": -12.5e+3, "t": true, "f": false, "z": null}',
+    '{"é": "中文 😀", "k": ["\\u00e9\\ud83d\\ude00", "\\n\\t\\"\\\\\\/"]}'.encode(),
+    b'[1, 2.5, -0, 0e1, 1E-2, "x", [], {}, [[]], {"a": {}}]',
+    b'  {"a" : 1 ,\n "b":[ 1 , 2 ] }  ',
+    b'"just a string"',
+    b"123",
+    b"-1.5e10",
+    b"[true, null, NaN, Infinity, -Infinity]",
+]
+
+MUTATION_PIECES = [
+    b'"', b"{", b"}", b"[", b"]", b":", b",", b" ", b"\n", b"\\", b"u", b"0", b"1", b"9", b"-",
+    b"+", b".", b"e", b"E", b"n", b"t", b"f", b"a", b"l", b"s", b"N", b"I", b"x", b"\x01",
+    b"\x1f", b"\x7f", "é".encode(), "😀".encode(), b"\xff", b"\t", b"\r", b"/", b"b", b"r",
+]
+
+MUTATION_COUNT = 600
+
+
+def mutated(rng):
+    """A request-like document with one to three random edits."""
+    s = bytearray(rng.choice(MUTATION_SEEDS))
+    for _ in range(rng.randrange(1, 4)):
+        op = rng.randrange(5)
+        p = rng.randrange(len(s) + 1)
+        if op == 0 and s:
+            del s[min(p, len(s) - 1)]
+        elif op == 1:
+            s[p:p] = rng.choice(MUTATION_PIECES)
+        elif op == 2 and s:
+            i = min(p, len(s) - 1)
+            s[i:i + 1] = rng.choice(MUTATION_PIECES)
+        elif op == 3:
+            s = s[:p]
+        else:
+            q = rng.randrange(len(s) + 1)
+            s[p:p] = s[min(p, q):max(p, q)][:10]
+    return bytes(s)
+
+
+def reads_as_utf8(raw):
+    """Whether json.loads reads the bytes as UTF-8 with strict decoding: it also detects UTF-16
+    and UTF-32, and its surrogatepass decoding lets encoded surrogates through, which the Swift
+    port does not reproduce (decision D-031)."""
+    if json.detect_encoding(raw) not in ("utf-8", "utf-8-sig"):
+        return False
+    doc = raw[3:] if raw.startswith(b"\xef\xbb\xbf") else raw
+    try:
+        doc.decode("utf-8")
+    except UnicodeDecodeError:
+        try:
+            doc.decode("utf-8", "surrogatepass")
+        except UnicodeDecodeError:
+            return True
+        return False
+    return True
+
+
+def loads_outcome(raw):
+    """What json.loads(raw) does, or None when it runs out of stack (RecursionError)."""
+    try:
+        json.loads(raw)
+    except json.JSONDecodeError as e:
+        return {"outcome": "JSONDecodeError", "msg": e.msg, "pos": e.pos}
+    except UnicodeDecodeError:
+        return {"outcome": "UnicodeDecodeError"}
+    except RecursionError:
+        return None
+    except ValueError:
+        # int() past sys.int_max_str_digits
+        return {"outcome": "ValueError"}
+    return {"outcome": "accepted"}
+
+
+def decode_error_table(rng):
+    documents = list(NAMED_DOCUMENTS)
+    seen = {raw for _, raw in documents}
+    while len(documents) < len(NAMED_DOCUMENTS) + MUTATION_COUNT:
+        raw = mutated(rng)
+        if raw in seen or not reads_as_utf8(raw):
+            continue
+        seen.add(raw)
+        documents.append((f"mutation_{len(documents) - len(NAMED_DOCUMENTS):03d}", raw))
+    rows = []
+    for name, raw in documents:
+        if not reads_as_utf8(raw):
+            raise SystemExit(f"decode_errors: {name} is not read as UTF-8 by json.loads")
+        outcome = loads_outcome(raw)
+        if outcome is None:
+            raise SystemExit(f"decode_errors: {name} ran out of stack")
+        row = {"name": name, "bytes": base64.b64encode(raw).decode("ascii")}
+        # A readable copy of short documents; the bytes are what the tests use.
+        if len(raw) <= 200:
+            try:
+                row["text"] = raw.decode("utf-8")
+            except UnicodeDecodeError:
+                pass
+        row.update(outcome)
+        rows.append(row)
+    return rows
+
+
 def write(name, rows):
     path = OUTPUT / name
     body = {"generator": generator(), "rows": rows}
@@ -185,6 +425,7 @@ def main():
     write("float_repr.json", float_table(random.Random(SEED)))
     write("strings.json", string_table())
     write("documents.json", document_table(random.Random(SEED + 1)))
+    write("decode_errors.json", decode_error_table(random.Random(SEED + 2)))
 
 
 if __name__ == "__main__":

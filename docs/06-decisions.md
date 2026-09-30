@@ -891,4 +891,124 @@ Decision.
    `#if canImport(Hummingbird)`, so `OpenJevServer` still compiles for iOS, where the manifest
    leaves Hummingbird out.
 
-Status. Proposed with issue #34.
+Status. Proposed with issue #34. Items 5 and 6 are completed by D-031 (issues #35 and #36): the
+503 for a backend failure, the body cap in a middleware after authentication, and the
+`json_invalid` messages, positions and content-type rules.
+
+## D-031 Error contract and authentication: where the port goes beyond or differs from the issue text
+
+Context. Issue #35 maps every failure to upstream's status, body and headers, and issue #36 ports
+`check_auth`. Upstream answers through FastAPI, Starlette and CPython, whose behaviour the
+fixtures record (`Fixtures/wire/cases.json`, `Fixtures/errors/cases.json`), and several points
+needed choices the issues do not spell out.
+
+Decision.
+
+1. A body `JSONParser` refuses is scanned again by `PythonJSONLoads`, a port of CPython 3.14's
+   scanner (`Modules/_json.c`), which reports only how `json.loads` ends: the first
+   `JSONDecodeError` with its message and position, a `UnicodeDecodeError`, the `ValueError` of
+   `int()` past 4,300 digits, or the `RecursionError` of nesting past the stack (item 2). The parser's own errors cannot give CPython's answer: the same
+   offset can be "Expecting value" or "Expecting property name enclosed in double quotes"
+   depending on the container, "Unterminated string starting at" points at the opening quote,
+   and CPython reads `01`, `1.` and `1e` in part and fails on what follows. Positions count
+   characters (Unicode scalars) after any byte order mark. `Fixtures/python-json/decode_errors.json`,
+   written by `Tools/fixtures/python_json_tables.py`, records CPython's answer for 728 documents
+   (128 chosen, 600 seeded mutations), and every one matches; a fuzz of 197,000 mutated documents
+   against CPython 3.14.7 found no difference before the table was committed.
+2. Where CPython accepts what the stricter parser refuses (D-016), the answer is the closest one
+   CPython gives, at the place the parser stopped: "Expecting value" at `NaN`, `Infinity`,
+   `-Infinity` or a float beyond `Double`, "Invalid \uXXXX escape" at a lone surrogate's `u`, and
+   the 400 "There was an error parsing the body" for nesting deeper than the parser's 1,024
+   levels. Upstream parses those bodies and answers from the value: a 422, then a 500 when the
+   value cannot be written as JSON (`NaN` in `state`), or a read. An integer of more than 4,300
+   digits is the 400, as upstream. CPython itself gives up on deep nesting with a
+   `RecursionError`, which FastAPI answers with the same 400, at a level that depends on the
+   version and the stack: 1,497 levels with CPython 3.12, which upstream's container runs, 9,998
+   with 3.13, and with 3.14.7, which recorded the fixtures, where the thread's stack runs out:
+   58,081 levels on an 8 MiB stack, the size of the Linux main thread uvicorn reads a body on,
+   and 116,208 on macOS's 16 MiB main thread. `PythonJSONLoads` stops at 58,000 levels
+   (`maximumNesting`), so a malformed body nested deeper is the 400, as upstream answers it
+   there, and one nested between 1,024 and 58,000 levels gets CPython's message.
+3. The body is read as FastAPI reads it. An empty body is no body, whatever its content type. A
+   JSON content type is `application/json` or `application/` ending in `+json`, the media type
+   read as `email.message` reads it: the text before the first `;`, stripped of Python's
+   whitespace and lowercased, with exactly one `/` (a lone 0x85 or 0xA0 byte arrives as U+FFFD,
+   item 6, and is not stripped). Any other content type, or none, hands pydantic
+   the bytes: the 422 `model_attributes_type` whose `input` is Python's bytes repr cut at 500
+   characters without a marker, as `trim` writes `str(value)[:500]`. `String.pythonRepr(bytes:)`
+   writes it. A UTF-8 byte order mark is dropped, as `json.loads` decodes `utf-8-sig`.
+   `json.loads` also reads UTF-16 and UTF-32, recognized by a byte order mark or by NUL bytes
+   among the first four, and UTF-8 with encoded surrogates (`surrogatepass`); this port reads
+   UTF-8 only and answers such bodies from their UTF-8 reading.
+4. `AuthenticationMiddleware` and then `BodyCapMiddleware` run inside
+   `ResponseHeadersMiddleware`, upstream's `check_auth(...) or await read_capped_body(...)`, so a
+   refusal carries both request ids and `server-timing`. Upstream's middleware answers the 401,
+   403 and 413 without `server-timing`, and `Fixtures/wire/cases.json` records
+   `server_timing_present` false for exactly those rows (in `Fixtures/errors/cases.json` only
+   upstream's two bare 500s lack it too); this server sets it on every response, as D-030 item 6
+   did for the 413.
+   The cap applies to `POST` only. `Content-Length` is read as Python's `int()` reads it
+   (whitespace, a sign, `_` between digits, at most 4,300 digits counting leading zeros): past
+   the cap is the 413 before a byte is read, a value `int()` refuses is ignored and the body
+   counted, and an integer too large for `Int` is past the cap when positive. A body is counted as it arrives and refused at the first chunk
+   that passes the cap. The route reads the collected buffer; `collect(upTo:)` keeps it bounded
+   should it ever be mounted without the middleware.
+5. Upstream authenticates and caps paths that start with `/v1/`. Hummingbird's router skips
+   empty path components, so `//v1/models` reaches `GET /v1/models` without starting with
+   `/v1/`; the middlewares also cover a path whose first component is `v1` with more after it.
+   Upstream answers `//v1/models` with a 404; here it needs the key. Hummingbird does not
+   percent-decode a path, so `/%761/models` is a 404 here, where Starlette decodes it to
+   `/v1/models` and upstream authenticates it; neither serves it without the key.
+6. A header is read as Starlette reads it: the first field of the name, one Latin-1 character per
+   byte of the value that reaches the server. `removeprefix("Bearer ")` is the exact text, `strip()`
+   removes Python's whitespace among the Latin-1 characters (U+0009 to U+000D, U+001C to U+0020,
+   U+0085, U+00A0), `encode()` writes UTF-8, and the comparison runs over every byte up to the
+   longer length with a length difference counted as one more mismatch, never returning early. What
+   reaches the server differs from what reaches Starlette in two ways. NIO's HTTP/1 decoder reads
+   each header value as UTF-8 and turns a byte that is not UTF-8 into U+FFFD, so a lone 0x85, 0xA0
+   or Latin-1 letter arrives changed: a key padded with 0xA0 is refused where upstream strips the
+   byte, and a non-ASCII setting can never be matched, where upstream accepts its Latin-1 bytes.
+   Such a request is refused, never failed another way. A value in UTF-8, as in every recorded case,
+   compares as upstream compares it. swift-http-types also drops the whitespace around a field
+   value, as h11 does in front of upstream, so `" s3"` arrives as `s3` and a key of spaces as the
+   missing key's 403; upstream's own tests, which call `check_auth` with such strings directly,
+   would give 403 and 401 there.
+7. A backend refuses a request with `BackendRefusal(reason:)`, next to `BackendContractError`,
+   upstream's `Upstream`. The server answers `WireError.modelRejected400` with the reason's first
+   500 Unicode scalars, as `str(msg)[:500]` keeps them. Any other error a service throws is the
+   503 naming its Swift type, `String(describing: type(of: error))` for upstream's
+   `type(e).__name__`, with `retry-after: 2`: that includes `BackendContractError`, a tokenizer's
+   error and `CancellationError`. Upstream answers the 503 only for httpx's errors and lets
+   anything else an engine raises become a 500; this port has no HTTP backend, and every
+   failure of the model is the backend's. How a vLLM response becomes a refusal or a failure is
+   not ported. The unknown route's 404 and the plain-text 500 for an error outside the service,
+   such as a body that cannot be written, stay as D-030 has them. `WireError` gains
+   `jsonInvalid422(message:position:)` and `unparsableBody400`.
+8. `RefusalLog` writes upstream's `log_invalid` line, `{status} {request_id} {problems}` with the
+   problems joined by `; `, at warning level, for the refusals upstream logs: each 422 (`loc:
+   type` per item, `body.24: json_invalid` for a malformed body), the invalid-request 400 (every
+   problem, each `union_tag_invalid` included, from `RequestValidator.problems(_:)`) and each
+   plain-detail 400 (`loc: reason`, with `SchemaError.loc`, `body.questions` for the questions
+   cap and `body` for a refusal). The body, the state and the instructions are never written.
+   Upstream logs the invalid-request 400 with the status 422, its handler's default argument;
+   here the line carries the 400 the client got. Authentication, the cap, a body FastAPI cannot
+   read, an unknown model and a full queue are not logged, as upstream does not log them. A
+   backend failure, which upstream does not log either, is logged at error level with the
+   message of its 503, the type name only, since an error's description can hold request text.
+9. The engine read a request's groups concurrently and threw whichever group's refusal came
+   first. Upstream's `asyncio.gather` starts the groups in order and each resolves its template
+   and prompt before its first `await`, so it always reports the first group's error; at canvas 8
+   the quickstart was refused with either the first group's 8 tokens or the second's 9. Without
+   a thought, every group is now prepared (template, prompt, label limit), concurrently, before
+   any read, and the first group's error is thrown. With a thought, upstream's order depends on
+   timing too, and nothing changed.
+10. The server test target declares swift-log, for a capturing `LogHandler` given to
+    `Application(logger:)`, and swift-nio, whose `NIOAsyncTestingChannel` lets a test send a
+    request built by hand straight to the responder: without `Content-Length`, or with a body
+    that fails the test if it is read. Both are pinned to the versions Hummingbird already
+    resolved, so `Package.resolved` is unchanged. The recorded requests that pass validation are
+    sent to a stub whose reads throw `ConnectError`, a test type named after httpx's error, so
+    the 503 comes back byte for byte; the tokenizer fixtures never rendered some of those
+    prompts, so the tests use `AnyPromptTokenizer`, which gives stand-in ids for those alone.
+
+Status. Proposed with issues #35 and #36.
