@@ -13,6 +13,7 @@ let package = Package(
     products: [
         .library(name: "EncoderHarness", targets: ["EncoderHarness"]),
         .executable(name: "encoder-harness", targets: ["encoder-harness"]),
+        .executable(name: "encoder-capacity", targets: ["encoder-capacity"]),
     ],
     dependencies: [
         // The version the main package resolves (Package.resolved at the repository root).
@@ -26,6 +27,13 @@ let package = Package(
         ),
         .executableTarget(
             name: "encoder-harness",
+            dependencies: ["EncoderHarness"],
+            swiftSettings: [.swiftLanguageMode(.v6)]
+        ),
+        // What each loaded function of a multifunction package costs in memory and load time on a
+        // Mac (D-042, docs/spikes/encoder-function-capacity.md).
+        .executableTarget(
+            name: "encoder-capacity",
             dependencies: ["EncoderHarness"],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),

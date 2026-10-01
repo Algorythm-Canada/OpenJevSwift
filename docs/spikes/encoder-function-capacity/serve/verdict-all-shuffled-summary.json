@@ -1,0 +1,20 @@
+{
+ "label": "verdict-all-shuffled",
+ "backend": "verdict",
+ "functions": "all",
+ "order": "shuffled",
+ "seed": 61,
+ "startup_s": 2.84,
+ "memory_mb": {
+  "after_warm_up": {
+   "footprint": 370,
+   "weight_copies": 289,
+   "resident": 659
+  },
+  "after_reads": {
+   "footprint": 405,
+   "weight_copies": 1156,
+   "resident": 1561
+  }
+ }
+}

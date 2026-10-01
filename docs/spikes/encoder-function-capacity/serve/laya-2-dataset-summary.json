@@ -1,0 +1,20 @@
+{
+ "label": "laya-2-dataset",
+ "backend": "laya",
+ "functions": "2",
+ "order": "dataset",
+ "seed": 61,
+ "startup_s": 3.08,
+ "memory_mb": {
+  "after_warm_up": {
+   "footprint": 530,
+   "weight_copies": 803,
+   "resident": 1333
+  },
+  "after_reads": {
+   "footprint": 426,
+   "weight_copies": 1610,
+   "resident": 2035
+  }
+ }
+}

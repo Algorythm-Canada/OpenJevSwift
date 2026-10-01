@@ -1,0 +1,111 @@
+{
+  "afterReleaseFootprintMB" : 1695.8,
+  "afterReleaseWeightCopiesMB" : 0,
+  "baselineFootprintMB" : 3.3,
+  "device" : {
+    "chip" : "Apple M3 Max",
+    "machine" : "arm64",
+    "model" : "Mac15,9",
+    "operatingSystem" : "Version 27.0.1 (Build 26A434)",
+    "physicalMemoryBytes" : 137438953472,
+    "processorCount" : 16
+  },
+  "package" : "laya-m18-fp16",
+  "peakFootprintMB" : 3522.7,
+  "peakResidentMB" : 9963.9,
+  "reloadFirstCallSeconds" : 0.5225755839928752,
+  "reloadFunction" : "b1_s128",
+  "reloadLoadSeconds" : 0.14157529099611565,
+  "steps" : [
+    {
+      "firstCallSeconds" : 1.1943915000010747,
+      "footprintMB" : 246.8,
+      "function" : "b1_s128",
+      "functionsLoaded" : 1,
+      "loadSeconds" : 0.2493589170044288,
+      "residentMB" : 1051.2,
+      "secondCallSeconds" : 0.01464066699554678,
+      "weightCopiesMB" : 804.4,
+      "weightCopyRegions" : 13
+    },
+    {
+      "firstCallSeconds" : 0.47762754099676386,
+      "footprintMB" : 311.4,
+      "function" : "b1_s256",
+      "functionsLoaded" : 2,
+      "loadSeconds" : 0.186235792003572,
+      "residentMB" : 1920.3,
+      "secondCallSeconds" : 0.023475209003663622,
+      "weightCopiesMB" : 1608.9,
+      "weightCopyRegions" : 26
+    },
+    {
+      "firstCallSeconds" : 0.4474041249923175,
+      "footprintMB" : 406.3,
+      "function" : "b1_s512",
+      "functionsLoaded" : 3,
+      "loadSeconds" : 0.14140104199759662,
+      "residentMB" : 2820,
+      "secondCallSeconds" : 0.04453241601004265,
+      "weightCopiesMB" : 2413.8,
+      "weightCopyRegions" : 39
+    },
+    {
+      "firstCallSeconds" : 0.5145310000079917,
+      "footprintMB" : 546.7,
+      "function" : "b1_s1024",
+      "functionsLoaded" : 4,
+      "loadSeconds" : 0.14872491599817295,
+      "residentMB" : 3767.3,
+      "secondCallSeconds" : 0.09392937499796972,
+      "weightCopiesMB" : 3220.6,
+      "weightCopyRegions" : 52
+    },
+    {
+      "firstCallSeconds" : 0.6039608340070117,
+      "footprintMB" : 738.6,
+      "function" : "b16_s128",
+      "functionsLoaded" : 5,
+      "loadSeconds" : 0.15338508300192188,
+      "residentMB" : 4763.6,
+      "secondCallSeconds" : 0.2016108749958221,
+      "weightCopiesMB" : 4025,
+      "weightCopyRegions" : 65
+    },
+    {
+      "firstCallSeconds" : 0.7649545830063289,
+      "footprintMB" : 891.9,
+      "function" : "b16_s256",
+      "functionsLoaded" : 6,
+      "loadSeconds" : 0.19282208300137427,
+      "residentMB" : 5721.4,
+      "secondCallSeconds" : 0.33750508300727233,
+      "weightCopiesMB" : 4829.5,
+      "weightCopyRegions" : 78
+    },
+    {
+      "firstCallSeconds" : 1.4740672500047367,
+      "footprintMB" : 1472,
+      "function" : "b16_s512",
+      "functionsLoaded" : 7,
+      "loadSeconds" : 0.14727212500292808,
+      "residentMB" : 7106.4,
+      "secondCallSeconds" : 0.7332184580009198,
+      "weightCopiesMB" : 5634.4,
+      "weightCopyRegions" : 91
+    },
+    {
+      "firstCallSeconds" : 1.8088593330030562,
+      "footprintMB" : 2629,
+      "function" : "b16_s1024",
+      "functionsLoaded" : 8,
+      "loadSeconds" : 0.1550749580055708,
+      "residentMB" : 9070.2,
+      "secondCallSeconds" : 1.51713637499779,
+      "weightCopiesMB" : 6441.3,
+      "weightCopyRegions" : 104
+    }
+  ],
+  "units" : "cpuAndGPU",
+  "weightFileMB" : 806.7
+}
