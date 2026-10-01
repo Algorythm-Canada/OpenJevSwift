@@ -105,14 +105,16 @@ var targets: [Target] = [
     ),
 ]
 
-// OpenJevDiffusionGemma runs on MLX, which needs Apple silicon. SwiftPM evaluates this manifest on
-// the host, and every Apple platform build runs on a macOS host, so the MLX packages and the
+// OpenJevDiffusionGemma runs on MLX, which needs Apple silicon, and OpenJevEncoders runs on Core
+// ML, which exists only on Apple platforms. SwiftPM evaluates this manifest on the host, and every
+// Apple platform build runs on a macOS host, so the MLX and swift-transformers packages and the
 // targets that use them are declared only there. A Linux build never loads their manifests or
 // builds them.
 #if os(macOS)
-    products.append(
-        .library(name: "OpenJevDiffusionGemma", targets: ["OpenJevDiffusionGemma"])
-    )
+    products += [
+        .library(name: "OpenJevDiffusionGemma", targets: ["OpenJevDiffusionGemma"]),
+        .library(name: "OpenJevEncoders", targets: ["OpenJevEncoders"]),
+    ]
     dependencies += [
         .package(url: "https://github.com/ml-explore/mlx-swift", exact: "0.32.2"),
         .package(
@@ -153,6 +155,23 @@ var targets: [Target] = [
                 .product(name: "MLXHuggingFace", package: "mlx-swift-lm"),
                 .product(name: "Tokenizers", package: "swift-transformers"),
             ],
+            swiftSettings: swiftSettings
+        ),
+        // Verdict (and later Laya) on Core ML (decision D-011): the prompt, the tokenizer, the
+        // calibration, the Core ML runner and the package store. No MLX. Its Core ML types need
+        // macOS 15 and iOS 18, which the multifunction packages require; the package keeps its
+        // macOS 14 and iOS 17 floors.
+        .target(
+            name: "OpenJevEncoders",
+            dependencies: [
+                "OpenJevCore",
+                .product(name: "Tokenizers", package: "swift-transformers"),
+            ],
+            swiftSettings: swiftSettings
+        ),
+        .testTarget(
+            name: "OpenJevEncodersTests",
+            dependencies: ["OpenJevEncoders", "OpenJevCore", "OpenJevTestSupport"],
             swiftSettings: swiftSettings
         ),
     ]

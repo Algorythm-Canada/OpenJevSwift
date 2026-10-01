@@ -58,7 +58,7 @@ jobs:
 
       - name: Test
         run: |
-          unset OPENJEV_TEST_MODEL OPENJEV_LIVE_URL
+          unset OPENJEV_TEST_MODEL OPENJEV_ENCODER_MODELS OPENJEV_LIVE_URL
           swift test --scratch-path .build/linux 2>&1 | tee "$RUNNER_TEMP/swift-test.log"
 
       - name: Check that only model tests were skipped
@@ -120,7 +120,7 @@ jobs:
 
       - name: Test
         run: |
-          unset OPENJEV_TEST_MODEL OPENJEV_LIVE_URL
+          unset OPENJEV_TEST_MODEL OPENJEV_ENCODER_MODELS OPENJEV_LIVE_URL
           swift test --build-system swiftbuild 2>&1 | tee "$RUNNER_TEMP/swift-test.log"
 
       - name: Check that only model tests were skipped
@@ -138,8 +138,9 @@ jobs:
     env:
       # The same toolchain as the macOS job.
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
-      # The committed shared scheme. It builds OpenJevCore and OpenJevCoreTests, and nothing that
-      # needs Hummingbird or MLX. docs/development.md holds the same commands for local runs.
+      # The committed shared scheme. It builds and tests OpenJevCore and OpenJevEncoders, and
+      # nothing that needs Hummingbird or MLX. docs/development.md holds the same commands for
+      # local runs.
       SCHEME: OpenJevCore-iOS
       # Every iOS runtime on the macos-26 image ships this device, and OS=latest picks the newest
       # runtime. The step below fails with a readable message if that stops being true.
@@ -225,7 +226,7 @@ jobs:
 
       - name: Test on the simulator
         run: |
-          unset OPENJEV_TEST_MODEL OPENJEV_LIVE_URL
+          unset OPENJEV_TEST_MODEL OPENJEV_ENCODER_MODELS OPENJEV_LIVE_URL
           xcodebuild test \
             -scheme "$SCHEME" \
             -destination "platform=iOS Simulator,name=$SIMULATOR,OS=latest" \

@@ -23,6 +23,28 @@ struct PythonJSONWriterTests {
     }
 
     @Test(
+        "Double.pythonRepr matches CPython repr, the infinities and NaN included",
+        .enabled(if: PythonFixtures.exists("float_repr.json"), PythonFixtures.missingMessage))
+    func doublePythonRepr() throws {
+        let rows = try PythonFixtures.rows("float_repr.json")
+        var mismatches: [String] = []
+        for row in rows {
+            let hex = try #require(row["hex"]?.stringValue)
+            let value = Double(bitPattern: try #require(UInt64(hex, radix: 16)))
+            if value.pythonRepr != row["repr"]?.stringValue {
+                mismatches.append("\(hex): \(value.pythonRepr), Python \(row["repr"] ?? .null)")
+            }
+        }
+        #expect(mismatches.isEmpty, "\(mismatches.count) mismatches: \(mismatches.prefix(10))")
+        // Verdict's score labels write float(i) for the level index i (upstream encoders.py).
+        #expect((0..<10).map { Double($0).pythonRepr } == (0..<10).map { "\($0).0" })
+        #expect(Double.infinity.pythonRepr == "inf")
+        #expect((-Double.infinity).pythonRepr == "-inf")
+        #expect(Double.nan.pythonRepr == "nan")
+        #expect((-Double.nan).pythonRepr == "nan")
+    }
+
+    @Test(
         "Strings match CPython json.dumps with and without ensure_ascii",
         .enabled(if: PythonFixtures.exists("strings.json"), PythonFixtures.missingMessage))
     func stringTable() throws {
