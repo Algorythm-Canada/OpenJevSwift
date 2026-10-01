@@ -361,24 +361,32 @@ def main():
         for path, size, sha in first["tokenizer"] + [first["calibrator"]]:
             print(f"  {path}: {size:,} bytes, sha256 {sha}")
         print()
-        print(f"Publish {model.served}'s packages (nothing has been uploaded):")
+        unpublished = [p for p in model.packages if not PACKAGE_DOWNLOADS_ENABLED[p.name]]
+        for package in model.packages:
+            if package not in unpublished:
+                print(f"{package.tag} is published and its manifest has downloads on; "
+                      "nothing to do.")
+        if not unpublished:
+            print()
+            continue
+        print(f"Publish {model.served}'s unpublished packages (nothing has been uploaded):")
         print()
         if print_once:
             print_once = False
             print("# Once, if the repository does not exist yet. A release needs a commit to tag, so "
                   "the")
-            print("# repository starts with the Apache-2.0 license the checkpoints carry; its NOTICE "
-                  "credits")
-            print("# the checkpoints' authors.")
+            print("# repository starts with the Apache-2.0 license the checkpoints carry.")
             print(f"{args.gh} repo create {q(args.repository)} --public --license apache-2.0 "
                   f"--description {q('Core ML conversions of the models OpenJevSwift serves')}")
+            print("# Once, if the repository has no NOTICE yet: it credits the checkpoints' "
+                  "authors.")
             print(f"mkdir -p {q(str(args.stage))}")
             print(f"printf %s {q(notice(args.repository, values))} > {q(str(args.stage / 'NOTICE'))}")
             print(f"{args.gh} api --method PUT repos/{args.repository}/contents/NOTICE "
                   f"-f message={q('Add the NOTICE crediting the checkpoints')} "
                   f"-f content=\"$(base64 < {q(str(args.stage / 'NOTICE'))} | tr -d '\\n')\"")
             print()
-        for package in model.packages:
+        for package in unpublished:
             stage = args.stage / package.tag
             notes = (f"{package.name}.mlpackage for {model.served}: {model.credit} ({repository} at "
                      f"{revision[:7]}, Apache-2.0), converted to Core ML with "
