@@ -276,14 +276,15 @@ public struct ServerSettings: Sendable, Hashable {
         return routes
     }
 
-    /// `url` without the `user:password@` that may come before its host. A URL without `://`
-    /// has no host part and is kept whole.
+    /// `url` without the `user:password@` that may come before its host: everything up to the
+    /// last `@` of the authority, which runs from after `://`, or from the start of a URL without
+    /// one, to the first `/`, `?` or `#`.
     static func withoutCredentials(_ url: String) -> String {
-        guard let schemeEnd = url.range(of: "://") else { return url }
-        let rest = url[schemeEnd.upperBound...]
+        let start = url.range(of: "://")?.upperBound ?? url.startIndex
+        let rest = url[start...]
         let authorityEnd = rest.firstIndex { "/?#".contains($0) } ?? rest.endIndex
         guard let at = rest[..<authorityEnd].lastIndex(of: "@") else { return url }
-        return String(url[..<schemeEnd.upperBound]) + String(rest[rest.index(after: at)...])
+        return String(url[..<start]) + String(rest[rest.index(after: at)...])
     }
 
     /// Upstream's `__post_init__` checks, plus the two minimums `_env_num` applies while reading.

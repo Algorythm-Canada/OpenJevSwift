@@ -136,9 +136,23 @@ class RecordingProxy:
             def log_message(self, *args):
                 pass
 
-            def handle_one(self):
+            def read_body(self):
+                """The request's body, sent with a length or in chunks."""
+                if "chunked" in (self.headers.get("transfer-encoding") or "").lower():
+                    body = b""
+                    while True:
+                        size = int(self.rfile.readline().split(b";")[0].strip() or b"0", 16)
+                        if size == 0:
+                            while self.rfile.readline() not in (b"\r\n", b"\n", b""):
+                                pass
+                            return body
+                        body += self.rfile.read(size)
+                        self.rfile.readline()
                 length = int(self.headers.get("content-length") or 0)
-                body = self.rfile.read(length) if length else b""
+                return self.rfile.read(length) if length else b""
+
+            def handle_one(self):
+                body = self.read_body()
                 headers = [(key, value) for key, value in self.headers.items()]
                 exchange = Exchange(recorder.check, time.monotonic(), self.command, self.path, headers, body)
                 connection = http.client.HTTPConnection("127.0.0.1", target_port, timeout=120)

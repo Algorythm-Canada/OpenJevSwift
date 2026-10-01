@@ -328,10 +328,9 @@ And took this long:
   device holds. The step runs even when the tests failed, so one push reports both.
 - **The SDK compatibility job.** It restores the Linux job's build directory without saving it,
   builds only the stub server, and runs the official SDKs against it (decision D-039). CPython
-  3.12 is Ubuntu 24.04's own `python3`, installed with apt and checked by version, because the
-  container has no `actions/setup-python` toolchain. A failure prints every HTTP exchange of the
-  failed checks in the log, and the artifact `sdk-compat-exchanges` holds every exchange and the
-  three servers' logs for 14 days.
+  3.12 is Ubuntu 24.04's own `python3`, installed with apt inside the Swift container and checked
+  by version. A failure prints every HTTP exchange of the failed checks in the log, and the
+  artifact `sdk-compat-exchanges` holds every exchange and the three servers' logs for 14 days.
 - **The test log check.** [check-test-log.sh](../.github/scripts/check-test-log.sh) reads the
   saved output of `swift test`. It fails when the log holds no Swift Testing run or a run failed,
   and when a test or suite was skipped or cancelled for any reason other than an unset
@@ -430,7 +429,7 @@ The last command prints nothing when the fixtures are current.
 The workflows do not change repository settings. The `Protect main` ruleset requires a review
 today, not a status check. Requiring one means handling the documentation-only case first, as the
 bullet above says. The checks worth requiring then are `Linux`, `macOS`, `iOS` and
-`SDK compatibility`, all four from the CI workflow. Their names carry no toolchain version, so a toolchain upgrade does not rename
-them. Do not require `Regenerate the fixtures`: it runs only
-when a pull request changes the fixture inputs, and a required check that never reports keeps the
-pull request waiting. The probe is manual and is never a required check.
+`SDK compatibility`, all four from the CI workflow. Their names carry no toolchain version, so a
+toolchain upgrade does not rename them. Do not require `Regenerate the fixtures`: it runs only when
+a pull request changes the fixture inputs, and a required check that never reports keeps the pull
+request waiting. The probe is manual and is never a required check.

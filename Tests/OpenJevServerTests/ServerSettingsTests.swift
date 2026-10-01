@@ -281,12 +281,14 @@ struct ServerSettingsTests {
     @Test("Routes are logged without the credentials a URL holds")
     func routesWithoutCredentials() throws {
         let settings = try ServerSettings(environment: [
-            "OPENJEV_MODEL_ROUTES": "a=http://u:p@h:1/x?y=@z, b=https://h/, c=x@y, d=http://@h"
+            "OPENJEV_MODEL_ROUTES":
+                "a=http://u:p@h:1/x?y=@z, b=https://h/, c=u:p@h/x, d=http://@h, e=h/x@y"
         ])
-        #expect(Array(settings.modelRoutesWithoutCredentials.keys) == ["a", "b", "c", "d"])
+        #expect(Array(settings.modelRoutesWithoutCredentials.keys) == ["a", "b", "c", "d", "e"])
+        // A URL without a scheme cannot be forwarded to, but its credentials stay out of the log.
         #expect(
             Array(settings.modelRoutesWithoutCredentials.values) == [
-                "http://h:1/x?y=@z", "https://h", "x@y", "http://h",
+                "http://h:1/x?y=@z", "https://h", "h/x", "http://h", "h/x@y",
             ])
         #expect(settings.modelRoutes["a"] == "http://u:p@h:1/x?y=@z")
     }
