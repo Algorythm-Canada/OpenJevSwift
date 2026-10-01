@@ -48,21 +48,27 @@ separate `chat_template.jinja` (Gemma 4's template with tools and channels) rath
 2. Per layer: causal mask, sliding layers additionally masked to the window; with images, an
    overlay lets tokens of the same image block see each other.
 3. Each layer runs with `decoder=False`, updating its KV cache (`KVCache` for full layers,
-   `RotatingKVCache(max_size=1024)` for sliding layers), and multiplies its output by the
-   encoder's `layer_scalar` for that layer.
+   `RotatingKVCache(max_size=1024)` for sliding layers, which after a one-piece prefill keeps
+   every prompt position), and multiplies its output by the encoder's `layer_scalar` for that
+   layer.
 4. Return the final norm (unused by reads) and the caches.
 
 Chunked prefill exists for long text-only prompts. Prompts with images are prefilled in one
-piece because chunking cannot yet split on image-block boundaries.
+piece because chunking cannot yet split on image-block boundaries. Upstream's reads never chunk
+(`MlxRuntime._prefill`), and the port follows: in bfloat16 a chunked prefill moves read
+probabilities by up to 0.62 (spike #22, D-036).
 
 ### Decoder (one denoise step)
 
 `decoder(canvas_ids, cache, self_conditioning_*, decoder_attention_mask)`:
 
-1. Embed the canvas and scale. Add self-conditioning: on the first step nothing (or zeros);
-   afterwards, `softmax(previous logits) @ embed_tokens.weight * sqrt(hidden)` through the
-   `self_conditioning` module. With quantized embeddings the implementations pass the logits
-   themselves ("prefers logits self-conditioning") and project inside.
+1. Embed the canvas and scale, then run the `self_conditioning` module:
+   `post_norm(embeddings + down(geglu(gate(pre_norm(signal)), up(pre_norm(signal)))))`, where
+   `post_norm` is an RMSNorm without a weight (so the checkpoint has no tensor for it). The
+   signal is zeros on the first step, and the module still runs on them; afterwards it is
+   `softmax(previous logits) @ embed_tokens.weight * sqrt(hidden)`. With quantized embeddings the
+   implementations pass the logits themselves ("prefers logits self-conditioning") and project
+   inside with a quantized matmul against the packed embedding.
 2. Build masks per layer type: full-attention layers see every valid encoder position and the
    whole canvas; sliding layers see only the last `window − 1 = 1023` encoder positions plus the
    whole canvas. Canvas positions attend to each other bidirectionally.
@@ -78,7 +84,7 @@ Given a prompt (chat template with the system and user messages, generation prom
 off) and a canvas built as in [01-upstream-openjev.md](01-upstream-openjev.md) section 5.5:
 
 1. Prefill the prompt once (cached).
-2. Run exactly one decoder step with no self-conditioning.
+2. Run exactly one decoder step, its self-conditioning signal zeros.
 3. For each slot position, take the logits row, log-softmax in float32 (temperature 1), and keep
    the entries for the top 20 tokens plus every label id.
 
@@ -86,9 +92,11 @@ With `steps > 1`, between steps only the slot positions are overwritten with the
 self-conditioning from the previous logits is applied; every other canvas position keeps the
 template token (what vLLM calls pinning). The final step's logits are read.
 
-Note for the port: a read needs logits only at the slot positions. Projecting only those hidden
-rows through the 262,144-wide tied head (instead of the whole canvas) is a legitimate
-optimisation because the full-row logits are used only for self-conditioning between steps.
+Note for the port: a read needs logits only at the slot positions, and the full-row logits are
+used only for self-conditioning between steps. Projecting only the slot rows through the
+262,144-wide tied head is close but not bit-identical: the smaller quantized matmul rounds
+differently, and under the oracle's kernels only 29 of 156 slots matched the full projection.
+The port projects every row (D-036).
 
 ### Text generation (for `think` and `/v1/chat/completions`)
 
