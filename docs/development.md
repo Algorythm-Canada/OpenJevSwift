@@ -61,7 +61,7 @@ The package declares macOS 14 and iOS 17 as minimum deployment targets.
 - **The CLI.** The `openjev` target is declared for every host, and the `#if os(macOS)` block
   appends its dependency on `OpenJevEncoders`; the code that uses it is behind
   `#if canImport(OpenJevEncoders)`. A Linux build therefore has the CLI without the encoder
-  backends, and `OPENJEV_BACKEND=verdict` exits with status 3 there.
+  backends, and `OPENJEV_BACKEND=verdict` and `laya` exit with status 3 there.
 - **The iOS scheme.** `.swiftpm/xcode/xcshareddata/xcschemes/OpenJevCore-iOS.xcscheme` is a
   committed Xcode scheme that builds `OpenJevCore`, `OpenJevEncoders` and their test targets and
   runs `OpenJevCoreTests` and `OpenJevEncodersTests`. The CI iOS job builds and tests it on a

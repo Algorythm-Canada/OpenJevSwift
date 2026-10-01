@@ -45,13 +45,14 @@ struct BinaryTests {
     @Test("A backend this build lacks exits 3 naming its issue")
     func backendNotBuilt() async throws {
         let outcome = try await BuiltBinary.run(
-            ["serve", "--backend", "laya"], environment: BuiltBinary.environment())
+            ["serve", "--backend", "mlx"], environment: BuiltBinary.environment())
         #expect(outcome.status == 3)
-        #expect(outcome.errors.contains("OPENJEV_BACKEND=laya"))
-        #expect(outcome.errors.contains("issue #58"))
-        let mlx = try await BuiltBinary.run(["serve"], environment: BuiltBinary.environment())
-        #expect(mlx.status == 3)
-        #expect(mlx.errors.contains("issue #29"))
+        #expect(outcome.errors.contains("OPENJEV_BACKEND=mlx"))
+        #expect(outcome.errors.contains("issue #29"))
+        // mlx is the default backend, as upstream's settings have it in this port.
+        let byDefault = try await BuiltBinary.run(["serve"], environment: BuiltBinary.environment())
+        #expect(byDefault.status == 3)
+        #expect(byDefault.errors.contains("issue #29"))
     }
 
     @Test(

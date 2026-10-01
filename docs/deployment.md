@@ -1,10 +1,10 @@
 # Deployment: a Mac mini as a decision server
 
 `openjev serve` runs the Jev-compatible server on a Mac as one process, with no Docker and no
-Python. It serves Verdict (`verdict-1.4`) on Core ML today. DiffusionGemma
-(`OPENJEV_BACKEND=mlx`) comes with issue #29 and Laya (`OPENJEV_BACKEND=laya`) with issue #58;
-until then those two backends exit with status 3 and a message naming their issue. This document
-follows upstream's README, "Run your own", where it applies to a Mac.
+Python. It serves Verdict (`verdict-1.4`) and Laya (`laya-1.0`) on Core ML today. DiffusionGemma
+(`OPENJEV_BACKEND=mlx`) comes with issue #29; until then it exits with status 3 and a message
+naming that issue. This document follows upstream's README, "Run your own", where it applies to
+a Mac.
 
 ## What the Mac needs
 
@@ -12,7 +12,7 @@ follows upstream's README, "Run your own", where it applies to a Mac.
 |---|---|---|---|---|
 | `verdict` | `verdict-1.4`, 151M parameters, Core ML | yes | Apple silicon, macOS 15 or later | about 1 GB at peak on the GPU (spike #56) |
 | `mlx` | `openjev-0.1`, DiffusionGemma 26B-A4B, 4-bit, MLX | issue #29 | Apple silicon | about 16 GB to load and more in service; 32 GB or more recommended |
-| `laya` | `laya-1.0`, 421M parameters, Core ML | issue #58 | Apple silicon, macOS 15 or later | about 2.9 GB at peak on the GPU (spike #56) |
+| `laya` | `laya-1.0`, 421M parameters, Core ML | yes | Apple silicon, macOS 15 or later | about 2.9 GB at peak on the GPU (spike #56) |
 
 On an M3 Max, Verdict reads one question in 7.5 to 20.3 ms depending on its length, and a batch
 of 16 in 4.3 to 19.3 ms per question ([spikes/encoder-runtime.md](spikes/encoder-runtime.md)). Like
@@ -39,7 +39,7 @@ sudo install -m 755 "$(swift build -c release --show-bin-path)/openjev" /usr/loc
 `openjev --version` prints the package version. On Linux the same command builds the CLI
 without the encoder backends, so `verdict` exits 3 there.
 
-## Verdict's files
+## The models' files
 
 Verdict needs its converted Core ML package (`verdict-m18-fp16`, 306 MB) and the checkpoint's
 tokenizer and calibrator (D-033):
@@ -62,6 +62,14 @@ tokenizer and calibrator (D-033):
 The first start compiles the package and keeps the result beside it
 (`verdict-m18-fp16.mlmodelc`); later starts reuse the compiled copy until the package changes.
 
+Laya on a Mac runs its multifunction package, `laya-m18-fp16` (810 MB), with its tokenizer and
+`rl_agent_config.json` (D-037). Its release is not published yet, so its downloads are off:
+without `OPENJEV_ENCODER_MODELS`, `OPENJEV_BACKEND=laya` exits 3 with
+`remote files for laya-m18-fp16 are not yet published; set OPENJEV_ENCODER_MODELS to a local
+models folder`. Convert it with `Tools/encoders/convert_laya.py` and point the variable at the
+folder that holds it, as for a local Verdict package. On an M3 Max, the first `decide` took 12
+seconds, most of it compiling the package, and later ones 2.5 seconds.
+
 ## Settings
 
 The server reads upstream's `OPENJEV_*` variables, with upstream's defaults and startup checks
@@ -69,7 +77,7 @@ The server reads upstream's `OPENJEV_*` variables, with upstream's defaults and 
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `OPENJEV_BACKEND` | `mlx` | `verdict` today; `mlx` and `laya` later. Upstream's default, `vllm`, does not exist in this port (D-030). |
+| `OPENJEV_BACKEND` | `mlx` | `verdict` or `laya` today; `mlx` once #29 lands. Upstream's default, `vllm`, does not exist in this port (D-030). |
 | `OPENJEV_HOST` | `127.0.0.1` | The address to bind. `0.0.0.0` serves the network. |
 | `OPENJEV_PORT` | `8080` | The port to bind. `0` picks a free one, which the `serving on` line names. |
 | `OPENJEV_API_KEY` | unset | Require `Authorization: Bearer <key>` on `/v1/` routes. |

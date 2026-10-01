@@ -84,27 +84,61 @@ struct CommandTests {
     }
 
     @Test(
-        "mlx and laya exit 3 naming the issue that brings them and the variable",
+        "mlx exits 3 naming the issue that brings it and the variable",
         arguments: ["serve", "decide"])
-    func backendsNotBuiltYet(subcommand: String) async {
+    func backendNotBuiltYet(subcommand: String) async {
         let mlx = await CommandHarness.run([subcommand, "--backend", "mlx"])
         #expect(mlx.status == 3)
         #expect(mlx.errors.hasPrefix("openjev: OPENJEV_BACKEND=mlx: "))
         #expect(mlx.errors.contains("issue #29"))
-        let laya = await CommandHarness.run([subcommand], environment: ["OPENJEV_BACKEND": "laya"])
-        #expect(laya.status == 3)
-        #expect(laya.errors.hasPrefix("openjev: OPENJEV_BACKEND=laya: "))
-        #expect(laya.errors.contains("issue #58"))
         // The default backend is upstream's, which this build does not have yet.
         #expect(await CommandHarness.run([subcommand]).status == 3)
     }
 
+    /// Checked without a load: Laya's package is 1.7 GB and Verdict's 306 MB.
+    @Test("verdict and laya are this build's encoder backends, mlx is a placeholder")
+    func standardBackends() throws {
+        let registry = BackendRegistry.standard
+        #expect(registry.backends.map(\.name) == ["mlx", "laya", "verdict"])
+        for name in ["laya", "verdict"] {
+            let backend = try registry.backend(named: name)
+            #expect(backend.kind == .encoder)
+            #expect(
+                backend.servedModels?.version == KnownEncoderModels.named(backend.modelName)?.name)
+            switch backend.availability {
+            case .available:
+                #expect(canImportEncoders, "\(name) is available without Core ML")
+            case .unavailable(let message):
+                #expect(!canImportEncoders, "\(name): \(message)")
+                #expect(message.hasPrefix("OPENJEV_BACKEND=\(name): "))
+                #expect(message.contains("Core ML"))
+            }
+        }
+        guard case .unavailable(let message) = try registry.backend(named: "mlx").availability
+        else {
+            Issue.record("mlx is available")
+            return
+        }
+        #expect(message.contains("issue #29"))
+    }
+
+    /// Whether this build has the encoder backends.
+    private var canImportEncoders: Bool {
+        #if canImport(OpenJevEncoders)
+            return true
+        #else
+            return false
+        #endif
+    }
+
     #if !canImport(OpenJevEncoders)
-        @Test("verdict exits 3 where Core ML does not exist")
-        func verdictWithoutCoreML() async {
-            let outcome = await CommandHarness.run(["decide", "--backend", "verdict"])
-            #expect(outcome.status == 3)
-            #expect(outcome.errors.contains("Core ML"))
+        @Test("verdict and laya exit 3 where Core ML does not exist")
+        func encodersWithoutCoreML() async {
+            for backend in ["verdict", "laya"] {
+                let outcome = await CommandHarness.run(["decide", "--backend", backend])
+                #expect(outcome.status == 3, "\(backend)")
+                #expect(outcome.errors.contains("Core ML"), "\(backend)")
+            }
         }
     #endif
 

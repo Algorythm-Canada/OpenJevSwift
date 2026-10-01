@@ -1423,15 +1423,16 @@ do not spell out.
 
 Decision.
 
-1. **Backends.** `OPENJEV_BACKEND` selects from the CLI's `BackendRegistry`: `verdict` on Core
-   ML (macOS), and `mlx` and `laya`, which upstream has and this build does not yet. Those two
-   exit 3 with a message naming the variable and the issue that brings them (#29, #58). Every
-   other name, upstream's `vllm`, `clm` and `jevk5` included, is upstream's `create_app` error
-   with this port's list and the variable named as `__post_init__` names it:
+1. **Backends.** `OPENJEV_BACKEND` selects from the CLI's `BackendRegistry`: `verdict` and
+   `laya` on Core ML (macOS), Laya registered once #58 merged into this branch, and `mlx`, which
+   upstream has and this build does not yet: it exits 3 with a message naming the variable and
+   issue #29. Every other name, upstream's `vllm`, `clm` and `jevk5` included, is upstream's
+   `create_app` error with this port's list and the variable named as `__post_init__` names it:
    `unknown backend 'vllm'; use one of mlx, laya, verdict (OPENJEV_BACKEND)`, exit 2. The check
    is the CLI's rather than `ServerSettings`', so tests register stub backends in the registry.
-   On Linux `verdict` is known and exits 3. The issue's `mlx` acceptance criterion, the 4-bit
-   checkpoint serving the README example, waits for #29; the live smoke test serves Verdict.
+   On Linux `verdict` and `laya` are known and exit 3. The issue's `mlx` acceptance criterion,
+   the 4-bit checkpoint serving the README example, waits for #29; the live smoke test serves
+   Verdict, and no test loads Laya, whose package is 810 MB.
 2. **Flags.** `serve` takes `--host`, `--port`, `--backend`, `--log-level` and `--no-warmup`,
    each written over its variable before `ServerSettings(environment:)` reads it, so a flag's
    value is checked and refused with the variable's message (`OPENJEV_PORT='abc' is not a int`).
@@ -1450,7 +1451,7 @@ Decision.
    through `SystemOneHandler`, which the route calls too. The body is read as a JSON body, under
    the body cap's 413. An error prints the server's error body to standard error, exactly.
    `decide` skips the warm-up read, which only delays its one read. `models` prints the listing
-   of every known backend without loading a model, `mlx` and `laya` included; a backend whose
+   of every known backend without loading a model, `mlx` included; a backend whose
    listing only the loaded model knows is loaded, as the test registry's stub encoder is.
 5. **Phases and the request log.** `serve` logs to standard error through swift-log: the
    settings line, with the API key and the origin secret as `set` or `unset` and the model routes
@@ -1487,8 +1488,8 @@ Decision.
    `--shutdown-timeout` as the group's `maximumGracefulShutdownDuration`. A second signal does
    not cut the wait short. The model is released afterwards through `ModelReleasing.close()`,
    upstream's `close()`, a protocol a service or backend adopts when it has something to release:
-   the two engines pass it on, `VerdictBackend` passes it to `CoreMLEncoderModel`, which drops its
-   loaded functions. A server cancelled while it is answering requests throws
+   the two engines pass it on, `VerdictBackend` and `LayaBackend` pass it to their Core ML
+   runner, and `CoreMLEncoderModel` and `CoreMLPackagesByLength` drop what they have loaded. A server cancelled while it is answering requests throws
    `ShutdownInterrupted`, exit 1; one cancelled with nothing in flight stops cleanly, so a
    `--shutdown-timeout` of 0 exits 0 when no request is running. The timeout is at most a day,
    since a larger `Duration` overflows. `OpenJevApplication.make(settings:provider:)` is replaced by
@@ -1514,8 +1515,8 @@ table short, and it is what upstream's Python tooling exits with.
 
 Consequences. launchd's `ExitTimeOut`, whose default is system-defined, must exceed
 `--shutdown-timeout` or launchd may kill the server before its requests finish;
-docs/deployment.md sets it. A
-DiffusionGemma or Laya backend registers with one entry in `BackendRegistry.standard` and drops
-its placeholder.
+docs/deployment.md sets it. The
+DiffusionGemma backend registers with one entry in `BackendRegistry.standard` and drops its
+placeholder, as Laya's did.
 
 Status. Proposed with issues #40 and #37.

@@ -12,7 +12,7 @@ import OpenJevServer
 ///
 /// Upstream also has `vllm`, `clm` and `jevk5`, which this port does not: `vllm` because it has no
 /// vLLM backend (D-030), `clm` and `jevk5` until issues #59 and #55. They are unknown here, as any
-/// other name is. `mlx` and `laya` are known but not built yet, and `verdict` needs Core ML.
+/// other name is. `mlx` is known but not built yet, and `verdict` and `laya` need Core ML.
 struct BackendRegistry: Sendable {
     /// One backend.
     struct Backend: Sendable {
@@ -116,7 +116,7 @@ struct BackendRegistry: Sendable {
         "https://github.com/Algorythm-Canada/OpenJevSwift/issues/\(number)"
     }
 
-    /// The backends of this build: `mlx` and `laya`, not built yet, and `verdict`.
+    /// The backends of this build: `mlx`, not built yet, then `laya` and `verdict`.
     static let standard = BackendRegistry(backends: [
         Backend(
             name: "mlx", modelName: ServedModels.diffusionGemmaVersion, kind: .diffusion,
@@ -126,10 +126,7 @@ struct BackendRegistry: Sendable {
                     + "brings it (\(issue(29)))")),
         Backend(
             name: "laya", modelName: KnownEncoderModels.laya.name, kind: .encoder,
-            servedModels: .encoder(KnownEncoderModels.laya),
-            availability: .unavailable(
-                "OPENJEV_BACKEND=laya: the Laya backend is not in this build yet; issue #58 "
-                    + "brings it (\(issue(58)))")),
+            servedModels: .encoder(KnownEncoderModels.laya), availability: laya),
         Backend(
             name: "verdict", modelName: KnownEncoderModels.verdict.name, kind: .encoder,
             servedModels: .encoder(KnownEncoderModels.verdict), availability: verdict),
@@ -150,6 +147,23 @@ struct BackendRegistry: Sendable {
             return .unavailable(
                 "OPENJEV_BACKEND=verdict: Verdict runs on Core ML, which this platform does not "
                     + "have; serve it from a Mac with macOS 15 or later")
+        #endif
+    }
+
+    /// Laya on Core ML (D-037): on a Mac its multifunction package, from the store as Verdict's.
+    private static var laya: Backend.Availability {
+        #if canImport(OpenJevEncoders)
+            return .available { environment, willWarmUp in
+                QuestionReadBackendProvider(
+                    load: { _ in
+                        try await LayaBackend.load(
+                            from: EncoderPackageStore(environment: environment))
+                    }, willWarmUp: willWarmUp)
+            }
+        #else
+            return .unavailable(
+                "OPENJEV_BACKEND=laya: Laya runs on Core ML, which this platform does not have; "
+                    + "serve it from a Mac with macOS 15 or later")
         #endif
     }
 }
