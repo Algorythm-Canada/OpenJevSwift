@@ -36,12 +36,17 @@ public struct DecisionBackendProvider: BackendProvider {
 /// ``EncoderDecisionEngine`` configured from the settings, warmed up when `OPENJEV_WARMUP` asks.
 public struct QuestionReadBackendProvider: BackendProvider {
     private let load: @Sendable (ServerSettings) async throws -> any QuestionReadBackend
+    private let willWarmUp: @Sendable () -> Void
 
-    /// Creates a provider from a function that loads the backend.
+    /// Creates a provider from a function that loads the backend. `willWarmUp` runs once the
+    /// backend has loaded, just before the warm-up read, and not at all without one; the CLI
+    /// prints its phase there.
     public init(
-        load: @escaping @Sendable (ServerSettings) async throws -> any QuestionReadBackend
+        load: @escaping @Sendable (ServerSettings) async throws -> any QuestionReadBackend,
+        willWarmUp: @escaping @Sendable () -> Void = {}
     ) {
         self.load = load
+        self.willWarmUp = willWarmUp
     }
 
     /// Loads the backend, builds the engine over it and runs upstream's warm-up read when the
@@ -51,6 +56,7 @@ public struct QuestionReadBackendProvider: BackendProvider {
         let engine = EncoderDecisionEngine(
             backend: backend, configuration: EncoderEngineConfiguration(settings))
         if settings.warmup {
+            willWarmUp()
             try await engine.warmUp()
         }
         return engine

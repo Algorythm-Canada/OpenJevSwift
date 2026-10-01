@@ -431,12 +431,14 @@
                     ])
                 let refused = try await ServerHarness.post(client, Self.smallRequest)
                 let ids = [capped, refused].map { ServerHarness.header($0, "x-request-id") ?? "?" }
+                // The request log adds one info line per request; RequestLogTests checks those.
+                let refusals = recorder.lines.filter { $0.level > .info }
                 #expect(
-                    recorder.lines.map(\.message) == [
+                    refusals.map(\.message) == [
                         "400 \(ids[0]) body.questions: at most 1 questions per request",
                         "400 \(ids[1]) body: the model rejected this request: prompt too long",
                     ])
-                #expect(recorder.lines.allSatisfy { $0.level == .warning })
+                #expect(refusals.allSatisfy { $0.level == .warning })
             }
         }
 

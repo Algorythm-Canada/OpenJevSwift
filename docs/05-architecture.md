@@ -56,18 +56,25 @@ OpenJevSwift/                          Swift package, tools 6.2, strict concurre
       Store/         EncoderPackageManifest (Verdict's, Laya's five), EncoderPackageStore
                      (download on first use, SHA-256, the tokenizer alone, held packages)
     OpenJevServer/                     Hummingbird 2. ServerSettings, BackendProvider,
-                                       OpenJevApplication (routes), request id, server-timing,
-                                       authentication and body cap middleware, the body reader
-                                       and the refusal log; later capacity, forwarding.
-    OpenJevTestSupport/                Fixture loaders, FixtureTokenizer and the stub backends
-                                       the test targets share. Foundation only; not a product.
-    openjev/                           CLI executable: serve, decide, models
+                                       OpenJevApplication (routes), SystemOneHandler, request id,
+                                       server-timing, request log, authentication and body cap
+                                       middleware, the body reader, the refusal log, the client
+                                       disconnect watch and DecisionServer (graceful shutdown);
+                                       later forwarding.
+    OpenJevTestSupport/                Fixture loaders, FixtureTokenizer, the stub backends and
+                                       ReadGate the test targets share. Foundation only; not a
+                                       product.
+    openjev/                           CLI executable: serve, decide, models; the backend registry
   Tests/
     OpenJevCoreTests/                  Fixture-driven unit tests (no model)
     OpenJevDiffusionGemmaTests/        Unit tests on synthetic shapes; opt-in live tests
     OpenJevEncodersTests/              Fixture-driven parity tests over recorded logits; opt-in
                                        tokenizer and Core ML parity tests
-    OpenJevServerTests/                Contract tests with a stub backend; SDK compatibility
+    OpenJevServerTests/                Contract tests with a stub backend, capacity and model time
+                                       among them; disconnects and shutdown on live sockets; SDK
+                                       compatibility
+    OpenJevCLITests/                   Parsing, the commands in-process with stub backends, the
+                                       built binary as a child process; opt-in Verdict smoke test
   Tools/
     fixtures/                          Python: generate golden fixtures from pinned upstream
     encoders/                          Python and Swift: Verdict's and Laya's reference outputs,
@@ -86,15 +93,17 @@ engine as a `SystemOneService`.
 
 ```
 openjev (CLI) ──► OpenJevServer ──► OpenJevCore
-                        │                ▲
-                        ├──► OpenJevDiffusionGemma ──► mlx-swift, mlx-swift-lm (MLXLMCommon, MLXVLM),
-                        │                               swift-transformers (Tokenizers)
-                        └──► OpenJevEncoders ──► Core ML, swift-transformers (Tokenizers)
+      │                                  ▲
+      ├──► OpenJevEncoders (macOS) ──────┤──► Core ML, swift-transformers (Tokenizers)
+      └──► OpenJevDiffusionGemma (#29) ──┘──► mlx-swift, mlx-swift-lm (MLXLMCommon, MLXVLM),
+                                              swift-transformers (Tokenizers)
 ```
 
 `OpenJevCore` has no third-party dependencies (an `OrderedDictionary` from `swift-collections`
-is acceptable if it saves a hand-rolled type). `OpenJevServer` depends on Hummingbird. Backends
-depend on the core, never the reverse.
+is acceptable if it saves a hand-rolled type). `OpenJevServer` depends on Hummingbird,
+swift-http-types, swift-log, swift-nio's `NIOCore` and swift-service-lifecycle, never on a
+backend. The CLI picks the backend and links it: `OpenJevEncoders` on macOS today,
+`OpenJevDiffusionGemma` once #29 registers it. Backends depend on the core, never the reverse.
 
 ## Core types (sketch)
 
@@ -261,15 +270,26 @@ An `actor DiffusionGemmaRuntime: DecisionBackend`:
 
 ## The server
 
-Hummingbird 2 application with the routes in [02-jev-wire-api.md](02-jev-wire-api.md).
-`OpenJevApplication.make(settings:provider:)` asks a `BackendProvider` for the
-`SystemOneService` once, before binding `OPENJEV_HOST` and `OPENJEV_PORT`, as upstream's
-`lifespan` loads its engine. `DecisionBackendProvider` wraps a `DecisionBackend` in a
-`DecisionEngine`, and `QuestionReadBackendProvider` wraps a `QuestionReadBackend` in an
-`EncoderDecisionEngine`, each configured from the settings. Tests hand the router a stub-backed
-service; the CLI hands it the DiffusionGemma runtime or an encoder. `GET /v1/models` lists the
-service's `ServedModels`.
+Hummingbird 2 application with the routes in [02-jev-wire-api.md](02-jev-wire-api.md). A
+`BackendProvider` loads the `SystemOneService` once, before `OPENJEV_HOST` and `OPENJEV_PORT` are
+bound, as upstream's `lifespan` loads its engine. `DecisionBackendProvider` wraps a
+`DecisionBackend` in a `DecisionEngine`, and `QuestionReadBackendProvider` wraps a
+`QuestionReadBackend` in an `EncoderDecisionEngine`, each configured from the settings, and runs
+the warm-up read when `OPENJEV_WARMUP` asks. Tests hand the router a stub-backed service; the CLI
+hands it the DiffusionGemma runtime or an encoder. `GET /v1/models` lists the service's
+`ServedModels`.
 
+`DecisionServer` is the server over a loaded service, a swift-service-lifecycle `Service`:
+`OpenJevApplication.application(settings:service:logger:onServerRunning:)` binds the settings'
+address, and on a graceful shutdown the listening socket closes, idle connections close, the
+requests in flight finish, and the service's `close()` releases the model (`ModelReleasing`,
+upstream's `await app.state.engine.close()`). The service group that runs it bounds the shutdown
+with its `maximumGracefulShutdownDuration`; past it the requests in flight are cancelled, the
+model is still released, and `run()` throws `ShutdownInterrupted`. The engines pass `close()` on
+to their backend, and `VerdictBackend` releases its loaded Core ML functions.
+
+`RequestLogMiddleware` runs first, outside everything else, and writes one info line per request:
+`{method} {path} {status} {ms}ms {request id}`, never a body, a header value or a query string.
 `ResponseHeadersMiddleware` runs in front of every route. It turns a thrown `WireError` into its
 response, answers an unknown route as FastAPI's 404, and adds `x-typesafe-request-id`,
 `x-request-id` and `server-timing` to every response, errors included. Inside it, as upstream's
@@ -281,22 +301,58 @@ never authenticated.
 `POST /v1/systemone` reads the body as FastAPI does (`RequestBodyReader`): only a JSON content
 type is parsed, by the core's order-preserving parser (Foundation's `JSONDecoder` cannot preserve
 object order), and a body it refuses gets CPython's `json_invalid` message and position from
-`PythonJSONLoads`. The body is checked by `RequestValidator`, then the model name and the
-questions cap are checked before `SystemOneService.decide`. `SchemaError`, `OverloadedError` and
-`BackendRefusal` become upstream's 400, 529 and 400 `the model rejected this request`; any other
-error of the service is the 503 naming its type. `RefusalLog` logs the refusals upstream logs,
-where and why, never the body. The route adds the engine's `Decision.modelTime` to a task-local
-`ModelTimeRecorder`, and the middleware reports it as `model`. Capacity comes later; it is the
-engines' counter and semaphore, mirroring `max_inflight` and `max_queue`. Decisions D-030 and
-D-031 record where the server differs from upstream.
-`OPENJEV_MODEL_ROUTES` forwarding uses `URLSession` or Hummingbird's client. Text generation
-routes are added only when a generation-capable backend is loaded.
+`PythonJSONLoads`. `SystemOneHandler` does the rest, and `openjev decide` calls it too, so the
+command prints the bytes the server sends: the body is checked by `RequestValidator`, then the
+model name and the questions cap are checked before `SystemOneService.decide`. `SchemaError`,
+`OverloadedError` and `BackendRefusal` become upstream's 400, 529 and 400 `the model rejected this
+request`; any other error of the service is the 503 naming its type. `RefusalLog` logs the
+refusals upstream logs, where and why, never the body.
+
+Capacity is the engines' own: the queue counter (`OPENJEV_MAX_QUEUE`, upstream's
+`waiting >= max_queue`, so 0 refuses every request) and the in-flight semaphore
+(`OPENJEV_MAX_INFLIGHT`; one model call at a time for an encoder), whose cancelled waiters leave
+without taking or returning a permit. Model time is upstream's `model_ns`: the headers middleware
+installs a task-local `ModelTimeRecorder` (OpenJevCore) per request, the engines add each backend
+call to it when the call ends, wait for a permit included, whether it returned, threw or was
+cancelled, and the middleware reports the sum as `server-timing`'s `model`. Concurrent reads sum,
+so `model` can exceed `total`, and a request refused after a read still reports the read. A
+request forwarded to another server will add that server's time when #38 forwards it.
+
+Every connection carries a `ClientDisconnectHandler`, which sees the end of the client's input.
+The route runs the decision in a child task beside a watch of its connection: a client that goes
+away cancels the decision, which reaches the reads through task cancellation, and the request log
+shows 499. Request handling creates no unstructured or detached task. Decisions D-030, D-031 and
+D-038 record where the server differs from upstream. `OPENJEV_MODEL_ROUTES` forwarding uses
+`URLSession` or Hummingbird's client. Text generation routes are added only when a
+generation-capable backend is loaded.
 
 Configuration: a `ServerSettings` struct with the same names, defaults and startup validation as
 upstream's `Settings`, populated from `OPENJEV_*` variables by the CLI so existing deployment
 docs and compose files keep working.
 
-An encoder backend is one line of the CLI's provider choice (`openjev serve`, issue #40). For
+## The command line tool
+
+`openjev` (`Sources/openjev`, swift-argument-parser) has three subcommands. Each reads
+`ServerSettings(environment:)` from the process environment, with its flags written over their
+variables first, so a flag's value is checked and refused as its variable's is.
+
+- `openjev serve` loads the backend `OPENJEV_BACKEND` names, logs its phases (the settings
+  without secrets, `loading`, `warming up`, `serving on host:port`) to standard error, and runs a
+  `DecisionServer` in a service group that starts the graceful shutdown on SIGINT and SIGTERM,
+  bounded by `--shutdown-timeout` (30 seconds).
+- `openjev decide` answers one request from a file or standard input through
+  `SystemOneHandler`, without the warm-up read, and prints the server's bytes; a refusal prints
+  the error body to standard error and exits 4.
+- `openjev models` prints the backend's `GET /v1/models` body without loading a model.
+
+The exit statuses are 0, 1 for any other failure, 2 for invalid settings or command line, 3 for
+a backend this build lacks or that failed to load, and 4 for a request `decide` was refused
+([deployment.md](deployment.md)). The commands read a task-local `CommandContext` (environment,
+streams, backends, loggers, shutdown signals), which tests replace to run them in-process with
+stub backends.
+
+`BackendRegistry` lists the backends: `mlx` exits 3 naming issue #29 until it lands, any name
+it does not list is upstream's invalid-setting error, and an encoder backend is one line. For
 `OPENJEV_BACKEND=verdict` and `OPENJEV_BACKEND=laya`, with `environment` the process environment
 the CLI also hands to `ServerSettings(environment:)`:
 
@@ -308,6 +364,9 @@ QuestionReadBackendProvider { _ in
     try await LayaBackend.load(from: EncoderPackageStore(environment: environment))
 }
 ```
+
+On Linux, where `OpenJevEncoders` does not exist, `verdict` and `laya` are known backends that
+exit 3.
 
 `EncoderPackageStore(environment:)` uses the folder `OPENJEV_ENCODER_MODELS` names when it is set,
 as the converters in `Tools/encoders` write it. Otherwise it downloads the model's package,

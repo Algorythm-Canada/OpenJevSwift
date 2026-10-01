@@ -1,5 +1,6 @@
 #if canImport(CoreML)
     import Foundation
+    import OpenJevCore
 
     /// Encoder packages of one program for one shape each, one per sequence length, run with
     /// Core ML: Laya's iPhone packages (D-011), the only Laya packages Core ML loads for the
@@ -205,6 +206,18 @@
             compiles[spec.name] = task
             defer { compiles[spec.name] = nil }
             return try await task.value
+        }
+    }
+
+    @available(macOS 15, iOS 18, *)
+    extension CoreMLPackagesByLength: ModelReleasing {
+        /// Releases every package loaded so far. A later read loads the one it needs again.
+        public func close() async {
+            let loaded = models.values
+            models = [:]
+            for model in loaded {
+                await model.close()
+            }
         }
     }
 #endif

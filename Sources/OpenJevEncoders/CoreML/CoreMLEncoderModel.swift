@@ -2,6 +2,7 @@
     import CoreML
     import Dispatch
     import Foundation
+    import OpenJevCore
 
     /// A converted encoder package run with Core ML: one function per input shape, or one
     /// program for one shape (D-011).
@@ -179,6 +180,15 @@
                     output[[NSNumber(value: row), NSNumber(value: column)]].floatValue
                 }
             }
+        }
+    }
+
+    @available(macOS 15, iOS 18, *)
+    extension CoreMLEncoderModel: ModelReleasing {
+        /// Releases every loaded function and the weights it holds. It runs on the model's queue,
+        /// after the call in progress, if any. A later call loads its function again.
+        public func close() {
+            functions = LeastRecentlyUsed()
         }
     }
 

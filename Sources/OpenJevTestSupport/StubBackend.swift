@@ -13,10 +13,12 @@ import OpenJevCore
 /// - ``scripted`` replaces the stub read for the seeds it names with the recorded raw
 ///   log-probability maps of `Fixtures/distributions/`, through ``ReadResult``'s raw initializer.
 ///
-/// Every ``CanvasRead`` and every think call is recorded in call order. ``delay`` makes each
-/// backend call take at least that long, for the concurrency and timing tests, and ``failure``
-/// makes each one throw, for the error contract tests.
-public final class StubBackend: DecisionBackend, @unchecked Sendable {
+/// Every ``CanvasRead`` and every think call is recorded in call order, with the time each call
+/// took inside the stub (``callTimes``). ``gate`` holds each call until the test opens it and
+/// ``delay`` makes each one take at least that long, for the capacity, timing and shutdown tests;
+/// both let cancellation through. ``failure`` makes each call after the first
+/// ``succeedingCalls`` throw, for the error contract tests. ``close()`` is counted.
+public final class StubBackend: DecisionBackend, ModelReleasing, @unchecked Sendable {
     /// One recorded think call.
     public struct ThinkCall: Equatable, Sendable {
         /// The prompt ids.
@@ -51,13 +53,20 @@ public final class StubBackend: DecisionBackend, @unchecked Sendable {
     public let scripted: [UInt64: [[(tokenID: Int, logprob: Double)]]]
     /// The prompt tokens a scripted read bills.
     public let scriptedPromptTokens: Int
-    /// The error every read and every think call throws, after recording the call, instead of
-    /// answering; `nil` answers.
+    /// The error the reads and think calls after the first ``succeedingCalls`` throw, after
+    /// recording the call, instead of answering; `nil` answers every call.
     public let failure: (any Error)?
+    /// How many calls answer before ``failure`` applies to the rest; 0 fails every call.
+    public let succeedingCalls: Int
+    /// Holds every call until it is opened; `nil` lets calls through.
+    public let gate: ReadGate?
 
     private let lock = NSLock()
     private var recordedReads: [CanvasRead] = []
     private var recordedThinks: [ThinkCall] = []
+    private var recordedTimes: [Duration] = []
+    private var calls = 0
+    private var closed = 0
 
     /// Creates a stub; every argument defaults to what the recordings used.
     public init(
@@ -71,7 +80,9 @@ public final class StubBackend: DecisionBackend, @unchecked Sendable {
         thought: [Int] = [7, 8, 9],
         scripted: [UInt64: [[(tokenID: Int, logprob: Double)]]] = [:],
         scriptedPromptTokens: Int = 100,
-        failure: (any Error)? = nil
+        failure: (any Error)? = nil,
+        succeedingCalls: Int = 0,
+        gate: ReadGate? = nil
     ) {
         self.tokenizer = tokenizer
         self.maxPromptTokens = maxPromptTokens
@@ -84,6 +95,8 @@ public final class StubBackend: DecisionBackend, @unchecked Sendable {
         self.scripted = scripted
         self.scriptedPromptTokens = scriptedPromptTokens
         self.failure = failure
+        self.succeedingCalls = succeedingCalls
+        self.gate = gate
     }
 
     /// Every read so far, in call order.
@@ -96,14 +109,46 @@ public final class StubBackend: DecisionBackend, @unchecked Sendable {
         lock.withLock { recordedThinks }
     }
 
-    public func read(_ read: CanvasRead) async throws -> ReadResult {
-        lock.withLock { recordedReads.append(read) }
+    /// The time each finished call spent inside the stub, gate and delay included, in the order
+    /// the calls finished; a call that was cancelled or failed counts too.
+    public var callTimes: [Duration] {
+        lock.withLock { recordedTimes }
+    }
+
+    /// How many times ``close()`` was called.
+    public var closeCount: Int {
+        lock.withLock { closed }
+    }
+
+    public func close() async {
+        lock.withLock { closed += 1 }
+    }
+
+    /// Waits for the gate and the delay, counting the call, timing it and throwing ``failure``
+    /// once ``succeedingCalls`` calls have answered.
+    private func simulateCall() async throws {
+        let clock = ContinuousClock()
+        let started = clock.now
+        let index = lock.withLock {
+            calls += 1
+            return calls
+        }
+        defer {
+            let time = clock.now - started
+            lock.withLock { recordedTimes.append(time) }
+        }
+        try await gate?.pass()
         if let delay {
             try await Task.sleep(for: delay)
         }
-        if let failure {
+        if let failure, index > succeedingCalls {
             throw failure
         }
+    }
+
+    public func read(_ read: CanvasRead) async throws -> ReadResult {
+        lock.withLock { recordedReads.append(read) }
+        try await simulateCall()
         if let tops = scripted[read.seed] {
             return ReadResult(
                 tops: tops, labelIDs: read.slots.map(\.labelIDs),
@@ -125,12 +170,7 @@ public final class StubBackend: DecisionBackend, @unchecked Sendable {
         lock.withLock {
             recordedThinks.append(ThinkCall(prompt: prompt, budget: budget, stopIDs: stopIDs))
         }
-        if let delay {
-            try await Task.sleep(for: delay)
-        }
-        if let failure {
-            throw failure
-        }
+        try await simulateCall()
         return ThoughtGeneration(generated: thought, promptTokens: 100)
     }
 }

@@ -44,7 +44,7 @@ The package declares macOS 14 and iOS 17 as minimum deployment targets.
 | `OpenJevDiffusionGemma` (library product) | yes, Apple silicon | compiles, but the model does not fit in memory | not declared |
 | `OpenJevEncoders` (library product) | yes; its Core ML types from macOS 15 | yes; its Core ML types from iOS 18 | not declared |
 | `OpenJevServer` (internal target) | yes | no | yes |
-| `openjev` (executable) | yes | no | yes |
+| `openjev` (executable) | yes, with the encoder backends | no | yes, without the encoder backends |
 
 - **Apple-only code.** `Package.swift` declares the MLX packages, swift-transformers and the
   `OpenJevDiffusionGemma` and `OpenJevEncoders` targets inside `#if os(macOS)`. SwiftPM evaluates
@@ -58,6 +58,10 @@ The package declares macOS 14 and iOS 17 as minimum deployment targets.
 - **The server.** `OpenJevServer` is not a library product, so library consumers never link
   Hummingbird (D-009). Its Hummingbird dependency applies only on macOS and Linux, which keeps
   Hummingbird out of iOS builds.
+- **The CLI.** The `openjev` target is declared for every host, and the `#if os(macOS)` block
+  appends its dependency on `OpenJevEncoders`; the code that uses it is behind
+  `#if canImport(OpenJevEncoders)`. A Linux build therefore has the CLI without the encoder
+  backends, and `OPENJEV_BACKEND=verdict` and `laya` exit with status 3 there.
 - **The iOS scheme.** `.swiftpm/xcode/xcshareddata/xcschemes/OpenJevCore-iOS.xcscheme` is a
   committed Xcode scheme that builds `OpenJevCore`, `OpenJevEncoders` and their test targets and
   runs `OpenJevCoreTests` and `OpenJevEncodersTests`. The CI iOS job builds and tests it on a
@@ -77,15 +81,16 @@ The package declares macOS 14 and iOS 17 as minimum deployment targets.
 | [mlx-swift-lm](https://github.com/ml-explore/mlx-swift-lm) | revision `c043fb3b1ccf00f54ef8882a1e8da45c6e32e6f8` | that revision | `MLXLMCommon`, `MLXVLM` | macOS hosts |
 | [swift-transformers](https://github.com/huggingface/swift-transformers) | 1.3.0 up to the next minor | 1.3.4 | `Tokenizers` | macOS hosts |
 | [swift-jinja](https://github.com/huggingface/swift-jinja) | 2.4.2 or later | 2.5.1 | `Jinja` | macOS hosts |
-| [hummingbird](https://github.com/hummingbird-project/hummingbird) | 2.23.0 or later | 2.27.0 | `Hummingbird`, `HummingbirdTesting` (server tests) | all hosts |
+| [hummingbird](https://github.com/hummingbird-project/hummingbird) | 2.23.0 or later | 2.27.0 | `Hummingbird`, `HummingbirdCore` (server), `HummingbirdTesting` (server and CLI tests) | all hosts |
 | [swift-argument-parser](https://github.com/apple/swift-argument-parser) | 1.8.0 or later | 1.8.2 | `ArgumentParser` | all hosts |
-| [swift-http-types](https://github.com/apple/swift-http-types) | 1.8.0 or later | 1.8.0 | `HTTPTypes` | all hosts |
-| [swift-log](https://github.com/apple/swift-log) | 1.15.1 or later | 1.15.1 | `Logging` (server tests) | all hosts |
-| [swift-nio](https://github.com/apple/swift-nio) | 2.103.0 or later | 2.103.0 | `NIOEmbedded` (server tests) | all hosts |
+| [swift-http-types](https://github.com/apple/swift-http-types) | 1.8.0 or later | 1.8.0 | `HTTPTypes` (server, server and CLI tests) | all hosts |
+| [swift-log](https://github.com/apple/swift-log) | 1.15.1 or later | 1.15.1 | `Logging` (server, CLI, server and CLI tests) | all hosts |
+| [swift-nio](https://github.com/apple/swift-nio) | 2.103.0 or later | 2.103.0 | `NIOCore` (server and server tests), `NIOEmbedded` (server tests) | all hosts |
+| [swift-service-lifecycle](https://github.com/swift-server/swift-service-lifecycle) | 2.12.0 or later | 2.12.0 | `ServiceLifecycle` (server, CLI, server tests), `UnixSignals` (CLI) | all hosts |
 
-`Package.resolved` is committed. It pins these nine packages and their 24 transitive dependencies.
-swift-http-types, swift-log and swift-nio are Hummingbird's own dependencies, declared at the
-versions it already resolved.
+`Package.resolved` is committed. It pins these ten packages and their 23 transitive dependencies.
+swift-http-types, swift-log, swift-nio and swift-service-lifecycle are Hummingbird's own
+dependencies, declared at the versions it already resolved, so declaring them changed no pin.
 `swift-collections` is not a direct dependency. Issue #3 adds it if the JSON model adopts
 `OrderedDictionary`. The product names match [05-architecture.md](05-architecture.md).
 
@@ -146,6 +151,16 @@ swift test --build-system native
 ```
 
 That works while no test runs MLX code, for the reason above.
+
+### The CLI tests
+
+`OpenJevCLITests` imports the `openjev` executable's module to parse command lines and to run the
+commands in-process with stub backends, which its `CommandContext` registers. It also runs the
+built binary as a child process: `swift build --build-tests` and `swift test` build it into the
+folder that holds the test bundles, where the tests look for it, and a test fails when it is not
+there. The smoke test serves Verdict from the binary and sends it Jev's quickstart request; it
+needs the converted package and the tokenizer, like the encoder tests, and skips naming
+`OPENJEV_ENCODER_MODELS` without them.
 
 ### MLX in tests
 
@@ -329,6 +344,10 @@ The Linux job, from the repository root, with Docker:
 ```bash
 docker run --rm -v "$PWD":/src -w /src swift:6.2-noble bash -o pipefail -c 'swift build --build-tests --scratch-path .build/linux && swift test --scratch-path .build/linux 2>&1 | tee .build/linux/test.log && .github/scripts/check-test-log.sh .build/linux/test.log'
 ```
+
+SwiftPM in the container resolves the Linux graph again and rewrites `Package.resolved` without
+the eight Apple-only pins, keeping every other version. Restore the committed file afterwards
+with `git checkout Package.resolved`.
 
 The macOS job, with Xcode 26.6 installed:
 

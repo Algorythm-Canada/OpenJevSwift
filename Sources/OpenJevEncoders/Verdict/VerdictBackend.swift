@@ -134,6 +134,8 @@ public actor VerdictBackend: QuestionReadBackend {
         logits.reserveCapacity(rows.count)
         var start = rows.startIndex
         while start < rows.endIndex {
+            // A Core ML call cannot be interrupted; a cancelled request starts no further one.
+            try Task.checkCancellation()
             let end = min(start + maxBatchRows, rows.endIndex)
             let planes = rows[start..<end].map { ids in
                 [ids.map { Int32($0) }, [Int32](repeating: 1, count: ids.count)]
@@ -158,6 +160,14 @@ public actor VerdictBackend: QuestionReadBackend {
         }
         return BatchReadResult(
             probabilities: probabilities, inputTokens: rows.reduce(0) { $0 + $1.count })
+    }
+}
+
+extension VerdictBackend: ModelReleasing {
+    /// Releases the model's loaded Core ML functions, when the runner adopts ``ModelReleasing``
+    /// as ``CoreMLEncoderModel`` does. A later read loads them again.
+    public nonisolated func close() async {
+        await (model as? any ModelReleasing)?.close()
     }
 }
 

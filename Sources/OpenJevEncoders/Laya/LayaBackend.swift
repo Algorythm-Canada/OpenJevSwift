@@ -266,6 +266,14 @@ public actor LayaBackend: QuestionReadBackend {
     }
 }
 
+extension LayaBackend: ModelReleasing {
+    /// Releases the model's loaded Core ML packages, when the runner adopts ``ModelReleasing``
+    /// as ``CoreMLEncoderModel`` and ``CoreMLPackagesByLength`` do. A later read loads them again.
+    public nonisolated func close() async {
+        await (model as? any ModelReleasing)?.close()
+    }
+}
+
 #if canImport(CoreML)
     extension LayaBackend {
         /// Loads Laya to run with Core ML: the configuration file, the tokenizer and the

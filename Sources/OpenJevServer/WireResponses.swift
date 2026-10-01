@@ -32,11 +32,15 @@
 
         /// The response for an error thrown by a route: a ``WireError`` as its status, body and
         /// headers; a Hummingbird error, such as the router's 404, as FastAPI's
-        /// `{"detail": "<reason phrase>"}`; anything else as Starlette's plain-text 500, logged.
+        /// `{"detail": "<reason phrase>"}`; ``ClientDisconnected`` as an empty 499, which only a
+        /// client that half-closed and still reads receives; anything else as Starlette's
+        /// plain-text 500, logged.
         static func response(for error: any Error, context: OpenJevRequestContext) -> Response {
             switch error {
             case let wire as WireError:
                 return response(for: wire, context: context)
+            case is ClientDisconnected:
+                return Response(status: clientClosedRequest)
             case let http as any HTTPResponseError:
                 // A string detail has no float, so writing it cannot fail.
                 let detail = PlainDetailBody(detail: http.status.reasonPhrase)
@@ -60,6 +64,11 @@
                 return internalError()
             }
         }
+
+        /// nginx's 499, `Client Closed Request`: the status the request log shows for a client
+        /// that went away before its answer was ready.
+        static let clientClosedRequest = HTTPResponse.Status(
+            code: 499, reasonPhrase: "Client Closed Request")
 
         /// Starlette's `ServerErrorMiddleware` response: 500, `Internal Server Error` as plain
         /// text.

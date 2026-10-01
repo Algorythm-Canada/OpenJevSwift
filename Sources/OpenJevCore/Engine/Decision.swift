@@ -12,7 +12,9 @@ public struct Decision: Sendable, Hashable {
     public var outputTokens: Int
     /// The time spent inside backend calls, including the wait for a free slot, summed over the
     /// calls. Reads of one request run concurrently, so this can exceed the request's wall time:
-    /// it is model time spent, not elapsed, upstream's Server-Timing `model` value.
+    /// it is model time spent, not elapsed, upstream's Server-Timing `model` value. The engines
+    /// also add every call to ``ModelTimeRecorder/current`` as it ends, which is what the server
+    /// reports, because a refused or failed request has no decision to carry the time.
     public var modelTime: Duration
 
     /// Creates a decision.

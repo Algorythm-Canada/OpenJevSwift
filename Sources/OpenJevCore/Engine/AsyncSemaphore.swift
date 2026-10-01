@@ -86,11 +86,22 @@ final class AsyncSemaphore: @unchecked Sendable {
         waiting?.resume()
     }
 
-    /// Runs `body` holding a permit.
+    /// Runs `body` holding a permit. A task cancelled before it gets one throws
+    /// `CancellationError` without running `body` and returns nothing, because it took nothing.
     func withPermit<T>(_ body: () async throws -> T) async throws -> T {
         try await wait()
         defer { signal() }
         return try await body()
+    }
+
+    /// The permits free now, for tests.
+    var availablePermits: Int {
+        lock.withLock { permits }
+    }
+
+    /// The tasks waiting for a permit now, for tests.
+    var waitingCount: Int {
+        lock.withLock { continuations.count }
     }
 
     /// Drops the consumed prefix of ``queue`` once it is at least half of the array, so the

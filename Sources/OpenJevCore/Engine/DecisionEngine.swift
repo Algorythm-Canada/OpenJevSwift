@@ -417,13 +417,24 @@ struct GroupReader: Sendable {
     }
 
     /// Runs one backend call under the in-flight semaphore and measures it, wait included.
+    ///
+    /// The time also goes to ``ModelTimeRecorder/current`` when the call ends, whether it
+    /// returned, threw or was cancelled, as upstream's `_post` adds it in its `finally`: a request
+    /// refused after a thought or a first read still reports the time it spent.
     private func timed<T: Sendable>(
         _ call: @Sendable () async throws -> T
     ) async throws -> (value: T, time: Duration) {
         let clock = ContinuousClock()
         let started = clock.now
-        let value = try await slots.withPermit(call)
-        return (value, clock.now - started)
+        do {
+            let value = try await slots.withPermit(call)
+            let time = clock.now - started
+            ModelTimeRecorder.record(time)
+            return (value, time)
+        } catch {
+            ModelTimeRecorder.record(clock.now - started)
+            throw error
+        }
     }
 
     /// Runs `body` for every index at once and returns the results in index order. When some

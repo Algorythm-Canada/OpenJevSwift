@@ -20,10 +20,13 @@ var dependencies: [Package.Dependency] = [
     .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.8.0"),
     // Hummingbird's own dependency; the server names header fields with it directly.
     .package(url: "https://github.com/apple/swift-http-types.git", from: "1.8.0"),
-    // Hummingbird's own dependencies too: the server tests capture log lines with swift-log and
-    // hand requests to the router over swift-nio's testing channel.
+    // Hummingbird's own dependencies too: the server logs with swift-log and watches each
+    // connection with a swift-nio channel handler, the server tests capture log lines and hand
+    // requests to the router over swift-nio's testing channel, and the CLI runs the server in a
+    // swift-service-lifecycle service group that shuts it down on SIGINT and SIGTERM.
     .package(url: "https://github.com/apple/swift-log.git", from: "1.15.1"),
     .package(url: "https://github.com/apple/swift-nio.git", from: "2.103.0"),
+    .package(url: "https://github.com/swift-server/swift-service-lifecycle.git", from: "2.12.0"),
 ]
 
 var targets: [Target] = [
@@ -44,20 +47,47 @@ var targets: [Target] = [
                 package: "hummingbird",
                 condition: .when(platforms: [.macOS, .linux])
             ),
+            // For the HTTP/1 channel's configuration, where the connection watch is installed.
+            .product(
+                name: "HummingbirdCore",
+                package: "hummingbird",
+                condition: .when(platforms: [.macOS, .linux])
+            ),
             .product(
                 name: "HTTPTypes",
                 package: "swift-http-types",
                 condition: .when(platforms: [.macOS, .linux])
             ),
+            .product(
+                name: "Logging",
+                package: "swift-log",
+                condition: .when(platforms: [.macOS, .linux])
+            ),
+            .product(
+                name: "NIOCore",
+                package: "swift-nio",
+                condition: .when(platforms: [.macOS, .linux])
+            ),
+            .product(
+                name: "ServiceLifecycle",
+                package: "swift-service-lifecycle",
+                condition: .when(platforms: [.macOS, .linux])
+            ),
         ],
         swiftSettings: swiftSettings
     ),
+    // The command line tool: serve, decide and models. On macOS it also links the encoder
+    // backends; the block at the end appends that dependency, since OpenJevEncoders exists only
+    // there, and the code that uses it is behind `#if canImport(OpenJevEncoders)`.
     .executableTarget(
         name: "openjev",
         dependencies: [
             "OpenJevCore",
             "OpenJevServer",
             .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            .product(name: "Logging", package: "swift-log"),
+            .product(name: "ServiceLifecycle", package: "swift-service-lifecycle"),
+            .product(name: "UnixSignals", package: "swift-service-lifecycle"),
         ],
         swiftSettings: swiftSettings
     ),
@@ -72,6 +102,22 @@ var targets: [Target] = [
     .testTarget(
         name: "OpenJevCoreTests",
         dependencies: ["OpenJevCore", "OpenJevTestSupport"],
+        swiftSettings: swiftSettings
+    ),
+    // The CLI's tests import the executable's module, and run the built `openjev` binary.
+    .testTarget(
+        name: "OpenJevCLITests",
+        dependencies: [
+            "openjev",
+            "OpenJevServer",
+            "OpenJevCore",
+            "OpenJevTestSupport",
+            .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            .product(name: "HTTPTypes", package: "swift-http-types"),
+            .product(name: "Hummingbird", package: "hummingbird"),
+            .product(name: "HummingbirdTesting", package: "hummingbird"),
+            .product(name: "Logging", package: "swift-log"),
+        ],
         swiftSettings: swiftSettings
     ),
     .testTarget(
@@ -98,6 +144,16 @@ var targets: [Target] = [
             .product(
                 name: "NIOEmbedded",
                 package: "swift-nio",
+                condition: .when(platforms: [.macOS, .linux])
+            ),
+            .product(
+                name: "NIOCore",
+                package: "swift-nio",
+                condition: .when(platforms: [.macOS, .linux])
+            ),
+            .product(
+                name: "ServiceLifecycle",
+                package: "swift-service-lifecycle",
                 condition: .when(platforms: [.macOS, .linux])
             ),
         ],
@@ -177,6 +233,11 @@ var targets: [Target] = [
             swiftSettings: swiftSettings
         ),
     ]
+    // `openjev serve` with OPENJEV_BACKEND=verdict, and its opt-in smoke test, which finds the
+    // converted package the way the store does.
+    for target in targets where ["openjev", "OpenJevCLITests"].contains(target.name) {
+        target.dependencies.append("OpenJevEncoders")
+    }
 #endif
 
 let package = Package(

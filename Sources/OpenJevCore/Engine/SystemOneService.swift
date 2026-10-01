@@ -8,7 +8,7 @@
 /// `config.served_models`.
 ///
 /// ``DecisionEngine`` (DiffusionGemma) and ``EncoderDecisionEngine`` (Verdict, Laya, CLM and
-/// JevK5) conform.
+/// JevK5) conform. Both also adopt ``ModelReleasing``, which the server calls when it stops.
 public protocol SystemOneService: Sendable {
     /// The model version a response names, the names a request may use and the `/v1/models`
     /// listing.
@@ -16,6 +16,10 @@ public protocol SystemOneService: Sendable {
 
     /// Answers a request. The errors are ``SchemaError``, ``OverloadedError``, the backend's own,
     /// among them ``BackendRefusal``, and, for an encoder engine, ``BackendContractError``.
+    ///
+    /// A service adds the time of each backend call to ``ModelTimeRecorder/current`` as the call
+    /// ends, which the server reports as `server-timing`'s `model`, and lets cancellation reach
+    /// its reads: the server cancels the decision of a client that has gone away.
     func decide(_ request: SystemOneRequest) async throws -> Decision
 }
 
