@@ -42,6 +42,7 @@ respective owners.
 | [docs/08-implementation-plan.md](docs/08-implementation-plan.md) | Milestones, ordering, dependency graph and the issue index |
 | [docs/09-conformance-and-testing.md](docs/09-conformance-and-testing.md) | Golden fixtures from upstream, parity tolerances, live tests, SDK compatibility tests, CI |
 | [docs/10-other-models.md](docs/10-other-models.md) | Verdict, Laya, JevK5 and CLM: formats, calibration, Swift feasibility |
+| [docs/deployment.md](docs/deployment.md) | Running `openjev serve` on a Mac: build, settings, launchd, logs, shutdown, exit statuses |
 
 ## Compatibility target
 
