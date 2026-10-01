@@ -40,3 +40,6 @@ TASKS.md
 
 # Python bytecode caches from the fixture scripts
 __pycache__/
+
+# Stage dumps written by Tools/oracle/stage_dump.py (hundreds of MB each); never committed.
+Tools/oracle/results/*.safetensors

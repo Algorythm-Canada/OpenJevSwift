@@ -37,25 +37,33 @@ with `chat-prompts/` lets `OpenJevCore` replay tokenizations on Linux without th
 `policies/auto_rereads.json` covers the automatic re-read policy with upstream's stub read
 reporting a higher entropy.
 
-## Layer 2: model parity, tolerance-based
+## Layer 2: model parity, two tiers
 
-Oracle: mlx-vlm 0.6.15 on the same `mlx-community` 4-bit checkpoint, driven by a small Python
-script in `Tools/fixtures/` that reuses upstream's `MlxRuntime.read` to record, for each fixture
-canvas, the slot logprobs (top 20 plus labels) and, for `steps > 1`, the intermediate argmaxes.
+Oracle: mlx-vlm 0.6.15 on the same `mlx-community` 4-bit checkpoint, driven by
+`Tools/fixtures/mlx_vlm_oracle.py`, which reuses upstream's `MlxRuntime.read`.
+[Fixtures/oracle](../Fixtures/oracle/README.md) holds what it records: 27 reads with their slot
+logprobs (top 20 plus labels), slot distributions, the argmaxes written by steps 2 and 3, the
+prompt ids, the prefill cache digests of layers 0 and 29, and the full-attention RoPE table.
 
-Swift live tests (opt-in via `OPENJEV_TEST_MODEL=<path>`; skipped otherwise) load the same
-checkpoint and compare:
+Swift live tests (opt-in via `OPENJEV_TEST_MODEL=<path>`, else the Hugging Face cache snapshot;
+skipped naming that variable otherwise) load the same checkpoint and compare in the two tiers of
+D-014:
 
-- Slot label probabilities within a tolerance (proposal 0.02 absolute; final value set by the
-  parity spike and recorded in D-014).
-- Top label agreement on every fixture read (target 100% on the fixture set; report any
-  disagreement with both distributions).
-- Long-prompt cases (a 3,000-token state) to exercise the sliding-window decoder masks.
-- Canvas widths 16, 32, 48 and 64.
-- `steps` 2 and 3 (self-conditioning path).
-- Cached versus uncached prefill: identical logprobs.
-- Same request, same answer: determinism across runs.
-- Image reads once the vision path exists (upstream's `tests/data/hotdog.jpg` case).
+- **Exact tier, the conformance test.** On the reference machine, with `MLX.GPU.metallib` set to
+  the pinned mlx-metal wheel's `mlx.metallib` (in tests, `OPENJEV_MLX_METALLIB`) and the oracle's
+  RoPE table installed in the full-attention layers, every read must be identical to the oracle:
+  every logprob, distribution, written argmax, prompt token count and cache digest.
+- **Native tier, the production check.** With mlx-swift's own kernels, the reads must meet
+  D-014's aggregate bounds: mean label probability and entropy differences overall and over the
+  prompts past 1,024 tokens, and top label agreement overall and where the oracle's margin is at
+  least 0.5. Per-label maxima are reported, never bounded.
+
+Below the reads, the text blocks (#24) are compared stage by stage with dumps of mlx-vlm's own
+prefill written by `Tools/oracle/stage_dump.py` (attention, MLP, router, experts and layer output
+of layers 0 to 5): bit-identical in the exact tier, within bounds measured at twice the native
+differences otherwise. The read-level cases still to cover are canvas widths 16 to 64, `steps` 2
+and 3, cached against uncached prefill, determinism across runs, and image reads once the vision
+path exists (upstream's `tests/data/hotdog.jpg` case).
 
 The encoder backends (`OpenJevEncodersTests`, issues #57 and #58) take their oracle from
 `Fixtures/encoders`, PyTorch float32 reads through upstream's own code. Without any model they
