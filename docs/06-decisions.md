@@ -1066,3 +1066,110 @@ Decision.
    pins, because no upstream code is involved. `FixturePinTests` checks `model/` that way.
 
 Status. Proposed with issue #23.
+
+## D-033 Encoder packages: GitHub Releases, one asset per package file, checked by SHA-256
+
+Context. D-011 item 5 decided that the converted Core ML packages are downloaded on first use,
+checked by SHA-256 and compiled on the device, not bundled in apps, and spike #56's report names
+the organisation's Hugging Face account as one place to publish them
+([spikes/encoder-runtime.md](spikes/encoder-runtime.md), "Packaging"). Issue #57 needs a host, a
+URL for every file of Verdict's package `verdict-m18-fp16` (306 MB in three files), and a
+manifest the library embeds.
+
+Decision.
+
+1. **Host: GitHub Releases** of a dedicated public repository, `Algorythm-Canada/openjev-models`,
+   one release per package version (`verdict-m18-fp16-v1`). It needs no new account and no Git
+   LFS, and a release asset may be up to 2 GB. The manifest does not depend on the host: moving
+   to the organisation's Hugging Face account later changes only the URLs that
+   `Tools/encoders/manifest.py` writes.
+2. **One asset per package file, not an archive.** `Manifest.json`,
+   `Data/com.apple.CoreML/model.mlmodel` and `Data/com.apple.CoreML/weights/weight.bin` are
+   uploaded under their paths with `/` replaced by `--`, since an asset name cannot hold a folder.
+   An iPhone then needs no unzip and no second copy on disk, and a failed download is retried per
+   file.
+3. **The tokenizer and the calibrator come from the checkpoint**: tokenizer.json,
+   tokenizer_config.json and calibrator.json of `heman10x/rlcd-modernbert-151m` on Hugging Face at
+   the pinned revision `8af2496`, the files upstream reads. They are not re-hosted.
+4. **The manifest is code.** `EncoderPackageManifest.verdict` lists every file with its URL, size
+   and SHA-256. `Tools/encoders/manifest.py` writes it from the converted package and the Hugging
+   Face cache, `--check` reports a stale one, and the script prints the `gh release create` and
+   `gh release upload` commands (for `ghp` by default) that publish exactly those files. The
+   embedded digests describe the package converted for spike #56 on the reference Mac.
+5. **Storage.** `EncoderPackageStore` keeps the files in
+   `Application Support/OpenJevSwift/encoders/{package}/`, excluded from backups: the package under
+   `{package}.mlpackage/`, the tokenizer and the calibrator under `tokenizer/`. Each download goes
+   to a temporary file and is moved into place only when its size and SHA-256 match the manifest.
+   A mismatch is refused with an error naming the file, its URL and both digests. `verified.json`
+   records the digest each file was checked against, so a later launch downloads only what is
+   missing or what a newer manifest changed, without hashing 300 MB at every launch. A package
+   that needs a newer OS than the device runs is refused before anything is downloaded.
+   `CompiledEncoderModel` compiles the package once with `MLModel.compileModel(at:)` and keeps
+   `{package}.mlmodelc` beside it, compiling again when the package's files change.
+6. **Local packages.** When `OPENJEV_ENCODER_MODELS` names a folder, the store downloads and checks
+   nothing: the package is `{folder}/{package}.mlpackage`, as the converters write it, and the
+   tokenizer and the calibrator are read from `{folder}/{package}/tokenizer/`, else from the
+   checkpoint's snapshot in the Hugging Face cache. The library never reads the environment
+   itself: `EncoderPackageStore(environment:)` takes the one the CLI passes.
+
+Publishing is a manual step after review: `python3 Tools/encoders/manifest.py` rewrites the
+manifest (unchanged for the spike's package) and prints the commands. They create the repository
+once, with the Apache-2.0 license as its first commit, since a release needs a commit to tag;
+then they copy the three files under their asset names, create the release and upload them.
+
+Alternatives rejected. (a) The organisation's Hugging Face account, the spike report's
+suggestion: it needs a new account, where GitHub needs none; it stays open for a later move,
+since only the URLs change. (b) An archive per package: an unzip on iOS and a second copy on disk while
+it expands. (c) Git LFS in this repository: the repository never holds weights
+(CONTRIBUTING.md). (d) The package in the app bundle: rejected by D-011.
+
+Consequences. Until the release exists, a download fails with HTTP 404
+(`EncoderPackageError.httpStatus`); a deployment sets `OPENJEV_ENCODER_MODELS` in the meantime. A
+changed package needs a new release tag and a new manifest, and a published asset is never
+replaced. `openjev-models` should carry the Apache-2.0 license and a notice crediting Heman10x's
+checkpoint, and Laya's authors once #58 publishes its packages the same way.
+
+Status. Proposed with issue #57; the host needs the maintainers' confirmation.
+
+## D-034 Verdict backend: where the port goes beyond or differs from the issue text
+
+Context. Issue #57 predates spike #56 and D-011, and describes a backend that batches like
+upstream's PyTorch one. A few points follow the spike instead, and a few needed choices the issue
+does not spell out.
+
+Decision.
+
+1. **No CLI registration yet.** The issue asks for `OPENJEV_BACKEND=verdict` in the CLI, and
+   `openjev serve` is issue #40. This issue exposes `VerdictBackend.load(from:)` and
+   `load(configuration:)`, and 05-architecture.md documents the one-line
+   `QuestionReadBackendProvider` registration.
+2. **Rows per Core ML call follow D-011, not a fixed 16.** `EncoderDecisionEngine` still hands the
+   backend batches of `OPENJEV_ENCODER_BATCH` questions. The backend runs them one question per
+   call on iOS, through the batch-1 functions on the Neural Engine, and up to 16 per call on
+   macOS, through the batch-16 functions on the GPU, in the smallest function that holds the rows
+   and the longest row. Rows are padded to that function's length (128, 256 or 512 tokens), where
+   upstream pads to the longest row; the billing, the rows' unpadded lengths, is the same.
+3. **Where the files come from.** The issue's download from `heman10x/rlcd-modernbert-151m` holds
+   for the tokenizer and the calibrator; the weights are the Core ML package of D-033.
+4. **Compute units.** `EncoderComputeUnits` has no `.all`, so D-011's rule against it holds by
+   type; `.cpuOnly` remains for tests.
+5. **Tolerance.** The calibration runs in double on the float32 logits, as the spike's harness
+   did, where upstream runs in float32; the two agree within 1e-6 on the corpus and differ only
+   where float32 underflows. The Core ML acceptance bounds are the spike's scope notes rather
+   than the issue's 0.007 (bfloat16 moved probabilities by up to 0.0115 on this corpus): the
+   largest difference at most 0.02, the mean at most 0.003, and the top answer unchanged wherever
+   the reference's top two are at least 0.01 apart.
+6. **A model's wrong output is an error.** A model that returns the wrong number of rows, or fewer
+   logits than a question's labels, throws `EncoderModelError`, which the server answers as a
+   backend failure, where upstream would raise from the same place or broadcast silently. A score
+   with no levels, which only a request built in code can hold, gets an empty distribution, and
+   the engine refuses it with `BackendContractError` rather than stopping the process.
+7. **The core gains `Double.pythonRepr`**, CPython's `repr(float)`, for the score labels'
+   `float(i)`. It lays out finite values as the JSON writer does and is checked against the whole
+   `python-json/float_repr.json` table.
+8. **The loaders check the OS when they run.** The Core ML types are `@available(macOS 15, iOS
+   18, *)`, as D-011 item 4 says, but `VerdictBackend.load(configuration:)` and `load(from:)` are
+   not: they throw `EncoderLoadError.unsupportedOperatingSystem` on an older OS. The CLI and the
+   server build for the package's macOS 14 floor, and this keeps their registration one line.
+
+Status. Proposed with issue #57.

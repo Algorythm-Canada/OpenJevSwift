@@ -2,7 +2,8 @@
 
 Scripts and a Swift harness that answer spike #56: should Verdict and Laya, upstream's two
 ModernBERT encoder models, run on Core ML or on an MLX port, on iOS and macOS? The findings are in
-[docs/spikes/encoder-runtime.md](../../docs/spikes/encoder-runtime.md). Nothing here is built by
+[docs/spikes/encoder-runtime.md](../../docs/spikes/encoder-runtime.md). The converters and
+`manifest.py` also produce and describe the packages that `OpenJevEncoders` downloads. Nothing here is built by
 the main package, and no weights, converted packages or tokenizer files are committed.
 
 | Path | What it is |
@@ -18,6 +19,7 @@ the main package, and no weights, converted packages or tokenizer files are comm
 | `stage_harness.sh` | Copies fixtures, tokenizers and packages into the app for a device run |
 | `run_macos.sh`, `run_ios.sh` | Measure every package with every compute-unit setting, one process each, on the Mac or a connected iPhone |
 | `summarize.py` | Turns the measurement results into the report's tables |
+| `manifest.py` | Writes the manifest of Verdict's package that `OpenJevEncoders` embeds (every file's URL, size and SHA-256) and prints the commands that publish the package as a GitHub release (D-033). Standard library only |
 
 ## Running it
 
@@ -48,6 +50,27 @@ take about five and fifteen minutes and write about 1.2 GB and 1.7 GB of package
 they are the only Laya packages that run on the Neural Engine. The harness tests skip when the
 tokenizers or fixtures are missing; the measurement tests also need `ENCODER_HARNESS_BENCHMARK=1`
 and converted packages.
+
+## Publishing a package
+
+`OpenJevEncoders` downloads Verdict's package on first use and checks every file against the
+manifest it embeds, `Sources/OpenJevEncoders/Store/EncoderPackageManifest+Verdict.swift` (D-033).
+After converting a new package, from the repository root:
+
+```bash
+python3 Tools/encoders/manifest.py
+```
+
+It rewrites the manifest from `verdict-m18-fp16.mlpackage` (in `OPENJEV_ENCODER_MODELS` or
+`~/Library/Caches/OpenJevSwift/encoders`) and the checkpoint's tokenizer and calibrator (in the
+Hugging Face cache), and prints the commands that create `Algorythm-Canada/openjev-models` once
+(with the Apache-2.0 license as its first commit, since a release needs a commit to tag), copy the
+three package files under their asset names and upload them to a release. It uploads nothing
+itself; `--gh gh` prints `gh` instead of `ghp`, and `--check` fails when the committed manifest
+no longer matches the package. Every conversion writes new identifiers into the package's
+Manifest.json, so a package converted on another machine never matches the published digests:
+publish from the machine whose package the manifest describes. Commit the manifest and publish the release together: a new
+package needs a new tag (`--tag`), and a published asset is never replaced.
 
 ## Known problems
 

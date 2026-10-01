@@ -39,6 +39,12 @@ OpenJevSwift/                          Swift package, tools 6.2, strict concurre
       Tokenization/  Tokenizer adapter, chat prompt builder, label discovery hookup
       Vision/        Processor parity, pixel embedding, block ids (later milestone)
       Generation/    Sampler, stopping rules, block loop, streaming detokenizer (later)
+    OpenJevEncoders/                   Apple platforms; its Core ML types need macOS 15 and iOS 18.
+                                       Depends on Core ML and swift-transformers Tokenizers; no MLX.
+      Verdict/       VerdictPrompt, VerdictTokenizer, VerdictCalibration, VerdictBackend actor
+      CoreML/        EncoderPackageSpec, CoreMLEncoderModel (one function per shape, one or two
+                     loaded), CompiledEncoderModel, EncoderComputeUnits
+      Store/         EncoderPackageManifest, EncoderPackageStore (download on first use, SHA-256)
     OpenJevServer/                     Hummingbird 2. ServerSettings, BackendProvider,
                                        OpenJevApplication (routes), request id, server-timing,
                                        authentication and body cap middleware, the body reader
@@ -49,25 +55,31 @@ OpenJevSwift/                          Swift package, tools 6.2, strict concurre
   Tests/
     OpenJevCoreTests/                  Fixture-driven unit tests (no model)
     OpenJevDiffusionGemmaTests/        Unit tests on synthetic shapes; opt-in live tests
+    OpenJevEncodersTests/              Fixture-driven parity tests over recorded logits; opt-in
+                                       tokenizer and Core ML parity tests
     OpenJevServerTests/                Contract tests with a stub backend; SDK compatibility
   Tools/
     fixtures/                          Python: generate golden fixtures from pinned upstream
+    encoders/                          Python and Swift: Verdict's and Laya's reference outputs,
+                                       the Core ML converters and the package manifest
     sdk-compat/                        Python and TypeScript SDK smoke tests against a server
   Fixtures/                            Checked-in JSON fixtures (small)
 ```
 
-Later milestones add `OpenJevEncoders` (Verdict, Laya) and `OpenJevLetterReadout` (JevK5 style
-on `MLXLLM` models) as separate targets so that iOS consumers never link the 26B model code. Both
-implement `QuestionReadBackend` and run behind `EncoderDecisionEngine`, so the server holds either
-kind of engine as a `SystemOneService`.
+`OpenJevEncoders` holds the encoder backends on Core ML (D-011): Verdict (#57) now, Laya (#58)
+next. A later milestone adds `OpenJevLetterReadout` (JevK5 style on `MLXLLM` models). Both are
+separate targets so that iOS consumers never link the 26B model code. Both implement
+`QuestionReadBackend` and run behind `EncoderDecisionEngine`, so the server holds either kind of
+engine as a `SystemOneService`.
 
 ## Module dependency graph
 
 ```
 openjev (CLI) ──► OpenJevServer ──► OpenJevCore
                         │                ▲
-                        └──► OpenJevDiffusionGemma ──► mlx-swift, mlx-swift-lm (MLXLMCommon, MLXVLM),
-                                                        swift-transformers (Tokenizers)
+                        ├──► OpenJevDiffusionGemma ──► mlx-swift, mlx-swift-lm (MLXLMCommon, MLXVLM),
+                        │                               swift-transformers (Tokenizers)
+                        └──► OpenJevEncoders ──► Core ML, swift-transformers (Tokenizers)
 ```
 
 `OpenJevCore` has no third-party dependencies (an `OrderedDictionary` from `swift-collections`
@@ -274,13 +286,31 @@ Configuration: a `ServerSettings` struct with the same names, defaults and start
 upstream's `Settings`, populated from `OPENJEV_*` variables by the CLI so existing deployment
 docs and compose files keep working.
 
+An encoder backend is one line of the CLI's provider choice (`openjev serve`, issue #40). For
+`OPENJEV_BACKEND=verdict`, with `environment` the process environment the CLI also hands to
+`ServerSettings(environment:)`:
+
+```swift
+QuestionReadBackendProvider { _ in
+    try await VerdictBackend.load(from: EncoderPackageStore(environment: environment))
+}
+```
+
+`EncoderPackageStore(environment:)` uses the folder `OPENJEV_ENCODER_MODELS` names when it is set,
+as the converters in `Tools/encoders` write it. Otherwise it downloads Verdict's package, tokenizer
+and calibrator to Application Support on first use and checks every file's SHA-256 against the
+manifest the library embeds (D-033). `VerdictBackend.load(configuration:)` takes the three
+locations directly. Both loaders build for the package's macOS 14 floor and throw on an OS
+older than macOS 15 or iOS 18, which the Core ML packages need (D-034). The provider builds the `EncoderDecisionEngine` from `OPENJEV_ENCODER_BATCH`,
+`OPENJEV_MAX_QUEUE` and `OPENJEV_WARMUP`, and the warm-up read loads the first Core ML function.
+
 ## Platform support matrix
 
-| Target | `OpenJevCore` | `OpenJevDiffusionGemma` | `OpenJevServer` | Small encoder models (later) |
+| Target | `OpenJevCore` | `OpenJevDiffusionGemma` | `OpenJevServer` | `OpenJevEncoders` |
 |---|---|---|---|---|
-| macOS 14+ Apple silicon | yes | yes (32 GB+ recommended) | yes | yes |
-| iOS 17+ | yes | no (memory) | no | yes |
-| Linux | yes (tests, tooling) | no | builds with a stub backend for contract tests | no |
+| macOS 14+ Apple silicon | yes | yes (32 GB+ recommended) | yes | yes, from macOS 15 (Core ML's multifunction packages) |
+| iOS 17+ | yes | no (memory) | no | yes, from iOS 18 |
+| Linux | yes (tests, tooling) | no | builds with a stub backend for contract tests | no (Core ML) |
 
 ## Deliberately not in scope for 0.1
 

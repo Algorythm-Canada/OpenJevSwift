@@ -57,6 +57,19 @@ checkpoint and compare:
 - Same request, same answer: determinism across runs.
 - Image reads once the vision path exists (upstream's `tests/data/hotdog.jpg` case).
 
+The encoder backends (`OpenJevEncodersTests`, issues #57 and #58) take their oracle from
+`Fixtures/encoders`, PyTorch float32 reads through upstream's own code. Without any model they
+check every prompt byte for byte, the calibration within 1e-6 on the recorded logits, the billing
+and, over a model that replays the recorded logits, the batching and the answer order through
+`EncoderDecisionEngine`. The tokenizer parity tests need the checkpoint's tokenizer, and the Core
+ML parity tests need the converted package; both are opt-in via `OPENJEV_ENCODER_MODELS=<folder>`
+(the converters' output, with `<package>/tokenizer/`), else `~/Library/Caches/OpenJevSwift/encoders`
+and the Hugging Face cache, and skip naming that variable otherwise. Core ML is compared with the
+bounds of spike #56 in the style of D-014: over the 200 questions, the largest probability
+difference at most 0.02, the mean at most 0.003, and the top answer unchanged wherever the
+reference's top two are at least 0.01 apart. Planted calibration bugs (the global temperature
+where `per_k` has one, the abstention's mass kept) must each break a bound.
+
 Layer 2 also covers the port of upstream's `test_mlx_model.py` cases: README example answers,
 chunked question reads, more steps costing no more prompt tokens, `think` billing, chat completion
 sanity, thought channel never leaking.
@@ -93,15 +106,17 @@ identity.
 - macOS Apple silicon job: build everything with Swift Build, run every test target, and run
   swift-format. MLX unit tests on synthetic small shapes run there on the runner's GPU (issue #8
   and D-028).
-- Both jobs fail when a test skips for any reason other than an unset `OPENJEV_TEST_MODEL` or
-  `OPENJEV_LIVE_URL`, so a fixture test cannot stop testing without failing.
+- Every job fails when a test skips for any reason other than an unset `OPENJEV_TEST_MODEL`,
+  `OPENJEV_ENCODER_MODELS` or `OPENJEV_LIVE_URL`, so a fixture test cannot stop testing without
+  failing.
 - A fixtures workflow regenerates every fixture from the pinned upstream commit and tokenizer and
   fails when the result differs from the committed files.
 - Model and live tests never run on hosted CI. They are run by developers with the weights and
   recorded in the pull request. A self-hosted Apple silicon runner is a later option. The
   tokenizer parity suite of `OpenJevDiffusionGemmaTests` needs the checkpoint's tokenizer files
   (`OPENJEV_TEST_TOKENIZER`, `OPENJEV_TEST_MODEL` or the Hugging Face cache) and is opt-in the
-  same way until CI fetches those files (spikes/tokenizer-parity.md, follow-up E).
+  same way until CI fetches those files (spikes/tokenizer-parity.md, follow-up E). So are the
+  tokenizer and Core ML suites of `OpenJevEncodersTests` (`OPENJEV_ENCODER_MODELS`).
 
 ## Test data hygiene
 
