@@ -1,6 +1,20 @@
 import CryptoKit
 import Foundation
 
+/// Where an encoder's tokenizer and calibration file are on this device.
+public struct EncoderTokenizerLocations: Sendable, Hashable {
+    /// The folder holding tokenizer.json and tokenizer_config.json.
+    public var tokenizerDirectory: URL
+    /// The calibration file: Verdict's calibrator.json, Laya's rl_agent_config.json.
+    public var calibratorFile: URL
+
+    /// Creates the locations.
+    public init(tokenizerDirectory: URL, calibratorFile: URL) {
+        self.tokenizerDirectory = tokenizerDirectory
+        self.calibratorFile = calibratorFile
+    }
+}
+
 /// Where an encoder's package, tokenizer and calibrator are on this device.
 public struct EncoderPackageLocations: Sendable, Hashable {
     /// The `.mlpackage` folder.
@@ -15,6 +29,19 @@ public struct EncoderPackageLocations: Sendable, Hashable {
         self.packageDirectory = packageDirectory
         self.tokenizerDirectory = tokenizerDirectory
         self.calibratorFile = calibratorFile
+    }
+
+    /// Creates the locations of a package and of its tokenizer and calibration file.
+    public init(packageDirectory: URL, tokenizer: EncoderTokenizerLocations) {
+        self.init(
+            packageDirectory: packageDirectory, tokenizerDirectory: tokenizer.tokenizerDirectory,
+            calibratorFile: tokenizer.calibratorFile)
+    }
+
+    /// The tokenizer's folder and the calibration file.
+    public var tokenizer: EncoderTokenizerLocations {
+        EncoderTokenizerLocations(
+            tokenizerDirectory: tokenizerDirectory, calibratorFile: calibratorFile)
     }
 }
 
@@ -31,7 +58,14 @@ public struct EncoderPackageLocations: Sendable, Hashable {
 /// checked: the package is `{localModelsDirectory}/{package}.mlpackage`, as the converters in
 /// Tools/encoders write it, and the tokenizer and the calibrator are read from
 /// `{localModelsDirectory}/{package}/tokenizer/` if it holds them, else from the checkpoint's
-/// snapshot in the Hugging Face cache.
+/// snapshot in the Hugging Face cache (its root for Verdict; for Laya the tokenizer under
+/// `tokenizer/` and rl_agent_config.json at the root,
+/// ``EncoderPackageManifest/checkpointTokenizerFolder``).
+///
+/// ``locations(for:)`` gets everything a manifest names. ``tokenizerLocations(for:)`` gets only
+/// the tokenizer and the calibrator, which the checkpoint publishes even while the package is not,
+/// and ``heldPackageDirectory(for:)`` says whether the device already holds a package without
+/// downloading anything: an iPhone fetches Laya's package for a length only when it needs it.
 ///
 /// Call ``locations(for:)`` once at startup; concurrent calls for the same package may download
 /// a file twice.
@@ -125,23 +159,91 @@ public struct EncoderPackageStore: Sendable {
         guard manifest.packageDownloadsEnabled else {
             throw EncoderPackageError.packageDownloadsUnavailable(manifest.package)
         }
-        let fileManager = FileManager.default
+        let root = try storeRoot(for: manifest)
+        try await fetch(Self.packageEntries(of: manifest) + Self.tokenizerEntries(of: manifest), into: root)
+        return EncoderPackageLocations(
+            packageDirectory: Self.packageDirectory(of: manifest, in: root),
+            tokenizer: Self.tokenizerLocations(of: manifest, in: root))
+    }
+
+    /// The tokenizer's files and the calibration file of a manifest, on this device, without
+    /// its package: the local models' copies or the Hugging Face cache's when
+    /// ``localModelsDirectory`` is set, else the store's, downloading and checking each file that
+    /// is missing or unchecked first.
+    ///
+    /// The checkpoint publishes these files itself, so they are downloaded even while the
+    /// manifest's package is not published (``EncoderPackageManifest/packageDownloadsEnabled``).
+    /// A later ``locations(for:)`` of the same manifest finds them checked.
+    ///
+    /// - Throws: ``EncoderPackageError`` as ``locations(for:)`` does, and
+    ///   ``EncoderPackageError/missingLocalTokenizer(files:searched:)`` when the local models
+    ///   and the Hugging Face cache lack a file.
+    public func tokenizerLocations(for manifest: EncoderPackageManifest) async throws
+        -> EncoderTokenizerLocations
+    {
+        try Self.checkPaths(of: manifest)
+        try Self.checkOperatingSystem(for: manifest)
+        if let localModelsDirectory {
+            return try localTokenizer(for: manifest, in: localModelsDirectory)
+        }
+        let root = try storeRoot(for: manifest)
+        try await fetch(Self.tokenizerEntries(of: manifest), into: root)
+        return Self.tokenizerLocations(of: manifest, in: root)
+    }
+
+    /// The package's folder when this device holds the whole package, else `nil`; nothing is
+    /// downloaded or hashed.
+    ///
+    /// With ``localModelsDirectory`` set, the package is held when
+    /// `{localModelsDirectory}/{package}.mlpackage` exists. Otherwise it is held when the store
+    /// has checked every package file at the manifest's digest (`verified.json`) and the file
+    /// still has the manifest's size, as ``locations(for:)`` decides what to download again.
+    ///
+    /// - Throws: ``EncoderPackageError`` for a manifest whose paths leave the store's folder, a
+    ///   package for a newer OS, or a symbolic link on a file's way.
+    public func heldPackageDirectory(for manifest: EncoderPackageManifest) throws -> URL? {
+        try Self.checkPaths(of: manifest)
+        try Self.checkOperatingSystem(for: manifest)
+        if let localModelsDirectory {
+            let package = Self.localPackageDirectory(of: manifest, in: localModelsDirectory)
+            return FileManager.default.fileExists(atPath: package.path) ? package : nil
+        }
         let root = directory.appendingPathComponent(manifest.package, isDirectory: true)
-        try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-        let recordFile = root.appendingPathComponent("verified.json")
+        guard FileManager.default.fileExists(atPath: root.path) else {
+            return nil
+        }
+        let verified = Self.verifiedDigests(in: root)
+        for (path, file) in Self.packageEntries(of: manifest) {
+            let destination = try Self.checkDestination(
+                root: root, storeDirectory: directory, path: path)
+            guard verified[path] == file.sha256.lowercased(),
+                (try? Self.size(of: destination)) == file.bytes
+            else {
+                return nil
+            }
+        }
+        return Self.packageDirectory(of: manifest, in: root)
+    }
+
+    /// The store's folder of a manifest's files, created and excluded from backups.
+    private func storeRoot(for manifest: EncoderPackageManifest) throws -> URL {
+        let root = directory.appendingPathComponent(manifest.package, isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         try Self.checkDestination(root: root, storeDirectory: directory, path: "verified.json")
         var values = URLResourceValues()
         values.isExcludedFromBackup = true
         var excluded = root
         try excluded.setResourceValues(values)
+        return root
+    }
 
-        let packageFolder = manifest.package + ".mlpackage"
-        let entries =
-            manifest.packageFiles.map { (packageFolder + "/" + $0.path, $0) }
-            + (manifest.tokenizerFiles + [manifest.calibrator]).map { ("tokenizer/" + $0.path, $0) }
-        var verified =
-            (try? JSONDecoder().decode([String: String].self, from: Data(contentsOf: recordFile)))
-            ?? [:]
+    /// Downloads and checks each entry that `verified.json` does not record at the manifest's
+    /// digest, or whose file no longer has the manifest's size, and records each one checked.
+    private func fetch(_ entries: [(String, EncoderPackageManifest.File)], into root: URL)
+        async throws
+    {
+        let recordFile = root.appendingPathComponent("verified.json")
+        var verified = Self.verifiedDigests(in: root)
         for (path, file) in entries {
             let destination = try Self.checkDestination(
                 root: root, storeDirectory: directory, path: path)
@@ -158,9 +260,43 @@ public struct EncoderPackageStore: Sendable {
                 root: root, storeDirectory: directory, path: "verified.json")
             try JSONEncoder().encode(verified).write(to: recordFile, options: .atomic)
         }
+    }
+
+    /// The digest `verified.json` records for each path the store has checked.
+    private static func verifiedDigests(in root: URL) -> [String: String] {
+        (try? JSONDecoder().decode(
+            [String: String].self, from: Data(contentsOf: root.appendingPathComponent("verified.json"))))
+            ?? [:]
+    }
+
+    /// The package's files, each under `{package}.mlpackage/` in the store's folder.
+    private static func packageEntries(of manifest: EncoderPackageManifest)
+        -> [(String, EncoderPackageManifest.File)]
+    {
+        manifest.packageFiles.map { (manifest.package + ".mlpackage/" + $0.path, $0) }
+    }
+
+    /// The tokenizer's files and the calibration file, each under `tokenizer/` in the store's
+    /// folder.
+    private static func tokenizerEntries(of manifest: EncoderPackageManifest)
+        -> [(String, EncoderPackageManifest.File)]
+    {
+        (manifest.tokenizerFiles + [manifest.calibrator]).map { ("tokenizer/" + $0.path, $0) }
+    }
+
+    /// The package in a folder laid out as the store's.
+    private static func packageDirectory(of manifest: EncoderPackageManifest, in root: URL)
+        -> URL
+    {
+        root.appendingPathComponent(manifest.package + ".mlpackage", isDirectory: true)
+    }
+
+    /// The tokenizer and the calibration file in a folder laid out as the store's.
+    private static func tokenizerLocations(of manifest: EncoderPackageManifest, in root: URL)
+        -> EncoderTokenizerLocations
+    {
         let tokenizer = root.appendingPathComponent("tokenizer", isDirectory: true)
-        return EncoderPackageLocations(
-            packageDirectory: root.appendingPathComponent(packageFolder, isDirectory: true),
+        return EncoderTokenizerLocations(
             tokenizerDirectory: tokenizer,
             calibratorFile: tokenizer.appendingPathComponent(manifest.calibrator.path))
     }
@@ -187,45 +323,69 @@ public struct EncoderPackageStore: Sendable {
         try fileManager.moveItem(at: temporary, to: destination)
     }
 
-    /// The package in the local models folder, and the first folder that holds the tokenizer
-    /// and the calibrator: `{package}/tokenizer/` there, else the checkpoint's Hugging Face
-    /// snapshot.
+    /// The package in the local models folder, and the first place that holds the tokenizer and
+    /// the calibrator (``localTokenizer(for:in:)``).
     private func localLocations(for manifest: EncoderPackageManifest, in local: URL) throws
         -> EncoderPackageLocations
     {
-        let fileManager = FileManager.default
-        let package = local.appendingPathComponent(
-            manifest.package + ".mlpackage", isDirectory: true)
-        guard fileManager.fileExists(atPath: package.path) else {
+        let package = Self.localPackageDirectory(of: manifest, in: local)
+        guard FileManager.default.fileExists(atPath: package.path) else {
             throw EncoderPackageError.missingLocalPackage(package)
         }
-        var candidates = [
-            local.appendingPathComponent(manifest.package, isDirectory: true)
-                .appendingPathComponent("tokenizer", isDirectory: true)
-        ]
-        if let huggingFaceHubDirectory {
-            candidates.append(manifest.checkpoint.snapshot(in: huggingFaceHubDirectory))
-        }
-        let names = (manifest.tokenizerFiles + [manifest.calibrator]).map(\.path)
-        guard
-            let tokenizer = candidates.first(where: { folder in
-                names.allSatisfy {
-                    fileManager.fileExists(atPath: folder.appendingPathComponent($0).path)
-                }
-            })
-        else {
-            throw EncoderPackageError.missingLocalTokenizer(files: names, searched: candidates)
-        }
         return EncoderPackageLocations(
-            packageDirectory: package, tokenizerDirectory: tokenizer,
-            calibratorFile: tokenizer.appendingPathComponent(manifest.calibrator.path))
+            packageDirectory: package, tokenizer: try localTokenizer(for: manifest, in: local))
     }
 
-    /// Refuses a manifest whose package name or file paths would leave the store's folder: an
-    /// empty or absolute path, or one with an empty, `.` or `..` component.
+    /// The package's folder in the local models folder, as the converters write it.
+    private static func localPackageDirectory(of manifest: EncoderPackageManifest, in local: URL)
+        -> URL
+    {
+        local.appendingPathComponent(manifest.package + ".mlpackage", isDirectory: true)
+    }
+
+    /// The first place that holds the tokenizer's files and the calibration file:
+    /// `{package}/tokenizer/` in the local models folder, else the checkpoint's Hugging Face
+    /// snapshot, where Laya's tokenizer is under `tokenizer/` and its calibration file at the
+    /// root.
+    private func localTokenizer(for manifest: EncoderPackageManifest, in local: URL) throws
+        -> EncoderTokenizerLocations
+    {
+        let fileManager = FileManager.default
+        let folder = local.appendingPathComponent(manifest.package, isDirectory: true)
+            .appendingPathComponent("tokenizer", isDirectory: true)
+        var candidates = [
+            EncoderTokenizerLocations(
+                tokenizerDirectory: folder,
+                calibratorFile: folder.appendingPathComponent(manifest.calibrator.path))
+        ]
+        if let huggingFaceHubDirectory {
+            candidates.append(manifest.checkpointFiles(in: huggingFaceHubDirectory))
+        }
+        let names = manifest.tokenizerFiles.map(\.path)
+        guard
+            let found = candidates.first(where: { candidate in
+                fileManager.fileExists(atPath: candidate.calibratorFile.path)
+                    && names.allSatisfy {
+                        fileManager.fileExists(
+                            atPath: candidate.tokenizerDirectory.appendingPathComponent($0).path)
+                    }
+            })
+        else {
+            throw EncoderPackageError.missingLocalTokenizer(
+                files: names + [manifest.calibrator.path],
+                searched: candidates.map(\.tokenizerDirectory))
+        }
+        return found
+    }
+
+    /// Refuses a manifest whose package name or file paths would leave the store's folder, or
+    /// whose checkpoint tokenizer folder would leave the checkpoint's: an empty or absolute path,
+    /// or one with an empty, `.` or `..` component. The tokenizer folder may be empty, for the
+    /// checkpoint's root.
     private static func checkPaths(of manifest: EncoderPackageManifest) throws {
         let files = manifest.packageFiles + manifest.tokenizerFiles + [manifest.calibrator]
-        for path in [manifest.package] + files.map(\.path) {
+        let folder = manifest.checkpointTokenizerFolder.isEmpty ? [] : [manifest.checkpointTokenizerFolder]
+        for path in [manifest.package] + files.map(\.path) + folder {
             let components = path.split(separator: "/", omittingEmptySubsequences: false)
             guard !path.hasPrefix("/"),
                 components.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." })
