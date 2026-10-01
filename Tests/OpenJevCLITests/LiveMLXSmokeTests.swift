@@ -40,7 +40,8 @@
             print("openjev serve --backend mlx was serving after \(clock.now - started)")
 
             let row = try WireFixtures.recordedCase(named: "quickstart")
-            let body = try #require(try WireFixtures.bodyBytes(of: try #require(row["request"])))
+            let request = try #require(row["request"])
+            let body = try #require(try WireFixtures.bodyBytes(of: request))
             let client = TestClient(host: "127.0.0.1", port: serving)
             client.connect()
             let response = try await client.execute(

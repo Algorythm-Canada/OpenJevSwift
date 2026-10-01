@@ -94,7 +94,7 @@ struct ModelResolverTests {
         }
     }
 
-    @Test("A download closed after 100,000 bytes resumes with a Range request and the right digest")
+    @Test("A download closed partway resumes with a Range request and the right digest")
     func interruptedDownload() async throws {
         try await withServer { server, resolver, cache in
             server.interruptNextLFSDownload(after: 100_000)
@@ -107,7 +107,12 @@ struct ModelResolverTests {
             let attempts = server.downloads.filter { $0.path.hasSuffix("/model.safetensors") }
             #expect(attempts.count == 2)
             #expect(attempts.first?.headers["range"] == nil)
-            #expect(attempts.last?.headers["range"] == "bytes=100000-")
+            // The second request resumes from the bytes that reached the disk, at most the
+            // 100,000 the server wrote before it closed (the socket may drop some of them).
+            let range = try #require(attempts.last?.headers["range"])
+            let offset = try #require(Int(range.dropFirst(6).dropLast()))
+            #expect(range.hasPrefix("bytes=") && range.hasSuffix("-"))
+            #expect(offset > 0 && offset <= 100_000)
         }
     }
 
@@ -192,6 +197,32 @@ struct ModelResolverTests {
         #expect(HubCacheLocation.token(environment: ["HF_TOKEN": ""]) == nil)
         #expect(HubCacheLocation.token(environment: [:]) == nil)
         #expect(HubCacheLocation.token(environment: ["HF_TOKEN": "hf_abc"]) == "hf_abc")
+    }
+
+    @Test("A redirect to another host drops the token; a whitespace token is not sent")
+    func redirectDropsTheToken() async throws {
+        try await withServer { server, resolver, cache in
+            server.redirectLFSFileToAnotherHost(true)
+            let directory = try await resolver.resolve(
+                .hub(repository: repository, revision: commit), cache: cache, token: "hf_abc")
+            let shard = file(named: "model.safetensors")
+            #expect(
+                try TokenizerFiles.sha256Hex(
+                    of: directory.appendingPathComponent("model.safetensors")) == shard.sha256)
+            let cdn = server.requests.filter { $0.path.hasPrefix("/cdn/") }
+            #expect(cdn.count == 1)
+            #expect(cdn.allSatisfy { $0.headers["authorization"] == nil })
+            let hub = server.requests.filter { !$0.path.hasPrefix("/cdn/") }
+            #expect(hub.allSatisfy { $0.headers["authorization"] == "Bearer hf_abc" })
+
+            let other = try temporaryCache()
+            defer { try? FileManager.default.removeItem(at: other.directory) }
+            let count = server.requests.count
+            _ = try await resolver.resolve(
+                .hub(repository: repository, revision: commit), cache: other, token: "  ")
+            #expect(
+                server.requests.dropFirst(count).allSatisfy { $0.headers["authorization"] == nil })
+        }
     }
 
     @Test("A commit already in the cache resolves when the Hub cannot be reached")

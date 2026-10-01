@@ -1573,7 +1573,8 @@ Decision.
    `refs/<name>`. A transport error is retried from the bytes on disk, 5 attempts in all; a server that
    answers a range with the whole file or a 416 restarts the file; a digest mismatch removes the
    download and names the file and both digests; 401 and 403 say the repository is gated and name
-   `HF_TOKEN`; a 404 names the revision. When the Hub cannot be reached, a commit (given, or read
+   `HF_TOKEN`; a 404 names the revision. The token is dropped when a download redirects to another
+   host (the Hub's CDN), as huggingface_hub does. When the Hub cannot be reached, a commit (given, or read
    from `refs/<name>`) whose snapshot is complete is used offline. The issue's "all files except
    README" is not followed: the whole tree is fetched (13 files, README and `.gitattributes`
    included), so the snapshot is the one huggingface_hub writes. No lock files are written, so
@@ -1616,7 +1617,9 @@ Decision.
     156 and 120 of 120), and the runtime's maps are bit-identical to `DiffusionGemmaModel.read`'s.
     D-014's bounds are aggregates: the quickstart's five reads alone have a mean of 0.045, from its
     `is_urgent` slot (the oracle reads 0.57, 0.94 and 0.52 for yes), so per-request bounds are not
-    asserted. Load: tokenizer 5.4 to 6.3 s, weights 2.2 to 4.1 s, warm-up 0.37 to 0.83 s. Memory
-    over 100 unique short prompts: R4.
+    asserted. Load over four test runs (warm file cache): tokenizer 4.9 to 6.3 s, weights 0.9 to 4.1 s,
+    warm-up 0.30 to 0.83 s. The built `openjev serve --backend mlx` was serving 12.2 s after it
+    started (warm-up about 4 s) and answered the quickstart in 751 ms. Memory over 100 unique short
+    prompts: R4.
 
 Status. Proposed with issues #29 and #30.

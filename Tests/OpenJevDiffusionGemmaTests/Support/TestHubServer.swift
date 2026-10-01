@@ -62,6 +62,7 @@ final class TestHubServer: @unchecked Sendable {
     private var status: Int?
     private var corrupt = false
     private var interruptAfter: Int?
+    private var redirect = false
 
     /// The server's base URL, once started.
     private(set) var endpoint = URL(string: "http://127.0.0.1:0")!
@@ -109,6 +110,9 @@ final class TestHubServer: @unchecked Sendable {
     func respondToEverything(with status: Int?) { lock.withLock { self.status = status } }
     /// Serves the LFS file with one byte changed.
     func corruptLFSFile(_ on: Bool) { lock.withLock { corrupt = on } }
+    /// Redirects downloads of the LFS file to `localhost`, another host than `127.0.0.1`, as the
+    /// Hub redirects LFS files to its CDN.
+    func redirectLFSFileToAnotherHost(_ on: Bool) { lock.withLock { redirect = on } }
     /// Closes the next download of the LFS file after `bytes` bytes of its body.
     func interruptNextLFSDownload(after bytes: Int) { lock.withLock { interruptAfter = bytes } }
 
@@ -156,15 +160,28 @@ final class TestHubServer: @unchecked Sendable {
             headers[line[..<colon].lowercased()] = line[line.index(after: colon)...]
                 .trimmingCharacters(in: .whitespaces)
         }
-        let (forced, corrupt, interrupt) = lock.withLock {
+        let (forced, corrupt, interrupt, redirect) = lock.withLock {
             seen.append(Request(path: path, headers: headers))
-            return (status, self.corrupt, interruptAfter)
+            return (status, self.corrupt, interruptAfter, self.redirect)
         }
         if let forced {
             send(connection, status: forced, body: Data(#"{"error": "refused"}"#.utf8))
             return
         }
         let repository = Self.repository
+        if path.hasPrefix("/cdn/"),
+            let file = Self.files.first(where: { path == "/cdn/\($0.path)" })
+        {
+            serve(file.content, range: headers["range"], on: connection, cutAfter: nil)
+            return
+        }
+        if redirect, let lfs = Self.files.first(where: \.isLFS),
+            path == "/\(repository)/resolve/\(Self.commit)/\(lfs.path)"
+        {
+            let location = "http://localhost:\(endpoint.port ?? 0)/cdn/\(lfs.path)"
+            send(connection, status: 302, body: Data(), extraHeaders: ["Location: \(location)"])
+            return
+        }
         if path == "/api/models/\(repository)/revision/main" {
             send(connection, status: 200, body: Data(#"{"sha": "\#(Self.commit)"}"#.utf8))
         } else if path.hasPrefix("/api/models/\(repository)/revision/")

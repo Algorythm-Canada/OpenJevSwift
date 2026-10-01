@@ -178,7 +178,10 @@ public struct ModelResolver: Sendable {
             return Resolution(
                 directory: directory, commit: nil, downloadedFiles: 0, downloadedBytes: 0)
         case .hub(let repository, let revision):
-            let token = token.flatMap { $0.isEmpty ? nil : $0 }
+            let token = token.flatMap {
+                let trimmed = $0.trimmingCharacters(in: .whitespaces)
+                return trimmed.isEmpty ? nil : trimmed
+            }
             return try await HubSnapshot(
                 resolver: self, cache: cache, repository: repository,
                 revision: revision ?? "main", token: token, progress: progress
@@ -327,6 +330,20 @@ final class FileTransfer: NSObject, URLSessionDataDelegate, @unchecked Sendable 
             }
         }
         completionHandler(disposition)
+    }
+
+    /// Follows a redirect, without the token when it leaves the host: the Hub sends LFS files to
+    /// its CDN, which needs no token, as huggingface_hub does.
+    func urlSession(
+        _ session: URLSession, task: URLSessionTask,
+        willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest,
+        completionHandler: @escaping @Sendable (URLRequest?) -> Void
+    ) {
+        var request = request
+        if request.url?.host != task.originalRequest?.url?.host {
+            request.setValue(nil, forHTTPHeaderField: "Authorization")
+        }
+        completionHandler(request)
     }
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
