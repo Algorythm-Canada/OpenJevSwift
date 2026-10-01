@@ -86,8 +86,8 @@ public struct ServerSettings: Sendable, Hashable {
     /// Questions per encoder batch, `OPENJEV_ENCODER_BATCH`.
     public let encoderBatch: Int
     /// Other System One models served by other OpenJev servers, `OPENJEV_MODEL_ROUTES`
-    /// (`name=url,name=url`), in the order given. A request for one of them is passed through
-    /// unchanged; the forwarding itself is issue #38's.
+    /// (`name=url,name=url`), in the order given. A request for one of them that this server does
+    /// not serve is passed through unchanged, and `GET /v1/models` lists them.
     public let modelRoutes: OrderedMap<String>
     /// The log level, `OPENJEV_LOG_LEVEL`.
     public let logLevel: LogLevel
@@ -220,33 +220,89 @@ public struct ServerSettings: Sendable, Hashable {
     }
 
     /// Upstream's `parse_routes`: `name=url,name=url` into the routes in the order given. Parts
-    /// are trimmed, empty parts are skipped and a trailing `/` is dropped from every URL.
+    /// are trimmed, empty parts are skipped and every trailing `/` is dropped from a URL. A name
+    /// given twice keeps its first place and takes its last URL, as a Python dict does.
+    ///
+    /// The text is read code point by code point, as Python reads it, and trimmed of the
+    /// characters `str.strip()` removes (``TextOf/isPythonWhitespace(_:)``), so a `,` or `=`
+    /// followed by a combining mark still separates, and U+001C to U+001F are trimmed.
     ///
     /// - Throws: ``ServerSettingsError`` `OPENJEV_MODEL_ROUTES: {part!r} is not name=url` for a
     ///   part without a `=`, or with an empty name or URL.
     public static func parseRoutes(_ text: String) throws(ServerSettingsError) -> OrderedMap<String>
     {
+        func stripped(_ scalars: Substring.UnicodeScalarView) -> Substring.UnicodeScalarView {
+            guard let start = scalars.firstIndex(where: { !TextOf.isPythonWhitespace($0) }),
+                let end = scalars.lastIndex(where: { !TextOf.isPythonWhitespace($0) })
+            else {
+                return Substring.UnicodeScalarView()
+            }
+            return scalars[start...end]
+        }
         var routes = OrderedMap<String>()
-        for piece in text.split(separator: ",", omittingEmptySubsequences: false) {
-            let part = piece.trimmingCharacters(in: .whitespacesAndNewlines)
+        let pieces = Substring(text).unicodeScalars.split(
+            separator: ",", omittingEmptySubsequences: false)
+        for piece in pieces {
+            let part = stripped(piece)
             if part.isEmpty {
                 continue
             }
+            let partText = String(String.UnicodeScalarView(part))
             guard let separator = part.firstIndex(of: "=") else {
-                throw ServerSettingsError.notARoute(part)
+                throw ServerSettingsError.notARoute(partText)
             }
-            let name = part[..<separator].trimmingCharacters(in: .whitespacesAndNewlines)
-            var url = part[part.index(after: separator)...]
-                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let name = stripped(part[..<separator])
+            var url = stripped(part[part.index(after: separator)...])
             if name.isEmpty || url.isEmpty {
-                throw ServerSettingsError.notARoute(part)
+                throw ServerSettingsError.notARoute(partText)
             }
-            while url.hasSuffix("/") {
+            while url.last == "/" {
                 url.removeLast()
             }
-            routes.updateValue(url, forKey: name)
+            routes.updateValue(
+                String(String.UnicodeScalarView(url)),
+                forKey: String(String.UnicodeScalarView(name)))
         }
         return routes
+    }
+
+    /// The model routes as `serve` logs them, in order: each URL without the user name and
+    /// password it may hold before its host, so that no log holds them.
+    public var modelRoutesWithoutCredentials: OrderedMap<String> {
+        var routes = OrderedMap<String>()
+        for (name, url) in modelRoutes {
+            routes.updateValue(Self.withoutCredentials(url), forKey: name)
+        }
+        return routes
+    }
+
+    /// `url` without the `user:password@` that may come before its host: everything up to the
+    /// last `@` of the authority, which ends at the first `/`, `?` or `#` and starts after
+    /// `scheme://`, after the `//` that opens a scheme-relative URL, or at the start of a URL
+    /// with neither. The URL is read code point by code point, so a combining mark after a
+    /// delimiter does not hide it.
+    static func withoutCredentials(_ url: String) -> String {
+        let scalars = Array(url.unicodeScalars)
+        let schemeCharacters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+-."
+            .unicodeScalars
+        let schemeLength = scalars.prefix { schemeCharacters.contains($0) }.count
+        let slashes: [Unicode.Scalar] = ["/", "/"]
+        var start = 0
+        if schemeLength > 0, scalars[0].properties.isAlphabetic,
+            scalars[schemeLength...].starts(with: [":"] + slashes)
+        {
+            start = schemeLength + 3
+        } else if scalars.starts(with: slashes) {
+            start = 2
+        }
+        let end =
+            scalars[start...].firstIndex { "/?#".unicodeScalars.contains($0) }
+            ?? scalars.endIndex
+        guard let at = scalars[start..<end].lastIndex(of: "@") else { return url }
+        var kept = String.UnicodeScalarView()
+        kept.append(contentsOf: scalars[..<start])
+        kept.append(contentsOf: scalars[(at + 1)...])
+        return String(kept)
     }
 
     /// Upstream's `__post_init__` checks, plus the two minimums `_env_num` applies while reading.

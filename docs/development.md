@@ -45,6 +45,7 @@ The package declares macOS 14 and iOS 17 as minimum deployment targets.
 | `OpenJevEncoders` (library product) | yes; its Core ML types from macOS 15 | yes; its Core ML types from iOS 18 | not declared |
 | `OpenJevServer` (internal target) | yes | no | yes |
 | `openjev` (executable) | yes, with the encoder backends | no | yes, without the encoder backends |
+| `openjev-stub-server` (executable, not a product) | yes | no | yes |
 
 - **Apple-only code.** `Package.swift` declares the MLX packages, swift-transformers and the
   `OpenJevDiffusionGemma` and `OpenJevEncoders` targets inside `#if os(macOS)`. SwiftPM evaluates
@@ -62,6 +63,10 @@ The package declares macOS 14 and iOS 17 as minimum deployment targets.
   appends its dependency on `OpenJevEncoders`; the code that uses it is behind
   `#if canImport(OpenJevEncoders)`. A Linux build therefore has the CLI without the encoder
   backends, and `OPENJEV_BACKEND=verdict` and `laya` exit with status 3 there.
+- **The stub server.** `openjev-stub-server` serves OpenJevTestSupport's stub backends through
+  the real application, for the SDK compatibility suite. It is an executable target without a
+  product, so `swift build` builds it, `swift build --product openjev-stub-server` builds it alone,
+  and nothing ships it.
 - **The iOS scheme.** `.swiftpm/xcode/xcshareddata/xcschemes/OpenJevCore-iOS.xcscheme` is a
   committed Xcode scheme that builds `OpenJevCore`, `OpenJevEncoders` and their test targets and
   runs `OpenJevCoreTests` and `OpenJevEncodersTests`. The CI iOS job builds and tests it on a
@@ -85,12 +90,15 @@ The package declares macOS 14 and iOS 17 as minimum deployment targets.
 | [swift-argument-parser](https://github.com/apple/swift-argument-parser) | 1.8.0 or later | 1.8.2 | `ArgumentParser` | all hosts |
 | [swift-http-types](https://github.com/apple/swift-http-types) | 1.8.0 or later | 1.8.0 | `HTTPTypes` (server, server and CLI tests) | all hosts |
 | [swift-log](https://github.com/apple/swift-log) | 1.15.1 or later | 1.15.1 | `Logging` (server, CLI, server and CLI tests) | all hosts |
-| [swift-nio](https://github.com/apple/swift-nio) | 2.103.0 or later | 2.103.0 | `NIOCore` (server and server tests), `NIOEmbedded` (server tests) | all hosts |
-| [swift-service-lifecycle](https://github.com/swift-server/swift-service-lifecycle) | 2.12.0 or later | 2.12.0 | `ServiceLifecycle` (server, CLI, server tests), `UnixSignals` (CLI) | all hosts |
+| [swift-nio](https://github.com/apple/swift-nio) | 2.103.0 or later | 2.103.0 | `NIOCore` (server and server tests), `NIOPosix` and `NIOHTTP1` (server), `NIOEmbedded` (server tests) | all hosts |
+| [swift-service-lifecycle](https://github.com/swift-server/swift-service-lifecycle) | 2.12.0 or later | 2.12.0 | `ServiceLifecycle` (server, CLI, stub server, server tests), `UnixSignals` (CLI, stub server) | all hosts |
+| [async-http-client](https://github.com/swift-server/async-http-client) | 1.36.2 or later | 1.36.2 | `AsyncHTTPClient` (server and server tests) | all hosts |
 
-`Package.resolved` is committed. It pins these ten packages and their 23 transitive dependencies.
-swift-http-types, swift-log, swift-nio and swift-service-lifecycle are Hummingbird's own
-dependencies, declared at the versions it already resolved, so declaring them changed no pin.
+`Package.resolved` is committed. It pins these eleven packages and their 22 transitive
+dependencies. swift-http-types, swift-log, swift-nio, swift-service-lifecycle and
+async-http-client are Hummingbird's own dependencies, declared at the versions it already
+resolved, so declaring them changed no pin. AsyncHTTPClient forwards a routed model's request
+(D-040); it brings swift-nio-ssl and its BoringSSL into the `openjev` binary.
 `swift-collections` is not a direct dependency. Issue #3 adds it if the JSON model adopts
 `OrderedDictionary`. The product names match [05-architecture.md](05-architecture.md).
 
@@ -161,6 +169,26 @@ folder that holds the test bundles, where the tests look for it, and a test fail
 there. The smoke test serves Verdict from the binary and sends it Jev's quickstart request; it
 needs the converted package and the tokenizer, like the encoder tests, and skips naming
 `OPENJEV_ENCODER_MODELS` without them.
+
+### The SDK compatibility suite
+
+`Tools/sdk-compat` runs TypeSafe's Python and TypeScript SDKs, at the versions it pins, against
+`openjev-stub-server` ([Tools/sdk-compat/README.md](../Tools/sdk-compat/README.md)). It needs
+CPython 3.12 and Node.js 20 or later. From the repository root, once:
+
+```bash
+make sdk-compat-venv
+```
+
+Then, which builds the stub server first:
+
+```bash
+make sdk-compat
+```
+
+`make sdk-compat SDK_COMPAT_ARGS=--swift-sdk` also builds and runs NSStudent's JevSwiftSDK, as CI
+does. A failed check prints every HTTP exchange it made, and every exchange and the servers' logs
+are written to `Tools/sdk-compat/exchanges/`.
 
 ### MLX in tests
 
@@ -249,6 +277,7 @@ cost nothing. No workflow uses the billed `-xlarge` runners unless asked to.
 | [ci.yml](../.github/workflows/ci.yml) | Every pull request and every push to `main`, except changes that touch only Markdown files | `Linux` | `ubuntu-24.04` with the `swift:6.2-noble` container | `swift build --build-tests` and `swift test`, both with `--scratch-path .build/linux`, then the test log check |
 | | | `macOS` | `macos-26` with Xcode 26.6, selected with `DEVELOPER_DIR` | `swift build --build-tests` and `swift test`, both with `--build-system swiftbuild`, the test log check, then `make lint` |
 | | | `iOS` | `macos-26` with Xcode 26.6, selected with `DEVELOPER_DIR` | `xcodebuild test` of the `OpenJevCore-iOS` scheme on an iPhone 17 Pro simulator, the test log check, then a build of `OpenJevDiffusionGemma` for the iOS Simulator |
+| | | `SDK compatibility` | `ubuntu-24.04` with the `swift:6.2-noble` container | `swift build --product openjev-stub-server` with `--scratch-path .build/linux`, Ubuntu's CPython 3.12 and Node.js 20 from `actions/setup-node`, the pinned SDKs, then `Tools/sdk-compat/run.py --swift-sdk`; the exchanges are uploaded when it fails |
 | [fixtures.yml](../.github/workflows/fixtures.yml) | Pull requests that change `Fixtures/`, `Tools/fixtures/`, `THIRD_PARTY.md`, the `Makefile` or the workflow; manual runs; Mondays at 06:23 UTC | `Regenerate the fixtures` | `macos-26` with CPython 3.14.7 from `actions/setup-python` | `make upstream`, `make fixtures-venv` and `make fixtures`, then fails if `git status --porcelain Fixtures/` lists a file, and prints and uploads the diff |
 | [mlx-probe.yml](../.github/workflows/mlx-probe.yml) | Manual runs only | `Probe <label>` | `macos-15`, `macos-26` and `xcode-27`, plus `macos-26-xlarge` when asked | The MLX runner probe of issue #8. Its findings are under R13 in [07-risks-and-unknowns.md](07-risks-and-unknowns.md). |
 
@@ -297,6 +326,11 @@ And took this long:
   the package, so a build for the iOS Simulator keeps it honest. mlx-swift compiles for the
   simulator, arm64 and x86_64 both. Only the build runs: the tests need weights that no iOS
   device holds. The step runs even when the tests failed, so one push reports both.
+- **The SDK compatibility job.** It restores the Linux job's build directory without saving it,
+  builds only the stub server, and runs the official SDKs against it (decision D-040). CPython
+  3.12 is Ubuntu 24.04's own `python3`, installed with apt inside the Swift container and checked
+  by version. A failure prints every HTTP exchange of the failed checks in the log, and the
+  artifact `sdk-compat-exchanges` holds every exchange and the three servers' logs for 14 days.
 - **The test log check.** [check-test-log.sh](../.github/scripts/check-test-log.sh) reads the
   saved output of `swift test`. It fails when the log holds no Swift Testing run or a run failed,
   and when a test or suite was skipped or cancelled for any reason other than an unset
@@ -339,6 +373,10 @@ And took this long:
   outcomes and the probe's output to the run summary.
 
 ### Running the CI commands locally
+
+The SDK compatibility job runs the same checks as `make sdk-compat-venv` and
+`make sdk-compat SDK_COMPAT_ARGS=--swift-sdk` on a Mac, against a Linux build of the stub server;
+its steps in [ci.yml](../.github/workflows/ci.yml) are the commands.
 
 The Linux job, from the repository root, with Docker:
 
@@ -391,8 +429,8 @@ The last command prints nothing when the fixtures are current.
 
 The workflows do not change repository settings. The `Protect main` ruleset requires a review
 today, not a status check. Requiring one means handling the documentation-only case first, as the
-bullet above says. The checks worth requiring then are `Linux`, `macOS` and `iOS`, all three from
-the CI workflow. Their names carry no toolchain version, so a toolchain upgrade does not rename
-them. Do not require `Regenerate the fixtures`: it runs only
-when a pull request changes the fixture inputs, and a required check that never reports keeps the
-pull request waiting. The probe is manual and is never a required check.
+bullet above says. The checks worth requiring then are `Linux`, `macOS`, `iOS` and
+`SDK compatibility`, all four from the CI workflow. Their names carry no toolchain version, so a
+toolchain upgrade does not rename them. Do not require `Regenerate the fixtures`: it runs only when
+a pull request changes the fixture inputs, and a required check that never reports keeps the pull
+request waiting. The probe is manual and is never a required check.

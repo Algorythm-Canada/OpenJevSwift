@@ -7,6 +7,7 @@
 #if canImport(Hummingbird)
     import HTTPTypes
     import Hummingbird
+    import NIOCore
     import OpenJevCore
 
     /// FastAPI's reading of the `POST /v1/systemone` body, up to the value pydantic validates.
@@ -18,7 +19,18 @@
         /// `trim` writes a value that is neither JSON nor a string as `str(value)[:500]`.
         static let reprCharacters = 500
 
-        /// The value pydantic validates for the body, in FastAPI's order:
+        /// The body of `request`, read to its end: the bytes upstream's `request.body()` gives,
+        /// which a routed request is forwarded with unchanged.
+        ///
+        /// - Throws: Whatever reading the body throws, and a too-many-bytes error past
+        ///   `OPENJEV_MAX_BODY_BYTES`.
+        func bytes(of request: Request) async throws -> ByteBuffer {
+            // The cap middleware has read the body into one buffer already; the limit keeps this
+            // route bounded should it ever be mounted without it.
+            try await request.body.collect(upTo: maxBodyBytes)
+        }
+
+        /// The value pydantic validates for a body sent with `headers`, in FastAPI's order:
         ///
         /// - `nil` for an empty body, whatever its content type (`if body_bytes:`);
         /// - for a JSON content type (``isJSON(_:)``), the parsed body;
@@ -27,18 +39,15 @@
         ///   `b'...'`, cut at 500 characters. The repr stands in for them here, so validating it
         ///   gives that 422.
         ///
-        /// - Throws: ``WireError/jsonInvalid422(message:position:)`` for a body that is not JSON,
-        ///   ``WireError/unparsableBody400`` for one `json.loads` cannot read at all (see
-        ///   ``parse(_:)``), and whatever reading the body throws.
-        func value(of request: Request) async throws -> JSONValue? {
-            // The cap middleware has read the body into one buffer already; the limit keeps this
-            // route bounded should it ever be mounted without it.
-            let buffer = try await request.body.collect(upTo: maxBodyBytes)
+        /// - Throws: ``WireError/jsonInvalid422(message:position:)`` for a body that is not JSON
+        ///   and ``WireError/unparsableBody400`` for one `json.loads` cannot read at all (see
+        ///   ``parse(_:)``).
+        func value(of buffer: ByteBuffer, headers: HTTPFields) throws(WireError) -> JSONValue? {
             let body = buffer.readableBytesView
             if body.isEmpty {
                 return nil
             }
-            guard Self.isJSON(HeaderText(.contentType, in: request.headers)) else {
+            guard Self.isJSON(HeaderText(.contentType, in: headers)) else {
                 return .string(String.pythonRepr(bytes: body, maxLength: Self.reprCharacters))
             }
             return try parse(body)

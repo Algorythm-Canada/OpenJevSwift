@@ -254,6 +254,51 @@ struct ServerSettingsTests {
         #expect(try ServerSettings.parseRoutes("a = http://x=y ")["a"] == "http://x=y")
     }
 
+    /// `test_parse_routes`'s example, and what Python's dict, `str.split`, `str.strip` and
+    /// `str.rstrip` do with the rest, each checked against upstream's `parse_routes`.
+    @Test("Routes parse code point by code point, trimmed as str.strip() trims")
+    func routesAsPythonReadsThem() throws {
+        let example = try ServerSettings.parseRoutes("a=http://x/, b = http://y")
+        #expect(Array(example.keys) == ["a", "b"])
+        #expect(example["a"] == "http://x")
+        #expect(example["b"] == "http://y")
+        // A name given twice keeps its first place and takes its last URL; every slash goes.
+        let twice = try ServerSettings.parseRoutes("a=http://1,b=http://2,a=http://3//")
+        #expect(Array(twice.keys) == ["a", "b"])
+        #expect(twice["a"] == "http://3")
+        // U+001C to U+001F are Python's whitespace too, which Foundation's set leaves.
+        let spaced = try ServerSettings.parseRoutes("\u{1C}a\u{3000}=\u{A0}http://x\u{85}\u{1F}")
+        #expect(Array(spaced.keys) == ["a"])
+        #expect(spaced["a"] == "http://x")
+        // A comma followed by a combining mark still separates two routes.
+        let combining = try ServerSettings.parseRoutes("a=http://x,\u{301}b=http://y")
+        #expect(
+            Array(combining.keys).map { Array($0.unicodeScalars) } == [["a"], ["\u{301}", "b"]])
+        #expect(try ServerSettings.parseRoutes("a=/")["a"] == "")
+        #expect(try ServerSettings.parseRoutes("\u{1C}").isEmpty)
+    }
+
+    @Test("Routes are logged without the credentials a URL holds")
+    func routesWithoutCredentials() throws {
+        let settings = try ServerSettings(environment: [
+            "OPENJEV_MODEL_ROUTES":
+                "a=http://u:p@h:1/x?y=@z, b=https://h/, c=u:p@h/x, d=http://@h, e=h/x@y, "
+                + "f=//user:password@host/path, g=//u:p@h/x?y=http://a, h=http://u:p@\u{301}h"
+        ])
+        #expect(
+            Array(settings.modelRoutesWithoutCredentials.keys) == [
+                "a", "b", "c", "d", "e", "f", "g", "h",
+            ])
+        // A URL without a scheme cannot be forwarded to, but its credentials stay out of the log;
+        // so do a scheme-relative URL's, and an @ that a combining mark follows still ends them.
+        #expect(
+            Array(settings.modelRoutesWithoutCredentials.values) == [
+                "http://h:1/x?y=@z", "https://h", "h/x", "http://h", "h/x@y", "//host/path",
+                "//h/x?y=http://a", "http://\u{301}h",
+            ])
+        #expect(settings.modelRoutes["a"] == "http://u:p@h:1/x?y=@z")
+    }
+
     @Test(
         "A route without a name or URL is refused with parse_routes's message",
         arguments: [

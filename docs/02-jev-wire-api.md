@@ -129,7 +129,7 @@ The SDK accepts both, but the fixtures compare bytes, so the Swift serialiser wi
 | 422 | `{"detail": [{"type": "json_invalid", "loc": ["body", <character offset>], "msg": "JSON decode error", "input": {}, "ctx": {"error": "<Python json message>"}}]}` | A body that is not valid JSON. |
 | 400 | `{"detail": "There was an error parsing the body"}` | A body that is not UTF-8. |
 | 429 | Jev only | Rate limit (250,000 tokens/s, 1,200 requests/min per account). OpenJev has no rate limiter. |
-| 503 | `{"detail": {"error_type": "api_error", "message": "inference backend unavailable: ..."}}` | Backend unreachable; forwarded model's server down. |
+| 503 | `{"detail": {"error_type": "api_error", "message": "inference backend unavailable: ..."}}` | Backend unreachable; a routed model's server down or silent (see Model routes). |
 | 529 | `{"detail": {"error_type": "overloaded_error", "message": "... at capacity. Retry shortly."}}` | Queue full. |
 
 Details of the 422 body, from the recordings:
@@ -156,6 +156,26 @@ budget, 10 s per-operation timeout. Its error message extraction reads `error.me
 `message`, `detail` (string or object with `message`), or joins a 422 list as `loc: msg`.
 Base URL from `TYPESAFE_BASE_URL`, key from `TYPESAFE_API_KEY`, model from
 `TYPESAFE_DEFAULT_MODEL` (default `jev-latest`, base `https://api.typesafe.ai`).
+
+## Model routes (OpenJev)
+
+`OPENJEV_MODEL_ROUTES` (`name=url,name=url`) lets one origin serve several models, each from its
+own OpenJev server. A `POST /v1/systemone` whose `model` has a route and is not served here is
+passed, once its body has passed validation and before the model name is checked, to
+`{url}/v1/systemone` as the bytes the client sent, with only its `authorization`,
+`x-origin-secret` and `content-type` headers. The routed server's status and body come back
+unchanged, with only its `content-type` and `retry-after`; the forwarding server adds its own
+request ids and `server-timing`, whose `model` counts the whole exchange. A routed server that
+cannot be reached, or sends nothing for `OPENJEV_FORWARD_TIMEOUT` seconds (300), is the 503
+`inference backend unavailable: <httpx error>` with `retry-after: 2`, for example `ConnectError` or
+`ReadTimeout`. A name the server serves itself, the SDK aliases included, is answered there even
+when routed.
+
+`GET /v1/models` lists the server's own models, then each routed name it does not serve: with
+upstream's description and release date for an encoder model it knows (`laya-1.0`,
+`verdict-1.4`, `clm-v0.1`, `jevk5-0.2`) and an empty description and release date for any other.
+The routed servers are not asked, so the listing holds while one is down. Decision D-040 records
+where OpenJevSwift differs.
 
 ## Differences between OpenJev and Jev (kept as they are)
 

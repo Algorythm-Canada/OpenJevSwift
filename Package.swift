@@ -27,6 +27,10 @@ var dependencies: [Package.Dependency] = [
     .package(url: "https://github.com/apple/swift-log.git", from: "1.15.1"),
     .package(url: "https://github.com/apple/swift-nio.git", from: "2.103.0"),
     .package(url: "https://github.com/swift-server/swift-service-lifecycle.git", from: "2.12.0"),
+    // Hummingbird's own dependency too, through HummingbirdTesting: the server forwards a request
+    // for a routed model (OPENJEV_MODEL_ROUTES) to the server that serves it with this client,
+    // which runs on swift-nio on macOS and Linux alike (decision D-040).
+    .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.36.2"),
 ]
 
 var targets: [Target] = [
@@ -73,6 +77,23 @@ var targets: [Target] = [
                 package: "swift-service-lifecycle",
                 condition: .when(platforms: [.macOS, .linux])
             ),
+            // The model routes: the client that forwards a request, on swift-nio's own event loops,
+            // and the HTTP/1 headers it takes.
+            .product(
+                name: "AsyncHTTPClient",
+                package: "async-http-client",
+                condition: .when(platforms: [.macOS, .linux])
+            ),
+            .product(
+                name: "NIOPosix",
+                package: "swift-nio",
+                condition: .when(platforms: [.macOS, .linux])
+            ),
+            .product(
+                name: "NIOHTTP1",
+                package: "swift-nio",
+                condition: .when(platforms: [.macOS, .linux])
+            ),
         ],
         swiftSettings: swiftSettings
     ),
@@ -97,6 +118,21 @@ var targets: [Target] = [
     .target(
         name: "OpenJevTestSupport",
         dependencies: ["OpenJevCore"],
+        swiftSettings: swiftSettings
+    ),
+    // The stub-backed server the SDK compatibility suite runs (Tools/sdk-compat, decision D-040):
+    // the real application over OpenJevTestSupport's stub backends, so it runs on Linux, where Core
+    // ML does not exist. It is not a product and never ships; `openjev` has no stub backend.
+    .executableTarget(
+        name: "openjev-stub-server",
+        dependencies: [
+            "OpenJevCore",
+            "OpenJevServer",
+            "OpenJevTestSupport",
+            .product(name: "Logging", package: "swift-log"),
+            .product(name: "ServiceLifecycle", package: "swift-service-lifecycle"),
+            .product(name: "UnixSignals", package: "swift-service-lifecycle"),
+        ],
         swiftSettings: swiftSettings
     ),
     .testTarget(
@@ -154,6 +190,12 @@ var targets: [Target] = [
             .product(
                 name: "ServiceLifecycle",
                 package: "swift-service-lifecycle",
+                condition: .when(platforms: [.macOS, .linux])
+            ),
+            // The forwarding client's errors, which the route tests name.
+            .product(
+                name: "AsyncHTTPClient",
+                package: "async-http-client",
                 condition: .when(platforms: [.macOS, .linux])
             ),
         ],

@@ -36,8 +36,8 @@
     /// backend call ends, refused and failed requests included; the `server` time is the rest of
     /// the wall time, never below zero; `total` is the wall time. Each is in milliseconds with one
     /// decimal, as upstream's `{:.1f}` writes them. The time of a request forwarded to another
-    /// server (`OPENJEV_MODEL_ROUTES`) will count as model time when issue #38 forwards it, as
-    /// upstream's `forward` adds it.
+    /// server (`OPENJEV_MODEL_ROUTES`) counts as model time, network included, as upstream's
+    /// `forward` adds it (``ModelRouter``).
     struct ResponseHeadersMiddleware: RouterMiddleware {
         typealias Context = OpenJevRequestContext
 

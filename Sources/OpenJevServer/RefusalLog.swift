@@ -16,7 +16,8 @@
     /// 400 and the plain-detail 400s. Authentication, the body cap, a body FastAPI cannot read,
     /// an unknown model and a full queue are not. A backend failure, which upstream does not log
     /// either, is logged at error level with the message of its 503, since the request log
-    /// (``RequestLogMiddleware``) shows only its status.
+    /// (``RequestLogMiddleware``) shows only its status, and so is a routed server that did not
+    /// answer a forwarded request.
     struct RefusalLog: Sendable {
         /// Where the lines go.
         let logger: Logger
@@ -61,6 +62,17 @@
         func failure(_ error: WireError) {
             guard case .typed(let body) = error.body else { return }
             let text = Self.line(status: error.status, requestID: requestID, [body.message])
+            logger.error("\(text)")
+        }
+
+        /// Logs a forwarded request that got no answer at error level, with the message of its
+        /// answer and the routed model's name, never the route's URL: upstream does not log it,
+        /// and only the 503's status would show otherwise.
+        func failure(_ error: WireError, forwarding model: String) {
+            guard case .typed(let body) = error.body else { return }
+            let text = Self.line(
+                status: error.status, requestID: requestID,
+                ["\(body.message) (forwarding \(model))"])
             logger.error("\(text)")
         }
 

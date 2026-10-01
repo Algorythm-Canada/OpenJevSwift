@@ -1,6 +1,7 @@
 // A port of upstream OpenJev (razorback16/openjev at dcd2094), `openjev/config.py`,
 // `MODEL_VERSION`, `MODEL_ALIASES`, `SDK_ALIASES`, `MODELS`, `ENCODER_MODELS` and
-// `served_models`, and the `Engine` contract (`decide`) that `openjev/api.py` holds as
+// `served_models`, the `models_list` that `create_app` in `openjev/api.py` builds from them and
+// the model routes, and the `Engine` contract (`decide`) that `openjev/api.py` holds as
 // `app.state.engine`. Apache-2.0. See THIRD_PARTY.md.
 
 /// What the server holds to answer `POST /v1/systemone` and `GET /v1/models` without knowing
@@ -86,6 +87,20 @@ public struct ServedModels: Sendable, Hashable {
     /// Whether a request may name `model`.
     public func accepts(_ model: String) -> Bool {
         acceptedNames.contains(model)
+    }
+
+    /// The `GET /v1/models` listing of a server that also forwards the models `routedNames`
+    /// names to other servers (`OPENJEV_MODEL_ROUTES`), upstream's `models_list`: ``listing``,
+    /// then each routed name this server does not accept, in the order given. A name an encoder
+    /// backend serves gets ``KnownEncoderModels``' entry, upstream's `known`; any other gets an
+    /// empty description and release date. The routed servers are never asked, so the listing is
+    /// the same while one is down.
+    public func listing(routedNames: some Sequence<String>) -> [ModelInfo] {
+        listing
+            + routedNames.filter { !accepts($0) }.map { name in
+                KnownEncoderModels.named(name)
+                    ?? ModelInfo(name: name, description: "", releaseDate: "")
+            }
     }
 }
 

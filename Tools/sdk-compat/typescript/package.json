@@ -1,0 +1,13 @@
+{
+  "name": "openjev-sdk-compat",
+  "private": true,
+  "description": "Runs TypeSafe's TypeScript SDK against the OpenJevSwift stub server (Tools/sdk-compat).",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@typesafe-ai/sdk": "0.6.0"
+  }
+}
