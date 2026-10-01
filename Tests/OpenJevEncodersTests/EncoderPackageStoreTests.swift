@@ -271,6 +271,23 @@ struct EncoderPackageStoreTests {
         #expect(!FileManager.default.fileExists(atPath: storeFolder.path))
     }
 
+    @Test("Verdict's unpublished package files are not downloaded by default")
+    func unpublishedVerdictPackage() async throws {
+        let folder = try temporaryFolder()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let storeFolder = folder.appendingPathComponent("store", isDirectory: true)
+        let store = EncoderPackageStore(directory: storeFolder)
+
+        let error = await #expect(
+            throws: EncoderPackageError.packageDownloadsUnavailable(
+                "verdict-m18-fp16")
+        ) {
+            try await store.locations(for: .verdict)
+        }
+        #expect(error == .packageDownloadsUnavailable("verdict-m18-fp16"))
+        #expect(!FileManager.default.fileExists(atPath: storeFolder.path))
+    }
+
     @Test("Without a tokenizer folder, the local models read the Hugging Face cache snapshot")
     func huggingFaceFallback() async throws {
         let folder = try temporaryFolder()
