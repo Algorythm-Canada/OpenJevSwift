@@ -71,7 +71,9 @@
         ///
         /// - Precondition: Every spec is one program for one shape at batch 1, and no two have
         ///   the same length.
-        public init(specs: [EncoderPackageSpec], computeUnits: EncoderComputeUnits, source: Source) {
+        public init(
+            specs: [EncoderPackageSpec], computeUnits: EncoderComputeUnits, source: Source
+        ) {
             precondition(
                 specs.allSatisfy { $0.layout == .singleShape && $0.batchSizes == [1] },
                 "each package holds one row of one length")

@@ -47,7 +47,8 @@ struct LayaPackageStoreTests {
         }
         let configuration = try entry(
             "rl_agent_config.json",
-            for: write(#"{"max_len": 1024, "head_max_len": 256}"#, to: "rl_agent_config.json", in: source))
+            for: write(
+                #"{"max_len": 1024, "head_max_len": 256}"#, to: "rl_agent_config.json", in: source))
         return EncoderPackageManifest(
             model: "laya-1.0", package: package, minimumOS: .init(iOS: 18, macOS: 15),
             checkpoint: .init(repository: "owner/laya", revision: "abc123"),
@@ -91,7 +92,8 @@ struct LayaPackageStoreTests {
                     tag + "Data--com.apple.CoreML--model.mlmodel",
                     tag + "Data--com.apple.CoreML--weights--weight.bin", tag + "Manifest.json",
                 ])
-            #expect(manifest.tokenizerFiles.map(\.path) == ["tokenizer.json", "tokenizer_config.json"])
+            #expect(
+                manifest.tokenizerFiles.map(\.path) == ["tokenizer.json", "tokenizer_config.json"])
             #expect(
                 manifest.tokenizerFiles.map(\.url.absoluteString) == [
                     checkpoint + "tokenizer/tokenizer.json",
@@ -189,7 +191,8 @@ struct LayaPackageStoreTests {
             try write("{}", to: "tokenizer/\(name)", in: snapshot)
         }
         let locations = try await store.locations(for: manifest)
-        #expect(locations.packageDirectory == local.appendingPathComponent("laya-m18-fp16.mlpackage"))
+        #expect(
+            locations.packageDirectory == local.appendingPathComponent("laya-m18-fp16.mlpackage"))
         #expect(locations.tokenizerDirectory == snapshot.appendingPathComponent("tokenizer"))
         #expect(locations.calibratorFile == snapshot.appendingPathComponent("rl_agent_config.json"))
         #expect(manifest.checkpointFiles(in: hub) == locations.tokenizer)
@@ -229,7 +232,9 @@ struct LayaPackageStoreTests {
             !FileManager.default.fileExists(
                 atPath: root.appendingPathComponent("laya-f18-b1s128-fp16.mlpackage").path))
         #expect(try store.heldPackageDirectory(for: manifest) == nil)
-        await #expect(throws: EncoderPackageError.packageDownloadsUnavailable("laya-f18-b1s128-fp16")) {
+        await #expect(
+            throws: EncoderPackageError.packageDownloadsUnavailable("laya-f18-b1s128-fp16")
+        ) {
             try await store.locations(for: manifest)
         }
 
@@ -285,7 +290,9 @@ struct LayaPackageStoreTests {
         let specs = EncoderPackageSpec.layaSequenceLengths.map {
             EncoderPackageSpec.laya(sequenceLength: $0)
         }
-        #expect(specs.map(\.name) == EncoderPackageSpec.layaSequenceLengths.map { "laya-f18-b1s\($0)-fp16" })
+        #expect(
+            specs.map(\.name)
+                == EncoderPackageSpec.layaSequenceLengths.map { "laya-f18-b1s\($0)-fp16" })
         var manifests: [String: EncoderPackageManifest] = [:]
         for spec in specs {
             manifests[spec.name] = try manifest(spec.name, in: folder)
@@ -313,22 +320,27 @@ struct LayaPackageStoreTests {
         // With all four, each length uses its own.
         for (length, package) in [(100, 128), (200, 256), (300, 512), (1024, 1024)] {
             #expect(
-                CoreMLPackagesByLength.package(forLength: length, among: specs, isHeld: { _ in true })
+                CoreMLPackagesByLength.package(
+                    forLength: length, among: specs, isHeld: { _ in true })
                     == EncoderPackageSpec.laya(sequenceLength: package))
         }
 
         let byName = manifests
+        let source = CoreMLPackagesByLength.Source(
+            held: { spec in try store.heldPackageDirectory(for: byName[spec.name]!) },
+            fetch: { spec in
+                try await store.locations(for: byName[spec.name]!).packageDirectory
+            })
         let model = CoreMLPackagesByLength(
-            specs: specs.reversed(), computeUnits: .cpuAndNeuralEngine,
-            source: CoreMLPackagesByLength.Source(
-                held: { spec in try store.heldPackageDirectory(for: byName[spec.name]!) },
-                fetch: { spec in try await store.locations(for: byName[spec.name]!).packageDirectory }))
+            specs: specs.reversed(), computeUnits: .cpuAndNeuralEngine, source: source)
         #expect(model.specs == specs)
         #expect(model.spec(holding: 1024) == specs[3])
         #expect(model.spec(holding: 1025) == nil)
         // A row longer than every package the device holds names the one to fetch.
-        let row: [[Int32]] = [[Int32](repeating: 7, count: 600), [Int32](repeating: 1, count: 600),
-            [Int32](repeating: 0, count: 600)]
+        let row: [[Int32]] = [
+            [Int32](repeating: 7, count: 600), [Int32](repeating: 1, count: 600),
+            [Int32](repeating: 0, count: 600),
+        ]
         let error = await #expect(throws: EncoderLoadError.self) { try await model.run([row]) }
         #expect(
             error

@@ -36,7 +36,8 @@ struct LayaPromptTests {
             }
         }
         #expect(compared == 200)
-        #expect(mismatches.isEmpty, "\(mismatches.count) questions differ: \(mismatches.prefix(10))")
+        #expect(
+            mismatches.isEmpty, "\(mismatches.count) questions differ: \(mismatches.prefix(10))")
     }
 
     @Test(
@@ -145,7 +146,10 @@ struct LayaPromptTests {
         #expect(read[0].options == defaults)
         #expect(read[1].options == defaults)
         #expect(read[2].options == ["false:   ", #"true: {"means": "yes"}"#])
-        #expect(defaults == ["false: no, the statement does not hold", "true: yes, the statement holds"])
+        #expect(
+            defaults == [
+                "false: no, the statement does not hold", "true: yes, the statement holds",
+            ])
     }
 
     @Test("Every [MASK] in the instructions, the options and the state becomes a space")

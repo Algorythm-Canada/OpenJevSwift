@@ -279,7 +279,8 @@ public struct LayaCalibration: Sendable, Hashable {
                 }
                 index += 8
             }
-            var total = ((sums[0] + sums[1]) + (sums[2] + sums[3]))
+            var total =
+                ((sums[0] + sums[1]) + (sums[2] + sums[3]))
                 + ((sums[4] + sums[5]) + (sums[6] + sums[7]))
             while index < n {
                 total += values[base + index]

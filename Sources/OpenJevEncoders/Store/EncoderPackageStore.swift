@@ -160,7 +160,8 @@ public struct EncoderPackageStore: Sendable {
             throw EncoderPackageError.packageDownloadsUnavailable(manifest.package)
         }
         let root = try storeRoot(for: manifest)
-        try await fetch(Self.packageEntries(of: manifest) + Self.tokenizerEntries(of: manifest), into: root)
+        try await fetch(
+            Self.packageEntries(of: manifest) + Self.tokenizerEntries(of: manifest), into: root)
         return EncoderPackageLocations(
             packageDirectory: Self.packageDirectory(of: manifest, in: root),
             tokenizer: Self.tokenizerLocations(of: manifest, in: root))
@@ -265,7 +266,8 @@ public struct EncoderPackageStore: Sendable {
     /// The digest `verified.json` records for each path the store has checked.
     private static func verifiedDigests(in root: URL) -> [String: String] {
         (try? JSONDecoder().decode(
-            [String: String].self, from: Data(contentsOf: root.appendingPathComponent("verified.json"))))
+            [String: String].self,
+            from: Data(contentsOf: root.appendingPathComponent("verified.json"))))
             ?? [:]
     }
 
@@ -384,7 +386,8 @@ public struct EncoderPackageStore: Sendable {
     /// checkpoint's root.
     private static func checkPaths(of manifest: EncoderPackageManifest) throws {
         let files = manifest.packageFiles + manifest.tokenizerFiles + [manifest.calibrator]
-        let folder = manifest.checkpointTokenizerFolder.isEmpty ? [] : [manifest.checkpointTokenizerFolder]
+        let folder =
+            manifest.checkpointTokenizerFolder.isEmpty ? [] : [manifest.checkpointTokenizerFolder]
         for path in [manifest.package] + files.map(\.path) + folder {
             let components = path.split(separator: "/", omittingEmptySubsequences: false)
             guard !path.hasPrefix("/"),

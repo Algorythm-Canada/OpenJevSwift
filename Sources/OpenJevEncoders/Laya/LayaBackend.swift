@@ -169,6 +169,9 @@ public actor LayaBackend: QuestionReadBackend {
     public func readBatch(
         state: JSONValue, stateText: String, questions: [EncoderQuestion]
     ) async throws -> BatchReadResult {
+        guard !questions.isEmpty else {
+            return BatchReadResult(probabilities: [], inputTokens: 0)
+        }
         let prompts = questions.map(LayaPrompt.init(question:))
         let stateIDs = tokenizer.encode(LayaPrompt.stateText(state))
         var sequences: [LayaSequence] = []
@@ -352,7 +355,8 @@ public actor LayaBackend: QuestionReadBackend {
             -> LayaBackend
         {
             let manifests = EncoderPackageManifest.layaByLength
-            guard let first = EncoderPackageSpec.layaSequenceLengths.first.flatMap({ manifests[$0] })
+            guard
+                let first = EncoderPackageSpec.layaSequenceLengths.first.flatMap({ manifests[$0] })
             else {
                 throw EncoderLoadError.invalidConfiguration("no manifest for Laya's packages")
             }
@@ -368,7 +372,9 @@ public actor LayaBackend: QuestionReadBackend {
             }
             let source = CoreMLPackagesByLength.Source(
                 held: { spec in try store.heldPackageDirectory(for: manifest(for: spec)) },
-                fetch: { spec in try await store.locations(for: manifest(for: spec)).packageDirectory })
+                fetch: { spec in
+                    try await store.locations(for: manifest(for: spec)).packageDirectory
+                })
             let model = CoreMLPackagesByLength(
                 specs: EncoderPackageSpec.layaSequenceLengths.map {
                     EncoderPackageSpec.laya(sequenceLength: $0)

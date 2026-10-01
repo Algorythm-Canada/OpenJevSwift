@@ -162,7 +162,8 @@
             let short = try await phoneEngine.decide(corpus.request)
             #expect(answerBounds(short, reads).violations.isEmpty)
             // A 1,024-token state loads the longest package and keeps the shorter one.
-            let long = try #require(try LayaFixtures.corpus().first { $0.name == "long_conversation" })
+            let long = try #require(
+                try LayaFixtures.corpus().first { $0.name == "long_conversation" })
             var one = long.request
             let first = try #require(long.request.questions.first)
             one.questions = OrderedMap(uniqueKeysWithValues: [(first.key, first.value)])

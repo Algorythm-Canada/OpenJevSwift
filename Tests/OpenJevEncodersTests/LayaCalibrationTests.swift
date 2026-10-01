@@ -139,7 +139,8 @@ struct LayaCalibrationTests {
         for index in 8..<16 {
             lanes[index - 8] += values[index]
         }
-        var expected = ((lanes[0] + lanes[1]) + (lanes[2] + lanes[3]))
+        var expected =
+            ((lanes[0] + lanes[1]) + (lanes[2] + lanes[3]))
             + ((lanes[4] + lanes[5]) + (lanes[6] + lanes[7]))
         for index in 16..<20 {
             expected += values[index]

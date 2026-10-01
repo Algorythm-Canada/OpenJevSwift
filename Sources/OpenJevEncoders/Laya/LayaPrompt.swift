@@ -64,7 +64,8 @@ public struct LayaPrompt: Sendable, Hashable {
         case .score(_, let levels):
             criteria = .score(levels)
         case .noul(_, let outcomes):
-            criteria = .noul(whenTrue: outcomes?.whenTrue ?? nil, whenFalse: outcomes?.whenFalse ?? nil)
+            criteria = .noul(
+                whenTrue: outcomes?.whenTrue ?? nil, whenFalse: outcomes?.whenFalse ?? nil)
         }
     }
 

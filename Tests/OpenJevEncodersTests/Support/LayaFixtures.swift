@@ -88,9 +88,8 @@ enum LayaFixtures {
         /// `request/key`, for messages.
         var name: String { "\(request)/\(key)" }
 
-        /// laya's rounded probabilities in laya's option order, from its answer: a choice's and
-        /// a score's `probabilities` values, a noul's `[1 - noul, noul]` is not recorded, so
-        /// only `[noul]`, its rounded P(true).
+        /// laya's rounded answer: a choice's or a score's `probabilities` in laya's option
+        /// order, or a noul's `[noul]`, its rounded P(true).
         var answerValues: [Double] {
             get throws {
                 if kind == .noul {
@@ -141,9 +140,10 @@ enum LayaFixtures {
             layaQuestion = try json.value("laya_question")
             let texts = try json.value("texts")
             head = try texts.string("head")
-            optionTexts = try texts.value("options").arrayValue?.map {
-                try unwrapString($0, "texts.options")
-            } ?? []
+            optionTexts =
+                try texts.value("options").arrayValue?.map {
+                    try unwrapString($0, "texts.options")
+                } ?? []
             ids = try json.ints("ids")
             markers = try json.ints("markers")
             qtype = try json.int("qtype")

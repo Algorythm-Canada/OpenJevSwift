@@ -60,7 +60,9 @@ struct LayaSequenceTests {
             head: [1, 2], options: [[3], [4, 5]], state: [6, 7, 8], special: special,
             maxLength: 1024, headMaxLength: 256)
         #expect(
-            sequence.ids == [50_281, 1, 2, 50_282, 50_284, 3, 50_284, 4, 5, 50_282, 6, 7, 8, 50_282])
+            sequence.ids == [
+                50_281, 1, 2, 50_282, 50_284, 3, 50_284, 4, 5, 50_282, 6, 7, 8, 50_282,
+            ])
         #expect(sequence.markers == [4, 6])
     }
 
@@ -86,7 +88,9 @@ struct LayaSequenceTests {
         #expect(Array(sequence.ids[1..<17]) == tokens(16, from: 9000))
         #expect(sequence.markers == (0..<6).map { 18 + 40 * $0 })
         for (index, marker) in sequence.markers.enumerated() {
-            #expect(Array(sequence.ids[(marker + 1)..<(marker + 40)]) == Array(options[index].prefix(39)))
+            #expect(
+                Array(sequence.ids[(marker + 1)..<(marker + 40)])
+                    == Array(options[index].prefix(39)))
         }
         #expect(sequence.ids.count == 1 + 16 + 1 + 240 + 1 + 5 + 1)
     }
