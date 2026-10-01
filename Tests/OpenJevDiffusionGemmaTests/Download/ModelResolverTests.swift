@@ -107,12 +107,35 @@ struct ModelResolverTests {
             let attempts = server.downloads.filter { $0.path.hasSuffix("/model.safetensors") }
             #expect(attempts.count == 2)
             #expect(attempts.first?.headers["range"] == nil)
-            // The second request resumes from the bytes that reached the disk, at most the
-            // 100,000 the server wrote before it closed (the socket may drop some of them).
-            let range = try #require(attempts.last?.headers["range"])
-            let offset = try #require(Int(range.dropFirst(6).dropLast()))
-            #expect(range.hasPrefix("bytes=") && range.hasSuffix("-"))
-            #expect(offset > 0 && offset <= 100_000)
+            // The retry resumes from the bytes that reached the disk: at most the 100,000 the
+            // server wrote before it closed, and a plain request if none arrived.
+            if let range = attempts.last?.headers["range"] {
+                let offset = try #require(Int(range.dropFirst(6).dropLast()))
+                #expect(range.hasPrefix("bytes=") && range.hasSuffix("-"))
+                #expect(offset > 0 && offset <= 100_000)
+            }
+        }
+    }
+
+    @Test("A partial download left by an earlier run resumes from its bytes with a Range request")
+    func resumeAcrossRuns() async throws {
+        try await withServer { server, resolver, cache in
+            let shard = file(named: "model.safetensors")
+            let blobs = cache.repositoryDirectory(repository).appendingPathComponent("blobs")
+            try FileManager.default.createDirectory(at: blobs, withIntermediateDirectories: true)
+            try shard.content.prefix(100_000).write(
+                to: blobs.appendingPathComponent(shard.blobID + ".incomplete"))
+            let resolution = try await resolver.resolution(
+                of: .hub(repository: repository, revision: commit), cache: cache)
+            #expect(
+                try TokenizerFiles.sha256Hex(
+                    of: resolution.directory.appendingPathComponent("model.safetensors"))
+                    == shard.sha256)
+            let attempts = server.downloads.filter { $0.path.hasSuffix("/model.safetensors") }
+            #expect(attempts.map { $0.headers["range"] } == ["bytes=100000-"])
+            #expect(
+                !FileManager.default.fileExists(
+                    atPath: blobs.appendingPathComponent(shard.blobID + ".incomplete").path))
         }
     }
 
@@ -225,6 +248,48 @@ struct ModelResolverTests {
         }
     }
 
+    @Test("A tree whose next page is on another host is refused, and the token is not sent there")
+    func foreignNextPage() async throws {
+        try await withServer { server, resolver, cache in
+            server.linkTreeToAnotherHost(true)
+            let error = await #expect(throws: ModelResolverError.self) {
+                try await resolver.resolve(
+                    .hub(repository: repository, revision: commit), cache: cache, token: "hf_abc")
+            }
+            #expect(error?.description.contains("another host") == true)
+            #expect(server.requests.allSatisfy { !$0.path.contains("cursor=2") })
+        }
+    }
+
+    @Test("Cancelling a load stops the download in flight and keeps its partial file")
+    func cancellation() async throws {
+        try await withServer { server, resolver, cache in
+            server.stallLFSDownloads(true)
+            let task = Task {
+                try await resolver.resolve(
+                    .hub(repository: repository, revision: commit), cache: cache)
+            }
+            let shard = file(named: "model.safetensors")
+            let partial = cache.repositoryDirectory(repository)
+                .appendingPathComponent("blobs/\(shard.blobID).incomplete")
+            let clock = ContinuousClock()
+            let deadline = clock.now + .seconds(10)
+            while clock.now < deadline,
+                ((try? FileManager.default.attributesOfItem(atPath: partial.path)[.size])
+                    as? NSNumber)?.intValue ?? 0 == 0
+            {
+                try await Task.sleep(for: .milliseconds(20))
+            }
+            task.cancel()
+            let started = clock.now
+            await #expect(throws: CancellationError.self) { try await task.value }
+            #expect(clock.now - started < .seconds(5))
+            let attempts = server.downloads.filter { $0.path.hasSuffix("/model.safetensors") }
+            #expect(attempts.count == 1, "a cancelled download is not retried")
+            #expect(FileManager.default.fileExists(atPath: partial.path))
+        }
+    }
+
     @Test("A commit already in the cache resolves when the Hub cannot be reached")
     func offlineSnapshot() async throws {
         let cache = try temporaryCache()
@@ -267,6 +332,24 @@ struct ModelResolverTests {
         }
         #expect(error == .incompleteDirectory(directory, missing: ["config.json"]))
         #expect(error?.description.contains("lacks config.json") == true)
+
+        // An index that names a path outside the directory is refused, even when it exists.
+        let outside = directory.deletingLastPathComponent()
+            .appendingPathComponent("openjev-outside-\(UUID().uuidString).safetensors")
+        try Data().write(to: outside)
+        defer { try? FileManager.default.removeItem(at: outside) }
+        try Data("{}".utf8).write(to: directory.appendingPathComponent("config.json"))
+        try Data(#"{"weight_map": {"w": "../\#(outside.lastPathComponent)"}}"#.utf8).write(
+            to: directory.appendingPathComponent("model.safetensors.index.json"))
+        let escaping = await #expect(throws: ModelResolverError.self) {
+            try await resolver.resolve(.directory(directory))
+        }
+        #expect(escaping?.description.contains("outside the directory") == true)
+        let index = try #require(
+            TestHubServer.files.first { $0.path == "model.safetensors.index.json" })
+        try index.content.write(
+            to: directory.appendingPathComponent("model.safetensors.index.json"))
+        try FileManager.default.removeItem(at: directory.appendingPathComponent("config.json"))
 
         // With config.json back, the absent shard the index names is reported.
         try Data("{}".utf8).write(to: directory.appendingPathComponent("config.json"))

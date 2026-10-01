@@ -63,6 +63,9 @@ final class TestHubServer: @unchecked Sendable {
     private var corrupt = false
     private var interruptAfter: Int?
     private var redirect = false
+    private var stall = false
+    private var foreignNextPage = false
+    private var held: [NWConnection] = []
 
     /// The server's base URL, once started.
     private(set) var endpoint = URL(string: "http://127.0.0.1:0")!
@@ -99,6 +102,9 @@ final class TestHubServer: @unchecked Sendable {
 
     func stop() {
         listener.cancel()
+        for connection in lock.withLock({ held }) {
+            connection.cancel()
+        }
     }
 
     /// Every request so far.
@@ -113,6 +119,11 @@ final class TestHubServer: @unchecked Sendable {
     /// Redirects downloads of the LFS file to `localhost`, another host than `127.0.0.1`, as the
     /// Hub redirects LFS files to its CDN.
     func redirectLFSFileToAnotherHost(_ on: Bool) { lock.withLock { redirect = on } }
+    /// Sends the first 50,000 bytes of each LFS download and then nothing, holding the
+    /// connection open, so a test can cancel a download in flight.
+    func stallLFSDownloads(_ on: Bool) { lock.withLock { stall = on } }
+    /// Adds a `Link: rel="next"` header to the tree that points at another host.
+    func linkTreeToAnotherHost(_ on: Bool) { lock.withLock { foreignNextPage = on } }
     /// Closes the next download of the LFS file after `bytes` bytes of its body.
     func interruptNextLFSDownload(after bytes: Int) { lock.withLock { interruptAfter = bytes } }
 
@@ -166,6 +177,8 @@ final class TestHubServer: @unchecked Sendable {
         let corrupt = self.corrupt
         let interrupt = interruptAfter
         let redirect = self.redirect
+        let stall = self.stall
+        let foreignNextPage = self.foreignNextPage
         lock.unlock()
         if let forced {
             send(connection, status: forced, body: Data(#"{"error": "refused"}"#.utf8))
@@ -193,7 +206,12 @@ final class TestHubServer: @unchecked Sendable {
         {
             send(connection, status: 404, body: Data(#"{"error": "Revision not found"}"#.utf8))
         } else if path == "/api/models/\(repository)/tree/\(Self.commit)?recursive=true" {
-            send(connection, status: 200, body: Self.treeJSON())
+            let link =
+                "Link: <http://localhost:\(endpoint.port ?? 0)/api/models/\(repository)/tree/"
+                + "\(Self.commit)?recursive=true&cursor=2>; rel=\"next\""
+            send(
+                connection, status: 200, body: Self.treeJSON(),
+                extraHeaders: foreignNextPage ? [link] : [])
         } else if path.hasPrefix("/\(repository)/resolve/\(Self.commit)/"),
             let file = Self.files.first(where: {
                 path == "/\(repository)/resolve/\(Self.commit)/\($0.path)"
@@ -202,6 +220,13 @@ final class TestHubServer: @unchecked Sendable {
             var content = file.content
             if file.isLFS && corrupt {
                 content[content.count / 2] ^= 0xFF
+            }
+            if file.isLFS && stall {
+                lock.withLock { held.append(connection) }
+                serve(
+                    content, range: headers["range"], on: connection, cutAfter: 50_000, close: false
+                )
+                return
             }
             var cut: Int?
             if file.isLFS, let interrupt {
@@ -239,8 +264,10 @@ final class TestHubServer: @unchecked Sendable {
         return try! JSONSerialization.data(withJSONObject: entries)
     }
 
-    private func serve(_ content: Data, range: String?, on connection: NWConnection, cutAfter: Int?)
-    {
+    private func serve(
+        _ content: Data, range: String?, on connection: NWConnection, cutAfter: Int?,
+        close: Bool = true
+    ) {
         var start = 0
         if let range, range.hasPrefix("bytes="), range.hasSuffix("-"),
             let from = Int(range.dropFirst(6).dropLast())
@@ -258,12 +285,12 @@ final class TestHubServer: @unchecked Sendable {
         }
         send(
             connection, status: start > 0 ? 206 : 200, body: Data(body), extraHeaders: extra,
-            cutAfter: cutAfter)
+            cutAfter: cutAfter, close: close)
     }
 
     private func send(
         _ connection: NWConnection, status: Int, body: Data, extraHeaders: [String] = [],
-        cutAfter: Int? = nil
+        cutAfter: Int? = nil, close: Bool = true
     ) {
         let reason =
             [
@@ -276,10 +303,17 @@ final class TestHubServer: @unchecked Sendable {
         head += "\r\n"
         var bytes = Data(head.utf8)
         bytes.append(cutAfter.map { body.prefix($0) } ?? body)
+        let queue = queue
         connection.send(
             content: bytes,
             completion: .contentProcessed { _ in
-                connection.cancel()
+                guard close else { return }
+                guard cutAfter != nil else {
+                    connection.cancel()
+                    return
+                }
+                // A cut response: give the client time to read what was sent before the close.
+                queue.asyncAfter(deadline: .now() + 0.5) { connection.cancel() }
             })
     }
 }

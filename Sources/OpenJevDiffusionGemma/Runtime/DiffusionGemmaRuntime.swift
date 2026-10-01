@@ -12,9 +12,15 @@ public enum DiffusionGemmaRuntimeError: Error, Sendable, Hashable, CustomStringC
     /// `images` (the vision milestone). ``DiffusionGemmaRuntime/capabilities`` flags both off, so
     /// the engine refuses such requests before they get here.
     case unsupported(String)
+    /// ``DiffusionGemmaRuntime/Configuration/cacheLimitGB`` is not a finite number of GB, 0 or
+    /// more.
+    case invalidCacheLimit(Double)
 
     public var description: String {
         switch self {
+        case .invalidCacheLimit(let gb):
+            return "the MLX cache limit is \(gb) GB (cacheLimitGB, OPENJEV_MLX_CACHE_LIMIT_GB); "
+                + "it must be a finite number of GB, 0 or more"
         case .unsupported("think"):
             return "the DiffusionGemma runtime does not support think yet; generation arrives "
                 + "with milestone 5"
@@ -135,6 +141,8 @@ public actor DiffusionGemmaRuntime: DecisionBackend {
         resolver: ModelResolver = ModelResolver(),
         progress: (@Sendable (LoadStage) -> Void)? = nil
     ) async throws -> DiffusionGemmaRuntime {
+        // A cache limit MLX cannot take fails here, before anything is downloaded or loaded.
+        _ = try configuration.cacheLimitBytes()
         let clock = ContinuousClock()
         let start = clock.now
         let resolution = try await resolver.resolution(
@@ -165,7 +173,7 @@ public actor DiffusionGemmaRuntime: DecisionBackend {
         progress: (@Sendable (LoadStage) -> Void)?
     ) throws {
         progress?(.applyingCacheLimit)
-        applyConfiguredCacheLimit()
+        try applyConfiguredCacheLimit()
         var warmUpTime: Duration?
         if configuration.warmUp {
             progress?(.warmingUp)
@@ -182,14 +190,18 @@ public actor DiffusionGemmaRuntime: DecisionBackend {
 
     /// Upstream's `set_cache_limit(gb)`: nil leaves MLX alone, 0 disables MLX's buffer pool,
     /// anything else caps it at `gb × 1024³` bytes.
-    public func setCacheLimit(gb: Double?) {
-        guard let gb else { return }
-        setCacheLimit(Int(gb * 1024 * 1024 * 1024))
+    ///
+    /// - Throws: ``DiffusionGemmaRuntimeError/invalidCacheLimit(_:)`` for a value that is not a
+    ///   finite number of GB, 0 or more; MLX is left as it was.
+    public func setCacheLimit(gb: Double?) throws(DiffusionGemmaRuntimeError) {
+        if let bytes = try Configuration.bytes(gb: gb) {
+            setCacheLimit(bytes)
+        }
     }
 
     /// Applies ``Configuration/cacheLimitGB``, as loading does.
-    func applyConfiguredCacheLimit() {
-        setCacheLimit(gb: configuration.cacheLimitGB)
+    func applyConfiguredCacheLimit() throws(DiffusionGemmaRuntimeError) {
+        try setCacheLimit(gb: configuration.cacheLimitGB)
     }
 
     /// MLX's active, cache and peak bytes and the process's resident bytes now.

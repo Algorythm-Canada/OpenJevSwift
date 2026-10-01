@@ -363,7 +363,7 @@ extension MLXTests {
             ) {
                 await runtime.removeCachedPrefills()
                 Memory.cacheLimit = originalLimit
-                await runtime.setCacheLimit(gb: limitGB)
+                try await runtime.setCacheLimit(gb: limitGB)
                 Memory.clearCache()
                 Memory.peakMemory = 0
                 let before = await runtime.memoryReport()
@@ -391,8 +391,10 @@ extension MLXTests {
             // MLX trims the pool on the next allocation, so it can pass the limit by one buffer.
             #expect(limited.cacheBytes <= (4 << 30) + (512 << 20))
             #expect(limited.activeBytes + limited.cacheBytes < 26 << 30)
+            // The resident bound R4 records: 15.1 to 15.5 GiB were measured on an M3 Max.
+            #expect(limited.residentBytes < 20 << 30)
+            #expect(unlimited.residentBytes < 20 << 30)
             #expect(await runtime.statistics().cachedPrefills <= 12)
-            _ = unlimited
         }
     }
 }

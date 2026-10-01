@@ -200,11 +200,24 @@ public struct ModelResolver: Sendable {
                 contentsOf: directory.appendingPathComponent("model.safetensors.index.json")),
             let index = try? JSONDecoder().decode(ShardIndex.self, from: data)
         {
-            missing += Set(index.weightMap.values).sorted().filter {
-                !manager.fileExists(atPath: directory.appendingPathComponent($0).path)
+            missing += Set(index.weightMap.values).sorted().compactMap { shard in
+                guard isContainedPath(shard) else {
+                    return "\(shard) (the index names a path outside the directory)"
+                }
+                return manager.fileExists(atPath: directory.appendingPathComponent(shard).path)
+                    ? nil : shard
             }
         }
         return missing
+    }
+
+    /// True when `path` is relative and has no empty, `.` or `..` component, so appending it to
+    /// a directory stays inside that directory.
+    static func isContainedPath(_ path: String) -> Bool {
+        !path.isEmpty && !path.hasPrefix("/")
+            && path.split(separator: "/", omittingEmptySubsequences: false).allSatisfy {
+                !$0.isEmpty && $0 != "." && $0 != ".."
+            }
     }
 
     private struct ShardIndex: Decodable {
@@ -290,10 +303,17 @@ final class FileTransfer: NSObject, URLSessionDataDelegate, @unchecked Sendable 
         bytes = offset
     }
 
+    /// Runs the request to its end. Cancelling the calling task cancels the data task, which
+    /// then completes with an error and resumes the continuation once, as any completion does.
     func run(_ request: URLRequest, in session: URLSession) async -> Outcome {
-        await withCheckedContinuation { continuation in
-            lock.withLock { self.continuation = continuation }
-            session.dataTask(with: request).resume()
+        let task = session.dataTask(with: request)
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                lock.withLock { self.continuation = continuation }
+                task.resume()
+            }
+        } onCancel: {
+            task.cancel()
         }
     }
 
@@ -434,6 +454,10 @@ private struct HubSnapshot {
             commit = isCommit ? revision.lowercased() : try await resolveCommit()
             tree = try await fetchTree(commit: commit)
         } catch let error as URLError {
+            // A cancelled load is cancelled, not offline.
+            if Task.isCancelled || error.code == .cancelled {
+                throw CancellationError()
+            }
             // Offline: a commit whose snapshot is complete needs no network.
             if let commit = offlineCommit(), wanted == nil {
                 let snapshot = cache.snapshotDirectory(repository, commit: commit)
@@ -591,7 +615,13 @@ private struct HubSnapshot {
                         entry.path, oid: entry.oid, size: entry.size,
                         lfs: entry.lfs.map { ($0.oid, $0.size) }, commit: commit))
             }
-            next = Self.nextLink(response.value(forHTTPHeaderField: "Link"))
+            next = Self.nextLink(response.value(forHTTPHeaderField: "Link"), relativeTo: url)
+            // The token goes only to the Hub: a next page on another origin is refused.
+            if let page = next, !Self.sameOrigin(page, resolver.endpoint) {
+                throw ModelResolverError.invalidResponse(
+                    repository: repository, revision: commit,
+                    reason: "the tree's next page is on another host, \(page.host ?? "none")")
+            }
         }
         guard !files.isEmpty else {
             throw ModelResolverError.invalidResponse(
@@ -603,10 +633,7 @@ private struct HubSnapshot {
     private func treeFile(
         _ path: String, oid: String?, size: Int?, lfs: (oid: String, size: Int)?, commit: String
     ) throws -> TreeFile {
-        let components = path.split(separator: "/", omittingEmptySubsequences: false)
-        guard !path.isEmpty, !path.hasPrefix("/"),
-            components.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." })
-        else {
+        guard ModelResolver.isContainedPath(path) else {
             throw ModelResolverError.unsafePath(
                 repository: repository, revision: commit, path: path)
         }
@@ -639,14 +666,25 @@ private struct HubSnapshot {
         return TreeFile(path: path, size: bytes, id: id, isLFS: lfs != nil)
     }
 
-    /// The `rel="next"` URL of a `Link` header.
-    static func nextLink(_ header: String?) -> URL? {
+    /// True when `a` and `b` have the same scheme, host and port.
+    static func sameOrigin(_ a: URL, _ b: URL) -> Bool {
+        func port(_ url: URL) -> Int? {
+            url.port ?? (url.scheme == "https" ? 443 : url.scheme == "http" ? 80 : nil)
+        }
+        return a.scheme?.lowercased() == b.scheme?.lowercased()
+            && a.host?.lowercased() == b.host?.lowercased() && port(a) == port(b)
+    }
+
+    /// The `rel="next"` URL of a `Link` header, resolved against `base`.
+    static func nextLink(_ header: String?, relativeTo base: URL? = nil) -> URL? {
         guard let header else { return nil }
         for part in header.split(separator: ",") where part.contains("rel=\"next\"") {
             if let open = part.firstIndex(of: "<"), let close = part.firstIndex(of: ">"),
                 open < close
             {
-                return URL(string: String(part[part.index(after: open)..<close]))
+                return URL(
+                    string: String(part[part.index(after: open)..<close]), relativeTo: base)?
+                    .absoluteURL
             }
         }
         return nil
@@ -743,6 +781,8 @@ private struct HubSnapshot {
                 progress(current)
             }
             try? handle.close()
+            // A cancelled load stops here, keeping the partial file for the next run.
+            try Task.checkCancellation()
             downloaded += outcome.written
             switch outcome.status {
             case 401, 403:

@@ -49,8 +49,22 @@ extension DiffusionGemmaRuntime {
 
         /// The byte count ``cacheLimitGB`` asks MLX for, or nil when MLX is left alone. 0 stays
         /// 0, which is not the same as unset.
-        public var cacheLimitBytes: Int? {
-            cacheLimitGB.map { Int($0 * 1024 * 1024 * 1024) }
+        ///
+        /// - Throws: ``DiffusionGemmaRuntimeError/invalidCacheLimit(_:)`` for a value that is not
+        ///   a finite number of GB, 0 or more, that fits in an `Int` of bytes; `nan` and `inf`
+        ///   are among them, which `OPENJEV_MLX_CACHE_LIMIT_GB` accepts as upstream's does.
+        public func cacheLimitBytes() throws(DiffusionGemmaRuntimeError) -> Int? {
+            try Self.bytes(gb: cacheLimitGB)
+        }
+
+        /// `gb × 1024³` as an `Int`, nil for nil.
+        static func bytes(gb: Double?) throws(DiffusionGemmaRuntimeError) -> Int? {
+            guard let gb else { return nil }
+            let bytes = gb * 1024 * 1024 * 1024
+            guard gb.isFinite, gb >= 0, bytes < Double(Int.max) else {
+                throw DiffusionGemmaRuntimeError.invalidCacheLimit(gb)
+            }
+            return Int(bytes)
         }
     }
 

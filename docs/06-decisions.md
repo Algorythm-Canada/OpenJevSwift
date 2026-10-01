@@ -1548,7 +1548,9 @@ Decision.
 3. **Settings are typed.** `DiffusionGemmaRuntime.Configuration` holds `maxPromptTokens`
    (32,768), `promptCacheEntries` (12), `promptCacheTokens` (16,384), `cacheLimitGB` (nil leaves
    MLX alone, 0 disables the pool, otherwise `Memory.cacheLimit` set to `gb × 1024³` bytes, the
-   non-deprecated form of `GPU.set(cacheLimit:)`) and `warmUp` (on). The module cannot import
+   non-deprecated form of `GPU.set(cacheLimit:)`); `nan`, `inf`, a negative value or one too large for an `Int` of
+   bytes is refused with `DiffusionGemmaRuntimeError.invalidCacheLimit` before anything loads,
+   since `OPENJEV_MLX_CACHE_LIMIT_GB` accepts `nan` as upstream's does and `warmUp` (on). The module cannot import
    `OpenJevServer`, so the CLI maps `ServerSettings` onto the memberwise initializer (05, "The
    server"). The runtime checks the prompt cap itself, as `MlxEngine.one_read` does, although the
    engine checks it first too.
@@ -1574,7 +1576,10 @@ Decision.
    answers a range with the whole file or a 416 restarts the file; a digest mismatch removes the
    download and names the file and both digests; 401 and 403 say the repository is gated and name
    `HF_TOKEN`; a 404 names the revision. The token is dropped when a download redirects to another
-   host (the Hub's CDN), as huggingface_hub does. When the Hub cannot be reached, a commit (given, or read
+   host (the Hub's CDN), as huggingface_hub does. A tree whose `Link` next page is on another origin is refused, so
+   the token goes only to the endpoint. Shard names from the index must be relative paths without
+   `.` or `..`. Cancelling the task that loads stops the transfer in flight, keeps the partial
+   file for the next run and throws `CancellationError`, never the offline fallback. When the Hub cannot be reached, a commit (given, or read
    from `refs/<name>`) whose snapshot is complete is used offline. The issue's "all files except
    README" is not followed: the whole tree is fetched (13 files, README and `.gitattributes`
    included), so the snapshot is the one huggingface_hub writes. No lock files are written, so

@@ -109,34 +109,53 @@ struct PrefillCacheTests {
     }
 
     @Test("test_mlx_engine_applies_both_settings_to_the_runtime")
-    func bothSettingsReachTheRuntime() async {
+    func bothSettingsReachTheRuntime() async throws {
         let log = StubModelLog()
         let runtime = DiffusionGemmaRuntime.stub(
             configuration: .init(promptCacheEntries: 5, cacheLimitGB: 2.5), log: log)
         #expect(runtime.configuration.promptCacheEntries == 5)
         #expect(runtime.configuration.cacheLimitGB == 2.5)
         #expect(await runtime.prefillCacheState.entryBudget == 5)
-        await runtime.applyConfiguredCacheLimit()
+        try await runtime.applyConfiguredCacheLimit()
         #expect(log.limits == [Int(2.5 * 1024 * 1024 * 1024)])
     }
 
     @Test("test_an_unset_cache_limit_still_reaches_the_runtime_as_none: MLX is left alone")
-    func anUnsetCacheLimitReachesTheRuntimeAsNil() async {
+    func anUnsetCacheLimitReachesTheRuntimeAsNil() async throws {
         let log = StubModelLog()
         let runtime = DiffusionGemmaRuntime.stub(
             configuration: .init(cacheLimitGB: nil), log: log)
         #expect(runtime.configuration.cacheLimitGB == nil)
-        #expect(runtime.configuration.cacheLimitBytes == nil)
-        await runtime.applyConfiguredCacheLimit()
+        #expect(try runtime.configuration.cacheLimitBytes() == nil)
+        try await runtime.applyConfiguredCacheLimit()
         #expect(log.limits.isEmpty)
     }
 
+    @Test("A cache limit of nan, inf or below 0 is refused before MLX is touched")
+    func invalidCacheLimits() async {
+        for gb in [Double.nan, .infinity, -1, 1e300] {
+            let log = StubModelLog()
+            let runtime = DiffusionGemmaRuntime.stub(
+                configuration: .init(cacheLimitGB: gb), log: log)
+            #expect(throws: DiffusionGemmaRuntimeError.self) {
+                try runtime.configuration.cacheLimitBytes()
+            }
+            await #expect(throws: DiffusionGemmaRuntimeError.self) {
+                try await runtime.applyConfiguredCacheLimit()
+            }
+            #expect(log.limits.isEmpty, "\(gb)")
+        }
+        #expect(
+            DiffusionGemmaRuntimeError.invalidCacheLimit(.nan).description.contains(
+                "OPENJEV_MLX_CACHE_LIMIT_GB"))
+    }
+
     @Test("test_a_zero_cache_limit_is_not_the_same_as_unset: 0 disables MLX's pool")
-    func aZeroCacheLimitIsNotUnset() async {
+    func aZeroCacheLimitIsNotUnset() async throws {
         let log = StubModelLog()
         let runtime = DiffusionGemmaRuntime.stub(configuration: .init(cacheLimitGB: 0), log: log)
-        #expect(runtime.configuration.cacheLimitBytes == 0)
-        await runtime.applyConfiguredCacheLimit()
+        #expect(try runtime.configuration.cacheLimitBytes() == 0)
+        try await runtime.applyConfiguredCacheLimit()
         #expect(log.limits == [0])
     }
 }
