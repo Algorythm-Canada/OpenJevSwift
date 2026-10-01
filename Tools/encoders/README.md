@@ -55,8 +55,9 @@ and converted packages.
 
 `OpenJevEncoders` downloads Verdict's package on first use and checks every file against the
 manifest it embeds, `Sources/OpenJevEncoders/Store/EncoderPackageManifest+Verdict.swift` (D-033).
-Until the package is published, the manifest keeps downloads off (`PACKAGE_DOWNLOADS_ENABLED` in
-`manifest.py`). After converting a new package, from the repository root:
+Verdict's package is published as release `verdict-m18-fp16-v1` of
+`Algorythm-Canada/openjev-models`, and the manifest has downloads on (`PACKAGE_DOWNLOADS_ENABLED`
+in `manifest.py`). After converting a new package, from the repository root:
 
 ```bash
 python3 Tools/encoders/manifest.py
@@ -71,8 +72,8 @@ three package files under their asset names and upload them to a release. It upl
 matches the package. Every conversion writes new identifiers into the package's Manifest.json, so a
 package converted on another machine never matches the published digests: publish from the machine
 whose package the manifest describes. A new package needs a new tag (`--tag`), and a published asset
-is never replaced. Once the uploaded assets match the manifest, set
-`PACKAGE_DOWNLOADS_ENABLED = True`, run the script again and commit the manifest.
+is never replaced. A new package starts with `PACKAGE_DOWNLOADS_ENABLED = False`; once its uploaded
+assets match the manifest, set it to `True`, run the script again and commit the manifest.
 
 ## Known problems
 

@@ -271,18 +271,22 @@ struct EncoderPackageStoreTests {
         #expect(!FileManager.default.fileExists(atPath: storeFolder.path))
     }
 
-    @Test("Verdict's unpublished package files are not downloaded by default")
-    func unpublishedVerdictPackage() async throws {
+    @Test("A manifest whose downloads are off is refused before the store touches the disk")
+    func downloadsOff() async throws {
         let folder = try temporaryFolder()
         defer { try? FileManager.default.removeItem(at: folder) }
         let storeFolder = folder.appendingPathComponent("store", isDirectory: true)
         let store = EncoderPackageStore(directory: storeFolder)
+        // Verdict's downloads are on since its release exists (D-033); a new package's are off
+        // until its own release does, so the refusal is tested on a copy with the flag cleared.
+        var manifest = EncoderPackageManifest.verdict
+        manifest.packageDownloadsEnabled = false
 
         let error = await #expect(
             throws: EncoderPackageError.packageDownloadsUnavailable(
                 "verdict-m18-fp16")
         ) {
-            try await store.locations(for: .verdict)
+            try await store.locations(for: manifest)
         }
         #expect(error == .packageDownloadsUnavailable("verdict-m18-fp16"))
         #expect(!FileManager.default.fileExists(atPath: storeFolder.path))
@@ -351,7 +355,7 @@ struct EncoderPackageStoreTests {
         #expect(manifest.model == KnownEncoderModels.verdict.name)
         #expect(manifest.package == EncoderPackageSpec.verdict.name)
         #expect(manifest.minimumOS == .init(iOS: 18, macOS: 15))
-        #expect(!manifest.packageDownloadsEnabled)
+        #expect(manifest.packageDownloadsEnabled)
         #expect(manifest.checkpoint.repository == "heman10x/rlcd-modernbert-151m")
         #expect(manifest.checkpoint.revision == (try VerdictFixtures.reference().verdictRevision))
         #expect(

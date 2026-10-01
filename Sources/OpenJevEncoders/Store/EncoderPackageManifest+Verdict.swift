@@ -16,7 +16,7 @@ extension EncoderPackageManifest {
         checkpoint: Checkpoint(
             repository: "heman10x/rlcd-modernbert-151m",
             revision: "8af2496eb63c7fa66d7d234e1f62629380030eb4"),
-        packageDownloadsEnabled: false,
+        packageDownloadsEnabled: true,
         packageFiles: [
             File(
                 path: "Data/com.apple.CoreML/model.mlmodel",
@@ -53,7 +53,7 @@ extension EncoderPackageManifest {
             sha256: "af2a876993148efa0726b6ccf710fe2303897d20c0ce8c7c9036eb50f64d23de"))
 }
 
-/// A package file's URL: an asset of the GitHub release (proposed in D-033).
+/// A package file's URL: an asset of the GitHub release (D-033).
 private func verdictRelease(_ asset: String) -> URL {
     URL(
         string: "https://github.com/Algorythm-Canada/openjev-models/releases/download/"
