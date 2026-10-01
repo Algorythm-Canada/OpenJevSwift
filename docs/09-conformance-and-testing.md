@@ -109,9 +109,18 @@ sanity, thought channel never leaking.
 - **Live server tests.** A port of upstream's `test_live.py` against a running server with the
   real model: README example, 255 options, chunked reads, unknown model, concurrent reads, chat and
   stream when generation exists, encoder models when listed. Opt-in via `OPENJEV_LIVE_URL`.
-- **JevBench.** Run the public JevBench v1 items through the server and compare top answers and
-  probabilities with upstream's published OpenJev results (upstream issue #6). Agreement rate is a
-  release metric, not a unit test.
+- **JevBench.** `Tools/jevbench` (issue #61, D-040) runs JevBench v1's 231 public items, and the 102
+  TypeSafe public-evaluation rows SemIf compares with Jev, against any `/v1/systemone` server, one
+  request per item through the benchmark's own adapter, and scores them with the benchmarks' own
+  code, vendored unchanged: JevBench's accuracy, Brier score and ECE, SemIf's equal-case modal
+  agreement and total variation. `servers.py` runs the Swift and upstream servers on the same Mac,
+  and `harness.py compare` reports, per model, top-answer agreement, the mean and largest
+  probability difference per question type and every item that disagrees; `published` sets a run
+  beside the benchmark's published row. [quality.md](quality.md) has the tables for Verdict and Laya
+  and the commands that produce them, and the DiffusionGemma run waits for the `mlx` backend's
+  parity tests (#31). Agreement is a release metric, not a unit test: the runs need the models and
+  are recorded in `Tools/jevbench/results/`, while the harness's own smoke test, a fake server in
+  the process, runs in CI.
 
 ## Tolerances and what "compatible" means
 
@@ -131,7 +140,7 @@ identity.
   fixture tests included. Cheap and fast; catches order and serialisation bugs.
 - macOS Apple silicon job: build everything with Swift Build, run every test target, and run
   swift-format. MLX unit tests on synthetic small shapes run there on the runner's GPU (issue #8
-  and D-028).
+  and D-028). The JevBench harness's smoke test (`Tools/jevbench/smoke_test.py`) runs there too.
 - Every job fails when a test skips for any reason other than an unset `OPENJEV_TEST_MODEL`,
   `OPENJEV_ENCODER_MODELS`, `OPENJEV_LIVE_URL` or `OPENJEV_TEST_DOWNLOAD`, so a fixture test
   cannot stop testing without failing.
