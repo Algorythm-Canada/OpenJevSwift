@@ -174,7 +174,7 @@ when routed.
 `GET /v1/models` lists the server's own models, then each routed name it does not serve: with
 upstream's description and release date for an encoder model it knows (`laya-1.0`,
 `verdict-1.4`, `clm-v0.1`, `jevk5-0.2`) and an empty description and release date for any other.
-The routed servers are not asked, so the listing holds while one is down. Decision D-039 records
+The routed servers are not asked, so the listing holds while one is down. Decision D-040 records
 where OpenJevSwift differs.
 
 ## Differences between OpenJev and Jev (kept as they are)

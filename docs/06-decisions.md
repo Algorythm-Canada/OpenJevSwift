@@ -895,7 +895,7 @@ Status. Proposed with issue #34. Items 5 and 6 are completed by D-031 (issues #3
 503 for a backend failure, the body cap in a middleware after authentication, and the
 `json_invalid` messages, positions and content-type rules. Item 7's zero for a refused request is
 replaced by D-038 item 7 (issue #37): the engines record the time they spent. Item 2's routed
-models are forwarded and listed by D-039 (issue #38).
+models are forwarded and listed by D-040 (issue #38).
 
 ## D-031 Error contract and authentication: where the port goes beyond or differs from the issue text
 
@@ -1523,9 +1523,117 @@ DiffusionGemma backend registers with one entry in `BackendRegistry.standard` an
 placeholder, as Laya's did.
 
 Status. Proposed with issues #40 and #37. Item 7's forwarded request reports the routed server's
-time as model time since D-039 (issue #38).
+time as model time since D-040 (issue #38).
 
-## D-039 Model routes and the SDK compatibility suite: where the port goes beyond or differs from the issue text
+## D-039 DiffusionGemma runtime and model download: where the port goes beyond or differs from the issue text
+
+Context. Issue #29 ports upstream's `MlxRuntime` and `MlxEngine` (`mlx_backend.py` lines 76 to
+303) as `DiffusionGemmaRuntime`, and issue #30 adds model resolution and download, into
+`Sources/OpenJevDiffusionGemma/Runtime/` (`DiffusionGemmaRuntime.swift`, `PrefillCache.swift`,
+`RuntimeConfiguration.swift`) and `Sources/OpenJevDiffusionGemma/Download/` (`ModelSource.swift`,
+`ModelResolver.swift`), on the model of D-035 and D-036.
+
+Decision.
+
+1. **One actor is the MLX boundary.** `DiffusionGemmaRuntime` owns the loaded model, the
+   `SwiftTransformersTokenizer` and the prefill cache, and runs every MLX evaluation inside
+   itself, one at a time, as upstream's one-worker executor does. It runs on the default actor
+   executor rather than a dedicated thread; R14 asks for one execution context, which a serial
+   actor is. Its `DecisionBackend` properties are `nonisolated`, and only values cross it. The
+   model is reached through two stored closures (prefill and read), so the model-free tests bind
+   them to a stub whose prefill is a `PromptCache` without layers.
+2. **The prefill cache is generic.** `PrefillCache<Value>` is upstream's `OrderedDict` with its
+   two budgets and running token total; the runtime instantiates it with `PromptCache`, and the
+   eleven cache and settings tests of `tests/test_mlx_backend.py` run over it and a stub runtime
+   without weights or MLX. Its key, `PrefillKey`, has one case, `.tokens([Int])`; the image key
+   (system text, state text, image digests) arrives with the vision milestone. Upstream's two
+   module constants are `PrefillCacheDefaults`. The token budget is a configuration value too,
+   which upstream does not expose.
+3. **Settings are typed.** `DiffusionGemmaRuntime.Configuration` holds `maxPromptTokens`
+   (32,768), `promptCacheEntries` (12), `promptCacheTokens` (16,384), `cacheLimitGB` (nil leaves
+   MLX alone, 0 disables the pool, otherwise `Memory.cacheLimit` set to `gb × 1024³` bytes, the
+   non-deprecated form of `GPU.set(cacheLimit:)`); `nan`, `inf`, a negative value or one too large for an `Int` of
+   bytes is refused with `DiffusionGemmaRuntimeError.invalidCacheLimit` before anything loads,
+   since `OPENJEV_MLX_CACHE_LIMIT_GB` accepts `nan` as upstream's does and `warmUp` (on). The module cannot import
+   `OpenJevServer`, so the CLI maps `ServerSettings` onto the memberwise initializer (05, "The
+   server"). The runtime checks the prompt cap itself, as `MlxEngine.one_read` does, although the
+   engine checks it first too.
+4. **The think stub.** `capabilities` is steps, samples and sequential; `think` and images are
+   off until milestones 5 and the vision milestone, so the engine refuses them with upstream's
+   messages before any read. `think(prompt:budget:stopIDs:)` and an image prompt throw
+   `DiffusionGemmaRuntimeError.unsupported`. `generate` is not declared: no protocol asks for it
+   yet.
+5. **Warm-up is one read on the model, outside the cache.** One noul question (the first of
+   upstream's `warmup.questions`) over upstream's warm-up state, its prompt from the chat
+   template, its canvas from `CanvasBuilder` with seed 0, prefilled and read without touching the
+   prefill cache, so no engine is needed and the first request is not served from the warm-up's
+   prefill.
+6. **The downloader is the module's own, not `HubApi`.** swift-transformers' `HubApi` downloads
+   into `downloadBase/models/{org}/{repo}/`, so it cannot share the 16.5 GB that upstream and
+   mlx-vlm keep in huggingface_hub's layout; it was the reference for the metadata and the resume.
+   `ModelResolver` reads the Hub API's revision and tree JSON (following `Link: rel="next"`),
+   streams each missing file through a URLSession data delegate into
+   `blobs/<id>.incomplete` with `Range: bytes=N-`, checks it (SHA-256 for LFS files, size and the
+   git blob SHA-1 of `blob <size>\0` and the content for the others), renames it to `blobs/<id>`
+   and links `snapshots/<commit>/<path>` to it with a relative symlink; a branch or tag writes
+   `refs/<name>`. A transport error is retried from the bytes on disk, 5 attempts in all; a server that
+   answers a range with the whole file or a 416 restarts the file; a digest mismatch removes the
+   download and names the file and both digests; 401 and 403 say the repository is gated and name
+   `HF_TOKEN`; a 404 names the revision. The token is dropped when a download redirects to another
+   host (the Hub's CDN), as huggingface_hub does. A tree whose `Link` next page is on another origin is refused, so
+   the token goes only to the endpoint. Shard names from the index must be relative paths without
+   `.` or `..`. Cancelling the task that loads stops the transfer in flight, keeps the partial
+   file for the next run and throws `CancellationError`, never the offline fallback. When the Hub cannot be reached, a commit (given, or read
+   from `refs/<name>`) whose snapshot is complete is used offline. The issue's "all files except
+   README" is not followed: the whole tree is fetched (13 files, README and `.gitattributes`
+   included), so the snapshot is the one huggingface_hub writes. No lock files are written, so
+   two processes downloading the same blob at once is unsupported.
+7. **The cache location and the token come from the caller.** `HubCacheLocation(environment:)`
+   follows huggingface_hub: `HF_HUB_CACHE`, then `HF_HOME/hub`, then
+   `XDG_CACHE_HOME/huggingface/hub` (beyond the issue text, as `EncoderPackageStore` already
+   does), then `~/.cache/huggingface/hub`. `HubCacheLocation.token(environment:)` reads `HF_TOKEN`
+   and treats an empty value as absent, the bug upstream's `LayaEngine.load` works around; the
+   resolver never sends an empty token. The library never reads the process environment (D-013).
+8. **The pins.** `.fourBit` is `mlx-community/diffusiongemma-26B-A4B-it-4bit` at
+   `a7a81407613811e8ba63af92ac0d852b809e191f`. `.eightBit` is `-8bit` at
+   `7b95e3887078ba56283c24f2578d6e5a06b9d7e8` and `.bf16` is `-bf16` at
+   `2cd36f950eb065c96c80810fb6b859b114cd052d`, each `main`'s commit on 2026-10-01 through the
+   Hub API (both last modified 2026-07-15); no fixture covers either. `ModelSource(setting:)`
+   maps a preset's bare repository to its pin, a path to `.directory` and `repo@revision` to that
+   revision.
+9. **The CLI registers `mlx`.** The CLI (D-038) merged before this branch, so
+   `BackendRegistry` now loads `mlx` instead of exiting 3: a `DecisionBackendProvider` whose load
+   is `DiffusionGemmaRuntime.load(ModelSource(setting: mlxModel), configuration: .init(
+   maxPromptTokens: mlxMaxPrompt, promptCacheEntries: mlxPromptCache, cacheLimitGB:
+   mlxCacheLimitGB, warmUp: warmup), cache: HubCacheLocation(environment:), token:
+   HubCacheLocation.token(environment:))`, whose `.warmingUp` stage prints the `warming up` phase;
+   `openjev` and its tests link `OpenJevDiffusionGemma` on macOS, and on Linux `mlx` is a known
+   backend that exits 3. The CLI does not print the `LoadReport` yet: its providers get no logger,
+   and changing that is the CLI's design to make. A directory that is not a checkpoint exits 3
+   naming what it lacks; an opt-in smoke test (`OPENJEV_TEST_MODEL`) serves the quickstart from
+   the built binary.
+10. **Tests.** `LiveCheckpoint` now loads through `DiffusionGemmaRuntime.load(.directory(...))`,
+    so the model-level suites and the runtime suites share one 16 GB load; the runtime exposes
+    its loaded model to the tests only (`sharedLoadedModel`, internal). The resolver's tests run a
+    local HTTP server (Network framework) with the Hub API's JSON shapes; one opt-in test
+    (`OPENJEV_TEST_DOWNLOAD=1`) downloads two small files of the pinned revision from the real Hub.
+    The issue's "downloading the 4-bit checkpoint to an empty cache completes" (16.58 GB) is not
+    run as a test; its parts (cold download, resume, digest check, layout) are tested on the fake
+    repository and on the two real files.
+11. **Measured on 2026-10-01 (M3 Max, the pinned checkpoint, native kernels).** Through the
+    runtime, the 27 oracle reads meet D-014 with the figures D-036 records (mean label
+    probability difference 0.0084, long prompts 0.0054; entropy 0.086 and 0.131; top label 150 of
+    156 and 120 of 120), and the runtime's maps are bit-identical to `DiffusionGemmaModel.read`'s.
+    D-014's bounds are aggregates: the quickstart's five reads alone have a mean of 0.045, from its
+    `is_urgent` slot (the oracle reads 0.57, 0.94 and 0.52 for yes), so per-request bounds are not
+    asserted. Load over four test runs (warm file cache): tokenizer 4.9 to 6.3 s, weights 0.9 to 4.1 s,
+    warm-up 0.30 to 0.83 s. The built `openjev serve --backend mlx` was serving 12.2 s after it
+    started (warm-up about 4 s) and answered the quickstart in 751 ms. Memory over 100 unique short
+    prompts: R4.
+
+Status. Proposed with issues #29 and #30.
+
+## D-040 Model routes and the SDK compatibility suite: where the port goes beyond or differs from the issue text
 
 Context. Issue #38 forwards a request for a routed model and lists the routed models, upstream's
 `forward`, `parse_routes` and `models_list`, and issue #39 runs TypeSafe's official SDKs against the

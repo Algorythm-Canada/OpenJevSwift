@@ -1,5 +1,5 @@
 // The stub-backed OpenJev server the SDK compatibility suite runs (Tools/sdk-compat, issue #39,
-// decision D-039): the real application over OpenJevTestSupport's stub backends, which answer as
+// decision D-040): the real application over OpenJevTestSupport's stub backends, which answer as
 // upstream's `tests/test_api.py` and `tests/test_encoders.py` stub their reads. It is not a
 // product and never ships. Apache-2.0. See THIRD_PARTY.md.
 

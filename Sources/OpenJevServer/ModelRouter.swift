@@ -30,7 +30,7 @@
     /// included, as upstream's `forward` adds it to `model_ns`.
     ///
     /// Each forwarded request has its own client, made and shut down inside the request, on
-    /// swift-nio's shared event loops; nothing outlives the request (decision D-039). The client
+    /// swift-nio's shared event loops; nothing outlives the request (decision D-040). The client
     /// waits 5 seconds for a connection, `OPENJEV_FORWARD_TIMEOUT` for each write and read, never
     /// follows a redirect, speaks HTTP/1.1, sends no `accept-encoding` and decodes no body, so
     /// the bytes that come back are the bytes the routed server sent.

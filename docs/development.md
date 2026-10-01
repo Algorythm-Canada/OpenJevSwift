@@ -98,7 +98,7 @@ The package declares macOS 14 and iOS 17 as minimum deployment targets.
 dependencies. swift-http-types, swift-log, swift-nio, swift-service-lifecycle and
 async-http-client are Hummingbird's own dependencies, declared at the versions it already
 resolved, so declaring them changed no pin. AsyncHTTPClient forwards a routed model's request
-(D-039); it brings swift-nio-ssl and its BoringSSL into the `openjev` binary.
+(D-040); it brings swift-nio-ssl and its BoringSSL into the `openjev` binary.
 `swift-collections` is not a direct dependency. Issue #3 adds it if the JSON model adopts
 `OrderedDictionary`. The product names match [05-architecture.md](05-architecture.md).
 
@@ -327,19 +327,20 @@ And took this long:
   simulator, arm64 and x86_64 both. Only the build runs: the tests need weights that no iOS
   device holds. The step runs even when the tests failed, so one push reports both.
 - **The SDK compatibility job.** It restores the Linux job's build directory without saving it,
-  builds only the stub server, and runs the official SDKs against it (decision D-039). CPython
+  builds only the stub server, and runs the official SDKs against it (decision D-040). CPython
   3.12 is Ubuntu 24.04's own `python3`, installed with apt inside the Swift container and checked
   by version. A failure prints every HTTP exchange of the failed checks in the log, and the
   artifact `sdk-compat-exchanges` holds every exchange and the three servers' logs for 14 days.
 - **The test log check.** [check-test-log.sh](../.github/scripts/check-test-log.sh) reads the
   saved output of `swift test`. It fails when the log holds no Swift Testing run or a run failed,
   and when a test or suite was skipped or cancelled for any reason other than an unset
-  `OPENJEV_TEST_MODEL`, `OPENJEV_ENCODER_MODELS` or `OPENJEV_LIVE_URL`; a skip without a comment
-  fails too. CI has every fixture, so a fixture test that skipped there would stop testing without
+  `OPENJEV_TEST_MODEL`, `OPENJEV_ENCODER_MODELS`, `OPENJEV_LIVE_URL` or `OPENJEV_TEST_DOWNLOAD`;
+  a skip without a comment fails too. CI has every fixture, so a fixture test that skipped there would stop testing without
   failing. A test that needs the weights names `OPENJEV_TEST_MODEL` in the comment of its
   `.enabled(if:)` trait, and one that needs a converted encoder package or its tokenizer names
-  `OPENJEV_ENCODER_MODELS`; the check lists them as skipped. Every job unsets the three variables
-  before it runs the tests. The iOS job saves the output of `xcodebuild test`, which prints the
+  `OPENJEV_ENCODER_MODELS`; the check lists them as skipped. The one test that downloads from the
+  Hugging Face Hub names `OPENJEV_TEST_DOWNLOAD` and runs only when it is `1`. Every job unsets the
+  first three variables before it runs the tests; no job sets the fourth. The iOS job saves the output of `xcodebuild test`, which prints the
   same Swift Testing lines, and checks it with the same script.
 - **Caches.** The Linux and macOS jobs cache their build directory, `.build/linux` or `.build`,
   which holds the SwiftPM checkouts, the clones they come from and the build products. The iOS

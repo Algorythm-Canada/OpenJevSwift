@@ -29,7 +29,7 @@ var dependencies: [Package.Dependency] = [
     .package(url: "https://github.com/swift-server/swift-service-lifecycle.git", from: "2.12.0"),
     // Hummingbird's own dependency too, through HummingbirdTesting: the server forwards a request
     // for a routed model (OPENJEV_MODEL_ROUTES) to the server that serves it with this client,
-    // which runs on swift-nio on macOS and Linux alike (decision D-039).
+    // which runs on swift-nio on macOS and Linux alike (decision D-040).
     .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.36.2"),
 ]
 
@@ -120,7 +120,7 @@ var targets: [Target] = [
         dependencies: ["OpenJevCore"],
         swiftSettings: swiftSettings
     ),
-    // The stub-backed server the SDK compatibility suite runs (Tools/sdk-compat, decision D-039):
+    // The stub-backed server the SDK compatibility suite runs (Tools/sdk-compat, decision D-040):
     // the real application over OpenJevTestSupport's stub backends, so it runs on Linux, where Core
     // ML does not exist. It is not a product and never ships; `openjev` has no stub backend.
     .executableTarget(
@@ -243,12 +243,14 @@ var targets: [Target] = [
             swiftSettings: swiftSettings
         ),
         // The tests also load the tokenizer through mlx-swift-lm's MLXHuggingFace macros, to
-        // confirm that path gives the same results as the direct one the module uses.
+        // confirm that path gives the same results as the direct one the module uses. The live
+        // runtime tests take their requests from the wire fixtures through OpenJevTestSupport.
         .testTarget(
             name: "OpenJevDiffusionGemmaTests",
             dependencies: [
                 "OpenJevDiffusionGemma",
                 "OpenJevCore",
+                "OpenJevTestSupport",
                 .product(name: "MLX", package: "mlx-swift"),
                 .product(name: "MLXNN", package: "mlx-swift"),
                 .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
@@ -275,10 +277,11 @@ var targets: [Target] = [
             swiftSettings: swiftSettings
         ),
     ]
-    // `openjev serve` with OPENJEV_BACKEND=verdict, and its opt-in smoke test, which finds the
-    // converted package the way the store does.
+    // `openjev serve` with OPENJEV_BACKEND=verdict, laya or mlx, and its opt-in smoke test, which
+    // finds the converted package the way the store does.
     for target in targets where ["openjev", "OpenJevCLITests"].contains(target.name) {
         target.dependencies.append("OpenJevEncoders")
+        target.dependencies.append("OpenJevDiffusionGemma")
     }
 #endif
 

@@ -7,12 +7,15 @@ import OpenJevServer
 #if canImport(OpenJevEncoders)
     import OpenJevEncoders
 #endif
+#if canImport(OpenJevDiffusionGemma)
+    import OpenJevDiffusionGemma
+#endif
 
 /// The backends `OPENJEV_BACKEND` may name, in upstream's order: `mlx`, then the encoder models.
 ///
 /// Upstream also has `vllm`, `clm` and `jevk5`, which this port does not: `vllm` because it has no
 /// vLLM backend (D-030), `clm` and `jevk5` until issues #59 and #55. They are unknown here, as any
-/// other name is. `mlx` is known but not built yet, and `verdict` and `laya` need Core ML.
+/// other name is. `mlx` needs MLX, and `verdict` and `laya` need Core ML.
 struct BackendRegistry: Sendable {
     /// One backend.
     struct Backend: Sendable {
@@ -111,19 +114,11 @@ struct BackendRegistry: Sendable {
         return registry
     }
 
-    /// The issue page of this repository's issue `number`.
-    static func issue(_ number: Int) -> String {
-        "https://github.com/Algorythm-Canada/OpenJevSwift/issues/\(number)"
-    }
-
-    /// The backends of this build: `mlx`, not built yet, then `laya` and `verdict`.
+    /// The backends of this build: `mlx`, then `laya` and `verdict`.
     static let standard = BackendRegistry(backends: [
         Backend(
             name: "mlx", modelName: ServedModels.diffusionGemmaVersion, kind: .diffusion,
-            servedModels: .diffusionGemma,
-            availability: .unavailable(
-                "OPENJEV_BACKEND=mlx: DiffusionGemma on MLX is not in this build yet; issue #29 "
-                    + "brings it (\(issue(29)))")),
+            servedModels: .diffusionGemma, availability: mlx),
         Backend(
             name: "laya", modelName: KnownEncoderModels.laya.name, kind: .encoder,
             servedModels: .encoder(KnownEncoderModels.laya), availability: laya),
@@ -131,6 +126,35 @@ struct BackendRegistry: Sendable {
             name: "verdict", modelName: KnownEncoderModels.verdict.name, kind: .encoder,
             servedModels: .encoder(KnownEncoderModels.verdict), availability: verdict),
     ])
+
+    /// DiffusionGemma on MLX (D-039): the checkpoint `OPENJEV_MLX_MODEL` names, a directory or a
+    /// Hub repository resolved in the Hugging Face cache the environment names, with `HF_TOKEN`.
+    /// The runtime warms itself up when `OPENJEV_WARMUP` asks.
+    private static var mlx: Backend.Availability {
+        #if canImport(OpenJevDiffusionGemma)
+            return .available { environment, willWarmUp in
+                DecisionBackendProvider { settings in
+                    try await DiffusionGemmaRuntime.load(
+                        ModelSource(setting: settings.mlxModel),
+                        configuration: .init(
+                            maxPromptTokens: settings.mlxMaxPrompt,
+                            promptCacheEntries: settings.mlxPromptCache,
+                            cacheLimitGB: settings.mlxCacheLimitGB, warmUp: settings.warmup),
+                        cache: HubCacheLocation(environment: environment),
+                        token: HubCacheLocation.token(environment: environment),
+                        progress: { stage in
+                            if case .warmingUp = stage {
+                                willWarmUp()
+                            }
+                        })
+                }
+            }
+        #else
+            return .unavailable(
+                "OPENJEV_BACKEND=mlx: DiffusionGemma runs on MLX, which needs Apple silicon; "
+                    + "serve it from a Mac")
+        #endif
+    }
 
     /// Verdict on Core ML (D-011, D-034): the package from the store that `OPENJEV_ENCODER_MODELS`
     /// points at a folder of converted packages, or from the release downloads (D-033).

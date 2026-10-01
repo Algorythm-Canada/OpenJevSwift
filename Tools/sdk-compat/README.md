@@ -3,7 +3,7 @@
 "TypeSafe's SDKs work unchanged" is upstream's headline claim. This suite runs those SDKs, as an
 application would use them, against the Swift server, and fails when one of them cannot decode an
 answer, maps an error to the wrong class, or retries differently. The CI job `SDK compatibility`
-runs it on Linux on every pull request (decision D-039,
+runs it on Linux on every pull request (decision D-040,
 [docs/development.md](../../docs/development.md)).
 
 ## What runs
