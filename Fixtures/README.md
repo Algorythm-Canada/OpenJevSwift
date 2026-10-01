@@ -56,12 +56,14 @@ THIRD_PARTY.md, the scripts and that test together, then regenerate.
 | [distributions/](distributions/README.md) | Synthetic log-probability maps and the probabilities, entropies, confidences, answers and averages they give | `upstream_tables.py` | #16, #17 |
 | [policies/](policies/README.md) | Requests with `samples`, `steps`, `think`, `sequential` and images, and every read the engine makes for them | `upstream_tables.py` | #17 |
 | [errors/](errors/README.md) | Error responses that `wire/cases.json` does not hold, and an index of every error row in the wire contract | `upstream_tables.py` | #35, #38 |
+| [encoders/](encoders/README.md) | PyTorch reference reads of Verdict and Laya through upstream's own code (float32, with float16 and bfloat16 passes), and the question corpus they cover | `Tools/encoders/reference.py` | #56, #57, #58 |
 | [model/](model/README.md) | The checkpoint's `config.json` and `generation_config.json` verbatim, and its safetensors weight map | `checkpoint_tables.py` | #23, #27 |
+| [oracle/](oracle/README.md) | mlx-vlm 0.6.15 reads of the 4-bit checkpoint through upstream's `MlxRuntime.read`: slot logprobs, distributions, written argmaxes, prompt ids, prefill cache digests and the full-attention RoPE table | `mlx_vlm_oracle.py` | #22, #31 |
 | [wire/](wire/README.md) | HTTP exchanges, answer bodies, request renderings and `/v1/models` listings, recorded with a stand-in tokenizer | `wire_tables.py` | #5, #35 |
 | [python-json/](python-json/README.md) | CPython `json.dumps` and float `repr` tables, and how `json.loads` ends on valid and malformed documents. These record the Python version, not the upstream commit. | `python_json_tables.py` | #3, #35 |
 
 `/v1/models` bodies for every backend are in `wire/models.json`, not in a `models.json` at this
-level. Model parity data from mlx-vlm (layer 2, issue #31) will also live here.
+level. Model parity data from mlx-vlm (layer 2) is in `oracle/`; issue #31 widens it.
 
 ### Replaying tokenization without the tokenizer
 

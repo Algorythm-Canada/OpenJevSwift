@@ -1182,3 +1182,68 @@ Decision.
    the package's macOS 14 floor, and this keeps their registration one line.
 
 Status. Proposed with issue #57.
+
+## D-035 DiffusionGemma text blocks and weight loading: where the port goes beyond or differs from the issue text
+
+Context. Issues #24 and #27 port mlx-vlm 0.6.15's text blocks (`language.py` lines 23 to 330)
+and its weight loading (`diffusion_gemma.py` lines 346 to 401) into
+`Sources/OpenJevDiffusionGemma/Model/`, on the configuration of D-032. The reference is spike
+#22's transliteration (`Tools/oracle/UpstreamProbe/Sources/Transliteration/Model.swift`), which
+matched mlx-vlm bit for bit; the library keeps its operations, order, shapes and dtypes, under the
+checkpoint's module names.
+
+Decision.
+
+1. **What the blocks reuse from mlx-swift-lm (D-004), and what they do not.** Reused: MLXNN's
+   `Linear`, `Embedding`, `RMSNorm` and their quantized forms; `MLXFast.RoPE` with explicit
+   frequencies, `MLXFast.rmsNorm` with `MLXArray.mlxNone` and `scaledDotProductAttention`;
+   mlx-swift-lm's `SwitchLinear`, `QuantizedSwitchLinear`, `gatherSort` and `scatterUnsort`
+   (the experts sort at 64 assignments or more, as `switch_layers.py`); and
+   `loadWeights(modelDirectory:model:perLayerQuantization:)` with `BaseConfiguration`'s per-layer
+   map. Not reused: `Gemma4TextRouter` (it folds the scale into the norm weight and uses a plain
+   softmax, which rounds differently), `Gemma4TextExperts` and `SwitchGLU` (the checkpoint fuses
+   gate and up into one 1,408-output `gate_up_proj`), `ProportionalRoPE` (it rotates a slice;
+   mlx-vlm rotates the whole head with infinite frequencies), and Gemma 4's fused norms and
+   compiled expert sum. The GeGLU and the float32 softcap are compiled shapeless, as mlx-vlm
+   compiles them.
+2. **Strict loading.** `DiffusionGemmaModel.load(from:)` first reads only the shard headers:
+   it applies `sanitizedName(_:)`, quantizes the lazy tree where the checkpoint (or its index)
+   has a module's `.scales`, as `loadWeights` decides, and requires the tree's parameters and the
+   tensors to be the same names with the same shapes. A mismatch is a
+   `WeightLoadingError.coverage` whose description names the first missing tensor with the shard
+   the index places it in, the first unexpected tensor with its shard, and the first shape
+   mismatch. Only then does `loadWeights` read the 16.5 GB, update with `verify: .all` and
+   evaluate. A shard the index names but the directory lacks makes its tensors missing;
+   `loadWeights` alone would have fallen back to other files.
+3. **Sanitize is text-only.** The tree has no vision tower, so `model.encoder.vision_tower.*`
+   and `model.encoder.embed_vision.*` are dropped with `rotary_emb`, `lm_head.weight` and the
+   encoder's non-scalar text weights; the bare-expert rename is kept, a no-op for this
+   checkpoint. Of the 1,647 tensors, 358 are dropped (355 vision tower, 3 embedder) and 1,289
+   load. The vision path keeps mlx-vlm's `.linear.` names when it arrives. The text tree has 299
+   quantized modules; the checkpoint has 300 `.scales`, the 300th being the embedder's.
+4. **The lazy coverage check works.** The real-size tree built from Fixtures/model/config.json
+   and quantized adds 26 MB of resident memory, because MLX arrays are lazy, so the model-free
+   test compares its parameter names and shapes with the sanitized weight map directly. No
+   fallback from the configuration was needed.
+5. **The exact-tier hook.** `Attention.fullAttentionFrequencies` exposes the full-attention RoPE
+   table, computed with MLX `pow` at init as mlx-vlm computes it at load time; the exact tier
+   installs the oracle's `rope` table there. The test helper `MetalLibrary.configure()` takes
+   `OPENJEV_MLX_METALLIB` when set, and inside Xcode's test host it takes effect: with the wheel's
+   metallib and the oracle's table, layers 0 to 5 of a one-piece prefill are bit-identical to
+   mlx-vlm on all 37 recorded stages of both stage dumps (quickstart/g0, 182 tokens;
+   indexed_12_mixed/g0, 1,572 tokens with the window mask). Under native kernels the stage
+   bounds are twice the measured differences, which grow with depth as last-bit router changes
+   flip experts.
+6. **The self-conditioning placeholder.** `model.decoder.self_conditioning` holds its four
+   modules' parameters so that the tree's key set is the checkpoint's; its forward pass is #28's.
+7. **The one-piece prefill** (`prefill(_:)` and `prefill(embeddings:layers:stages:)`) runs
+   every layer in encoder mode at offset 0 with the encoder's scalars and `.causal` masks, or the
+   boolean band for sliding layers past the window, and returns one `LayerCache` per layer. The
+   stage observer, a closure passed in, replaces the transliteration's global recorder. #25 owns
+   the prefill API.
+8. **Concurrency.** The new value types (errors, metrics, load stages, the checkpoint header
+   table) are Sendable. The module tree, the caches and `LoadedModel` hold MLX arrays and are not;
+   their callers serialise them, as the transliteration's did. The MLX test suites are nested in
+   one serialized parent suite.
+
+Status. Proposed with issues #24 and #27.

@@ -32,9 +32,11 @@ OpenJevSwift/                          Swift package, tools 6.2, strict concurre
       Images/        Data-URL and {content_type, base64} validation (no decoding of pixels)
     OpenJevDiffusionGemma/             Apple silicon only. Depends on mlx-swift, MLXLMCommon,
                                        MLXVLM (Gemma 4 vision), swift-transformers Tokenizers.
-      Model/         Configuration (exists: config.json decoding, #23), TextBlock, Attention,
-                     Router, Experts, SelfConditioning, Encoder, Decoder, Softcap,
-                     WeightLoading (sanitize, quantization map)
+      Model/         Configuration (config.json decoding, #23); Norms, Attention, DenseMLP,
+                     Router, Experts, DecoderLayer, LayerCache, Softcap (text blocks, #24);
+                     ModelTree (decoder, encoder scalars, root with sanitize and a one-piece
+                     prefill) and WeightLoading (strict coverage, loadWeights, metrics) (#27);
+                     self-conditioning's forward pass (#28), decoder read pass (#26)
       Runtime/       DiffusionGemmaRuntime actor: prefill cache, read(), think(), generate()
       Tokenization/  Tokenizer adapter, chat prompt builder, label discovery hookup
       Vision/        Processor parity, pixel embedding, block ids (later milestone)
