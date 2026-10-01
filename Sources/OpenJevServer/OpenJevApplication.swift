@@ -15,26 +15,23 @@
     public enum OpenJevApplication {
         /// The routes over a loaded service, behind upstream's `request_id_and_auth` in its
         /// order: the request log, the headers middleware, then authentication and the body cap
-        /// for `/v1/`. A server's count of its requests in flight runs just inside the log. Requests are not watched for clients that go away;
+        /// for `/v1/`. Requests are not watched for clients that go away;
         /// ``application(settings:service:logger:onServerRunning:)`` builds a server that watches
         /// them.
         public static func router(
             settings: ServerSettings, service: any SystemOneService
         ) -> Router<OpenJevRequestContext> {
-            router(settings: settings, service: service, connections: nil, inFlight: nil)
+            router(settings: settings, service: service, connections: nil)
         }
 
         /// The routes, cancelling the decision of a client that goes away when its connection is
-        /// in `connections`, and counting each request in `inFlight` when there is one.
+        /// in `connections`.
         static func router(
             settings: ServerSettings, service: any SystemOneService,
-            connections: ConnectionRegistry?, inFlight: RequestsInFlight?
+            connections: ConnectionRegistry?
         ) -> Router<OpenJevRequestContext> {
             let router = Router(context: OpenJevRequestContext.self)
             router.add(middleware: RequestLogMiddleware())
-            if let inFlight {
-                router.add(middleware: InFlightMiddleware(requests: inFlight))
-            }
             router.add(middleware: ResponseHeadersMiddleware())
             router.add(
                 middleware: AuthenticationMiddleware(
@@ -75,20 +72,29 @@
             onServerRunning: @escaping @Sendable (_ port: Int) async -> Void
         ) -> Application<RouterResponder<OpenJevRequestContext>> {
             Application(
-                router: router(
-                    settings: settings, service: service, connections: connections,
-                    inFlight: inFlight),
-                server: .http1(
-                    configuration: HTTP1Channel.Configuration(
-                        additionalChannelHandlers: [
-                            ClientDisconnectHandler(registry: connections)
-                        ])),
+                router: router(settings: settings, service: service, connections: connections),
+                server: server(connections: connections, inFlight: inFlight),
                 configuration: ApplicationConfiguration(
                     address: .hostname(settings.host, port: settings.port)),
                 onServerRunning: { channel in
                     await onServerRunning(channel.localAddress?.port ?? settings.port)
                 },
                 logger: logger)
+        }
+
+        /// The HTTP/1 server: every connection is watched for its client going away and joins
+        /// `connections`, and every request counts in `inFlight` until its response is written.
+        static func server(
+            connections: ConnectionRegistry, inFlight: RequestsInFlight
+        ) -> HTTPServerBuilder {
+            HTTPServerBuilder { responder in
+                HTTP1Channel(
+                    responder: inFlight.counting(responder),
+                    configuration: HTTP1Channel.Configuration(
+                        additionalChannelHandlers: [
+                            ClientDisconnectHandler(registry: connections)
+                        ]))
+            }
         }
     }
 

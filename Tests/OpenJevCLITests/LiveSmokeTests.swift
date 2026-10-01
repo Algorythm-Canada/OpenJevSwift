@@ -35,6 +35,8 @@
                 EncoderPackageStore.localModelsVariable: VerdictFiles.modelsDirectory.path,
             ])
             let child = try BuiltBinary.Child(arguments: ["serve"], environment: environment)
+            // Whatever fails below, the server does not outlive the test.
+            defer { child.terminateIfRunning() }
             let clock = ContinuousClock()
             let deadline = clock.now + .seconds(120)
             var port: Int?

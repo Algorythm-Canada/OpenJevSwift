@@ -2,10 +2,14 @@
 
 #if canImport(Hummingbird)
     import Foundation
-    import Hummingbird
+    import HummingbirdCore
 
     /// The requests one server is answering, so that a shutdown that has to cancel the server can
     /// tell whether it cut any of them short.
+    ///
+    /// A request counts from when Hummingbird hands it to the responder until its response has
+    /// been written to the connection (``counting(_:)``), so a response still being written to a
+    /// slow client counts too.
     final class RequestsInFlight: @unchecked Sendable {
         // Guarded by `lock`.
         private let lock = NSLock()
@@ -41,22 +45,18 @@
                 }
             }
         }
-    }
 
-    /// Counts each request in ``RequestsInFlight`` while the middlewares and the route handle it.
-    /// It runs just inside ``RequestLogMiddleware``, outside every other middleware.
-    struct InFlightMiddleware: RouterMiddleware {
-        typealias Context = OpenJevRequestContext
-
-        let requests: RequestsInFlight
-
-        func handle(
-            _ request: Request, context: Context,
-            next: (Request, Context) async throws -> Response
-        ) async throws -> Response {
-            requests.enter()
-            defer { requests.leave() }
-            return try await next(request, context)
+        /// `responder`, with each request counted while it runs: Hummingbird's responder routes
+        /// the request and then writes the response, and returns once the connection has taken
+        /// the last part.
+        func counting(
+            _ responder: @escaping HTTPChannelHandler.Responder
+        ) -> HTTPChannelHandler.Responder {
+            { request, writer, channel in
+                self.enter()
+                defer { self.leave() }
+                try await responder(request, writer, channel)
+            }
         }
     }
 #endif

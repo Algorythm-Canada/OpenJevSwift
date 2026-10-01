@@ -149,6 +149,14 @@
             guard let watch else {
                 return try await body()
             }
+            // Start no work for a request already cancelled, or a client already gone: a backend
+            // call may not be interruptible once it has begun.
+            if Task.isCancelled {
+                throw CancellationError()
+            }
+            if watch.isClosed {
+                throw ClientDisconnected()
+            }
             return try await withThrowingTaskGroup(of: Outcome<T>.self) { group in
                 group.addTask { .finished(try await body()) }
                 group.addTask {

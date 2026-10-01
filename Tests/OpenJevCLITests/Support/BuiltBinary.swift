@@ -103,6 +103,13 @@ enum BuiltBinary {
         func terminate() {
             process.terminate()
         }
+
+        /// Sends SIGTERM unless the process has exited, for a test's cleanup on every path.
+        func terminateIfRunning() {
+            if process.isRunning {
+                process.terminate()
+            }
+        }
     }
 
     /// Runs the binary to its end.
