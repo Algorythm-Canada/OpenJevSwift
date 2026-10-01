@@ -77,6 +77,8 @@ OpenJevSwift/                          Swift package, tools 6.2, strict concurre
                                        model routes against an in-process routed server
     OpenJevCLITests/                   Parsing, the commands in-process with stub backends, the
                                        built binary as a child process; opt-in Verdict smoke test
+    OpenJevLiveTests/                  Upstream's test_live.py over URLSession against a running
+                                       server of either implementation; opt-in (OPENJEV_LIVE_URL)
   Tools/
     fixtures/                          Python: generate golden fixtures from pinned upstream
     encoders/                          Python and Swift: Verdict's and Laya's reference outputs,

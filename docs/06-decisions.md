@@ -1955,3 +1955,93 @@ changes (0.2 s once Core ML has cached it, spike #56), which stays to be measure
 on the Neural Engine.
 
 Status. Proposed on 2026-10-01, from issue #61's runs.
+
+## D-043 Live end-to-end suite: where the port goes beyond or differs from the issue text
+
+Context. Issue #41 asks for an opt-in suite (`OPENJEV_LIVE_URL`, optional `OPENJEV_LIVE_KEY`,
+`OPENJEV_ORIGIN_SECRET`, and `OPENJEV_LIVE_GATEWAY=1` for a gateway that strips `server-timing`)
+that mirrors upstream's `tests/test_live.py`: the README example in Jev's shapes with sensible
+values, a 255-option choice, many questions chunked and answered in order, an unknown model's 400
+`api_usage_error`, 16 concurrent reads, the read options, images, chat and stream as their
+milestones land, the encoder models `/v1/models` lists, and the `server-timing` and request-id
+headers. It is to pass against `openjev serve` with the 4-bit checkpoint on the reference machine
+and against upstream's Python server, which shows that the suite itself is neutral. Several points
+needed choices the issue does not spell out.
+
+Decision.
+
+1. **A Swift Testing target over URLSession.** `OpenJevLiveTests` depends on `OpenJevCore` alone,
+   for `JSONValue`, `JSONParser` and `PythonJSONWriter`, which keep key order: the order of the
+   questions and of a choice's options is part of the contract. It sends its requests with
+   Foundation's URLSession (FoundationNetworking on Linux), so it builds and runs on macOS and
+   Linux and links no server and no backend. It stays out of the iOS scheme, although it would
+   compile there: it tests a server, not the iOS build.
+2. **The variables.** `OPENJEV_LIVE_URL` names the server; unset or empty, every test skips with a
+   comment naming it, which CI's test log check accepts, and a value that is not an `http` or
+   `https` URL with a host fails the tests instead. The bearer key is `OPENJEV_LIVE_KEY`, the
+   issue's name, else `OPENJEV_API_KEY`, upstream's, so a shell that configured a server with its
+   key runs either suite unchanged. `OPENJEV_ORIGIN_SECRET` goes as `X-Origin-Secret`, and
+   `OPENJEV_LIVE_GATEWAY=1`, exactly `1` as upstream compares it, drops the `server-timing` check
+   and nothing else.
+3. **Upstream's names, in upstream's order.** Each test's display name is the name of the upstream
+   test it ports, and the suite runs them one at a time, as pytest does. `test_read_options` is one
+   test with three arguments, `steps 4`, `samples 4` and `sequential true`. `test_encoder` is four
+   tests, `test_encoder[laya-1.0]`, `[verdict-1.4]`, `[clm-v0.1]` and `[jevk5-0.2]`, upstream's
+   four models rather than the two this port serves: a Swift Testing condition decides for a whole
+   test, and Swift 6.2, the Linux job's toolchain, has no `Test.cancel` to skip one argument.
+4. **What decides a skip.** As upstream's fixtures do, the server's `/v1/models`, asked once per
+   process, decides: the DiffusionGemma tests run when it lists `openjev-latest`, an encoder's test
+   when it lists that model, and `test_unknown_model` always. A listing that cannot be read fails
+   those tests rather than skipping them, as a failed fixture errors them in pytest. `test_image`,
+   `test_think`, `test_chat` and `test_chat_stream` are disabled with comments naming #48, #52 and
+   #53. Their bodies are upstream's checks, ready to enable once the features land, and they passed
+   against upstream's server (Consequences); `test_image` reads `hotdog.jpg` from the pinned
+   checkout, since no image of its 13 KB is committed here. Every skip comment names
+   `OPENJEV_LIVE_URL`.
+5. **Checks beyond upstream's.** On every response to `POST /v1/systemone`, errors included,
+   `server-timing` must time the `model`, `server` and `total` spans, where upstream only asks that
+   it be there, and `x-request-id` must be `req_` and 32 lowercase hex characters and equal
+   `x-typesafe-request-id` ([02-jev-wire-api.md](02-jev-wire-api.md)), behind a gateway too: a
+   gateway that rewrites the request id fails the suite, and none was run here. Every answer must have Jev's
+   shape for its question: the answers in the questions' order; a noul `{type, noul}`, a choice
+   `{type, choice, probabilities, confidence}` over its options in their order and a score
+   `{type, score, legend, probabilities, confidence}` with its levels as the legend; every
+   probability, noul and confidence in [0, 1] and a score in [0, n - 1]; `model` a name the listing
+   holds and never the `openjev-latest` alias; `usage.input_tokens` above 0 and `output_tokens` 0
+   unless the request thought. The issue's "in order" for the chunked questions is that order
+   check. `test_unknown_model` also checks the body's `detail.error_type`, `api_usage_error`, and
+   its message, as `Fixtures/wire` records them, and `test_concurrent_reads` the headers and shapes
+   of all 64 answers and that their request ids differ.
+6. **The concurrency is upstream's, not the issue's.** The issue says 16 concurrent reads; upstream
+   sends 64 requests with at most 32 in flight, and so does this suite. URLSession opens at most 6
+   connections to one host by default, which would cap the requests in flight, so the client allows
+   32.
+7. **httpx's timeouts.** Upstream's client sets `timeout=300`: 300 s to connect and for each read
+   and write, with no deadline for the whole exchange. URLSession's request timeout is that kind of
+   limit and is set to 300 s; its resource timeout keeps its default. One difference remains:
+   URLSession follows a redirect, which httpx does not by default. Neither server redirects.
+8. **The runs are recorded in the pull request.** Like the model tests, the suite never runs on
+   hosted CI. The pull request records each run (server, backend, model, tests passed and skipped,
+   wall time) and the runs of upstream's own file, with pytest and httpx, against the Swift
+   servers.
+
+Alternatives rejected. (a) AsyncHTTPClient, which the server already links: the suite would share
+the server's HTTP stack instead of a plain client, and URLSession needs no package. (b) Upstream's
+pytest file as the port: `swift test` runs this suite, and the checks beyond upstream's would have
+had to be patched into upstream's file. (c) Committing `hotdog.jpg`: the fixtures keep images to a
+few kilobytes, and the test waits for #48 anyway. (d) `Test.cancel` for the listing-dependent
+skips: Swift 6.2 lacks it, and a skip decided before the test starts reads better in the log.
+
+Consequences. On an M3 Max with macOS 27.0.1 and Xcode 27.0, the suite passed against the Swift
+server's release build on the three backends it serves, Verdict, Laya and the DiffusionGemma 4-bit
+checkpoint, and unchanged against upstream's Python server at `dcd2094` on the same three, with an
+API key and an origin secret required as well as without: the suite does not depend on the
+implementation it tests. With its four waiting tests enabled in a local build, it passed against
+upstream's MLX server too, so their bodies are ready for #48, #52 and #53. Upstream's own file
+passed against the Swift encoder servers. Against the Swift DiffusionGemma server it failed only
+those four: images and `think` get a 400 (`openjev-0.1 does not support images`, and `think`)
+until #48 and #52, and both chat tests a 404 until #53. The chat tests run there instead of
+skipping because the Swift listing names `diffusiongemma-26b`, as upstream's does; the listing
+stays upstream's (`Fixtures/wire/models.json`), so that difference lasts until #53.
+
+Status. Proposed with issue #41.

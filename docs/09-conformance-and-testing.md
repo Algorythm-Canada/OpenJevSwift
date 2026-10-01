@@ -115,9 +115,23 @@ sanity, thought channel never leaking.
   `models`. Its smoke test serves Verdict from the binary on an ephemeral port, sends Jev's
   quickstart request, compares `openjev decide`'s bytes and stops the server with SIGTERM;
   opt-in via `OPENJEV_ENCODER_MODELS`, like the encoder tests.
-- **Live server tests.** A port of upstream's `test_live.py` against a running server with the
-  real model: README example, 255 options, chunked reads, unknown model, concurrent reads, chat and
-  stream when generation exists, encoder models when listed. Opt-in via `OPENJEV_LIVE_URL`.
+- **Live server tests.** `OpenJevLiveTests` (issue #41, D-043) ports upstream's
+  `tests/test_live.py` case by case and under its test names: plain HTTP through URLSession to
+  whatever server `OPENJEV_LIVE_URL` names, Swift or Python, any backend, from macOS or Linux.
+  Without the variable every test skips. The DiffusionGemma tests
+  run when the server lists `openjev-latest`: the README example (urgent, `outage`, a tone above
+  1), `steps 4`, `samples 4` and `sequential true`, a 255-option choice, 30 questions answered in
+  chunks and in order, and 64 requests with 32 in flight. `test_encoder` runs for each of
+  `laya-1.0`, `verdict-1.4`, `clm-v0.1` and `jevk5-0.2` the server lists, and the unknown model's
+  400 `api_usage_error` against every server. Beyond upstream's checks, every decision response
+  must carry `server-timing` (unless `OPENJEV_LIVE_GATEWAY=1`) and the same `req_` id in
+  `x-request-id` and `x-typesafe-request-id`, and every answer must have Jev's shape for its
+  question. The image,
+  `think`, chat and stream tests skip, naming #48, #52 and #53. Like the model tests, the runs are
+  recorded in the pull request: the suite passes against the Swift server on Verdict, Laya and the
+  DiffusionGemma 4-bit checkpoint and, unchanged, against upstream's Python server on the same
+  three, which shows that the suite itself is neutral.
+  [development.md](development.md#the-live-suite) has the commands, upstream's own file included.
 - **JevBench.** `Tools/jevbench` (issue #61, D-041) runs JevBench v1's 231 public items, and the 102
   TypeSafe public-evaluation rows SemIf compares with Jev, against any `/v1/systemone` server, one
   request per item through the benchmark's own adapter, and scores them with the benchmarks' own
