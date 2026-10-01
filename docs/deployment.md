@@ -44,20 +44,20 @@ without the encoder backends, so `verdict` exits 3 there.
 Verdict needs its converted Core ML package (`verdict-m18-fp16`, 306 MB) and the checkpoint's
 tokenizer and calibrator (D-033):
 
-- **The package.** Until its GitHub release is published, downloads are off and the server
-  refuses to load with `remote files for verdict-m18-fp16 are not yet published; set
-  OPENJEV_ENCODER_MODELS to a local models folder`. Convert it once with
+- **Downloaded on first start.** With `OPENJEV_ENCODER_MODELS` unset, the first start downloads
+  the package from the `verdict-m18-fp16-v1` release of `Algorythm-Canada/openjev-models`, and
+  the tokenizer and calibrator from `heman10x/rlcd-modernbert-151m` at `8af2496`, into
+  `~/Library/Application Support/OpenJevSwift/encoders/verdict-m18-fp16/` of the user the server
+  runs as. Every file's size and SHA-256 are checked against the manifest the binary embeds, and a
+  later start downloads only what is missing or changed. The server binds its port once the files
+  are there and the model has loaded.
+- **A local folder.** For a Mac without network access, or a package converted with
   `Tools/encoders/convert_verdict.py` ([Tools/encoders/README.md](../Tools/encoders/README.md)),
-  which writes `~/Library/Caches/OpenJevSwift/encoders/verdict-m18-fp16.mlpackage`, copy that
-  folder to the server, and set `OPENJEV_ENCODER_MODELS` to the folder that holds it. Once the
-  release exists, leave the variable unset: the first start downloads the package to
-  `~/Library/Application Support/OpenJevSwift/encoders` and checks every file's SHA-256.
-- **The tokenizer and calibrator.** With `OPENJEV_ENCODER_MODELS` set, they are read from
+  set `OPENJEV_ENCODER_MODELS` to the folder that holds `verdict-m18-fp16.mlpackage`; nothing is
+  downloaded then. The tokenizer and calibrator are read from
   `$OPENJEV_ENCODER_MODELS/verdict-m18-fp16/tokenizer/` when that folder holds them, else from
-  the Hugging Face cache snapshot of `heman10x/rlcd-modernbert-151m` at `8af2496`, which
-  `Tools/encoders/reference.py` downloads: `HF_HUB_CACHE`, else `HF_HOME/hub`, else
-  `XDG_CACHE_HOME/huggingface/hub`, else `~/.cache/huggingface/hub`. With downloads on, they
-  come with the package and are checked the same way.
+  the Hugging Face cache snapshot of the checkpoint at its pinned revision: `HF_HUB_CACHE`, else
+  `HF_HOME/hub`, else `XDG_CACHE_HOME/huggingface/hub`, else `~/.cache/huggingface/hub`.
 
 The first start compiles the package and keeps the result beside it
 (`verdict-m18-fp16.mlmodelc`); later starts reuse the compiled copy until the package changes.
@@ -81,7 +81,7 @@ The server reads upstream's `OPENJEV_*` variables, with upstream's defaults and 
 | `OPENJEV_MAX_BODY_BYTES` | `67108864` | Request body limit before a 413. |
 | `OPENJEV_WARMUP` | `1` | `0` skips the warm-up read before the server opens. |
 | `OPENJEV_LOG_LEVEL` | `info` | `trace`, `debug`, `info`, `notice`, `warning`, `error` or `critical`. |
-| `HF_HOME`, `HF_HUB_CACHE` | unset | Where the Hugging Face cache is, for the tokenizer. |
+| `HF_HOME`, `HF_HUB_CACHE` | unset | Where the Hugging Face cache is, for the tokenizer of a local folder. |
 
 The DiffusionGemma settings (`OPENJEV_MLX_MODEL`, `OPENJEV_MLX_CACHE_LIMIT_GB`, `OPENJEV_CANVAS`
 and the others in upstream's table) are read and checked already and apply once #29 lands.
@@ -104,7 +104,7 @@ every variable (D-030).
 ## Run it by hand
 
 ```bash
-OPENJEV_BACKEND=verdict OPENJEV_ENCODER_MODELS=~/Library/Caches/OpenJevSwift/encoders openjev serve
+OPENJEV_BACKEND=verdict openjev serve
 ```
 
 From another terminal:
@@ -127,8 +127,8 @@ Ctrl-C stops the server gracefully.
 ## launchd
 
 A LaunchDaemon starts the server at boot, before anyone logs in, and restarts it when it fails.
-Run it as an ordinary user that owns the model files, here `openjev`. Save this as
-`/Library/LaunchDaemons/local.openjev.serve.plist`:
+Run it as an ordinary user, here `openjev`, whose Application Support folder receives the model.
+Save this as `/Library/LaunchDaemons/local.openjev.serve.plist`:
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -154,10 +154,6 @@ Run it as an ordinary user that owns the model files, here `openjev`. Save this 
         <string>8080</string>
         <key>OPENJEV_API_KEY</key>
         <string>replace-with-a-long-random-key</string>
-        <key>OPENJEV_ENCODER_MODELS</key>
-        <string>/Users/openjev/models</string>
-        <key>HF_HOME</key>
-        <string>/Users/openjev/.cache/huggingface</string>
     </dict>
     <key>UserName</key>
     <string>openjev</string>
@@ -227,7 +223,7 @@ Everything goes to standard error, one line per event, as swift-log writes it:
 `{time} {level} openjev: [{module}] {message}`. A start and one request look like this:
 
 ```text
-2026-10-01T11:51:53-0400 info openjev: [openjev] settings: host=0.0.0.0 port=8080 backend=verdict log_level=info warmup=on max_queue=512 max_questions=256 max_body_bytes=67108864 encoder_batch=16 encoder_models=/Users/openjev/models api_key=set origin_secret=unset model_routes=none
+2026-10-01T11:51:53-0400 info openjev: [openjev] settings: host=0.0.0.0 port=8080 backend=verdict log_level=info warmup=on max_queue=512 max_questions=256 max_body_bytes=67108864 encoder_batch=16 encoder_models=downloads api_key=set origin_secret=unset model_routes=none
 2026-10-01T11:51:53-0400 info openjev: [openjev] loading verdict-1.4 (OPENJEV_BACKEND=verdict)
 2026-10-01T11:51:55-0400 info openjev: [openjev] warming up
 2026-10-01T11:51:56-0400 info openjev: [HummingbirdCore] Server started and listening on 0.0.0.0:8080
@@ -273,7 +269,7 @@ wait short.
 | 0 | Success; for `serve`, a clean shutdown | SIGTERM with no request left |
 | 1 | Any other failure | the address is in use; a shutdown that cancelled requests; `decide` whose backend failed during the read (it prints the 503 body) |
 | 2 | Invalid settings or command line; the message names the variable | `openjev: OPENJEV_PORT='eighty' is not a int`; `openjev: unknown backend 'vllm'; use one of mlx, laya, verdict (OPENJEV_BACKEND)` |
-| 3 | The backend cannot run: not in this build, or it failed to load | `openjev: OPENJEV_BACKEND=mlx: DiffusionGemma on MLX is not in this build yet; issue #29 brings it (...)`; a missing package |
+| 3 | The backend cannot run: not in this build, or it failed to load | `openjev: OPENJEV_BACKEND=mlx: DiffusionGemma on MLX is not in this build yet; issue #29 brings it (...)`; a download that fails its checksum |
 | 4 | `decide` only: the request was refused (a 4xx or the 529) | an unknown model, a malformed body |
 
 A message goes to standard error, prefixed with `openjev:`. A command line the parser refuses
