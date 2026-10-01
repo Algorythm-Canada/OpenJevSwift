@@ -201,6 +201,15 @@ var targets: [Target] = [
         ],
         swiftSettings: swiftSettings
     ),
+    // The live end-to-end suite (issue #41), a port of upstream's tests/test_live.py: plain HTTP
+    // through Foundation's URLSession (FoundationNetworking on Linux) to whatever server
+    // OPENJEV_LIVE_URL names, so it links no server and no backend and runs on macOS and Linux
+    // alike. Without OPENJEV_LIVE_URL every test skips. It is not in the iOS scheme.
+    .testTarget(
+        name: "OpenJevLiveTests",
+        dependencies: ["OpenJevCore"],
+        swiftSettings: swiftSettings
+    ),
 ]
 
 // OpenJevDiffusionGemma runs on MLX, which needs Apple silicon, and OpenJevEncoders runs on Core
