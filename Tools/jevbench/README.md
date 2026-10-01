@@ -1,0 +1,145 @@
+# JevBench harness (issue #61)
+
+Runs JevBench v1's public items, and the TypeSafe subset SemIf compares with Jev, against any
+`/v1/systemone` server, scores the answers with each benchmark's own code and compares two runs of
+one model item by item. [docs/quality.md](../../docs/quality.md) holds the tables it produced for
+the Swift and upstream servers and what they mean; the decision behind its choices is D-040 in
+[docs/06-decisions.md](../../docs/06-decisions.md).
+
+| Path | What it is |
+|---|---|
+| `harness.py` | The runner and scorer: `fetch`, `run`, `summary`, `compare`, `published`, `report`. Standard library only |
+| `servers.py` | Starts the Swift or upstream server for one backend on a free port, records its versions, runs `harness.py` against it and stops it with SIGTERM |
+| `report.py` | Renders every table of docs/quality.md from `results/` |
+| `smoke_test.py` | The harness's own test: a fake server in the process, no model and no download. CI runs it |
+| `testdata/items.jsonl` | Seven items written for the smoke test, in JevBench's format |
+| `vendor/` | JevBench's and SemIf's scoring code, unchanged and pinned by SHA-256 ([vendor/README.md](vendor/README.md)) |
+| `requirements.txt` | Empty: the harness needs only Python's standard library |
+| `requirements-upstream.txt` | The complete lock of `.venv`, the environment upstream's server runs in |
+| `results/` | One file per run: `{model}-{server}.json` for JevBench, `typesafe102/{model}-{server}.json` for the TypeSafe rows |
+
+## The datasets
+
+Both are downloaded into a cache outside the repository (`~/Library/Caches/OpenJevSwift/jevbench`,
+or `JEVBENCH_CACHE`, or `--cache`) and checked by size and SHA-256 before use. Nothing of either
+is committed.
+
+- **`jevbench`**: the 231 public items of
+  [fstandhartinger/jevbench](https://github.com/fstandhartinger/jevbench) at `bb05a33`:
+  `datasets/public/easy.jsonl` (48), `original.jsonl` (72, the benchmark's "standard" tier) and
+  `hard.jsonl` (111). Their hashes are the ones the benchmark's own `datasets/manifest.json`
+  records. With them come `results/v1.2/jevbench-v1.2-per-task.json`, the
+  published outcome of every public item per system, and
+  `results/v1.4.2.2/jevbench-v1.4.2.2-results.json`, the newest board. MIT.
+- **`typesafe102`**: the 102 rows of [TypeSafe's public evaluations](https://evals.typesafe.ai/)
+  that [SemIf](https://github.com/TheoLeeCJ/SemIf-OpenJev) compares with Jev (its README, "TypeSafe
+  subset agreement"). SemIf's selection manifest at `23cf1f3` names the rows and pins each case
+  snapshot's parsed payload; the harness downloads the four snapshots
+  (`{workflow}-cases.js`, 1.4 MB together) from evals.typesafe.ai and rebuilds the rows with SemIf's
+  own `build_typesafe.py`, which checks those hashes. TypeSafe's snapshots carry no license grant,
+  so a result file keeps only ids, digests and the server's answers: no TypeSafe text, reference
+  answer or published distribution.
+
+## How an item becomes a request
+
+Through JevBench's own `typesafe` adapter, the one the benchmark uses for TypeSafe's API and every
+rebuild of it: one request per item, `{"state": <the item's state>, "model": <--model>,
+"questions": {"decision": {"type", "instructions", "criteria"}}}`, with `criteria` left out when
+the item has none and every object's key order kept. The state goes as the item has it, a string or
+an object. A noul answer is read as `{"yes": noul, "no": 1 - noul}`; a choice or score answer's
+`probabilities` are read as they are, and a choice whose `choice` is not one of the item's labels is
+a failed answer. A TypeSafe row sends TypeSafe's own question and document from the snapshot, as
+TypeSafe asked Jev, not SemIf's prompt rendering of them. Requests go one at a time, with the
+benchmark's 120-second timeout.
+
+An item whose question the model cannot take is **skipped**, never sent, and counted: more than 24
+options for `verdict-1.4` (its head has 25 logits, one kept for "insufficient evidence"), more than
+255 options or 10 levels for any model. Skipped items lower the coverage and stay out of the
+accuracy, as unattempted items do in the benchmark. No item of either dataset is skipped today:
+JevBench's widest choice has 6 options and the TypeSafe rows' 8. A 4xx other than 401, 403 or 429
+is a **refusal**: it is recorded with the server's detail and counts as a wrong answer, as the
+benchmark counts a failed decision. Three failures in a row, or a 401, 403 or 429, stop the run and
+leave the rest unattempted, as the benchmark's runner does, except that a refusal does not count
+towards the three (the runner exempts only a 422; D-040).
+
+## Scoring
+
+- **JevBench** (`vendor/jevbench`): `scoring.score_task` validates each distribution over the
+  item's exact labels (a sum within 1e-3, or rescaled inside the 2e-2 rounding band; anything else
+  is invalid and wrong) and takes the argmax, the smallest label on a tie. `summarize.metric` and
+  `summarize.summarize` then give the accuracy, the Brier score (the multi-class sum
+  `sum_k (p_k - y_k)^2`, so a binary question counts both outcomes), the ECE over 10 equal-width
+  bins of top-label confidence, the ordinal MAE of score items, paraphrase consistency and the
+  latency percentiles, overall, per family and per tier, exactly as the benchmark computes its
+  published numbers.
+- **TypeSafe rows** (`vendor/semif`): SemIf's `evaluate_external.type_safe`, the equal-case modal
+  agreement with the reference (each of the 20 cases weighs the same; the first option on a tie)
+  and the equal-case total variation from the reference distribution, for the run and for the Jev,
+  Opus and Sol answers the snapshots publish. JevBench's accuracy, Brier score and ECE are reported
+  beside them, with the reference's top option as the expected label.
+- **`compare A B`** takes two runs of one model and dataset, B as the reference: the top answers'
+  agreement, the mean and largest absolute probability difference per question type over every
+  label of every item both answered (spike #56's measure), identical answers, correctness flips with
+  an exact McNemar test, every disagreement with the reference's top-two margin, the items where
+  that margin is under 0.01 (where the parity bound of D-034 and D-037 allows a changed top answer),
+  the largest deviations and the items only one run answered.
+- **`published FILE`** compares a JevBench run with the benchmark's published row for the same
+  model: the outcome of every public item, both public accuracies, per tier, and the board's
+  aggregates. The rows were not produced the way this harness runs upstream's server;
+  `PUBLISHED_ROWS` in `harness.py` says how each was.
+
+## Running it
+
+From the repository root. The harness itself needs any `python3` (3.10 or later):
+
+```bash
+make upstream
+python3 Tools/jevbench/harness.py fetch
+python3 Tools/jevbench/smoke_test.py
+```
+
+Upstream's server needs its own environment, about 1 GB, and the two checkpoints at their pinned
+revisions in the Hugging Face cache (`Tools/encoders/reference.py` downloads them, or
+`servers.py` does on first use):
+
+```bash
+/usr/local/bin/python3.12 -m venv Tools/jevbench/.venv
+Tools/jevbench/.venv/bin/python -m pip install -r Tools/jevbench/requirements-upstream.txt
+```
+
+The Swift server is the release build (`swift build -c release --product openjev`). Then the four
+runs, each on both datasets, about five minutes in all on an M3 Max, more than half of it
+upstream's Laya on the CPU:
+
+```bash
+python3 Tools/jevbench/servers.py --server swift --backend verdict --encoder-models ~/Library/Caches/OpenJevSwift/encoders
+python3 Tools/jevbench/servers.py --server swift --backend laya --encoder-models ~/Library/Caches/OpenJevSwift/encoders
+python3 Tools/jevbench/servers.py --server upstream --backend verdict
+python3 Tools/jevbench/servers.py --server upstream --backend laya
+python3 Tools/jevbench/harness.py report
+```
+
+The DiffusionGemma runs, `--backend mlx`, wait for issue #31; their commands are in
+[docs/quality.md](../../docs/quality.md#diffusiongemma). `--encoder-models` names the folder the
+converters write to; without it the Swift server downloads
+the published packages (D-033), which have the same bytes (`Tools/encoders/manifest.py --check`,
+which `servers.py` runs and records). Add `--force` to replace earlier result files. Any other
+server: `python3 Tools/jevbench/harness.py run --base-url URL --model NAME --server LABEL
+[--dataset typesafe102] [--api-key-env VARIABLE]`, then `summary`, `compare` and `published` on the
+files it writes. `--ids a,b` runs only those items.
+
+## Result files
+
+`schema` `openjevswift-jevbench-result/1`: the dataset and its pins; the model; the server, with its
+`/v1/models` listing and the versions `servers.py` records (the last commit that changed
+OpenJevSwift's package, the binary's digest, the Core ML package and its check; upstream's commit,
+Python and package versions, device, dtype, thread count and checkpoint revision); the client (this
+harness's digest, the vendored files' digests); the hardware; the published row; the summary; and
+one line per item. An item holds its id, tier, family, type and labels (and, for JevBench, its
+paraphrase group and expected label), its status, the request (the model and question as sent, for
+JevBench; ids only, for TypeSafe; the state's and the body's SHA-256 always), the answer as the
+server sent it, the distribution JevBench scores, whether it is valid and (for JevBench, since a
+TypeSafe row's would give its reference answer away) correct, the published outcome where there is
+one, and the timing: the caller's time, the HTTP time and the server's `server-timing` header. The
+JevBench files are about 400 KB and the TypeSafe ones about 110 KB; a state is kept as its digest
+because the hard tier's states alone are 480 KB.

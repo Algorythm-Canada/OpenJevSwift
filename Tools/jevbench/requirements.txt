@@ -1,0 +1,5 @@
+# Tools/jevbench needs nothing outside Python's standard library (CPython 3.10 or later):
+# harness.py, servers.py, report.py and smoke_test.py import no other package, and neither does the
+# JevBench and SemIf code vendored under vendor/. This lock is empty on purpose, so any python3
+# runs the harness and CI needs no install step. Upstream's server has its own environment:
+# requirements-upstream.txt.
