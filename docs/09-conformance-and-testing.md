@@ -133,8 +133,14 @@ identity.
   swift-format. MLX unit tests on synthetic small shapes run there on the runner's GPU (issue #8
   and D-028).
 - Every job fails when a test skips for any reason other than an unset `OPENJEV_TEST_MODEL`,
-  `OPENJEV_ENCODER_MODELS` or `OPENJEV_LIVE_URL`, so a fixture test cannot stop testing without
-  failing.
+  `OPENJEV_ENCODER_MODELS`, `OPENJEV_LIVE_URL` or `OPENJEV_TEST_DOWNLOAD`, so a fixture test
+  cannot stop testing without failing.
+- `OPENJEV_TEST_DOWNLOAD=1` opts in to the one test that reaches the Hugging Face Hub: it
+  downloads the pinned 4-bit revision's `tokenizer_config.json` and `chat_template.jinja` into a
+  temporary cache in huggingface_hub's layout and checks their SHA-256 against
+  `Fixtures/tokenizer/special_tokens.json`. The downloader's other tests (layout, resume, digest
+  refusal, 401 and 404 messages, the token, local directories) run everywhere against a local
+  HTTP server the test starts, with no network.
 - A fixtures workflow regenerates every fixture from the pinned upstream commit and tokenizer and
   fails when the result differs from the committed files.
 - Model and live tests never run on hosted CI. They are run by developers with the weights and

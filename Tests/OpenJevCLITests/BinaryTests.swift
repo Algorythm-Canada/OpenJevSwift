@@ -42,17 +42,22 @@ struct BinaryTests {
         #expect(usage.errors.contains("Unknown option '--prot'"))
     }
 
-    @Test("A backend this build lacks exits 3 naming its issue")
-    func backendNotBuilt() async throws {
+    @Test("mlx over a directory that is not a checkpoint exits 3 naming what it lacks")
+    func mlxNotACheckpoint() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("openjev-not-a-checkpoint-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let environment = BuiltBinary.environment(["OPENJEV_MLX_MODEL": directory.path])
         let outcome = try await BuiltBinary.run(
-            ["serve", "--backend", "mlx"], environment: BuiltBinary.environment())
+            ["serve", "--backend", "mlx"], environment: environment)
         #expect(outcome.status == 3)
         #expect(outcome.errors.contains("OPENJEV_BACKEND=mlx"))
-        #expect(outcome.errors.contains("issue #29"))
+        #expect(outcome.errors.contains("config.json"))
         // mlx is the default backend, as upstream's settings have it in this port.
-        let byDefault = try await BuiltBinary.run(["serve"], environment: BuiltBinary.environment())
+        let byDefault = try await BuiltBinary.run(["serve"], environment: environment)
         #expect(byDefault.status == 3)
-        #expect(byDefault.errors.contains("issue #29"))
+        #expect(byDefault.errors.contains("config.json"))
     }
 
     @Test(

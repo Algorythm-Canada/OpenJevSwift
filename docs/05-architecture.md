@@ -221,19 +221,24 @@ is the oracle for the listings and the accepted names.
 The in-process, public entry point for apps:
 
 ```swift
-let model = try await OpenJev.DiffusionGemma.load(.fourBit)   // downloads or opens a local dir
-let engine = try DecisionEngine(backend: model, configuration: .default)
-let decision = try await engine.decide(SystemOneRequest(
-    model: "jev-latest",
-    state: "Everything is down and we have a demo at noon.",
-    questions: [
-        "urgent": .noul(instructions: "Does the customer need a reply within the hour?"),
-        "team":   .choice(instructions: "Which team should handle it?",
-                          criteria: ["outage": "service down", "billing": "charges, refunds"]),
-        "tone":   .score(instructions: "How upset is the customer?", criteria: ["calm", "annoyed", "furious"]),
-    ]))
-decision.answers["team"]?.choice   // "outage"
+let runtime = try await DiffusionGemmaRuntime.load(.fourBit)   // downloads or opens the cache
+let engine = try DecisionEngine(backend: runtime, configuration: .default)
+let request = try SystemOneRequest(json: JSONParser().parse("""
+    {"model": "jev-latest",
+     "state": "Everything is down and we have a demo with our biggest client at noon.",
+     "questions": {
+       "urgent": {"type": "noul", "instructions": "Does the customer need a reply within the hour?"},
+       "team": {"type": "choice", "instructions": "Which team should handle it?",
+                "criteria": {"outage": "service down", "billing": "charges, refunds",
+                             "feature": "requests, how-to"}},
+       "tone": {"type": "score", "instructions": "How upset is the customer?",
+                "criteria": ["calm", "annoyed", "furious"]}}}
+    """))
+let decision = try await engine.decide(request)
+decision.answers["team"]   // .choice(choice: "outage", ...), as measured on the 4-bit checkpoint
 ```
+
+`DiffusionGemmaRuntime.load(.directory(url))` opens a local checkpoint without network access.
 
 ## Engine flow (per request)
 
@@ -253,20 +258,56 @@ GPU parallelism (same as upstream's MLX backend).
 
 ## The DiffusionGemma runtime
 
-An `actor DiffusionGemmaRuntime: DecisionBackend`:
+`public actor DiffusionGemmaRuntime: DecisionBackend` (`Sources/OpenJevDiffusionGemma/Runtime/`,
+issue #29), upstream's `MlxRuntime` and `MlxEngine.one_read` in one actor:
 
-- Owns the model, tokenizer and caches. All MLX evaluation happens inside the actor, which gives
-  the single-thread discipline upstream enforces with a one-worker executor.
-- Prefill cache: LRU keyed by prompt token ids (or by system text, state text and image digests),
-  bounded by entries (default 12) and tokens (16,384), no exempt entry, hits move to the end.
-- `read`: prefill or hit → decoder masks → one or more decoder steps → float32 log-softmax of the
-  slot rows → top-20 plus labels. Between steps: argmax write-back at slot positions only,
-  self-conditioning from the previous logits.
-- `think` and `generate`: the diffusion generation loop (later milestone) with stop ids and
-  special-token skipping.
-- Memory controls: MLX GPU cache limit (`MLX.GPU.set(cacheLimit:)`), prefill cache budgets,
-  prompt length cap; memory statistics exposed for diagnostics.
-- Warmup: one small read after load so the first user does not pay kernel compilation.
+- Owns the model, the tokenizer and the prefill cache. Every MLX evaluation runs inside the
+  actor, one at a time, which gives the single-thread discipline upstream enforces with a
+  one-worker executor (R14). Only values cross it: `CanvasRead` in, `ReadResult` out.
+- Prefill cache: `PrefillCache<Value>`, generic so its eviction rule is tested without MLX, which
+  the runtime instantiates with `PromptCache`. Ordered and keyed by the prompt token ids (an image
+  key arrives with the vision milestone), bounded by entries (`promptCacheEntries`, default 12)
+  and tokens (`promptCacheTokens`, 16,384) with a running token total, no exempt entry (insert,
+  then evict oldest first while either budget is exceeded; the caller keeps what it was handed),
+  hits moved to the end, zero entries meaning no caching.
+- `read`: a token prompt longer than `maxPromptTokens` (32,768) is refused with upstream's
+  `SchemaError("the request is {n} tokens; the limit is {max}")` before anything runs, and an image
+  prompt with `DiffusionGemmaRuntimeError.unsupported("images")`; then the prefill or a cached one,
+  `model.read` over the canvas with the slots as `SlotRequest`s, `steps` passes and the top 20,
+  and `ReadOutput.readResult(for:)` with the prompt cache's token count.
+- Capabilities: steps, samples and sequential; not `think` (milestone 5) nor images (vision
+  milestone), so the engine answers `"openjev-0.1 does not support think"` and its image refusal.
+  `think(prompt:budget:stopIDs:)` throws `unsupported("think")`. `modelName` is `openjev-0.1`.
+- Memory controls: `Configuration.cacheLimitGB` (nil leaves MLX alone, 0 disables MLX's buffer
+  pool, otherwise `Memory.cacheLimit` in bytes, applied inside the actor at load, or later with
+  `setCacheLimit(gb:)`), the prefill cache budgets and the prompt cap. `memoryReport()` gives
+  MLX's active, cache and peak bytes and the process's resident bytes; `statistics()` the reads,
+  the prefill hits and misses and the model time.
+- Warm-up: `warmUp()` runs one small read directly on the model (one noul question over upstream's
+  warm-up state, its prompt from the chat template, its canvas from `CanvasBuilder` with seed 0),
+  so the first user does not pay kernel compilation; loading runs it when
+  `Configuration.warmUp` is on.
+- Loading: `DiffusionGemmaRuntime.load(_:configuration:cache:token:resolver:progress:)` resolves a
+  `ModelSource`, loads the tokenizer (`TokenizerFiles`) and the weights
+  (`DiffusionGemmaModel.load`), applies the cache limit and warms up, reporting one `LoadStage`
+  progression and keeping a `LoadReport` (resolve time, downloaded bytes, tokenizer and weight
+  metrics, warm-up time, memory).
+
+Model resolution and download (`Sources/OpenJevDiffusionGemma/Download/`, issue #30):
+`ModelSource` is `.directory(URL)` or `.hub(repository:revision:)`, with the presets `.fourBit`
+(the pinned `a7a81407`), `.eightBit` and `.bf16` (pinned in THIRD_PARTY.md), and
+`ModelSource(setting:)` reads `OPENJEV_MLX_MODEL`'s value. `ModelResolver` uses a directory as is
+once `config.json` and the shard index (and the shards it names) are there; a Hub source is
+resolved to a commit (a 40-hex revision as is, a branch or tag through the Hub API, writing
+`refs/<name>`), and every file of the tree is looked for in
+`<hub>/models--{org}--{repo}/snapshots/{commit}/` and downloaded when missing: into
+`blobs/<id>.incomplete` with HTTP Range resume, checked (SHA-256 for LFS files, size and git blob
+SHA-1 for the others), renamed to `blobs/<id>` and linked from the snapshot with a relative
+symlink. That is huggingface_hub's layout, so upstream, mlx-vlm and this library share one copy.
+`HubCacheLocation(environment:)` follows `HF_HUB_CACHE`, `HF_HOME`, `XDG_CACHE_HOME` and
+`~/.cache/huggingface/hub` in the environment the caller passes, and
+`HubCacheLocation.token(environment:)` reads `HF_TOKEN`, an empty value counting as absent; the
+library never reads the process environment (D-013).
 
 ## The server
 
@@ -351,10 +392,27 @@ a backend this build lacks or that failed to load, and 4 for a request `decide` 
 streams, backends, loggers, shutdown signals), which tests replace to run them in-process with
 stub backends.
 
-`BackendRegistry` lists the backends: `mlx` exits 3 naming issue #29 until it lands, any name
-it does not list is upstream's invalid-setting error, and an encoder backend is one line. For
-`OPENJEV_BACKEND=verdict` and `OPENJEV_BACKEND=laya`, with `environment` the process environment
-the CLI also hands to `ServerSettings(environment:)`:
+`BackendRegistry` lists the backends: any name it does not list is upstream's invalid-setting
+error, and each backend is one line. For `OPENJEV_BACKEND=mlx`, with `environment` the process
+environment the CLI also hands to `ServerSettings(environment:)`:
+
+```swift
+DecisionBackendProvider { settings in
+    try await DiffusionGemmaRuntime.load(
+        ModelSource(setting: settings.mlxModel),
+        configuration: .init(
+            maxPromptTokens: settings.mlxMaxPrompt, promptCacheEntries: settings.mlxPromptCache,
+            cacheLimitGB: settings.mlxCacheLimitGB, warmUp: settings.warmup),
+        cache: HubCacheLocation(environment: environment),
+        token: HubCacheLocation.token(environment: environment))
+}
+```
+
+The default `OPENJEV_MLX_MODEL`, `mlx-community/diffusiongemma-26B-A4B-it-4bit`, maps to
+`ModelSource.fourBit` at its pinned revision; a path opens a local directory; `repo@revision`
+picks a revision. The runtime warms itself up when `OPENJEV_WARMUP` asks, and its `.warmingUp`
+stage prints the `warming up` phase. On Linux, where `OpenJevDiffusionGemma` does not exist, `mlx`
+is a known backend that exits 3. For `OPENJEV_BACKEND=verdict` and `OPENJEV_BACKEND=laya`:
 
 ```swift
 QuestionReadBackendProvider { _ in
