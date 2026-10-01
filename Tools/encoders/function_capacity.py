@@ -132,14 +132,22 @@ def replay(args) -> None:
 
 
 def resident(pid: int) -> dict:
-    text = subprocess.run(["vmmap", str(pid)], capture_output=True, text=True).stdout
+    """The process's resident memory as vmmap gives it: the physical footprint, and the resident
+    pages of the files Core ML maps each loaded GPU function's weights from. A vmmap that fails, or
+    whose listing has no footprint, stops the run rather than record a figure it did not measure."""
+    listing = subprocess.run(["vmmap", str(pid)], capture_output=True, text=True)
     unit = {"K": 1 / 1024, "M": 1, "G": 1024}
-    found = re.search(r"Physical footprint:\s+([\d.]+)([KMG])", text)
-    footprint = float(found.group(1)) * unit[found.group(2)] if found else 0.0
+    found = re.search(r"Physical footprint:\s+([\d.]+)([KMG])", listing.stdout)
+    if listing.returncode != 0 or not found:
+        sys.exit(f"vmmap {pid} exited with status {listing.returncode} and gave no physical "
+                 f"footprint: {listing.stderr.strip()[-300:]}")
+    footprint = float(found.group(1)) * unit[found.group(2)]
     copies = 0.0
-    for line in text.splitlines():
+    for line in listing.stdout.splitlines():
         if line.startswith("mapped file") and "/payload-" in line:
             sizes = re.search(r"\[\s*([\d.]+)([KMG])\s+([\d.]+)([KMG])", line)
+            if not sizes:
+                sys.exit(f"vmmap {pid}: no virtual and resident sizes in {line.strip()!r}")
             copies += float(sizes.group(3)) * unit[sizes.group(4)]
     return {"footprint": round(footprint), "weight_copies": round(copies),
             "resident": round(footprint + copies)}

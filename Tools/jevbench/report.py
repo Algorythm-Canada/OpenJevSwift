@@ -155,7 +155,10 @@ def function_capacity(doc: dict, shapes: tuple) -> int:
 
 def function_load_rows(docs: list) -> list:
     """Which Swift requests had to load a Core ML function, by simulating that cache over one
-    server process's requests (JevBench, then TypeSafe), with the model time each took."""
+    server process's requests (JevBench, then TypeSafe), with the model time each took.
+
+    The two files of a model must record the same capacity: one cache cannot span runs whose
+    servers kept different numbers of functions, so such a pair stops the report."""
     swift = {(doc["model"], doc["dataset"]["name"]): doc for doc in docs
              if doc["server"]["name"] == "swift"}
     rows = []
@@ -163,6 +166,13 @@ def function_load_rows(docs: list) -> list:
         runs = [swift.get((model, name)) for name in ("jevbench", "typesafe102")]
         if not all(runs):
             continue
+        recorded = [doc["server"].get("function_capacity", RECORDED_FUNCTION_CAPACITY)
+                    for doc in runs]
+        if len({str(kept) for kept in recorded}) > 1:
+            raise SystemExit(
+                f"the Swift {model} runs record different function capacities (JevBench "
+                f"{recorded[0]}, TypeSafe {recorded[1]}); the simulation replays one server's "
+                "cache over both, so run both datasets on one server with servers.py")
         capacity = function_capacity(runs[0], shapes)
         loaded, seen, first, again, ordinary = [("b16", shapes[0])], set(), [], [], {}
         for doc in runs:
