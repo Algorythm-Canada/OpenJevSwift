@@ -1,7 +1,26 @@
 // Matches the output of CPython's `repr` for `str` (`unicode_repr` in Objects/unicodeobject.c),
-// which upstream OpenJev's `{value!r}` messages rely on, and for `bytes` (`PyBytes_Repr` in
-// Objects/bytesobject.c), which its `trim` writes for a body FastAPI did not parse. Written from
-// the documented behaviour.
+// which upstream OpenJev's `{value!r}` messages rely on, for `bytes` (`PyBytes_Repr` in
+// Objects/bytesobject.c), which its `trim` writes for a body FastAPI did not parse, and for
+// `float` (`float_repr` in Objects/floatobject.c), which its f-strings write. Written from the
+// documented behaviour.
+
+extension Double {
+    /// The float as Python's `repr` writes it, which is also what `str` and an f-string
+    /// replacement field without a format spec write: `0.0`, `1.0`, `0.1`, `1e+16`, `1e-05`.
+    ///
+    /// Finite values are laid out as ``PythonJSONWriter`` writes them (the shortest digits that
+    /// round-trip, in CPython's fixed or exponential layout). The infinities are `inf` and `-inf`,
+    /// and NaN is `nan` whatever its sign, as CPython writes them.
+    public var pythonRepr: String {
+        if isNaN {
+            return "nan"
+        }
+        if isInfinite {
+            return self < 0 ? "-inf" : "inf"
+        }
+        return pythonFloatRepr(self)
+    }
+}
 
 extension String {
     /// The string as Python's `repr` writes it, for messages that upstream formats with `!r`.
