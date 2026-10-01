@@ -51,6 +51,24 @@ public actor LayaBackend: QuestionReadBackend {
             /// `laya-f18-b1s{length}-fp16.mlpackage` folders by sequence length: the ones the
             /// device holds, among 128, 256, 512 and 1,024.
             case byLength([Int: URL])
+
+            /// Where these packages run by default: the GPU for the multifunction package, the
+            /// Neural Engine for the per-length packages, on either platform.
+            public var defaultComputeUnits: EncoderComputeUnits {
+                switch self {
+                case .multifunction: return .cpuAndGPU
+                case .byLength: return .cpuAndNeuralEngine
+                }
+            }
+
+            /// The most questions per call by default: ``Configuration/defaultMaxBatchRows`` for
+            /// the multifunction package, 1 for the per-length packages, which hold batch 1.
+            public var defaultMaxBatchRows: Int {
+                switch self {
+                case .multifunction: return Configuration.defaultMaxBatchRows
+                case .byLength: return 1
+                }
+            }
         }
 
         /// The converted packages.
@@ -69,31 +87,33 @@ public actor LayaBackend: QuestionReadBackend {
         /// packages keep every package loaded.
         public var functionCapacity: Int
 
-        /// Creates a configuration with D-011's defaults for this platform: on macOS the GPU,
-        /// 16 questions per call and two functions loaded; on iOS the Neural Engine and one
-        /// question per call.
+        /// Creates a configuration with D-011's defaults for the packages: the multifunction
+        /// package on the GPU with up to 16 questions per call on macOS and 1 on iOS, and two
+        /// functions loaded on macOS; the per-length packages on the Neural Engine, one question
+        /// per call.
         public init(
             packages: Packages,
             tokenizerDirectory: URL,
             configurationFile: URL,
-            computeUnits: EncoderComputeUnits = .platformDefault,
-            maxBatchRows: Int = Configuration.defaultMaxBatchRows,
+            computeUnits: EncoderComputeUnits? = nil,
+            maxBatchRows: Int? = nil,
             functionCapacity: Int = Configuration.defaultFunctionCapacity
         ) {
             self.packages = packages
             self.tokenizerDirectory = tokenizerDirectory
             self.configurationFile = configurationFile
-            self.computeUnits = computeUnits
-            self.maxBatchRows = maxBatchRows
+            self.computeUnits = computeUnits ?? packages.defaultComputeUnits
+            self.maxBatchRows = maxBatchRows ?? packages.defaultMaxBatchRows
             self.functionCapacity = functionCapacity
         }
 
         /// Creates a configuration of the multifunction package from the files an
-        /// ``EncoderPackageStore`` found or downloaded for ``EncoderPackageManifest/laya``.
+        /// ``EncoderPackageStore`` found or downloaded for ``EncoderPackageManifest/laya``, with
+        /// its defaults: the GPU, and up to 16 questions per call on macOS.
         public init(
             locations: EncoderPackageLocations,
-            computeUnits: EncoderComputeUnits = .platformDefault,
-            maxBatchRows: Int = Configuration.defaultMaxBatchRows,
+            computeUnits: EncoderComputeUnits? = nil,
+            maxBatchRows: Int? = nil,
             functionCapacity: Int = Configuration.defaultFunctionCapacity
         ) {
             self.init(
@@ -103,8 +123,8 @@ public actor LayaBackend: QuestionReadBackend {
                 maxBatchRows: maxBatchRows, functionCapacity: functionCapacity)
         }
 
-        /// 16 on macOS, where the GPU reads a batch in one call; 1 on iOS, where the
-        /// per-length packages read one question per call on the Neural Engine.
+        /// The multifunction package's rows per call, as for Verdict: 16 on macOS, where the GPU
+        /// reads a batch in one call; 1 on iOS, which reads one question per call.
         public static var defaultMaxBatchRows: Int {
             #if os(macOS)
                 return 16
@@ -333,18 +353,18 @@ public actor LayaBackend: QuestionReadBackend {
         public static func load(
             from store: EncoderPackageStore, packageSet: LayaPackageSet = .platformDefault
         ) async throws -> LayaBackend {
+            // Before the store, whose own check would throw EncoderPackageError instead.
+            guard #available(macOS 15, iOS 18, *) else {
+                throw EncoderLoadError.unsupportedOperatingSystem(
+                    "Laya's Core ML packages need macOS 15 or iOS 18")
+            }
             switch packageSet {
             case .multifunction:
                 // Core ML does not load the multifunction package for the Neural Engine, so it
-                // runs on the GPU on an iPhone too.
+                // runs on the GPU on an iPhone too, as Configuration's defaults have it.
                 return try await load(
-                    configuration: Configuration(
-                        locations: store.locations(for: .laya), computeUnits: .cpuAndGPU))
+                    configuration: Configuration(locations: store.locations(for: .laya)))
             case .byLength:
-                guard #available(macOS 15, iOS 18, *) else {
-                    throw EncoderLoadError.unsupportedOperatingSystem(
-                        "Laya's Core ML packages need macOS 15 or iOS 18")
-                }
                 return try await loadByLength(from: store)
             }
         }

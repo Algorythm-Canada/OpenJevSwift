@@ -1365,9 +1365,12 @@ Decision.
    first load of a Laya package took 33 to 56 s on an A15. A sequence longer than every package
    the device holds is `EncoderLoadError.noPackage`, which names the package to fetch; the app
    sends that read to a server meanwhile (D-011 item 6) and fetches the package with
-   `prefetch(lengths:)`, which downloads, checks and compiles it. Rows are padded to the
-   function's or the package's length, where laya pads to the longest row; the billing, the rows'
-   unpadded lengths, is the same.
+   `prefetch(lengths:)`, which downloads, checks and compiles it; a read that needs a package a
+   prefetch is compiling waits for that compile. `LayaBackend.Configuration`'s defaults follow the
+   package set rather than the platform: the GPU for the multifunction package, which Core ML does
+   not load for the Neural Engine, and the Neural Engine with one question per call for the
+   per-length packages. Rows are padded to the function's or the package's length, where laya pads
+   to the longest row; the billing, the rows' unpadded lengths, is the same.
 4. **Where the files come from.** The issue's download from
    `convaiinnovations/laya-typed-decisions` holds for the tokenizer, under the checkpoint's
    `tokenizer/` (`EncoderPackageManifest.checkpointTokenizerFolder`), and for
@@ -1401,8 +1404,10 @@ Decision.
    upstream's `"Too many choices for laya-1.0: a question's options must fit in 256 tokens."`,
    located at `["body"]`, before the batch is read, as laya builds every sequence of a call before
    its forward pass. A model's wrong output is `EncoderModelError` and a score with no levels gets
-   an empty distribution that the engine refuses, as D-034 item 6 decided for Verdict; the loaders
-   check the OS when they run, as D-034 item 8 did.
+   an empty distribution that the engine refuses, as D-034 item 6 decided for Verdict. The loaders
+   check the OS when they run, as D-034 item 8 has it, and `load(from:)` does so before it asks the
+   store, so an older OS gets `EncoderLoadError.unsupportedOperatingSystem` rather than the store's
+   `EncoderPackageError`; `VerdictBackend.load(from:)` gains the same check.
 10. **"[MASK]" is matched as Python matches it,** code point by code point: a combining mark
     after the `]` does not hide the token, as Swift's character comparison would.
 

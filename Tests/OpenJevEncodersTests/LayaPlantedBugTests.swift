@@ -3,10 +3,15 @@ import OpenJevCore
 import OpenJevEncoders
 import Testing
 
-/// The bounds the live parity test applies must catch a broken read: two planted bugs, run on
-/// the recorded float32 scores, each break at least one of them, while the port meets all three
-/// (docs/spikes/encoder-runtime.md, "Scope notes"). The probabilities are compared before laya
-/// rounds them, as the live test compares them.
+/// The bounds the live parity test applies must catch a broken read: the type's temperature
+/// where a bucket has its own, run on the recorded float32 scores, breaks at least one of them,
+/// while the port meets all three (docs/spikes/encoder-runtime.md, "Scope notes"). The
+/// probabilities are compared before laya rounds them, as the live test compares them.
+///
+/// The other planted bug, a read one position off each marker, needs the model's scores next to
+/// the markers, which laya.json does not record (it holds the scores at the markers only), so
+/// ``LayaLiveTests`` plants it on the Core ML package's own output. Without a model, the backend
+/// tests replay rows whose every other position is NaN, so a read off the markers fails there.
 @Suite(
     "Laya planted bugs",
     .enabled(if: LayaFixtures.available, LayaFixtures.missingMessage))
@@ -23,17 +28,10 @@ struct LayaPlantedBugTests {
             })
     }
 
-    /// The scores a read at `offset` from each marker gets from a model's output row: the
-    /// recorded scores at the markers, and a neutral 0 at every other position.
-    private func shifted(_ row: LayaFixtures.Read, by offset: Int) -> [Float] {
-        let scores = row.scoreRow(filler: 0)
-        return row.markers.map { scores[$0 + offset] }
-    }
-
     @Test("The port meets every bound")
     func portMeetsTheBounds() throws {
         let port = try bounds { row, calibration in
-            calibration.probabilities(logits: shifted(row, by: 0), kind: row.kind).map(Double.init)
+            calibration.probabilities(logits: row.logits, kind: row.kind).map(Double.init)
         }
         #expect(port.violations.isEmpty, "\(port)")
         #expect(port.maxDifference < 1e-6)
@@ -46,15 +44,6 @@ struct LayaPlantedBugTests {
                 temperatures: calibration.temperatures, temperaturesByOptions: [:],
                 maxLength: calibration.maxLength, headMaxLength: calibration.headMaxLength)
             return typeOnly.probabilities(logits: row.logits, kind: row.kind).map(Double.init)
-        }
-        #expect(!planted.violations.isEmpty, "\(planted)")
-    }
-
-    @Test("Reading one position after each marker breaks a bound", arguments: [1, -1])
-    func markersOffByOne(offset: Int) throws {
-        let planted = try bounds { row, calibration in
-            calibration.probabilities(logits: shifted(row, by: offset), kind: row.kind).map(
-                Double.init)
         }
         #expect(!planted.violations.isEmpty, "\(planted)")
     }

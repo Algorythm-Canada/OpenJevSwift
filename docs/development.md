@@ -275,7 +275,7 @@ And took this long:
   `xcodebuild` output. The job writes an `.xcresult` bundle and uploads it when a step failed. The
   tests read `Fixtures/` through a path derived from `#filePath`, which works unchanged in the
   simulator: the simulator runs on the host and reads the checkout in place, so the tests of both
-  targets run there with no resource copying (223 and 41 on 2026-10-01). The encoder tests that
+  targets run there with no resource copying (223 and 89 on 2026-10-01). The encoder tests that
   need Verdict's or Laya's tokenizer or converted packages look for them in the Mac's home, which
   the simulator names in `SIMULATOR_HOST_HOME`, and skip on CI, which has neither.
 - **Why the iOS job builds `OpenJevDiffusionGemma`.** The target declares iOS 17 like the rest of

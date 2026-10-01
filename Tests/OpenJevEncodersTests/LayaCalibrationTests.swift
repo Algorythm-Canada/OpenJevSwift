@@ -37,7 +37,9 @@ struct LayaCalibrationTests {
         }
         #expect(worst < 1e-6, "largest difference \(worst)")
         // Laya's float32 arithmetic in numpy's order gives laya's probabilities bit for bit.
-        #expect(exact == 200, "\(exact) of 200 bit for bit; largest difference \(worst)")
+        if LayaFixtures.arithmeticIsLayas {
+            #expect(exact == 200, "\(exact) of 200 bit for bit; largest difference \(worst)")
+        }
         // Both temperatures are used: score:6-10 and score:2 have no bucket of their own.
         #expect(sources == ["bucket": 190, "type": 10])
     }

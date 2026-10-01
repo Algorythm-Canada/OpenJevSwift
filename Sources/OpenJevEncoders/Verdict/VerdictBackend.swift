@@ -236,7 +236,12 @@ public actor VerdictBackend: QuestionReadBackend {
         ///
         /// - Throws: The store's errors (``EncoderPackageError``) and ``load(configuration:)``'s.
         public static func load(from store: EncoderPackageStore) async throws -> VerdictBackend {
-            try await load(
+            // Before the store, whose own check would throw EncoderPackageError instead.
+            guard #available(macOS 15, iOS 18, *) else {
+                throw EncoderLoadError.unsupportedOperatingSystem(
+                    "\(EncoderPackageSpec.verdict.name) needs macOS 15 or iOS 18")
+            }
+            return try await load(
                 configuration: Configuration(locations: store.locations(for: .verdict)))
         }
     }

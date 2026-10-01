@@ -83,7 +83,8 @@
             let longest = setting.length == 0 ? reference.maxLength : setting.length
             var unrounded: [(name: String, measured: [Double], reference: [Double])] = []
             var published: [(name: String, measured: [Double], reference: [Double])] = []
-            var shifted: [(name: String, measured: [Double], reference: [Double])] = []
+            var after: [(name: String, measured: [Double], reference: [Double])] = []
+            var before: [(name: String, measured: [Double], reference: [Double])] = []
             let clock = ContinuousClock()
             let started = clock.now
             for corpus in try LayaFixtures.corpus() {
@@ -115,9 +116,14 @@
                     let p = loaded.calibration.probabilities(logits: logits, kind: read.kind)
                     unrounded.append((read.name, p.map(Double.init), read.probabilitiesUnrounded))
                     published.append((read.name, distribution, read.probabilities))
-                    let off = loaded.calibration.probabilities(
+                    // The planted bug: each marker read one position later, then earlier.
+                    let later = loaded.calibration.probabilities(
                         logits: read.markers.map { row[$0 + 1] }, kind: read.kind)
-                    shifted.append((read.name, off.map(Double.init), read.probabilitiesUnrounded))
+                    after.append((read.name, later.map(Double.init), read.probabilitiesUnrounded))
+                    let earlier = loaded.calibration.probabilities(
+                        logits: read.markers.map { row[$0 - 1] }, kind: read.kind)
+                    before.append(
+                        (read.name, earlier.map(Double.init), read.probabilitiesUnrounded))
                 }
             }
             let elapsed = clock.now - started
@@ -130,16 +136,24 @@
             #expect(bounds.questions > 0)
             #expect(bounds.violations.isEmpty, "\(bounds)")
             #expect(publishedBounds.violations.isEmpty, "\(publishedBounds)")
-            // The bounds catch a read one position after each marker on the model's own scores.
-            let planted = ParityBounds(shifted)
-            #expect(!planted.violations.isEmpty, "markers off by one: \(planted)")
+            // The bounds catch a read one position off each marker, on the model's own scores;
+            // laya.json records the scores at the markers only, so no model-free test can.
+            for (direction, pairs) in [("after", after), ("before", before)] {
+                let planted = ParityBounds(pairs)
+                print("  read one position \(direction) each marker: \(planted)")
+                #expect(!planted.violations.isEmpty, "\(direction): \(planted)")
+            }
             if setting.length == 1024 || setting.length == 0 {
                 #expect(bounds.questions == 200)
             }
         }
 
         @available(macOS 15, *)
-        @Test("The store's local models load both package sets, and the iPhone's keeps each length")
+        @Test(
+            "The store's local models load both package sets, and the iPhone's keeps each length",
+            .enabled(
+                if: LayaModelFiles.byLengthTokenizer != nil, LayaModelFiles.missingTokenizerMessage)
+        )
         func loadThroughTheStore() async throws {
             let store = EncoderModelFiles.store
             let corpus = try #require(try LayaFixtures.corpus().first { $0.name == "quickstart" })

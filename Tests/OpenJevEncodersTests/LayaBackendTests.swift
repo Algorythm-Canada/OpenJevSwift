@@ -65,7 +65,8 @@ struct LayaBackendTests {
             #expect(calls.map(\.ids.count) == expectedCalls, "\(corpus.name): calls")
 
             // Answers in the caller's option order, exactly as upstream published them: laya's
-            // float32 arithmetic, its rounding and upstream's renormalisation are reproduced.
+            // float32 arithmetic, its rounding and upstream's renormalisation are reproduced
+            // (within one rounding step off Apple silicon, LayaFixtures.arithmeticIsLayas).
             for read in reads {
                 let answer = try #require(decision.answers[read.key], "\(read.name)")
                 let probabilities: [Double]
@@ -77,7 +78,9 @@ struct LayaBackendTests {
                 case .score(_, _, let byLevel, _):
                     probabilities = byLevel
                 }
-                #expect(probabilities == read.probabilities, "\(read.name)")
+                #expect(
+                    LayaFixtures.matchesPublished(probabilities, read.probabilities),
+                    "\(read.name): \(probabilities)")
                 questionsRead += 1
             }
         }
@@ -99,23 +102,20 @@ struct LayaBackendTests {
             state: corpus.request.state, stateText: StateText.render(corpus.request.state),
             questions: try LayaFixtures.questions(of: corpus))
         #expect(result.probabilities.count == 3)
-        #expect(result.probabilities == reads.map(\.probabilities))
+        for (probabilities, read) in zip(result.probabilities, reads) {
+            #expect(LayaFixtures.matchesPublished(probabilities, read.probabilities))
+        }
         // laya's markers are false then true: the engine's first value is P(true), laya's
         // second probability, rounded.
         let noul = reads[2]
         #expect(noul.optionTexts.first?.hasPrefix(" false: ") == true)
-        #expect(
-            result.probabilities[2]
-                == [
-                    LayaCalibration.roundedToFourPlaces(noul.probabilitiesUnrounded[1]),
-                    1 - LayaCalibration.roundedToFourPlaces(noul.probabilitiesUnrounded[1]),
-                ])
-        #expect(try noul.answerValues == [result.probabilities[2][0]])
+        let yes = LayaCalibration.roundedToFourPlaces(noul.probabilitiesUnrounded[1])
+        #expect(LayaFixtures.matchesPublished(result.probabilities[2], [yes, 1 - yes]))
+        #expect(LayaFixtures.matchesPublished([result.probabilities[2][0]], try noul.answerValues))
         // A choice keeps the criteria's order.
-        #expect(
-            result.probabilities[0]
-                == LayaCalibration.published(
-                    reads[0].probabilitiesUnrounded.map { Float($0) }, kind: .choice))
+        let choice = LayaCalibration.published(
+            reads[0].probabilitiesUnrounded.map { Float($0) }, kind: .choice)
+        #expect(LayaFixtures.matchesPublished(result.probabilities[0], choice))
     }
 
     @Test("Options that overflow the head's budget are refused before anything is read")

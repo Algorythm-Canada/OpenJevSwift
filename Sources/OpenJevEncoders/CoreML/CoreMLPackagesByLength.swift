@@ -63,9 +63,11 @@
         /// The packages compiled and created so far, by sequence length. Each loads its program
         /// on its first call and keeps it.
         private var models: [Int: CoreMLEncoderModel] = [:]
-        /// The fetches and compiles running now, by package name, which a second prefetch of
-        /// the same package waits for instead of fetching it again.
+        /// The fetches running now, by package name, which a second prefetch of the same
+        /// package waits for instead of fetching it again.
         private var fetches: [String: Task<URL, any Error>] = [:]
+        /// The compiles running now, by package name, which every other caller waits for.
+        private var compiles: [String: Task<URL, any Error>] = [:]
 
         /// Creates the set. Nothing is compiled or loaded until a row needs it.
         ///
@@ -114,17 +116,7 @@
             return output
         }
 
-        /// The package a row of `length` tokens runs through, of `specs` (shortest first): the
-        /// smallest that takes it of those `isHeld` accepts, or `nil`.
-        public static func package(
-            forLength length: Int, among specs: [EncoderPackageSpec],
-            isHeld: (EncoderPackageSpec) -> Bool
-        ) -> EncoderPackageSpec? {
-            specs.first { $0.sequenceLengths[0] >= length && isHeld($0) }
-        }
-
-        /// The package that runs a row of `length` tokens, as
-        /// ``package(forLength:among:isHeld:)`` picks it: the smallest the device holds that
+        /// The package that runs a row of `length` tokens: the smallest the device holds that
         /// takes the row, loaded already or compiled and created now.
         private func model(holding length: Int) async throws -> CoreMLEncoderModel {
             for spec in specs where spec.sequenceLengths[0] >= length {
@@ -135,7 +127,7 @@
                 guard let package = try await source.held(spec) else {
                     continue
                 }
-                let compiled = try await CompiledEncoderModel.url(for: package)
+                let compiled = try await compile(spec, at: package)
                 // Another call may have created it while this one compiled.
                 if let model = models[packageLength] {
                     return model
@@ -195,10 +187,23 @@
             }
             let source = source
             let task = Task {
-                try await CompiledEncoderModel.url(for: source.fetch(spec))
+                try await compile(spec, at: source.fetch(spec))
             }
             fetches[spec.name] = task
             defer { fetches[spec.name] = nil }
+            return try await task.value
+        }
+
+        /// Compiles a package, or waits for the compile of it that is running: a read that needs
+        /// a package a prefetch is compiling shares that compile, so no two compiles of one
+        /// package replace each other's output while one of them loads.
+        private func compile(_ spec: EncoderPackageSpec, at package: URL) async throws -> URL {
+            if let running = compiles[spec.name] {
+                return try await running.value
+            }
+            let task = Task { try await CompiledEncoderModel.url(for: package) }
+            compiles[spec.name] = task
+            defer { compiles[spec.name] = nil }
             return try await task.value
         }
     }

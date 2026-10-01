@@ -290,44 +290,33 @@ struct LayaPackageStoreTests {
         let specs = EncoderPackageSpec.layaSequenceLengths.map {
             EncoderPackageSpec.laya(sequenceLength: $0)
         }
-        #expect(
-            specs.map(\.name)
-                == EncoderPackageSpec.layaSequenceLengths.map { "laya-f18-b1s\($0)-fp16" })
+        let names = specs.map(\.name)
+        #expect(names == EncoderPackageSpec.layaSequenceLengths.map { "laya-f18-b1s\($0)-fp16" })
         var manifests: [String: EncoderPackageManifest] = [:]
-        for spec in specs {
-            manifests[spec.name] = try manifest(spec.name, in: folder)
+        for name in names {
+            manifests[name] = try manifest(name, in: folder)
         }
+        let byName = manifests
         let store = EncoderPackageStore(
             directory: folder.appendingPathComponent("store", isDirectory: true))
         // The device holds the 128- and 512-token packages.
         for name in ["laya-f18-b1s128-fp16", "laya-f18-b1s512-fp16"] {
-            _ = try await store.locations(for: try #require(manifests[name]))
-        }
-        let held = Set(
-            try specs.filter { try store.heldPackageDirectory(for: manifests[$0.name]!) != nil }
-                .map(\.name))
-        #expect(held == ["laya-f18-b1s128-fp16", "laya-f18-b1s512-fp16"])
-        let cases: [(length: Int, package: String?)] = [
-            (1, "laya-f18-b1s128-fp16"), (128, "laya-f18-b1s128-fp16"),
-            (129, "laya-f18-b1s512-fp16"), (512, "laya-f18-b1s512-fp16"), (513, nil), (1025, nil),
-        ]
-        for (length, package) in cases {
-            #expect(
-                CoreMLPackagesByLength.package(
-                    forLength: length, among: specs, isHeld: { held.contains($0.name) })?.name
-                    == package, "\(length) tokens")
-        }
-        // With all four, each length uses its own.
-        for (length, package) in [(100, 128), (200, 256), (300, 512), (1024, 1024)] {
-            #expect(
-                CoreMLPackagesByLength.package(
-                    forLength: length, among: specs, isHeld: { _ in true })
-                    == EncoderPackageSpec.laya(sequenceLength: package))
+            _ = try await store.locations(for: try #require(byName[name]))
         }
 
-        let byName = manifests
+        // The runner asks the store which packages the device holds. It is handed each held
+        // package at a folder that does not exist, so compiling the package it picks throws
+        // missingFile naming that package, before Core ML is involved.
+        let unbuilt = folder.appendingPathComponent("unbuilt", isDirectory: true)
+        func unbuiltFolder(of name: String) -> URL {
+            unbuilt.appendingPathComponent(name + ".mlpackage", isDirectory: true)
+        }
         let source = CoreMLPackagesByLength.Source(
-            held: { spec in try store.heldPackageDirectory(for: byName[spec.name]!) },
+            held: { spec in
+                try store.heldPackageDirectory(for: byName[spec.name]!).map { _ in
+                    unbuilt.appendingPathComponent(spec.name + ".mlpackage", isDirectory: true)
+                }
+            },
             fetch: { spec in
                 try await store.locations(for: byName[spec.name]!).packageDirectory
             })
@@ -336,27 +325,46 @@ struct LayaPackageStoreTests {
         #expect(model.specs == specs)
         #expect(model.spec(holding: 1024) == specs[3])
         #expect(model.spec(holding: 1025) == nil)
-        // A row longer than every package the device holds names the one to fetch.
-        let row: [[Int32]] = [
-            [Int32](repeating: 7, count: 600), [Int32](repeating: 1, count: 600),
-            [Int32](repeating: 0, count: 600),
+
+        /// The error a row of `length` tokens gets: which package the runner picked.
+        func outcome(_ length: Int) async -> EncoderLoadError? {
+            let row: [[Int32]] = [
+                [Int32](repeating: 7, count: length), [Int32](repeating: 1, count: length),
+                [Int32](repeating: 0, count: length),
+            ]
+            do {
+                _ = try await model.run([row])
+                return nil
+            } catch {
+                return error as? EncoderLoadError
+            }
+        }
+        let held = ["laya-f18-b1s128-fp16", "laya-f18-b1s512-fp16"]
+        let cases: [(length: Int, package: String)] = [
+            (1, "laya-f18-b1s128-fp16"), (128, "laya-f18-b1s128-fp16"),
+            (129, "laya-f18-b1s512-fp16"), (512, "laya-f18-b1s512-fp16"),
         ]
-        let error = await #expect(throws: EncoderLoadError.self) { try await model.run([row]) }
-        #expect(
-            error
-                == .noPackage(
-                    length: 600, package: "laya-f18-b1s1024-fp16",
-                    held: ["laya-f18-b1s128-fp16", "laya-f18-b1s512-fp16"]))
-        #expect(error?.description.contains("prefetch(lengths:)") == true)
+        for (length, package) in cases {
+            #expect(
+                await outcome(length) == .missingFile(unbuiltFolder(of: package)),
+                "\(length) tokens")
+        }
+        // A row longer than every package the device holds names the one to fetch.
+        let tooLong = await outcome(600)
+        #expect(tooLong == .noPackage(length: 600, package: "laya-f18-b1s1024-fp16", held: held))
+        #expect(tooLong?.description.contains("prefetch(lengths:)") == true)
         // Past 1,024 tokens no package takes the sequence, and nothing is fetched.
-        let tooLong = await #expect(throws: EncoderLoadError.self) {
+        #expect(await outcome(1025) == .noPackage(length: 1025, package: nil, held: held))
+        let beyond = await #expect(throws: EncoderLoadError.self) {
             try await model.prefetch(lengths: [1025])
         }
-        #expect(
-            tooLong
-                == .noPackage(
-                    length: 1025, package: nil,
-                    held: ["laya-f18-b1s128-fp16", "laya-f18-b1s512-fp16"]))
+        #expect(beyond == .noPackage(length: 1025, package: nil, held: held))
+
+        // A package fetched since is used by the next read that it takes.
+        _ = try await store.locations(for: try #require(byName["laya-f18-b1s256-fp16"]))
+        #expect(await outcome(129) == .missingFile(unbuiltFolder(of: "laya-f18-b1s256-fp16")))
+        #expect(await outcome(300) == .missingFile(unbuiltFolder(of: "laya-f18-b1s512-fp16")))
+        // Nothing compiled, so nothing was created to load.
         #expect(await model.loadedLengths.isEmpty)
     }
 }

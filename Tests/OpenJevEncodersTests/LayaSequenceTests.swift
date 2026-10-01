@@ -77,6 +77,18 @@ struct LayaSequenceTests {
         #expect(sequence.ids.count == 1 + 1 + 1 + 49 + 49 + 1 + 1)
     }
 
+    @Test("The head's budget counts each option after its 48-token cap")
+    func headBudgetAfterCap() {
+        // A 60-token option keeps 48 after its marker, 49 tokens, which leaves the head 207 of
+        // the 256; counting the uncut option would leave it 195.
+        let sequence = LayaSequence.build(
+            head: tokens(300, from: 9000), options: [tokens(60)], state: [], special: special,
+            maxLength: 1024, headMaxLength: 256)
+        #expect(sequence.markers == [1 + 207 + 1])
+        #expect(Array(sequence.ids[1..<208]) == tokens(207, from: 9000))
+        #expect(sequence.ids.count == 1 + 207 + 1 + 49 + 1 + 1)
+    }
+
     @Test("Options that leave fewer than 16 tokens are cut to an equal share, the head to 16")
     func optionShare() {
         // Six options of 45 tokens take 276 of the 256; each is cut to (256 - 16) / 6 = 40

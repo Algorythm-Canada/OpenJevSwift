@@ -224,6 +224,28 @@ enum LayaFixtures {
     static func questions(of request: EncoderCorpus.Request) throws -> [EncoderQuestion] {
         try EncoderCorpus.questions(of: request, maxChoices: 255)
     }
+
+    /// True where the port's float32 arithmetic is laya's bit for bit: on Apple silicon, where
+    /// Swift's `exp(Float)` is the libm `expf` that numpy called when laya.json was recorded.
+    /// Elsewhere numpy and libm may differ in the last bit, and a rounded probability may then
+    /// land one 4-decimal step away.
+    static var arithmeticIsLayas: Bool {
+        #if arch(arm64)
+            return true
+        #else
+            return false
+        #endif
+    }
+
+    /// Whether a published distribution is the recorded one: exactly where
+    /// ``arithmeticIsLayas``, else within one rounding step.
+    static func matchesPublished(_ measured: [Double], _ recorded: [Double]) -> Bool {
+        guard measured.count == recorded.count else { return false }
+        if arithmeticIsLayas {
+            return measured == recorded
+        }
+        return zip(measured, recorded).allSatisfy { abs($0 - $1) <= 1.5e-4 }
+    }
 }
 
 /// A tokenizer that hands back the ids laya.json recorded for each text: the head, each option
@@ -280,6 +302,13 @@ enum LayaModelFiles {
         EncoderModelFiles.tokenizer(for: .laya)
     }
 
+    /// The tokenizer folder and rl_agent_config.json where the iPhone's set looks for them
+    /// (``LayaBackend/load(from:packageSet:)``): `{models}/laya-f18-b1s128-fp16/tokenizer/`,
+    /// else the checkpoint's Hugging Face snapshot.
+    static var byLengthTokenizer: EncoderTokenizerLocations? {
+        EncoderPackageManifest.layaByLength[128].flatMap(EncoderModelFiles.tokenizer(for:))
+    }
+
     /// The Mac's package.
     static var multifunctionPackage: URL? {
         EncoderModelFiles.package(EncoderPackageManifest.laya.package)
@@ -296,10 +325,11 @@ enum LayaModelFiles {
 
     /// The message shown when the tokenizer is missing.
     static let missingTokenizerMessage = Comment(
-        rawValue: "OPENJEV_ENCODER_MODELS is unset or lacks laya-m18-fp16/tokenizer/, and the "
-            + "Hugging Face cache has no convaiinnovations/laya-typed-decisions snapshot at the "
-            + "pinned revision; run Tools/encoders/reference.py once, or set "
-            + "OPENJEV_ENCODER_MODELS to a folder holding laya-m18-fp16/tokenizer/")
+        rawValue: "OPENJEV_ENCODER_MODELS is unset or lacks laya-m18-fp16/tokenizer/ (and "
+            + "laya-f18-b1s128-fp16/tokenizer/ for the iPhone's set), and the Hugging Face "
+            + "cache has no convaiinnovations/laya-typed-decisions snapshot at the pinned "
+            + "revision; run Tools/encoders/reference.py once, or set OPENJEV_ENCODER_MODELS to "
+            + "a folder holding those tokenizer folders")
 
     /// The message shown when a package or the tokenizer is missing.
     static let missingPackageMessage = Comment(

@@ -376,7 +376,7 @@ def main():
             print(f"printf %s {q(notice(args.repository, values))} > {q(str(args.stage / 'NOTICE'))}")
             print(f"{args.gh} api --method PUT repos/{args.repository}/contents/NOTICE "
                   f"-f message={q('Add the NOTICE crediting the checkpoints')} "
-                  f"-f content=\"$(base64 < {q(str(args.stage / 'NOTICE'))})\"")
+                  f"-f content=\"$(base64 < {q(str(args.stage / 'NOTICE'))} | tr -d '\\n')\"")
             print()
         for package in model.packages:
             stage = args.stage / package.tag

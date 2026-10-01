@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 
 @testable import OpenJevEncoders
@@ -125,6 +126,22 @@ struct EncoderPackageSpecTests {
             #expect(LayaPackageSet.platformDefault == .byLength)
         #endif
         #expect(EncoderComputeUnits.allCases.map(\.rawValue).contains("all") == false)
+        // Laya's defaults follow its packages, not the platform: Core ML does not load the
+        // multifunction package for the Neural Engine, and a per-length package holds one row.
+        let folder = URL(fileURLWithPath: "/nonexistent", isDirectory: true)
+        let mac = LayaBackend.Configuration(
+            packages: .multifunction(folder), tokenizerDirectory: folder,
+            configurationFile: folder)
+        #expect(mac.computeUnits == .cpuAndGPU)
+        #expect(mac.maxBatchRows == LayaBackend.Configuration.defaultMaxBatchRows)
+        let phone = LayaBackend.Configuration(
+            packages: .byLength([:]), tokenizerDirectory: folder, configurationFile: folder)
+        #expect(phone.computeUnits == .cpuAndNeuralEngine)
+        #expect(phone.maxBatchRows == 1)
+        let chosen = LayaBackend.Configuration(
+            packages: .byLength([:]), tokenizerDirectory: folder, configurationFile: folder,
+            computeUnits: .cpuAndGPU, maxBatchRows: 1)
+        #expect(chosen.computeUnits == .cpuAndGPU)
     }
 
     @Test("The module reports the package version")
