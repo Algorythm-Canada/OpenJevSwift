@@ -303,8 +303,8 @@ enum LayaModelFiles {
     }
 
     /// The tokenizer folder and rl_agent_config.json where the iPhone's set looks for them
-    /// (``LayaBackend/load(from:packageSet:)``): `{models}/laya-f18-b1s128-fp16/tokenizer/`,
-    /// else the checkpoint's Hugging Face snapshot.
+    /// (``LayaBackend/load(from:packageSet:functionCapacity:)``):
+    /// `{models}/laya-f18-b1s128-fp16/tokenizer/`, else the checkpoint's Hugging Face snapshot.
     static var byLengthTokenizer: EncoderTokenizerLocations? {
         EncoderPackageManifest.layaByLength[128].flatMap(EncoderModelFiles.tokenizer(for:))
     }

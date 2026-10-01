@@ -108,14 +108,85 @@ struct EncoderPackageSpecTests {
         #expect(cache.keys.isEmpty)
     }
 
+    @Test("A key that is absent loads after the least recently used are released")
+    func loadingWithCapacity() {
+        var cache = LeastRecentlyUsed<String, Int>()
+        var loads: [String] = []
+        func value(_ key: String) -> Int {
+            cache.value(forKey: key, capacity: 2) {
+                loads.append(key)
+                return loads.count
+            }
+        }
+        #expect(value("b16_s128") == 1)
+        #expect(value("b1_s128") == 2)
+        #expect(value("b16_s128") == 1)
+        #expect(loads == ["b16_s128", "b1_s128"])
+        #expect(value("b1_s512") == 3)
+        #expect(cache.keys == ["b16_s128", "b1_s512"])
+        // The room is made before the load, so a load that fails adds nothing and what was
+        // released stays released: the cache never holds more than its capacity.
+        struct Failure: Error {}
+        #expect(throws: Failure.self) {
+            try cache.value(forKey: "b1_s1024", capacity: 2) { throw Failure() }
+        }
+        #expect(cache.keys == ["b1_s512"])
+    }
+
+    @Test("Every function of a package, by batch size and then by length")
+    func functions() {
+        #expect(
+            EncoderPackageSpec.verdict.functions.map(\.name) == [
+                "b1_s128", "b1_s256", "b1_s512", "b16_s128", "b16_s256", "b16_s512",
+            ])
+        #expect(
+            EncoderPackageSpec.layaMultifunction.functions.map(\.name) == [
+                "b1_s128", "b1_s256", "b1_s512", "b1_s1024",
+                "b16_s128", "b16_s256", "b16_s512", "b16_s1024",
+            ])
+        #expect(EncoderPackageSpec.laya(sequenceLength: 512).functions.map(\.name) == ["b1_s512"])
+    }
+
+    /// Requests whose shapes alternate, as the JevBench runs' did (D-042): the warm-up's three
+    /// questions, then one-question requests of every length and a few longer batches.
+    @Test("Keeping every function, a server whose requests change shape loads each one once")
+    func everyFunctionLoadsEachOnce() {
+        let calls = [
+            "b16_s128", "b1_s128", "b1_s128", "b1_s1024", "b1_s512", "b1_s1024", "b1_s256",
+            "b1_s512", "b16_s512", "b1_s256", "b1_s1024", "b16_s1024", "b1_s128", "b16_s128",
+            "b1_s512", "b16_s256", "b1_s1024", "b1_s256", "b16_s512",
+        ]
+        func loads(capacity: Int) -> Int {
+            var cache = LeastRecentlyUsed<String, Int>()
+            var count = 0
+            for call in calls {
+                _ = cache.value(forKey: call, capacity: capacity) {
+                    count += 1
+                    return count
+                }
+            }
+            return count
+        }
+        let shapes = Set(calls).count
+        #expect(shapes == EncoderPackageSpec.layaMultifunction.functions.count)
+        #if os(macOS)
+            #expect(loads(capacity: LayaBackend.Configuration.defaultFunctionCapacity) == shapes)
+        #endif
+        #expect(loads(capacity: shapes) == shapes)
+        // One fewer loads a function again; two, the earlier default, loads 9 again in 19 calls.
+        #expect(loads(capacity: shapes - 1) == shapes + 1)
+        #expect(loads(capacity: 2) == 17)
+    }
+
     @Test("The default compute units follow D-011 and never include .all")
     func computeUnits() {
         #if os(macOS)
             #expect(EncoderComputeUnits.platformDefault == .cpuAndGPU)
             #expect(VerdictBackend.Configuration.defaultMaxBatchRows == 16)
-            #expect(VerdictBackend.Configuration.defaultFunctionCapacity == 2)
+            // Every function of the package stays loaded once a call has needed it (D-042).
+            #expect(VerdictBackend.Configuration.defaultFunctionCapacity == 6)
             #expect(LayaBackend.Configuration.defaultMaxBatchRows == 16)
-            #expect(LayaBackend.Configuration.defaultFunctionCapacity == 2)
+            #expect(LayaBackend.Configuration.defaultFunctionCapacity == 8)
             #expect(LayaPackageSet.platformDefault == .multifunction)
         #else
             #expect(EncoderComputeUnits.platformDefault == .cpuAndNeuralEngine)

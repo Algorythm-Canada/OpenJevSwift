@@ -208,6 +208,16 @@ def upstream_server(backend: str, python: Path) -> tuple:
     return [str(python), "-m", "openjev"], settings, info
 
 
+def swift_function_capacity(log: Path):
+    """How many Core ML functions the Swift server keeps loaded, from the settings line it logs at
+    startup: `encoder_functions=all` or a number (D-042). A binary from before D-042 logs none and
+    kept two (D-037 item 3)."""
+    found = re.search(r"\bencoder_functions=(\S+)", log.read_text(errors="replace"))
+    if not found:
+        return 2
+    return int(found.group(1)) if found.group(1).isdigit() else found.group(1)
+
+
 def wait_until_healthy(base_url: str, process: subprocess.Popen, log: Path, timeout: float):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -286,6 +296,8 @@ def main(argv=None) -> int:
     try:
         wait_until_healthy(base_url, process, log, args.startup_timeout)
         info["startup_s"] = round(time.monotonic() - started, 1)
+        if args.server == "swift" and args.backend in SWIFT_RUNTIME:
+            info["function_capacity"] = swift_function_capacity(log)
         ids = set(args.ids.split(",")) if args.ids else None
         for dataset, path in zip(datasets, outputs):
             print(f"{dataset.name}: {len(dataset.tasks)} items", flush=True)

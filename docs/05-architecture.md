@@ -50,9 +50,9 @@ OpenJevSwift/                          Swift package, tools 6.2, strict concurre
                      LayaTokenizer, LayaCalibration (buckets, clamp, float32 softmax, rounding),
                      LayaBackend actor, LayaPackageSet
       CoreML/        EncoderPackageSpec (one function per shape, or one program for one shape),
-                     CoreMLEncoderModel (one or two functions loaded), CoreMLPackagesByLength
-                     (Laya's per-length packages, each kept loaded), CompiledEncoderModel,
-                     EncoderComputeUnits
+                     CoreMLEncoderModel (every function loaded on macOS, one on iOS),
+                     CoreMLPackagesByLength (Laya's per-length packages, each kept loaded),
+                     CompiledEncoderModel, EncoderComputeUnits
       Store/         EncoderPackageManifest (Verdict's, Laya's five), EncoderPackageStore
                      (download on first use, SHA-256, the tokenizer alone, held packages)
     OpenJevServer/                     Hummingbird 2. ServerSettings, BackendProvider,
@@ -433,11 +433,15 @@ stage prints the `warming up` phase. On Linux, where `OpenJevDiffusionGemma` doe
 is a known backend that exits 3. For `OPENJEV_BACKEND=verdict` and `OPENJEV_BACKEND=laya`:
 
 ```swift
-QuestionReadBackendProvider { _ in
-    try await VerdictBackend.load(from: EncoderPackageStore(environment: environment))
+QuestionReadBackendProvider { settings in
+    try await VerdictBackend.load(
+        from: EncoderPackageStore(environment: environment),
+        functionCapacity: settings.encoderFunctions)
 }
-QuestionReadBackendProvider { _ in
-    try await LayaBackend.load(from: EncoderPackageStore(environment: environment))
+QuestionReadBackendProvider { settings in
+    try await LayaBackend.load(
+        from: EncoderPackageStore(environment: environment),
+        functionCapacity: settings.encoderFunctions)
 }
 ```
 
@@ -456,7 +460,9 @@ through the smallest per-length package the device holds, and leaves fetching th
 loaders build for the package's macOS 14 floor and throw on an OS older than macOS 15 or iOS 18,
 which the Core ML packages need (D-034). The provider builds the
 `EncoderDecisionEngine` from `OPENJEV_ENCODER_BATCH`, `OPENJEV_MAX_QUEUE` and `OPENJEV_WARMUP`,
-and the warm-up read loads the first Core ML function.
+and the warm-up read loads the first Core ML function. On a Mac each function the reads need then
+stays loaded, up to the package's six or eight, unless `OPENJEV_ENCODER_FUNCTIONS` sets fewer
+(`ServerSettings.encoderFunctions`, this port's setting, D-042).
 
 ## Platform support matrix
 

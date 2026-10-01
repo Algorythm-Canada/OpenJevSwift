@@ -444,6 +444,41 @@ class HarnessSmokeTest(unittest.TestCase):
             servers.subprocess.run = saved
         self.assertIn("is not the published package", str(stopped.exception))
 
+    def test_function_loads_follow_the_capacity_each_run_records(self):
+        import report
+        import servers
+
+        def run(dataset, capacity=None):
+            server = {"name": "swift"}
+            if capacity is not None:
+                server["function_capacity"] = capacity
+            # Four lengths in turn, twice: 128, 1,024, 512 and 256 tokens, one shape each.
+            items = [{"status": "answered", "usage": {"input_tokens": tokens},
+                      "timing": {"server": {"model": 10.0}}}
+                     for tokens in [100, 1000, 300, 200] * 2]
+            return {"model": "laya-1.0", "dataset": {"name": dataset}, "server": server,
+                    "items": items}
+
+        # Recorded without a capacity, as before D-042: two functions, so after the four first
+        # loads every request loads its function again. Every function: none again.
+        two = report.function_load_rows([run("jevbench"), run("typesafe102")])
+        self.assertEqual(two[0][:4], ["laya-1.0", "16", "4", "12"])
+        every = report.function_load_rows([run("jevbench", "all"), run("typesafe102", "all")])
+        self.assertEqual(every[0][:4], ["laya-1.0", "16", "4", "0"])
+        self.assertEqual(every[0][5], "128: 10, 256: 10, 512: 10, 1024: 10")
+        # A JevBench run from a newer server with an older TypeSafe file cannot share one cache.
+        with self.assertRaises(SystemExit) as stopped:
+            report.function_load_rows([run("jevbench", "all"), run("typesafe102")])
+        self.assertIn("different function capacities", str(stopped.exception))
+
+        # servers.py reads the capacity from the Swift server's settings line.
+        for line, kept in [("encoder_batch=16 encoder_functions=all encoder_models=x", "all"),
+                           ("encoder_batch=16 encoder_functions=3 encoder_models=x", 3),
+                           ("encoder_batch=16 encoder_models=x", 2)]:
+            log = self.tmp / "server.log"
+            log.write_text(f"info openjev: [openjev] settings: backend=laya {line}\n")
+            self.assertEqual(servers.swift_function_capacity(log), kept)
+
     def test_helpers(self):
         self.assertEqual(harness.parse_server_timing("model;dur=41.2, server;dur=2.8, total;dur=44"),
                          {"model": 41.2, "server": 2.8, "total": 44.0})

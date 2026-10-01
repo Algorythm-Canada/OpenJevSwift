@@ -157,14 +157,16 @@ struct BackendRegistry: Sendable {
     }
 
     /// Verdict on Core ML (D-011, D-034): the package from the store that `OPENJEV_ENCODER_MODELS`
-    /// points at a folder of converted packages, or from the release downloads (D-033).
+    /// points at a folder of converted packages, or from the release downloads (D-033), with at
+    /// most `OPENJEV_ENCODER_FUNCTIONS` functions loaded (D-042).
     private static var verdict: Backend.Availability {
         #if canImport(OpenJevEncoders)
             return .available { environment, willWarmUp in
                 QuestionReadBackendProvider(
-                    load: { _ in
+                    load: { settings in
                         try await VerdictBackend.load(
-                            from: EncoderPackageStore(environment: environment))
+                            from: EncoderPackageStore(environment: environment),
+                            functionCapacity: settings.encoderFunctions)
                     }, willWarmUp: willWarmUp)
             }
         #else
@@ -174,14 +176,16 @@ struct BackendRegistry: Sendable {
         #endif
     }
 
-    /// Laya on Core ML (D-037): on a Mac its multifunction package, from the store as Verdict's.
+    /// Laya on Core ML (D-037): on a Mac its multifunction package, from the store and with
+    /// `OPENJEV_ENCODER_FUNCTIONS` as Verdict's.
     private static var laya: Backend.Availability {
         #if canImport(OpenJevEncoders)
             return .available { environment, willWarmUp in
                 QuestionReadBackendProvider(
-                    load: { _ in
+                    load: { settings in
                         try await LayaBackend.load(
-                            from: EncoderPackageStore(environment: environment))
+                            from: EncoderPackageStore(environment: environment),
+                            functionCapacity: settings.encoderFunctions)
                     }, willWarmUp: willWarmUp)
             }
         #else

@@ -3,8 +3,12 @@
 Scripts and a Swift harness that answer spike #56: should Verdict and Laya, upstream's two
 ModernBERT encoder models, run on Core ML or on an MLX port, on iOS and macOS? The findings are in
 [docs/spikes/encoder-runtime.md](../../docs/spikes/encoder-runtime.md). The converters and
-`manifest.py` also produce and describe the packages that `OpenJevEncoders` downloads. Nothing here
-is built by the main package, and no weights, converted packages or tokenizer files are committed.
+`manifest.py` also produce and describe the packages that `OpenJevEncoders` downloads, and
+`function_capacity.py` with `encoder-capacity` measured what each loaded Core ML function costs a
+Mac and how often each number of functions kept loads one again
+([docs/spikes/encoder-function-capacity.md](../../docs/spikes/encoder-function-capacity.md)).
+Nothing here is built by the main package, and no weights, converted packages or tokenizer files
+are committed.
 
 | Path | What it is |
 |---|---|
@@ -14,11 +18,12 @@ is built by the main package, and no weights, converted packages or tokenizer fi
 | `coreml_common.py` | The ModernBERT wrapper that converts cleanly, the conversion helpers and the Core ML runner used for parity |
 | `convert_verdict.py`, `convert_laya.py` | Convert each model to Core ML packages in `~/Library/Caches/OpenJevSwift/encoders` and check them against the reference from Python; reports in `docs/spikes/encoder-runtime/` |
 | `laya_ane_plan.py` | Prints where Core ML plans each part of Laya under the Neural Engine setting: the bisect that found why the unmodified model ran on the CPU |
-| `Harness/` | A Swift package: swift-transformers tokenization, the prompt and sequence builders, calibration, a Core ML runner and the measurement loop; a macOS command (`encoder-harness`) and XCTest parity tests for macOS and the iOS Simulator |
+| `Harness/` | A Swift package: swift-transformers tokenization, the prompt and sequence builders, calibration, a Core ML runner and the measurement loop; a macOS command (`encoder-harness`) and XCTest parity tests for macOS and the iOS Simulator. Its second command, `encoder-capacity`, loads every function of a multifunction package and records the memory and the load time each costs (D-042) |
 | `HarnessApp.swiftpm/` | An iPhone app around the harness, because Xcode cannot host a package's test bundle on a device |
 | `stage_harness.sh` | Copies fixtures, tokenizers and packages into the app for a device run |
 | `run_macos.sh`, `run_ios.sh` | Measure every package with every compute-unit setting, one process each, on the Mac or a connected iPhone |
 | `summarize.py` | Turns the measurement results into the report's tables |
+| `function_capacity.py` | How many Core ML functions a Mac's backend should keep loaded (D-042): replays JevBench runs through `CoreMLEncoderModel`'s cache to count the loads, serves a backend with an `OPENJEV_ENCODER_FUNCTIONS` through `Tools/jevbench`'s harness, and compares those runs; [docs/spikes/encoder-function-capacity.md](../../docs/spikes/encoder-function-capacity.md) has its commands. Standard library only |
 | `manifest.py` | Writes the manifests of Verdict's package and Laya's five that `OpenJevEncoders` embeds (every file's URL, size and SHA-256) and prints the commands that publish each package as a GitHub release (D-033). Standard library only |
 
 ## Running it

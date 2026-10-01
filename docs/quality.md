@@ -266,14 +266,17 @@ score and ECE do not move; SemIf's evaluator takes the first option, "true", aga
 One request at a time, the Swift server reads on the GPU and upstream on the CPU, on a MacBook Pro
 that was doing other work, so the latency columns say little about a loaded server and move between
 reruns, while the scores do not. The Swift server's 95th percentile shows something else: on a Mac
-the encoder keeps two Core ML functions loaded (`functionCapacity`, D-037 item 3), one per input
-shape, and one-question requests whose lengths move among three or four shapes load a function
-again. The function-load table above counts them in the recorded runs: Laya loaded a function 19
-times in its 333 requests, 4 first loads and 15 reloads, and Verdict's requests used three shapes,
-each loaded once. A load took about half a second to a second, several times an ordinary read, and a
-function's first load varied between 0.2 and 1.9 s across the runs on this Mac. The answers do not
-change. A server that sees mixed lengths may want more functions loaded, at the cost of one more
-copy of the weights in memory for each.
+the encoder kept two Core ML functions loaded when these runs were recorded (`functionCapacity`,
+D-037 item 3), one per input shape, and one-question requests whose lengths moved among three or
+four shapes loaded a function again. The function-load table above counts them in the recorded runs:
+Laya loaded a function 19 times in its 333 requests, 4 first loads and 15 reloads, and Verdict's
+requests used three shapes, each loaded once. A load took about half a second to a second, several
+times an ordinary read, and a function's first load varied between 0.2 and 1.9 s across the runs on
+this Mac. The answers do not change. Since D-042 a Mac keeps every function loaded once a read has
+needed it, each holding its own copy of the weights, 805 MB for Laya and 289 MB for Verdict
+([spikes/encoder-function-capacity.md](spikes/encoder-function-capacity.md)), unless
+`OPENJEV_ENCODER_FUNCTIONS` caps them; a new run records the number its server kept, and the table
+above simulates that number.
 
 ## Rerunning every table
 

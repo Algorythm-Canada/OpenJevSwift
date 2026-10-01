@@ -84,6 +84,14 @@ public struct EncoderPackageSpec: Sendable, Hashable {
     /// The planes of every row.
     public var planes: Int { padding.count }
 
+    /// Every function of the package, by batch size and then by length: Verdict's six, `b1_s128`
+    /// to `b16_s512`, and the multifunction Laya package's eight.
+    public var functions: [Function] {
+        batchSizes.flatMap { batchSize in
+            sequenceLengths.map { Function(batchSize: batchSize, sequenceLength: $0) }
+        }
+    }
+
     /// Verdict's float16 package with one function per shape, `verdict-m18-fp16` (D-011):
     /// batch 1 and 16 by 128, 256 and 512 tokens; the token ids padded with ModernBERT's
     /// `[PAD]` (50283) and the attention mask with 0; 25 logits per row.

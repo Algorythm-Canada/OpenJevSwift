@@ -134,14 +134,15 @@ files it writes. `--ids a,b` runs only those items.
 
 `schema` `openjevswift-jevbench-result/1`: the dataset and its pins; the model; the server, with its
 `/v1/models` listing and the versions `servers.py` records (the last commit that changed
-OpenJevSwift's package, the binary's digest, the Core ML package and its check; upstream's commit,
-Python and package versions, device, dtype, thread count and checkpoint revision); the client (this
-harness's digest, the vendored files' digests); the hardware; the published row; the summary; and
-one line per item. An item holds its id, tier, family, type and labels (and, for JevBench, its
-paraphrase group and expected label), its status, the request (the model and question as sent, for
-JevBench; ids only, for TypeSafe; the state's and the body's SHA-256 always), the answer as the
-server sent it, the distribution JevBench scores, whether it is valid and (for JevBench, since a
-TypeSafe row's would give its reference answer away) correct, the published outcome where there is
-one, and the timing: the caller's time, the HTTP time and the server's `server-timing` header. The
-JevBench files are about 400 KB and the TypeSafe ones about 110 KB; a state is kept as its digest
-because the hard tier's states alone are 480 KB.
+OpenJevSwift's package, the binary's digest, the Core ML package and its check, and the number of
+Core ML functions the server keeps loaded as its settings line gives it, `function_capacity`, 2 for
+a binary from before D-042; upstream's commit, Python and package versions, device, dtype, thread
+count and checkpoint revision); the client (this harness's digest, the vendored files' digests); the
+hardware; the published row; the summary; and one line per item. An item holds its id, tier, family,
+type and labels (and, for JevBench, its paraphrase group and expected label), its status, the
+request (the model and question as sent, for JevBench; ids only, for TypeSafe; the state's and the
+body's SHA-256 always), the answer as the server sent it, the distribution JevBench scores, whether
+it is valid and (for JevBench, since a TypeSafe row's would give its reference answer away) correct,
+the published outcome where there is one, and the timing: the caller's time, the HTTP time and the
+server's `server-timing` header. The JevBench files are about 400 KB and the TypeSafe ones about 110
+KB; a state is kept as its digest because the hard tier's states alone are 480 KB.

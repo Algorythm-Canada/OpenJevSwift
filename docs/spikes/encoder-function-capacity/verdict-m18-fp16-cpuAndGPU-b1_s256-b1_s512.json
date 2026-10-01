@@ -1,0 +1,45 @@
+{
+  "afterReleaseFootprintMB" : 95.4,
+  "afterReleaseWeightCopiesMB" : 0,
+  "baselineFootprintMB" : 3.3,
+  "device" : {
+    "chip" : "Apple M3 Max",
+    "machine" : "arm64",
+    "model" : "Mac15,9",
+    "operatingSystem" : "Version 27.0.1 (Build 26A434)",
+    "physicalMemoryBytes" : 137438953472,
+    "processorCount" : 16
+  },
+  "package" : "verdict-m18-fp16",
+  "peakFootprintMB" : 292.6,
+  "peakResidentMB" : 871.6,
+  "reloadFirstCallSeconds" : 0.22594991700316314,
+  "reloadFunction" : "b1_s256",
+  "reloadLoadSeconds" : 0.058939499998814426,
+  "steps" : [
+    {
+      "firstCallSeconds" : 0.8707042500027455,
+      "footprintMB" : 230.7,
+      "function" : "b1_s256",
+      "functionsLoaded" : 1,
+      "loadSeconds" : 0.6495842080039438,
+      "residentMB" : 519.9,
+      "secondCallSeconds" : 0.010749458000645973,
+      "weightCopiesMB" : 289.2,
+      "weightCopyRegions" : 5
+    },
+    {
+      "firstCallSeconds" : 0.6786839160049567,
+      "footprintMB" : 292.6,
+      "function" : "b1_s512",
+      "functionsLoaded" : 2,
+      "loadSeconds" : 0.5057778330083238,
+      "residentMB" : 871.6,
+      "secondCallSeconds" : 0.01649604199337773,
+      "weightCopiesMB" : 579,
+      "weightCopyRegions" : 10
+    }
+  ],
+  "units" : "cpuAndGPU",
+  "weightFileMB" : 289.8
+}

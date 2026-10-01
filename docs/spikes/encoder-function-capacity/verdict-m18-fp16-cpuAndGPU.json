@@ -1,0 +1,89 @@
+{
+  "afterReleaseFootprintMB" : 491,
+  "afterReleaseWeightCopiesMB" : 0,
+  "baselineFootprintMB" : 3.3,
+  "device" : {
+    "chip" : "Apple M3 Max",
+    "machine" : "arm64",
+    "model" : "Mac15,9",
+    "operatingSystem" : "Version 27.0.1 (Build 26A434)",
+    "physicalMemoryBytes" : 137438953472,
+    "processorCount" : 16
+  },
+  "package" : "verdict-m18-fp16",
+  "peakFootprintMB" : 1234.6,
+  "peakResidentMB" : 2970.9,
+  "reloadFirstCallSeconds" : 0.21902966700145043,
+  "reloadFunction" : "b1_s128",
+  "reloadLoadSeconds" : 0.05635604199778754,
+  "steps" : [
+    {
+      "firstCallSeconds" : 0.3849638329993468,
+      "footprintMB" : 229.1,
+      "function" : "b1_s128",
+      "functionsLoaded" : 1,
+      "loadSeconds" : 0.11698579099902418,
+      "residentMB" : 518.3,
+      "secondCallSeconds" : 0.010723999992478639,
+      "weightCopiesMB" : 289.2,
+      "weightCopyRegions" : 5
+    },
+    {
+      "firstCallSeconds" : 0.2242602500045905,
+      "footprintMB" : 245.2,
+      "function" : "b1_s256",
+      "functionsLoaded" : 2,
+      "loadSeconds" : 0.05443695900612511,
+      "residentMB" : 823.5,
+      "secondCallSeconds" : 0.010573124993243255,
+      "weightCopiesMB" : 578.3,
+      "weightCopyRegions" : 10
+    },
+    {
+      "firstCallSeconds" : 0.223293041010038,
+      "footprintMB" : 307.7,
+      "function" : "b1_s512",
+      "functionsLoaded" : 3,
+      "loadSeconds" : 0.05655979098810349,
+      "residentMB" : 1175.9,
+      "secondCallSeconds" : 0.01615704200230539,
+      "weightCopiesMB" : 868.1,
+      "weightCopyRegions" : 15
+    },
+    {
+      "firstCallSeconds" : 0.2512035419931635,
+      "footprintMB" : 450.1,
+      "function" : "b16_s128",
+      "functionsLoaded" : 4,
+      "loadSeconds" : 0.051001665997318923,
+      "residentMB" : 1607.4,
+      "secondCallSeconds" : 0.04609441600041464,
+      "weightCopiesMB" : 1157.3,
+      "weightCopyRegions" : 20
+    },
+    {
+      "firstCallSeconds" : 0.3315871660015546,
+      "footprintMB" : 678.7,
+      "function" : "b16_s256",
+      "functionsLoaded" : 5,
+      "loadSeconds" : 0.09074883299763314,
+      "residentMB" : 2125.2,
+      "secondCallSeconds" : 0.15505945899349172,
+      "weightCopiesMB" : 1446.5,
+      "weightCopyRegions" : 25
+    },
+    {
+      "firstCallSeconds" : 0.4346552920032991,
+      "footprintMB" : 1094.5,
+      "function" : "b16_s512",
+      "functionsLoaded" : 6,
+      "loadSeconds" : 0.08221537499048281,
+      "residentMB" : 2830.8,
+      "secondCallSeconds" : 0.23760191698966082,
+      "weightCopiesMB" : 1736.3,
+      "weightCopyRegions" : 30
+    }
+  ],
+  "units" : "cpuAndGPU",
+  "weightFileMB" : 289.8
+}

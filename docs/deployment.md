@@ -9,14 +9,23 @@ your own", where it applies to a Mac.
 
 | Backend | Model | In this build | Mac | Memory |
 |---|---|---|---|---|
-| `verdict` | `verdict-1.4`, 151M parameters, Core ML | yes | Apple silicon, macOS 15 or later | about 1 GB at peak on the GPU (spike #56) |
+| `verdict` | `verdict-1.4`, 151M parameters, Core ML | yes | Apple silicon, macOS 15 or later | 1.6 GB with the functions one-question reads load, 2.8 GB with all six (D-042) |
 | `mlx` | `openjev-0.1`, DiffusionGemma 26B-A4B, 4-bit, MLX | yes | Apple silicon | about 16 GB to load (MLX holds 14.35 GiB) and more in service (R4); 32 GB or more recommended |
-| `laya` | `laya-1.0`, 421M parameters, Core ML | yes | Apple silicon, macOS 15 or later | about 2.9 GB at peak on the GPU (spike #56) |
+| `laya` | `laya-1.0`, 421M parameters, Core ML | yes | Apple silicon, macOS 15 or later | 4.7 GB with the functions one-question reads load, 8.9 GB with all eight and up to 9.7 GB at peak (D-042); with `OPENJEV_ENCODER_FUNCTIONS=2`, 2.1 GB for one-question reads and up to 4.4 GB at peak |
 
 On an M3 Max, Verdict reads one question in 7.5 to 20.3 ms depending on its length, and a batch
 of 16 in 4.3 to 19.3 ms per question ([spikes/encoder-runtime.md](spikes/encoder-runtime.md)). Like
 upstream, one server serves one backend; run one process per backend, each on its own port, and
 let one of them forward the others' models ([One origin for several models](#one-origin-for-several-models)).
+
+The encoders' memory grows with the shapes the requests take. Each Core ML function reads one
+shape (one question or a batch of up to 16, by sequence length), loads when a read first needs it
+and stays loaded, holding its own copy of the weights: 289 MB for Verdict and 805 MB for Laya, in
+file-backed memory that the server's physical footprint does not include. On a Mac with 8 GB
+serving Laya, set `OPENJEV_ENCODER_FUNCTIONS=2`, a recommendation from the figures of a 128 GB Mac:
+each request whose function was released then waits for it to load again, 0.44 to 1.85 s for Laya
+and 0.22 to 0.69 s for Verdict
+([spikes/encoder-function-capacity.md](spikes/encoder-function-capacity.md)).
 
 ## Build
 
@@ -60,6 +69,10 @@ tokenizer and calibrator (D-033):
 
 The first start compiles the package and keeps the result beside it
 (`verdict-m18-fp16.mlmodelc`); later starts reuse the compiled copy until the package changes.
+Core ML also keeps each function it has run on the GPU, with its own copy of the weights, in
+`~/Library/Caches/openjev/com.apple.e5rt.e5bundlecache` of the user the server runs as: 1.7 GB
+once every Verdict function has run and 6.3 GB for Laya's, whatever `OPENJEV_ENCODER_FUNCTIONS`
+says.
 
 Laya on a Mac runs its multifunction package, `laya-m18-fp16` (810 MB), with its tokenizer and
 `rl_agent_config.json` (D-037). Its release `laya-m18-fp16-v1` is published, so without
@@ -82,6 +95,7 @@ The server reads upstream's `OPENJEV_*` variables, with upstream's defaults and 
 | `OPENJEV_ORIGIN_SECRET` | unset | Require `X-Origin-Secret` (for a server behind a proxy). |
 | `OPENJEV_ENCODER_MODELS` | unset | A folder of converted Core ML packages, used instead of downloading (this port's, D-033). |
 | `OPENJEV_ENCODER_BATCH` | `16` | Questions per backend call. On a Mac, Verdict splits a call into Core ML calls of at most 16 questions. |
+| `OPENJEV_ENCODER_FUNCTIONS` | unset | The most Core ML functions an encoder keeps loaded, at least 1 (this port's, D-042). Unset keeps every function a read has needed, up to Verdict's 6 and Laya's 8, and the settings line shows `encoder_functions=all`; a lower number releases the least recently used one first. |
 | `OPENJEV_MAX_QUEUE` | `512` | Decisions inside the server before a 529. `0` refuses every request, as upstream's does. |
 | `OPENJEV_MAX_QUESTIONS` | `256` | Questions per request before a 400. |
 | `OPENJEV_MAX_BODY_BYTES` | `67108864` | Request body limit before a 413. |
@@ -263,7 +277,7 @@ Everything goes to standard error, one line per event, as swift-log writes it:
 `{time} {level} openjev: [{module}] {message}`. A start and one request look like this:
 
 ```text
-2026-10-01T11:51:53-0400 info openjev: [openjev] settings: host=0.0.0.0 port=8080 backend=verdict log_level=info warmup=on max_queue=512 max_questions=256 max_body_bytes=67108864 encoder_batch=16 encoder_models=downloads api_key=set origin_secret=unset model_routes=none
+2026-10-01T11:51:53-0400 info openjev: [openjev] settings: host=0.0.0.0 port=8080 backend=verdict log_level=info warmup=on max_queue=512 max_questions=256 max_body_bytes=67108864 encoder_batch=16 encoder_functions=all encoder_models=downloads api_key=set origin_secret=unset model_routes=none
 2026-10-01T11:51:53-0400 info openjev: [openjev] loading verdict-1.4 (OPENJEV_BACKEND=verdict)
 2026-10-01T11:51:55-0400 info openjev: [openjev] warming up
 2026-10-01T11:51:56-0400 info openjev: [HummingbirdCore] Server started and listening on 0.0.0.0:8080

@@ -1,0 +1,22 @@
+Core ML's cache of the functions it has compiled for the GPU, after the encoder-capacity runs of
+2026-10-01 (macOS 27.0.1, build 26A434): one folder per package, one bundle per function, each
+with its own copy of the weights (resources.bin). MB are 2^20 bytes, the sums of the files'
+sizes; du -sh on each package's folder gives the same totals.
+
+~/Library/Caches/encoder-capacity/com.apple.e5rt.e5bundlecache/26A434/8C41DE033777...: 8 functions, 6,432 MB
+  b1_s128    bundle   803.2 MB, resources.bin   803.1 MB
+  b1_s256    bundle   803.4 MB, resources.bin   803.3 MB
+  b1_s512    bundle   803.9 MB, resources.bin   803.8 MB
+  b1_s1024   bundle   805.6 MB, resources.bin   805.6 MB
+  b16_s128   bundle   803.2 MB, resources.bin   803.1 MB
+  b16_s256   bundle   803.4 MB, resources.bin   803.3 MB
+  b16_s512   bundle   803.9 MB, resources.bin   803.8 MB
+  b16_s1024  bundle   805.6 MB, resources.bin   805.6 MB
+
+~/Library/Caches/encoder-capacity/com.apple.e5rt.e5bundlecache/26A434/FDF43F535E6A...: 6 functions, 1,735 MB
+  b1_s128    bundle   288.9 MB, resources.bin   288.8 MB
+  b1_s256    bundle   289.0 MB, resources.bin   289.0 MB
+  b1_s512    bundle   289.5 MB, resources.bin   289.5 MB
+  b16_s128   bundle   288.9 MB, resources.bin   288.8 MB
+  b16_s256   bundle   289.0 MB, resources.bin   289.0 MB
+  b16_s512   bundle   289.5 MB, resources.bin   289.5 MB

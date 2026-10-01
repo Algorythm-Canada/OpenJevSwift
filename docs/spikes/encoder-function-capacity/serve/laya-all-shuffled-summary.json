@@ -1,0 +1,20 @@
+{
+ "label": "laya-all-shuffled",
+ "backend": "laya",
+ "functions": "all",
+ "order": "shuffled",
+ "seed": 61,
+ "startup_s": 3.08,
+ "memory_mb": {
+  "after_warm_up": {
+   "footprint": 532,
+   "weight_copies": 803,
+   "resident": 1335
+  },
+  "after_reads": {
+   "footprint": 691,
+   "weight_copies": 4020,
+   "resident": 4711
+  }
+ }
+}

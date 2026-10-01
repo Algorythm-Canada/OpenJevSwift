@@ -1,0 +1,67 @@
+{
+  "afterReleaseFootprintMB" : 470.8,
+  "afterReleaseWeightCopiesMB" : 0,
+  "baselineFootprintMB" : 3.3,
+  "device" : {
+    "chip" : "Apple M3 Max",
+    "machine" : "arm64",
+    "model" : "Mac15,9",
+    "operatingSystem" : "Version 27.0.1 (Build 26A434)",
+    "physicalMemoryBytes" : 137438953472,
+    "processorCount" : 16
+  },
+  "package" : "verdict-m18-fp16",
+  "peakFootprintMB" : 1192.1,
+  "peakResidentMB" : 2350,
+  "reloadFirstCallSeconds" : 0.2403680409915978,
+  "reloadFunction" : "b1_s512",
+  "reloadLoadSeconds" : 0.06196695799008012,
+  "steps" : [
+    {
+      "firstCallSeconds" : 0.3795022499980405,
+      "footprintMB" : 251,
+      "function" : "b1_s512",
+      "functionsLoaded" : 1,
+      "loadSeconds" : 0.098572333008633,
+      "residentMB" : 540.8,
+      "secondCallSeconds" : 0.016974666010355577,
+      "weightCopiesMB" : 289.8,
+      "weightCopyRegions" : 5
+    },
+    {
+      "firstCallSeconds" : 0.26139274999150075,
+      "footprintMB" : 429.5,
+      "function" : "b16_s128",
+      "functionsLoaded" : 2,
+      "loadSeconds" : 0.05728912500489969,
+      "residentMB" : 1008.5,
+      "secondCallSeconds" : 0.0464750420069322,
+      "weightCopiesMB" : 579,
+      "weightCopyRegions" : 10
+    },
+    {
+      "firstCallSeconds" : 0.2968244590010727,
+      "footprintMB" : 685.5,
+      "function" : "b16_s256",
+      "functionsLoaded" : 3,
+      "loadSeconds" : 0.05768908299796749,
+      "residentMB" : 1553.6,
+      "secondCallSeconds" : 0.0919525000063004,
+      "weightCopiesMB" : 868.1,
+      "weightCopyRegions" : 15
+    },
+    {
+      "firstCallSeconds" : 0.43313358299201354,
+      "footprintMB" : 1192.1,
+      "function" : "b16_s512",
+      "functionsLoaded" : 4,
+      "loadSeconds" : 0.05403195800317917,
+      "residentMB" : 2350,
+      "secondCallSeconds" : 0.19812991601065733,
+      "weightCopiesMB" : 1157.9,
+      "weightCopyRegions" : 20
+    }
+  ],
+  "units" : "cpuAndGPU",
+  "weightFileMB" : 289.8
+}

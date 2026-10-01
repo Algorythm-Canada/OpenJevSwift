@@ -7,6 +7,8 @@ import OpenJevCore
 
 /// Upstream's `Settings`, for everything that is not vLLM-specific: the same names, defaults and
 /// startup validation, so deployment documentation and compose files transfer (decision D-013).
+/// One setting is this port's own, `OPENJEV_ENCODER_FUNCTIONS` (D-042), read and checked as
+/// upstream's `_env_num` settings are.
 ///
 /// The fields are constants, as upstream's frozen dataclass is: a value exists only once the
 /// checks have passed, so no later change can reach an engine's preconditions.
@@ -85,6 +87,9 @@ public struct ServerSettings: Sendable, Hashable {
     public let device: String
     /// Questions per encoder batch, `OPENJEV_ENCODER_BATCH`.
     public let encoderBatch: Int
+    /// The most Core ML functions an encoder keeps loaded, `OPENJEV_ENCODER_FUNCTIONS`, this
+    /// port's (D-042). `nil` keeps every function of the package once a read has needed it.
+    public let encoderFunctions: Int?
     /// Other System One models served by other OpenJev servers, `OPENJEV_MODEL_ROUTES`
     /// (`name=url,name=url`), in the order given. A request for one of them that this server does
     /// not serve is passed through unchanged, and `GET /v1/models` lists them.
@@ -99,7 +104,8 @@ public struct ServerSettings: Sendable, Hashable {
     ///   `maxImageBytes`, `genMaxInflight`, `genMaxTokens`, `mlxMaxPrompt`, `encoderBatch` and
     ///   `forwardTimeout` must be at least 1; `maxQueue`, `genMaxQueue` and `maxImages` must not
     ///   be negative; `mlxCacheLimitGB` and `mlxPromptCache` must not be negative either, which
-    ///   upstream checks while reading the environment.
+    ///   upstream checks while reading the environment, and `encoderFunctions` must be at least
+    ///   1, with the same message.
     public init(
         host: String = "127.0.0.1",
         port: Int = 8080,
@@ -129,6 +135,7 @@ public struct ServerSettings: Sendable, Hashable {
         verdictModel: String = "heman10x/rlcd-modernbert-151m",
         device: String = "",
         encoderBatch: Int = 16,
+        encoderFunctions: Int? = nil,
         modelRoutes: OrderedMap<String> = [:],
         logLevel: LogLevel = .info
     ) throws(ServerSettingsError) {
@@ -160,6 +167,7 @@ public struct ServerSettings: Sendable, Hashable {
         self.verdictModel = verdictModel
         self.device = device
         self.encoderBatch = encoderBatch
+        self.encoderFunctions = encoderFunctions
         self.modelRoutes = modelRoutes
         self.logLevel = logLevel
         try validate()
@@ -167,19 +175,20 @@ public struct ServerSettings: Sendable, Hashable {
 
     /// Creates settings from `OPENJEV_*` variables, as upstream reads them. A missing variable
     /// means the default. A variable set to the empty string is kept for a string setting, means
-    /// the default for the two MLX cache settings (upstream's `_env_num`), and is refused for
-    /// every other number, as Python's `int("")` refuses it. Numbers parse as Python's `int` and
-    /// `float` parse them, surrounding whitespace, a `+` and `_` between digits included. Unlike
-    /// upstream, a value that does not parse names its variable in the error.
+    /// the default for the two MLX cache settings (upstream's `_env_num`) and
+    /// `OPENJEV_ENCODER_FUNCTIONS`, and is refused for every other number, as Python's `int("")`
+    /// refuses it. Numbers parse as Python's `int` and `float` parse them, surrounding whitespace,
+    /// a `+` and `_` between digits included. Unlike upstream, a value that does not parse names
+    /// its variable in the error.
     ///
     /// Only the CLI calls this, with the process environment; the library never reads it.
     ///
     /// - Throws: ``ServerSettingsError`` with upstream's texts: `{NAME}={raw!r} is not a int` (or
     ///   `float`) for a value that does not parse, `{NAME}={value} is below the minimum of
-    ///   {minimum}` for the two MLX cache settings, `OPENJEV_MODEL_ROUTES: {part!r} is not
-    ///   name=url` for a route without both parts, and the memberwise initializer's messages for
-    ///   the values it refuses. An unknown `OPENJEV_LOG_LEVEL` is refused with a message that
-    ///   lists the levels.
+    ///   {minimum}` for the two MLX cache settings and `OPENJEV_ENCODER_FUNCTIONS`,
+    ///   `OPENJEV_MODEL_ROUTES: {part!r} is not name=url` for a route without both parts, and the
+    ///   memberwise initializer's messages for the values it refuses. An unknown
+    ///   `OPENJEV_LOG_LEVEL` is refused with a message that lists the levels.
     public init(environment: [String: String]) throws(ServerSettingsError) {
         let env = EnvironmentReader(environment)
         try self.init(
@@ -214,6 +223,7 @@ public struct ServerSettings: Sendable, Hashable {
                 "OPENJEV_VERDICT_MODEL", default: "heman10x/rlcd-modernbert-151m"),
             device: env.string("OPENJEV_DEVICE", default: ""),
             encoderBatch: env.integer("OPENJEV_ENCODER_BATCH", default: 16),
+            encoderFunctions: env.optionalInteger("OPENJEV_ENCODER_FUNCTIONS", minimum: 1),
             modelRoutes: Self.parseRoutes(env.string("OPENJEV_MODEL_ROUTES", default: "")),
             logLevel: env.logLevel("OPENJEV_LOG_LEVEL", default: .info)
         )
@@ -305,7 +315,8 @@ public struct ServerSettings: Sendable, Hashable {
         return String(kept)
     }
 
-    /// Upstream's `__post_init__` checks, plus the two minimums `_env_num` applies while reading.
+    /// Upstream's `__post_init__` checks, plus the two minimums `_env_num` applies while reading
+    /// and this port's `OPENJEV_ENCODER_FUNCTIONS` minimum.
     private func validate() throws(ServerSettingsError) {
         let positive: [(name: String, value: SettingNumber)] = [
             ("canvas", .integer(canvas)),
@@ -342,6 +353,10 @@ public struct ServerSettings: Sendable, Hashable {
         if SettingNumber.integer(mlxPromptCache).isBelow(0) {
             throw ServerSettingsError.belowMinimum(
                 "OPENJEV_MLX_PROMPT_CACHE", value: .integer(mlxPromptCache), minimum: 0)
+        }
+        if let functions = encoderFunctions, SettingNumber.integer(functions).isBelow(1) {
+            throw ServerSettingsError.belowMinimum(
+                "OPENJEV_ENCODER_FUNCTIONS", value: .integer(functions), minimum: 1)
         }
     }
 }
