@@ -373,9 +373,20 @@ public struct EncoderPackageStore: Sendable {
                     }
             })
         else {
+            // Every folder looked in: Laya's configuration file is sought at the snapshot's
+            // root, apart from its tokenizer.
+            var searched: [URL] = []
+            for candidate in candidates {
+                searched.append(candidate.tokenizerDirectory)
+                let calibratorFolder = candidate.calibratorFile.deletingLastPathComponent()
+                if calibratorFolder.standardizedFileURL.path
+                    != candidate.tokenizerDirectory.standardizedFileURL.path
+                {
+                    searched.append(calibratorFolder)
+                }
+            }
             throw EncoderPackageError.missingLocalTokenizer(
-                files: names + [manifest.calibrator.path],
-                searched: candidates.map(\.tokenizerDirectory))
+                files: names + [manifest.calibrator.path], searched: searched)
         }
         return found
     }
@@ -508,7 +519,9 @@ public enum EncoderPackageError: Error, Sendable, Hashable, CustomStringConverti
     case httpStatus(url: URL, status: Int)
     /// The local models folder lacks the package.
     case missingLocalPackage(URL)
-    /// No folder holds the tokenizer's files and the calibrator.
+    /// No folder holds the tokenizer's files and the calibrator. `searched` lists every folder
+    /// looked in, the calibration file's own when it is not the tokenizer's, as for Laya's
+    /// snapshot, whose rl_agent_config.json is at the root and its tokenizer under `tokenizer/`.
     case missingLocalTokenizer(files: [String], searched: [URL])
     /// The package needs a newer OS.
     case unsupportedOperatingSystem(package: String, minimum: String)

@@ -107,6 +107,27 @@ public struct EncoderPackageManifest: Sendable, Hashable, Codable {
         self.checkpointTokenizerFolder = checkpointTokenizerFolder
     }
 
+    private enum CodingKeys: String, CodingKey {
+        case model, package, minimumOS, checkpoint, packageDownloadsEnabled, packageFiles,
+            tokenizerFiles, calibrator, checkpointTokenizerFolder
+    }
+
+    /// Decodes a manifest. One encoded before ``checkpointTokenizerFolder`` existed has none,
+    /// and keeps the checkpoint's root, as Verdict's did.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        model = try container.decode(String.self, forKey: .model)
+        package = try container.decode(String.self, forKey: .package)
+        minimumOS = try container.decode(MinimumOS.self, forKey: .minimumOS)
+        checkpoint = try container.decode(Checkpoint.self, forKey: .checkpoint)
+        packageDownloadsEnabled = try container.decode(Bool.self, forKey: .packageDownloadsEnabled)
+        packageFiles = try container.decode([File].self, forKey: .packageFiles)
+        tokenizerFiles = try container.decode([File].self, forKey: .tokenizerFiles)
+        calibrator = try container.decode(File.self, forKey: .calibrator)
+        checkpointTokenizerFolder =
+            try container.decodeIfPresent(String.self, forKey: .checkpointTokenizerFolder) ?? ""
+    }
+
     /// Where the checkpoint's snapshot in a Hugging Face hub cache holds the tokenizer's files
     /// and the calibration file.
     public func checkpointFiles(in hub: URL) -> EncoderTokenizerLocations {

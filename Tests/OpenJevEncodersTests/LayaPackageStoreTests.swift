@@ -114,6 +114,24 @@ struct LayaPackageStoreTests {
         }
     }
 
+    @Test("A manifest encoded before the checkpoint's tokenizer folder existed still decodes")
+    func manifestDecoding() throws {
+        let laya = EncoderPackageManifest.laya
+        let decoded = try JSONDecoder().decode(
+            EncoderPackageManifest.self, from: JSONEncoder().encode(laya))
+        #expect(decoded == laya)
+        // Remove the key, as a manifest encoded by an earlier release lacks it.
+        var object = try #require(
+            try JSONSerialization.jsonObject(
+                with: JSONEncoder().encode(EncoderPackageManifest.verdict))
+                as? [String: Any])
+        #expect(object.removeValue(forKey: "checkpointTokenizerFolder") != nil)
+        let earlier = try JSONDecoder().decode(
+            EncoderPackageManifest.self, from: JSONSerialization.data(withJSONObject: object))
+        #expect(earlier == EncoderPackageManifest.verdict)
+        #expect(earlier.checkpointTokenizerFolder.isEmpty)
+    }
+
     @Test(
         "The checkpoint is the fixture's, and its files are the ones the manifests check",
         .enabled(if: LayaFixtures.available, LayaFixtures.missingMessage))
@@ -186,6 +204,18 @@ struct LayaPackageStoreTests {
         #expect(
             missing?.description.contains(
                 "tokenizer.json, tokenizer_config.json, rl_agent_config.json") == true)
+        // The error names every folder looked in, the snapshot's root included, where the
+        // configuration file is sought apart from the tokenizer.
+        guard case .missingLocalTokenizer(_, let searched) = missing else {
+            Issue.record("expected a missing tokenizer, got \(String(describing: missing))")
+            return
+        }
+        #expect(
+            searched.map(\.standardizedFileURL.path)
+                == [
+                    local.appendingPathComponent("laya-m18-fp16/tokenizer"),
+                    snapshot.appendingPathComponent("tokenizer"), snapshot,
+                ].map(\.standardizedFileURL.path))
 
         for name in ["tokenizer.json", "tokenizer_config.json"] {
             try write("{}", to: "tokenizer/\(name)", in: snapshot)
