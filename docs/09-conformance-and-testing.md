@@ -67,16 +67,24 @@ path exists (upstream's `tests/data/hotdog.jpg` case).
 
 The encoder backends (`OpenJevEncodersTests`, issues #57 and #58) take their oracle from
 `Fixtures/encoders`, PyTorch float32 reads through upstream's own code. Without any model they
-check every prompt byte for byte, the calibration within 1e-6 on the recorded logits, the billing
-and, over a model that replays the recorded logits, the batching and the answer order through
-`EncoderDecisionEngine`. The tokenizer parity tests need the checkpoint's tokenizer, and the Core
-ML parity tests need the converted package; both are opt-in via `OPENJEV_ENCODER_MODELS=<folder>`
-(the converters' output, with `<package>/tokenizer/`), else `~/Library/Caches/OpenJevSwift/encoders`
-and the Hugging Face cache, and skip naming that variable otherwise. Core ML is compared with the
-bounds of spike #56 in the style of D-014: over the 200 questions, the largest probability
-difference at most 0.02, the mean at most 0.003, and the top answer unchanged wherever the
-reference's top two are at least 0.01 apart. Planted calibration bugs (the global temperature
-where `per_k` has one, the abstention's mass kept) must each break a bound.
+check every prompt byte for byte (Verdict's prompts; Laya's heads, options and states), the
+calibration within 1e-6 on the recorded logits (Laya's bit for bit, since it reproduces laya's
+float32 arithmetic), Laya's 4-decimal rounding against laya's own answers and the renormalised
+distribution against upstream's exactly, the billing and, over a model that replays the recorded
+logits or scores, the batching, the answer order and the noul's swap through
+`EncoderDecisionEngine`. Laya's sequences are also rebuilt from the recorded pieces with no
+tokenizer. The tokenizer parity tests need the checkpoint's tokenizer, and the Core ML parity
+tests need the converted packages; both are opt-in via `OPENJEV_ENCODER_MODELS=<folder>` (the
+converters' output, with `<package>/tokenizer/`), else `~/Library/Caches/OpenJevSwift/encoders` and
+the Hugging Face cache (Laya's tokenizer under the snapshot's `tokenizer/`), and skip naming that
+variable otherwise. Core ML is compared with the bounds of spike #56 in the style of D-014, on
+Laya's probabilities before rounding: over the questions read, the largest probability difference
+at most 0.02, the mean at most 0.003, and the top answer unchanged wherever the reference's top two
+are at least 0.01 apart. Laya is read on its Mac package at 1 and 16 rows per call on the GPU and
+on each per-length package at one row on the Neural Engine, each with the questions that fit it.
+Planted bugs must each break a bound: for Verdict the global temperature where `per_k` has one and
+the abstention's mass kept; for Laya the type's temperature where a bucket has its own and a read
+one position off each marker, on recorded scores and, in the Core ML test, on the model's own.
 
 Layer 2 also covers the port of upstream's `test_mlx_model.py` cases: README example answers,
 chunked question reads, more steps costing no more prompt tokens, `think` billing, chat completion

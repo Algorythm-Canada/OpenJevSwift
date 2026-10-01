@@ -116,10 +116,7 @@ enum VerdictFixtures {
     }
 
     /// One request of corpus.json, decoded as the API decodes a body.
-    struct CorpusRequest: Sendable {
-        var name: String
-        var request: SystemOneRequest
-    }
+    typealias CorpusRequest = EncoderCorpus.Request
 
     private static let loadedReference = Result {
         try JSONDecoder().decode(
@@ -127,34 +124,14 @@ enum VerdictFixtures {
         )
     }
 
-    private static let loadedCorpus = Result { () throws -> [CorpusRequest] in
-        let corpus = try JSONParser().parse(
-            Data(contentsOf: directory.appendingPathComponent("corpus.json")))
-        guard let requests = corpus["requests"]?.arrayValue else {
-            throw FixtureError("corpus.json has no requests array")
-        }
-        return try requests.map { entry in
-            guard let name = entry["name"]?.stringValue, let state = entry["state"],
-                let questions = entry["questions"]
-            else {
-                throw FixtureError("a corpus request lacks its name, state or questions")
-            }
-            let body: JSONValue = .object([
-                "model": .string(KnownEncoderModels.verdict.name), "state": state,
-                "questions": questions,
-            ])
-            return CorpusRequest(name: name, request: try SystemOneRequest(json: body))
-        }
-    }
-
     /// verdict.json, parsed once.
     static func reference() throws -> Reference {
         try loadedReference.get()
     }
 
-    /// corpus.json's requests in order, parsed once.
+    /// corpus.json's requests in order, each asking `verdict-1.4`.
     static func corpus() throws -> [CorpusRequest] {
-        try loadedCorpus.get()
+        try EncoderCorpus.requests(model: KnownEncoderModels.verdict.name)
     }
 
     /// The reads of each request, keyed by request name, in corpus order.
@@ -164,69 +141,27 @@ enum VerdictFixtures {
 
     /// The read questions of a corpus request, as the engine hands them to a backend.
     static func questions(of request: CorpusRequest) throws -> [EncoderQuestion] {
-        try EncoderQuestionSchemaBuilder(maxChoices: 24).build(request.request.questions)
-            .questions
+        try EncoderCorpus.questions(of: request, maxChoices: 24)
     }
 }
 
 /// The files the opt-in tests read from outside the repository: Verdict's tokenizer and
-/// calibrator, and the converted package.
-///
-/// The folder of converted packages is `OPENJEV_ENCODER_MODELS` when set, else
-/// ~/Library/Caches/OpenJevSwift/encoders, where Tools/encoders/convert_verdict.py writes. The
-/// tokenizer is read from `{that folder}/verdict-m18-fp16/tokenizer/`, else from the Hugging Face
-/// cache snapshot at the pinned revision, the rule ``EncoderPackageStore`` applies. In the iOS
-/// Simulator, `~` is the Mac's home. Tests skip with a comment naming `OPENJEV_ENCODER_MODELS`
-/// when the files are missing, which is the skip CI's check-test-log.sh accepts.
+/// calibrator, and the converted package, found as ``EncoderModelFiles`` says.
 enum VerdictModelFiles {
-    /// The process environment, with the Mac's home standing in for the Simulator's.
-    static let environment: [String: String] = {
-        var environment = ProcessInfo.processInfo.environment
-        if let host = environment["SIMULATOR_HOST_HOME"], environment["HF_HUB_CACHE"] == nil,
-            environment["HF_HOME"] == nil
-        {
-            environment["HF_HUB_CACHE"] = host + "/.cache/huggingface/hub"
-        }
-        return environment
-    }()
-
-    /// The user's home, the Mac's in the Simulator.
-    static let home = environment["SIMULATOR_HOST_HOME"] ?? NSHomeDirectory()
-
     /// The folder of converted packages.
-    static let modelsDirectory: URL = {
-        if let path = environment[EncoderPackageStore.localModelsVariable], !path.isEmpty {
-            return URL(fileURLWithPath: path, isDirectory: true)
-        }
-        return URL(fileURLWithPath: home, isDirectory: true)
-            .appendingPathComponent("Library/Caches/OpenJevSwift/encoders", isDirectory: true)
-    }()
+    static var modelsDirectory: URL { EncoderModelFiles.modelsDirectory }
 
     /// The Hugging Face hub cache.
-    static let hubDirectory = EncoderPackageStore.huggingFaceHubDirectory(
-        environment: environment)
+    static var hubDirectory: URL { EncoderModelFiles.hubDirectory }
 
     /// The package, when it has been converted.
     static var packageDirectory: URL? {
-        let package = modelsDirectory.appendingPathComponent(
-            EncoderPackageManifest.verdict.package + ".mlpackage", isDirectory: true)
-        return FileManager.default.fileExists(atPath: package.path) ? package : nil
+        EncoderModelFiles.package(EncoderPackageManifest.verdict.package)
     }
 
     /// The first folder that holds tokenizer.json, tokenizer_config.json and calibrator.json.
     static var tokenizerDirectory: URL? {
-        let manifest = EncoderPackageManifest.verdict
-        let names = (manifest.tokenizerFiles + [manifest.calibrator]).map(\.path)
-        let candidates = [
-            modelsDirectory.appendingPathComponent(manifest.package, isDirectory: true)
-                .appendingPathComponent("tokenizer", isDirectory: true),
-            manifest.checkpoint.snapshot(in: hubDirectory),
-        ]
-        return candidates.first { folder in
-            names.allSatisfy {
-                FileManager.default.fileExists(atPath: folder.appendingPathComponent($0).path)
-            }
-        }
+        EncoderModelFiles.tokenizer(for: .verdict)?.tokenizerDirectory
     }
 
     /// The message shown when the tokenizer is missing.

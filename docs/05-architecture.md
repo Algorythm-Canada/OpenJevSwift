@@ -46,9 +46,15 @@ OpenJevSwift/                          Swift package, tools 6.2, strict concurre
     OpenJevEncoders/                   Apple platforms; its Core ML types need macOS 15 and iOS 18.
                                        Depends on Core ML and swift-transformers Tokenizers; no MLX.
       Verdict/       VerdictPrompt, VerdictTokenizer, VerdictCalibration, VerdictBackend actor
-      CoreML/        EncoderPackageSpec, CoreMLEncoderModel (one function per shape, one or two
-                     loaded), CompiledEncoderModel, EncoderComputeUnits
-      Store/         EncoderPackageManifest, EncoderPackageStore (download on first use, SHA-256)
+      Laya/          LayaPrompt (render_options, serialize_state), LayaSequence (build_sequence),
+                     LayaTokenizer, LayaCalibration (buckets, clamp, float32 softmax, rounding),
+                     LayaBackend actor, LayaPackageSet
+      CoreML/        EncoderPackageSpec (one function per shape, or one program for one shape),
+                     CoreMLEncoderModel (one or two functions loaded), CoreMLPackagesByLength
+                     (Laya's per-length packages, each kept loaded), CompiledEncoderModel,
+                     EncoderComputeUnits
+      Store/         EncoderPackageManifest (Verdict's, Laya's five), EncoderPackageStore
+                     (download on first use, SHA-256, the tokenizer alone, held packages)
     OpenJevServer/                     Hummingbird 2. ServerSettings, BackendProvider,
                                        OpenJevApplication (routes), SystemOneHandler, request id,
                                        server-timing, request log, authentication and body cap
@@ -77,8 +83,8 @@ OpenJevSwift/                          Swift package, tools 6.2, strict concurre
   Fixtures/                            Checked-in JSON fixtures (small)
 ```
 
-`OpenJevEncoders` holds the encoder backends on Core ML (D-011): Verdict (#57) now, Laya (#58)
-next. A later milestone adds `OpenJevLetterReadout` (JevK5 style on `MLXLLM` models). Both are
+`OpenJevEncoders` holds the encoder backends on Core ML (D-011): Verdict (#57) and Laya (#58).
+A later milestone adds `OpenJevLetterReadout` (JevK5 style on `MLXLLM` models). Both are
 separate targets so that iOS consumers never link the 26B model code. Both implement
 `QuestionReadBackend` and run behind `EncoderDecisionEngine`, so the server holds either kind of
 engine as a `SystemOneService`.
@@ -316,7 +322,7 @@ Every connection carries a `ClientDisconnectHandler`, which sees the end of the 
 The route runs the decision in a child task beside a watch of its connection: a client that goes
 away cancels the decision, which reaches the reads through task cancellation, and the request log
 shows 499. Request handling creates no unstructured or detached task. Decisions D-030, D-031 and
-D-037 record where the server differs from upstream. `OPENJEV_MODEL_ROUTES` forwarding uses
+D-038 record where the server differs from upstream. `OPENJEV_MODEL_ROUTES` forwarding uses
 `URLSession` or Hummingbird's client. Text generation routes are added only when a
 generation-capable backend is loaded.
 
@@ -345,27 +351,35 @@ a backend this build lacks or that failed to load, and 4 for a request `decide` 
 streams, backends, loggers, shutdown signals), which tests replace to run them in-process with
 stub backends.
 
-`BackendRegistry` lists the backends: `mlx` and `laya` exit 3 naming issues #29 and #58 until
-they land, any name it does not list is upstream's invalid-setting error, and an encoder backend
-is one line. For `OPENJEV_BACKEND=verdict`, with `environment` the process environment the CLI
-also hands to `ServerSettings(environment:)`:
+`BackendRegistry` lists the backends: `mlx` exits 3 naming issue #29 until it lands, any name
+it does not list is upstream's invalid-setting error, and an encoder backend is one line. For
+`OPENJEV_BACKEND=verdict` and `OPENJEV_BACKEND=laya`, with `environment` the process environment
+the CLI also hands to `ServerSettings(environment:)`:
 
 ```swift
 QuestionReadBackendProvider { _ in
     try await VerdictBackend.load(from: EncoderPackageStore(environment: environment))
 }
+QuestionReadBackendProvider { _ in
+    try await LayaBackend.load(from: EncoderPackageStore(environment: environment))
+}
 ```
 
-On Linux, where `OpenJevEncoders` does not exist, `verdict` is a known backend that exits 3.
+On Linux, where `OpenJevEncoders` does not exist, `verdict` and `laya` are known backends that
+exit 3.
 
 `EncoderPackageStore(environment:)` uses the folder `OPENJEV_ENCODER_MODELS` names when it is set,
-as the converters in `Tools/encoders` write it. Otherwise it downloads Verdict's package, tokenizer
-and calibrator to Application Support on first use and checks every file's SHA-256 against the
-manifest the library embeds (D-033); a manifest whose downloads are off, as a new package's is
-before its release exists, is refused with `EncoderPackageError.packageDownloadsUnavailable`. `VerdictBackend.load(configuration:)`
-takes the three locations directly. Both loaders build for the package's macOS 14 floor and throw on
-an OS older than macOS 15 or iOS 18, which the Core ML packages need (D-034). The provider builds
-the `EncoderDecisionEngine` from `OPENJEV_ENCODER_BATCH`, `OPENJEV_MAX_QUEUE` and `OPENJEV_WARMUP`,
+as the converters in `Tools/encoders` write it. Otherwise it downloads the model's package,
+tokenizer and calibration file to Application Support on first use and checks every file's SHA-256
+against the manifest the library embeds (D-033); a manifest whose downloads are off, as a new
+package's is before its release exists, is refused with
+`EncoderPackageError.packageDownloadsUnavailable`. On a Mac, Laya's loader gets its multifunction
+package; on an iPhone it gets only the tokenizer and rl_agent_config.json, reads each question
+through the smallest per-length package the device holds, and leaves fetching them to the app
+(`LayaBackend.prefetch(lengths:)`, D-037). `load(configuration:)` takes the locations directly. The
+loaders build for the package's macOS 14 floor and throw on an OS older than macOS 15 or iOS 18,
+which the Core ML packages need (D-034). The provider builds the
+`EncoderDecisionEngine` from `OPENJEV_ENCODER_BATCH`, `OPENJEV_MAX_QUEUE` and `OPENJEV_WARMUP`,
 and the warm-up read loads the first Core ML function.
 
 ## Platform support matrix

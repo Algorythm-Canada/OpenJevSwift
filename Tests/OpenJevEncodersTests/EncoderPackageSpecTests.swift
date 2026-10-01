@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 
 @testable import OpenJevEncoders
@@ -56,6 +57,40 @@ struct EncoderPackageSpecTests {
         #expect(input == [3, 4, 0, 0, 1, 1, 0, 0, 2, 2, 2, 2] + Array(repeating: 0, count: 12))
     }
 
+    @Test("Laya's packages: the Mac's one function per shape, the iPhone's one program each")
+    func layaSpecs() {
+        let mac = EncoderPackageSpec.layaMultifunction
+        #expect(mac.name == "laya-m18-fp16")
+        #expect(mac.layout == .functionPerShape)
+        #expect(mac.batchSizes == [1, 16])
+        #expect(mac.sequenceLengths == [128, 256, 512, 1024])
+        #expect(mac.padding == [.value(50_283), .value(0), .firstValue])
+        #expect(mac.outputName == "scores")
+        #expect(mac.function(rows: 16, longestRow: 1000)?.name == "b16_s1024")
+        #expect(mac.function(rows: 3, longestRow: 300)?.name == "b16_s512")
+        #expect(mac.function(rows: 1, longestRow: 128)?.name == "b1_s128")
+        #expect(mac.function(rows: 1, longestRow: 1025) == nil)
+        for length in EncoderPackageSpec.layaSequenceLengths {
+            let phone = EncoderPackageSpec.laya(sequenceLength: length)
+            #expect(phone.name == "laya-f18-b1s\(length)-fp16")
+            #expect(phone.layout == .singleShape)
+            #expect(phone.batchSizes == [1])
+            #expect(phone.sequenceLengths == [length])
+            #expect(phone.padding == mac.padding)
+            #expect(phone.outputName == "scores")
+            #expect(phone.function(rows: 1, longestRow: length)?.name == "b1_s\(length)")
+            #expect(phone.function(rows: 2, longestRow: 1) == nil)
+            #expect(phone.function(rows: 1, longestRow: length + 1) == nil)
+        }
+        #expect(EncoderPackageSpec.verdict.layout == .functionPerShape)
+        // A Laya row pads its ids with [PAD], its mask with 0 and its question type with itself.
+        let input = EncoderPackageSpec.laya(sequenceLength: 128).input(
+            [[[7, 8], [1, 1], [2, 2]]], for: .init(batchSize: 1, sequenceLength: 128))
+        #expect(Array(input[0..<128]) == [7, 8] + [Int32](repeating: 50_283, count: 126))
+        #expect(Array(input[128..<256]) == [1, 1] + [Int32](repeating: 0, count: 126))
+        #expect(Array(input[256..<384]) == [Int32](repeating: 2, count: 128))
+    }
+
     @Test("At most the capacity stays loaded, the least recently used released first")
     func leastRecentlyUsed() {
         var cache = LeastRecentlyUsed<String, Int>()
@@ -79,12 +114,34 @@ struct EncoderPackageSpecTests {
             #expect(EncoderComputeUnits.platformDefault == .cpuAndGPU)
             #expect(VerdictBackend.Configuration.defaultMaxBatchRows == 16)
             #expect(VerdictBackend.Configuration.defaultFunctionCapacity == 2)
+            #expect(LayaBackend.Configuration.defaultMaxBatchRows == 16)
+            #expect(LayaBackend.Configuration.defaultFunctionCapacity == 2)
+            #expect(LayaPackageSet.platformDefault == .multifunction)
         #else
             #expect(EncoderComputeUnits.platformDefault == .cpuAndNeuralEngine)
             #expect(VerdictBackend.Configuration.defaultMaxBatchRows == 1)
             #expect(VerdictBackend.Configuration.defaultFunctionCapacity == 1)
+            #expect(LayaBackend.Configuration.defaultMaxBatchRows == 1)
+            #expect(LayaBackend.Configuration.defaultFunctionCapacity == 1)
+            #expect(LayaPackageSet.platformDefault == .byLength)
         #endif
         #expect(EncoderComputeUnits.allCases.map(\.rawValue).contains("all") == false)
+        // Laya's defaults follow its packages, not the platform: Core ML does not load the
+        // multifunction package for the Neural Engine, and a per-length package holds one row.
+        let folder = URL(fileURLWithPath: "/nonexistent", isDirectory: true)
+        let mac = LayaBackend.Configuration(
+            packages: .multifunction(folder), tokenizerDirectory: folder,
+            configurationFile: folder)
+        #expect(mac.computeUnits == .cpuAndGPU)
+        #expect(mac.maxBatchRows == LayaBackend.Configuration.defaultMaxBatchRows)
+        let phone = LayaBackend.Configuration(
+            packages: .byLength([:]), tokenizerDirectory: folder, configurationFile: folder)
+        #expect(phone.computeUnits == .cpuAndNeuralEngine)
+        #expect(phone.maxBatchRows == 1)
+        let chosen = LayaBackend.Configuration(
+            packages: .byLength([:]), tokenizerDirectory: folder, configurationFile: folder,
+            computeUnits: .cpuAndGPU, maxBatchRows: 1)
+        #expect(chosen.computeUnits == .cpuAndGPU)
     }
 
     @Test("The module reports the package version")

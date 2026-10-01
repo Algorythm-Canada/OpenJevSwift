@@ -215,10 +215,10 @@ var targets: [Target] = [
             ],
             swiftSettings: swiftSettings
         ),
-        // Verdict (and later Laya) on Core ML (decision D-011): the prompt, the tokenizer, the
-        // calibration, the Core ML runner and the package store. No MLX. Its Core ML types need
-        // macOS 15 and iOS 18, which the multifunction packages require; the package keeps its
-        // macOS 14 and iOS 17 floors.
+        // Verdict and Laya on Core ML (decision D-011): the prompts, the tokenizers, the
+        // calibrations, the Core ML runners and the package store. No MLX. Its Core ML types need
+        // macOS 15 and iOS 18, which the packages require; the package keeps its macOS 14 and
+        // iOS 17 floors.
         .target(
             name: "OpenJevEncoders",
             dependencies: [
