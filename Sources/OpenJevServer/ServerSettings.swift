@@ -277,14 +277,32 @@ public struct ServerSettings: Sendable, Hashable {
     }
 
     /// `url` without the `user:password@` that may come before its host: everything up to the
-    /// last `@` of the authority, which runs from after `://`, or from the start of a URL without
-    /// one, to the first `/`, `?` or `#`.
+    /// last `@` of the authority, which ends at the first `/`, `?` or `#` and starts after
+    /// `scheme://`, after the `//` that opens a scheme-relative URL, or at the start of a URL
+    /// with neither. The URL is read code point by code point, so a combining mark after a
+    /// delimiter does not hide it.
     static func withoutCredentials(_ url: String) -> String {
-        let start = url.range(of: "://")?.upperBound ?? url.startIndex
-        let rest = url[start...]
-        let authorityEnd = rest.firstIndex { "/?#".contains($0) } ?? rest.endIndex
-        guard let at = rest[..<authorityEnd].lastIndex(of: "@") else { return url }
-        return String(url[..<start]) + String(rest[rest.index(after: at)...])
+        let scalars = Array(url.unicodeScalars)
+        let schemeCharacters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+-."
+            .unicodeScalars
+        let schemeLength = scalars.prefix { schemeCharacters.contains($0) }.count
+        let slashes: [Unicode.Scalar] = ["/", "/"]
+        var start = 0
+        if schemeLength > 0, scalars[0].properties.isAlphabetic,
+            scalars[schemeLength...].starts(with: [":"] + slashes)
+        {
+            start = schemeLength + 3
+        } else if scalars.starts(with: slashes) {
+            start = 2
+        }
+        let end =
+            scalars[start...].firstIndex { "/?#".unicodeScalars.contains($0) }
+            ?? scalars.endIndex
+        guard let at = scalars[start..<end].lastIndex(of: "@") else { return url }
+        var kept = String.UnicodeScalarView()
+        kept.append(contentsOf: scalars[..<start])
+        kept.append(contentsOf: scalars[(at + 1)...])
+        return String(kept)
     }
 
     /// Upstream's `__post_init__` checks, plus the two minimums `_env_num` applies while reading.

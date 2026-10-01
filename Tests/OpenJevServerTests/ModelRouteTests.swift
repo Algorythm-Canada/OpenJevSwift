@@ -255,10 +255,15 @@
                 let seen = try #require(target.received.first)
                 #expect(seen.path == "/v1/systemone")
                 #expect(seen.body == body)
-                // The transport adds the host and the length; nothing else of the client's goes.
+                // The client adds the host, the length and the encodings it decodes, as httpx
+                // does; nothing else of the client's goes.
                 #expect(
-                    seen.headerNames
-                        == ["authorization", "x-origin-secret", "content-type", "content-length"])
+                    Set(seen.headerNames) == [
+                        "authorization", "x-origin-secret", "content-type", "content-length",
+                        "accept-encoding",
+                    ])
+                #expect(seen.headerNames.count == 5, "\(seen.headerNames)")
+                #expect(seen.header("accept-encoding") == "deflate, gzip")
                 #expect(seen.authority == "127.0.0.1:\(target.port)")
                 #expect(seen.header("authorization") == "Bearer sk-x")
                 #expect(seen.header("x-origin-secret") == "s")
@@ -279,7 +284,9 @@
                     #expect(response.status == .ok)
                 }
                 let seen = try #require(target.received.first)
-                #expect(seen.headerNames == ["content-type", "content-length"])
+                #expect(
+                    Set(seen.headerNames) == ["content-type", "content-length", "accept-encoding"])
+                #expect(seen.headerNames.count == 3, "\(seen.headerNames)")
             }
         }
 
@@ -356,6 +363,67 @@
                     #expect(response.status == .serviceUnavailable)
                     #expect(response.headers[values: HTTPField.Name("retry-after")!] == ["7, 8"])
                     #expect(ServerHarness.text(response) == "{}")
+                }
+            }
+        }
+
+        /// `routedAnswer` compressed by Python's `gzip.compress(..., mtime=0)`.
+        static let gzippedAnswer: [UInt8] = [
+            0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x13, 0xab, 0x56, 0xca, 0xcd,
+            0x4f,
+            0x49, 0xcd, 0x51, 0xb2, 0x52, 0x2a, 0x4b, 0x2d, 0x4a, 0xc9, 0x4c, 0x2e, 0xd1, 0x35,
+            0xd4,
+            0x33, 0x51, 0xd2, 0x51, 0x4a, 0xcc, 0x2b, 0x2e, 0x4f, 0x2d, 0x2a, 0x56, 0xb2, 0xaa,
+            0xae,
+            0xd5, 0x51, 0x2a, 0x2d, 0x4e, 0x4c, 0x4f, 0x05, 0x31, 0x6b, 0x01, 0xb9, 0xe3, 0x82,
+            0xe3,
+            0x2f, 0x00, 0x00, 0x00,
+        ]
+
+        @Test("A gzip answer comes back decoded, without its content-encoding, as httpx gives it")
+        func compressedAnswer() async throws {
+            let headers = [
+                ("content-type", "application/json"), ("content-encoding", "gzip"),
+            ].map { RoutedTarget.Header(name: $0.0, value: $0.1) }
+            let behaviour = RoutedTarget.Behaviour.answer(
+                status: 200, headers: headers, body: Self.gzippedAnswer)
+            try await RoutedTarget.run(behaviour) { target in
+                let settings = try ServerSettings(modelRoutes: ["verdict-1.4": target.url])
+                let service = try await ServerHarness.diffusionService(settings)
+                try await ServerHarness.withClient(settings: settings, service: service) {
+                    client in
+                    let response = try await ServerHarness.post(
+                        client, Self.asking("verdict-1.4"))
+                    #expect(response.status == .ok)
+                    #expect(Array(response.body.readableBytesView) == Self.routedAnswer)
+                    #expect(ServerHarness.header(response, "content-type") == "application/json")
+                    #expect(ServerHarness.header(response, "content-encoding") == nil)
+                    #expect(
+                        ServerHarness.header(response, "content-length")
+                            == String(Self.routedAnswer.count))
+                }
+            }
+        }
+
+        @Test("A gzip answer that does not decode is the 503 naming httpx's DecodingError")
+        func undecodableAnswer() async throws {
+            let headers = [
+                ("content-type", "application/json"), ("content-encoding", "gzip"),
+            ].map { RoutedTarget.Header(name: $0.0, value: $0.1) }
+            let behaviour = RoutedTarget.Behaviour.answer(
+                status: 200, headers: headers, body: Self.routedAnswer)
+            try await RoutedTarget.run(behaviour) { target in
+                let settings = try ServerSettings(modelRoutes: ["verdict-1.4": target.url])
+                let service = try await ServerHarness.diffusionService(settings)
+                try await ServerHarness.withClient(settings: settings, service: service) {
+                    client in
+                    let response = try await ServerHarness.post(
+                        client, Self.asking("verdict-1.4"))
+                    #expect(response.status == .serviceUnavailable)
+                    #expect(
+                        ServerHarness.text(response)
+                            == #"{"detail":{"error_type":"api_error","message":"inference backend unavailable: DecodingError"}}"#
+                    )
                 }
             }
         }
@@ -549,6 +617,10 @@
             #expect(configuration.timeout.write == .milliseconds(2500))
             #expect(configuration.connectionPool.retryConnectionEstablishment == false)
             #expect(configuration.httpVersion == .http1Only)
+            guard case .enabled = configuration.decompression else {
+                Issue.record("gzip and deflate answers are not decoded")
+                return
+            }
             #expect(ModelRouter.timeAmount(seconds: .infinity) == nil)
             #expect(ModelRouter.timeAmount(seconds: 300) == .seconds(300))
         }

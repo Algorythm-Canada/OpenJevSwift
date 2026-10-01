@@ -31,8 +31,9 @@ process of its own, configured from `TYPESAFE_BASE_URL` and `TYPESAFE_API_KEY`:
 
 A scenario prints what the SDK observed; `run.py` checks it, and the exchanges its proxy recorded,
 against what the server must answer. A failed check prints every HTTP exchange it made, and the
-servers' logs. Every exchange and log is written to `exchanges/` (or `--exchanges`). The servers
-must also exit 0 on SIGTERM. The exit status is 1 when anything failed.
+servers' logs. Every exchange and log is written to `exchanges/` (or `--exchanges`), as
+`exchanges.txt` and `server-*.log`, which replace older files of those names and nothing else.
+The servers must also exit 0 on SIGTERM. The exit status is 1 when anything failed.
 
 `--swift-sdk` also builds `swift/`, a package of its own, and runs NSStudent's JevSwiftSDK, which
 takes a base URL: `models`, `wrong_key`, `overloaded` and `routed`. It sends only state, model

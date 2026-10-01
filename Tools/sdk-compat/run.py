@@ -320,6 +320,13 @@ def expect_answers(observed, exchange, *, model, first, choice_index, score, nou
     expect(observed["usage"] == {"input_tokens": tokens, "output_tokens": 0}, f"usage {observed['usage']}")
 
 
+def expect_request_id(sdk, observed, request_id):
+    """The official SDKs expose a successful answer's request id; JevSwiftSDK does not."""
+    if sdk != "swift":
+        expect(observed.get("request_id") == request_id,
+               f"request id {observed.get('request_id')!r}, not {request_id!r}")
+
+
 def verify_quickstart(sdk, observed, exchanges):
     exchange = expect_one(exchanges, "/v1/systemone", 200)
     request_id = expect_server_headers(exchange)
@@ -328,8 +335,7 @@ def verify_quickstart(sdk, observed, exchanges):
     # The DiffusionGemma stub gives each question's first label 0.7 and reads once for 123 tokens.
     expect_answers(observed, exchange, model="openjev-0.1", first=sdk != "swift", choice_index=0,
                    score=0.15 * 1 + 0.15 * 2, noul=0.7, tokens=123)
-    if observed.get("request_id") is not None:
-        expect(observed["request_id"] == request_id, f"request id {observed['request_id']}, not {request_id}")
+    expect_request_id(sdk, observed, request_id)
 
 
 def verify_models(sdk, observed, exchanges):
@@ -396,8 +402,8 @@ def verify_routed(sdk, observed, exchanges):
     # 0.3, and reads one batch for 99 tokens.
     expect_answers(observed, exchange, model="laya-1.0", first=sdk != "swift", choice_index=1,
                    score=0.15 * 0 + 0.7 * 1 + 0.15 * 2, noul=0.3, tokens=99)
-    if observed.get("request_id") is not None:
-        expect(observed["request_id"] == request_id, "the request id is not main's")
+    # main's own request id, which replaces the Laya server's.
+    expect_request_id(sdk, observed, request_id)
 
 
 VERIFY = {
@@ -451,7 +457,8 @@ def main():
     parser.add_argument("--node", default="node", help="the Node.js executable (default: node)")
     parser.add_argument("--swift-sdk", action="store_true", help="also run NSStudent's JevSwiftSDK")
     parser.add_argument("--exchanges", type=Path, default=HERE / "exchanges",
-                        help="where to write every exchange and the servers' logs (default: Tools/sdk-compat/exchanges)")
+                        help="the folder to write exchanges.txt and the servers' logs in, replacing files of those "
+                             "names and nothing else (default: Tools/sdk-compat/exchanges)")
     args = parser.parse_args()
 
     server_binary = args.server or stub_server_binary()
@@ -467,9 +474,9 @@ def main():
     if not (HERE / "typescript/node_modules/@typesafe-ai/sdk").is_dir():
         sys.exit("typescript/node_modules is missing; run make sdk-compat-venv")
 
-    if args.exchanges.exists():
-        shutil.rmtree(args.exchanges)
-    args.exchanges.mkdir(parents=True)
+    # Only exchanges.txt and the server-*.log files are written here, each replacing an older
+    # file of its name; nothing else in the folder is touched.
+    args.exchanges.mkdir(parents=True, exist_ok=True)
     recorder = Recorder()
     servers, proxies, results = [], [], []
     try:

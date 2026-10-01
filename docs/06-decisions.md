@@ -1648,12 +1648,12 @@ Decision.
    Network.framework on macOS. It was already resolved, as a dependency of Hummingbird's
    HummingbirdTesting, so `Package.resolved` is unchanged. Its options map onto httpx's one for
    one: 5 seconds to connect and `OPENJEV_FORWARD_TIMEOUT` for each read and write, upstream's
-   `httpx.Timeout(forward_timeout, connect=5.0)`; no redirect followed; HTTP/1.1; no body decoded;
-   and a refused connection reported at once rather than retried until the connect timeout. Its
-   errors become httpx's exception names, which the 503 repeats as upstream's
-   `type(e).__name__` does: `ConnectError`, `ConnectTimeout`, `ReadTimeout`, `WriteTimeout`,
-   `ReadError`, `WriteError`, `RemoteProtocolError` and `UnsupportedProtocol`
-   (`ForwardingFailure`). Any other error is the 503 naming its Swift type, as a backend's is
+   `httpx.Timeout(forward_timeout, connect=5.0)`; no redirect followed; HTTP/1.1; `gzip` and
+   `deflate` asked for and decoded, as httpx asks for and decodes them; and a refused connection
+   reported at once rather than retried until the connect timeout. Its errors become httpx's
+   exception names, which the 503 repeats as upstream's `type(e).__name__` does: `ConnectError`,
+   `ConnectTimeout`, `ReadTimeout`, `WriteTimeout`, `ReadError`, `WriteError`,
+   `RemoteProtocolError`, `DecodingError` and `UnsupportedProtocol` (`ForwardingFailure`). Any other error is the 503 naming its Swift type, as a backend's is
    (D-031 item 7). The cost is the binary: `openjev` now links AsyncHTTPClient and swift-nio-ssl
    with BoringSSL, which the server did not use before. A stripped release build for Linux grows
    from 11.2 MB to 17.4 MB.
@@ -1672,12 +1672,15 @@ Decision.
    none. This server's request ids and `server-timing` replace the routed server's. The questions
    cap is the routed server's to apply, since upstream forwards before it. A route URL with
    `user:password@` sends them as `Authorization: Basic` in place of the client's header, as httpx
-   0.28.1 does (recorded with it). Departures: the client adds only `host` and `content-length`,
-   where httpx adds `accept`, `accept-encoding: gzip, deflate`, `connection` and `user-agent`; it
-   ignores `HTTP_PROXY` and the other proxy variables httpx reads; and a route URL Foundation
-   cannot parse is the 503 `InvalidURL`, where httpx's `InvalidURL` is not an `HTTPError` and
-   upstream answers Starlette's bare 500. The routed answer is read whole without a bound, as
-   httpx's `r.content` is: the routed server is the operator's own.
+   0.28.1 does (recorded with it). A `gzip` or `deflate` answer comes back decoded, without its
+   `content-encoding`, as httpx's `r.content` is, and one in another encoding as it was sent, as
+   httpx gives it without brotli or zstandard installed. Departures: the client adds `host`,
+   `content-length` and `accept-encoding: deflate, gzip`, where httpx adds `accept`,
+   `accept-encoding: gzip, deflate`, `connection` and `user-agent`; it ignores `HTTP_PROXY` and
+   the other proxy variables httpx reads; and a route URL Foundation cannot parse is the 503
+   `InvalidURL`, where httpx's `InvalidURL` is not an `HTTPError` and upstream answers Starlette's
+   bare 500. The routed answer is read and decoded whole without a bound, as httpx's `r.content`
+   is: the routed server is the operator's own.
 4. **Model time, cancellation and the log.** The time from sending the request to reading the
    whole answer is added to the request's `ModelTimeRecorder` when the exchange ends, failed or
    not, as upstream's `finally` adds it to `model_ns`, so `server-timing`'s `model` reports it;
@@ -1695,8 +1698,8 @@ Decision.
    forwards: it answers with the loaded model, so a model only a route serves is the
    unknown-model 400 there.
 6. **The routes in the log.** `serve` logs `forwarding {name} to {url}` for each route after the
-   settings line, the URL without the `user:password@` it may hold; the settings line keeps
-   naming the routes alone.
+   settings line, the URL without the `user:password@` it may hold, a scheme-relative `//` URL's
+   and a scheme-less one's included; the settings line keeps naming the routes alone.
 7. **Parsing.** `parse_routes` is read as Python reads it, code point by code point, so a `,` or
    an `=` followed by a combining mark still separates, and trimmed of the characters
    `str.strip()` removes, which include U+001C to U+001F that Foundation's whitespace set leaves.

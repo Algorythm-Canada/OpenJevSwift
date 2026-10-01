@@ -32,8 +32,11 @@
     /// Each forwarded request has its own client, made and shut down inside the request, on
     /// swift-nio's shared event loops; nothing outlives the request (decision D-040). The client
     /// waits 5 seconds for a connection, `OPENJEV_FORWARD_TIMEOUT` for each write and read, never
-    /// follows a redirect, speaks HTTP/1.1, sends no `accept-encoding` and decodes no body, so
-    /// the bytes that come back are the bytes the routed server sent.
+    /// follows a redirect and speaks HTTP/1.1. Like httpx, it asks for `gzip` and `deflate`
+    /// (`accept-encoding: deflate, gzip`) and decodes an answer in either, so the body that comes
+    /// back, without its `content-encoding`, is the decoded one, as httpx's `r.content` is. An
+    /// answer in another encoding comes back as it was sent, as httpx gives it without brotli or
+    /// zstandard installed.
     struct ModelRouter: Sendable {
         /// The routes: a model name, then the URL of the server that serves it, without a
         /// trailing slash.
@@ -117,14 +120,17 @@
         }
 
         /// The client's configuration: upstream's timeouts, no redirects, HTTP/1.1, a connection
-        /// that is not retried, and no body decoding.
+        /// that is not retried, and `gzip` and `deflate` answers decoded.
         var configuration: HTTPClient.Configuration {
             let readTimeout = Self.timeAmount(seconds: forwardTimeout)
             var timeout = HTTPClient.Configuration.Timeout(
                 connect: Self.connectTimeout, read: readTimeout)
             timeout.write = readTimeout
+            // Decoded without a bound, as httpx decodes `r.content` and as the whole answer is
+            // read: the routed server is the operator's own.
             var configuration = HTTPClient.Configuration(
-                redirectConfiguration: .disallow, timeout: timeout, decompression: .disabled)
+                redirectConfiguration: .disallow, timeout: timeout,
+                decompression: .enabled(limit: .none))
             configuration.httpVersion = .http1Only
             // A refused connection is the 503 at once, as httpx's ConnectError is, rather than
             // retried until the connect timeout.
@@ -213,6 +219,8 @@
         /// The routed server closed the connection without an answer, or sent one that is not
         /// HTTP.
         case remoteProtocolError = "RemoteProtocolError"
+        /// An answer in `gzip` or `deflate` that does not decode.
+        case decodingError = "DecodingError"
         /// The route's URL has no `http` or `https` scheme, or no host.
         case unsupportedProtocol = "UnsupportedProtocol"
         /// The route's URL cannot be parsed.
@@ -246,10 +254,17 @@
             case is HTTPParserError:
                 self = .remoteProtocolError
             default:
-                // A TLS handshake that fails is httpx's ConnectError; the TLS errors are
-                // swift-nio-ssl's types, which this target does not import.
-                guard String(reflecting: type(of: error)).hasPrefix("NIOSSL.") else { return nil }
-                self = .connectError
+                // swift-nio-ssl's and swift-nio-extras' errors, by module, since this target does
+                // not import them: a TLS handshake that fails is httpx's ConnectError, and an
+                // answer that does not decode its DecodingError.
+                let type = String(reflecting: type(of: error))
+                if type.hasPrefix("NIOSSL.") {
+                    self = .connectError
+                } else if type.hasPrefix("NIOHTTPCompression.") {
+                    self = .decodingError
+                } else {
+                    return nil
+                }
             }
         }
 

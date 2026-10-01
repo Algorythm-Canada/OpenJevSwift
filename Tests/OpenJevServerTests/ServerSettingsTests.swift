@@ -282,13 +282,19 @@ struct ServerSettingsTests {
     func routesWithoutCredentials() throws {
         let settings = try ServerSettings(environment: [
             "OPENJEV_MODEL_ROUTES":
-                "a=http://u:p@h:1/x?y=@z, b=https://h/, c=u:p@h/x, d=http://@h, e=h/x@y"
+                "a=http://u:p@h:1/x?y=@z, b=https://h/, c=u:p@h/x, d=http://@h, e=h/x@y, "
+                + "f=//user:password@host/path, g=//u:p@h/x?y=http://a, h=http://u:p@\u{301}h"
         ])
-        #expect(Array(settings.modelRoutesWithoutCredentials.keys) == ["a", "b", "c", "d", "e"])
-        // A URL without a scheme cannot be forwarded to, but its credentials stay out of the log.
+        #expect(
+            Array(settings.modelRoutesWithoutCredentials.keys) == [
+                "a", "b", "c", "d", "e", "f", "g", "h",
+            ])
+        // A URL without a scheme cannot be forwarded to, but its credentials stay out of the log;
+        // so do a scheme-relative URL's, and an @ that a combining mark follows still ends them.
         #expect(
             Array(settings.modelRoutesWithoutCredentials.values) == [
-                "http://h:1/x?y=@z", "https://h", "h/x", "http://h", "h/x@y",
+                "http://h:1/x?y=@z", "https://h", "h/x", "http://h", "h/x@y", "//host/path",
+                "//h/x?y=http://a", "http://\u{301}h",
             ])
         #expect(settings.modelRoutes["a"] == "http://u:p@h:1/x?y=@z")
     }

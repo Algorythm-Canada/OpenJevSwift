@@ -148,13 +148,14 @@ OPENJEV_BACKEND=verdict OPENJEV_MODEL_ROUTES=laya-1.0=http://127.0.0.1:8081 open
 
 Clients use port 8080 for both. A request for `laya-1.0` reaches the Verdict server, which passes
 it to the Laya server unchanged, with the client's `authorization`, `x-origin-secret` and
-`content-type` headers and nothing else, and sends the Laya server's answer back: its status and
-body, with its `content-type` and `retry-after`, and the forwarding server's own request id and
-`server-timing`, whose `model` counts the whole exchange. Give both servers the same
-`OPENJEV_API_KEY`, since the client's key reaches the second one. A name the forwarding server
-serves itself, the SDK aliases `jev-latest` and `jev-preview` included, is answered there even when
-routed. `GET /v1/models` lists `verdict-1.4`, then `laya-1.0`, without asking the Laya server, so it
-lists both while the Laya server is down.
+`content-type` headers and no other header of the client's, and sends the Laya server's answer
+back, decoded if it came compressed with `gzip` or `deflate`: its status and body, with its
+`content-type` and `retry-after`, and the forwarding server's own request id and `server-timing`,
+whose `model` counts the whole exchange. Give both servers the same `OPENJEV_API_KEY`, since the
+client's key reaches the second one. A name the forwarding server serves itself, the SDK aliases
+`jev-latest` and `jev-preview` included, is answered there even when routed. `GET /v1/models` lists
+`verdict-1.4`, then `laya-1.0`, without asking the Laya server, so it lists both while the Laya
+server is down.
 
 When the routed server cannot be reached, or sends nothing for `OPENJEV_FORWARD_TIMEOUT` seconds
 (300), the client gets the 503 `inference backend unavailable: ConnectError` (or `ReadTimeout`, and
