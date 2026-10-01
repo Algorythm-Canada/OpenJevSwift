@@ -69,12 +69,12 @@ public final class Attention: Module {
             frequencies = nil
         }
         let hidden = config.hiddenSize
-        _qProj.wrappedValue = Linear(hidden, heads * headDim, bias: false)
-        _kProj.wrappedValue = Linear(hidden, keyValueHeads * headDim, bias: false)
+        _qProj.wrappedValue = Linear(hidden, heads * headDim, bias: config.attentionBias)
+        _kProj.wrappedValue = Linear(hidden, keyValueHeads * headDim, bias: config.attentionBias)
         _vProj.wrappedValue =
             layerType == .slidingAttention
-            ? Linear(hidden, keyValueHeads * headDim, bias: false) : nil
-        _oProj.wrappedValue = Linear(heads * headDim, hidden, bias: false)
+            ? Linear(hidden, keyValueHeads * headDim, bias: config.attentionBias) : nil
+        _oProj.wrappedValue = Linear(heads * headDim, hidden, bias: config.attentionBias)
         _qNorm.wrappedValue = rmsNorm(dimensions: headDim, eps: config.rmsNormEps)
         _kNorm.wrappedValue = rmsNorm(dimensions: headDim, eps: config.rmsNormEps)
         super.init()
