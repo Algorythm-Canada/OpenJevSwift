@@ -51,14 +51,14 @@ private struct StageComparison: CustomStringConvertible {
 private func compare(
     _ name: String, _ got: MLXArray, _ want: MLXArray, order: (got: MLXArray, want: MLXArray)?
 ) -> StageComparison {
-    let identical =
-        got.shape == want.shape && got.dtype == want.dtype && arrayEqual(got, want).item(Bool.self)
     var got = got
     var want = want
     if let order {
         got = takeAlong(got, argSort(order.got, axis: -1), axis: -1)
         want = takeAlong(want, argSort(order.want, axis: -1), axis: -1)
     }
+    let identical =
+        got.shape == want.shape && got.dtype == want.dtype && arrayEqual(got, want).item(Bool.self)
     if name.hasSuffix(".indices") {
         let differing = (got.asType(.int64) .!= want.asType(.int64)).sum().item(Int.self)
         return StageComparison(
