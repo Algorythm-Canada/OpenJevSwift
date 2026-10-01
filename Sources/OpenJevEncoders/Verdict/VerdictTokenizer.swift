@@ -29,7 +29,7 @@ public struct VerdictTokenizer: VerdictTokenizing {
     public static let defaultMaxLength = 512
 
     /// The files the folder must hold.
-    public static let fileNames = ["tokenizer.json", "tokenizer_config.json"]
+    public static let fileNames = TokenizerFolder.fileNames
 
     private let tokenizer: any Tokenizer
     /// The id of `[CLS]`, which starts every row.
@@ -48,13 +48,7 @@ public struct VerdictTokenizer: VerdictTokenizing {
         -> VerdictTokenizer
     {
         precondition(maxLength > 2, "a row holds [CLS], at least one token and [SEP]")
-        for name in fileNames {
-            let file = directory.appendingPathComponent(name)
-            guard FileManager.default.fileExists(atPath: file.path) else {
-                throw EncoderLoadError.missingFile(file)
-            }
-        }
-        let tokenizer = try await AutoTokenizer.from(modelFolder: directory)
+        let tokenizer = try await TokenizerFolder.load(directory)
         guard let classTokenID = tokenizer.convertTokenToId("[CLS]") else {
             throw EncoderLoadError.missingToken("[CLS]")
         }
