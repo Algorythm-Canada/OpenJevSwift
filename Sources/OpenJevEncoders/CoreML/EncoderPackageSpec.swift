@@ -1,12 +1,23 @@
-/// A converted encoder package with one function per input shape, as Tools/encoders' converters
-/// write them: the shapes it holds, its input planes and their padding, and its output.
+/// A converted encoder package, as Tools/encoders' converters write them: the shapes it holds, how
+/// it holds them, its input planes and their padding, and its output.
 ///
-/// Each function is named `b{batch}_s{length}` and takes one int32 input of shape
+/// A package holds either one function per input shape, each named `b{batch}_s{length}`, or one
+/// program for one fixed shape (``Layout``). Each shape takes one int32 input of shape
 /// [batch, planes, length]. A row is a list of planes, all the length of the row's tokens; the
 /// padded part of each plane is filled as ``padding`` says. The output is float32
 /// [batch, width], one row per input row. Nothing here names a model, so Verdict's backend and
-/// Laya's (issue #58) share it.
+/// Laya's share it.
 public struct EncoderPackageSpec: Sendable, Hashable {
+    /// How a package holds its shapes.
+    public enum Layout: Sendable, Hashable {
+        /// One function per shape, named `b{batch}_s{length}`, sharing one copy of the weights:
+        /// the iOS 18 multifunction packages, loaded with `MLModelConfiguration.functionName`.
+        case functionPerShape
+        /// One program for one fixed shape, loaded without a function name: Laya's per-length
+        /// packages, the only Laya packages Core ML loads for the Neural Engine (D-011).
+        case singleShape
+    }
+
     /// How the padded part of one input plane is filled.
     public enum Padding: Sendable, Hashable {
         /// A fixed value: the padding token's id for the ids, 0 for the attention mask.
@@ -48,18 +59,26 @@ public struct EncoderPackageSpec: Sendable, Hashable {
     public var padding: [Padding]
     /// The name of the output, such as Verdict's `logits`.
     public var outputName: String
+    /// How the package holds its shapes.
+    public var layout: Layout
 
     /// Creates a spec. The batch sizes and lengths are sorted.
+    ///
+    /// - Precondition: A ``Layout/singleShape`` package has one batch size and one length.
     public init(
         name: String, batchSizes: [Int], sequenceLengths: [Int], inputName: String = "tokens",
-        padding: [Padding], outputName: String
+        padding: [Padding], outputName: String, layout: Layout = .functionPerShape
     ) {
+        precondition(
+            layout == .functionPerShape || (batchSizes.count == 1 && sequenceLengths.count == 1),
+            "a package of one program holds one shape")
         self.name = name
         self.batchSizes = batchSizes.sorted()
         self.sequenceLengths = sequenceLengths.sorted()
         self.inputName = inputName
         self.padding = padding
         self.outputName = outputName
+        self.layout = layout
     }
 
     /// The planes of every row.
@@ -71,6 +90,30 @@ public struct EncoderPackageSpec: Sendable, Hashable {
     public static let verdict = EncoderPackageSpec(
         name: "verdict-m18-fp16", batchSizes: [1, 16], sequenceLengths: [128, 256, 512],
         padding: [.value(50_283), .value(0)], outputName: "logits")
+
+    /// The sequence lengths Laya's packages hold: 128, 256, 512 and 1,024 tokens.
+    public static let layaSequenceLengths = [128, 256, 512, 1024]
+
+    /// The planes of a Laya row, padded: the token ids with ModernBERT's `[PAD]` (50283), the
+    /// attention mask with 0, and the question type (0 choice, 1 score, 2 noul), which the model
+    /// reads at the first position, with the row's own type.
+    private static let layaPadding: [Padding] = [.value(50_283), .value(0), .firstValue]
+
+    /// Laya's float16 package with one function per shape, `laya-m18-fp16` (D-011): batch 1 and
+    /// 16 by 128 to 1,024 tokens, the Mac's package. Its output `scores` is the scorer at every
+    /// position, [batch, length], which the backend reads at the option markers.
+    public static let layaMultifunction = EncoderPackageSpec(
+        name: "laya-m18-fp16", batchSizes: [1, 16], sequenceLengths: layaSequenceLengths,
+        padding: layaPadding, outputName: "scores")
+
+    /// Laya's float16 package of one program for one fixed shape, batch 1 by `length` tokens,
+    /// `laya-f18-b1s{length}-fp16` (D-011): the iPhone's packages, one per sequence length, which
+    /// run on the Neural Engine.
+    public static func laya(sequenceLength length: Int) -> EncoderPackageSpec {
+        EncoderPackageSpec(
+            name: "laya-f18-b1s\(length)-fp16", batchSizes: [1], sequenceLengths: [length],
+            padding: layaPadding, outputName: "scores", layout: .singleShape)
+    }
 
     /// The smallest function that holds `rows` rows of at most `longestRow` tokens, or `nil`
     /// when the package has none.

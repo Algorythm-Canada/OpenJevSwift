@@ -3,13 +3,16 @@
     import Dispatch
     import Foundation
 
-    /// A converted encoder package run with Core ML, one function per input shape (D-011).
+    /// A converted encoder package run with Core ML: one function per input shape, or one
+    /// program for one shape (D-011).
     ///
     /// A call runs through the smallest function that holds its rows and its longest row. Each
     /// function is its own `MLModel`, loaded the first time a call needs it. A loaded function
     /// keeps its own copy of the weights once it has run (six Verdict functions took 1.5 GB for a
     /// 306 MB package on a Mac, spike #56), so at most ``capacity`` stay loaded and the least
-    /// recently used one is released before another is loaded.
+    /// recently used one is released before another is loaded. A package of one program
+    /// (``EncoderPackageSpec/Layout/singleShape``) has one function, its main program, loaded
+    /// without a function name.
     ///
     /// The model is an actor on a serial queue of its own, so Core ML's blocking loads and
     /// predictions run one at a time and never hold a thread of Swift's cooperative pool.
@@ -119,7 +122,9 @@
             functions.trim(to: capacity - 1)
             let configuration = MLModelConfiguration()
             configuration.computeUnits = computeUnits.mlComputeUnits
-            configuration.functionName = function.name
+            if spec.layout == .functionPerShape {
+                configuration.functionName = function.name
+            }
             let model = try MLModel(contentsOf: compiledModel, configuration: configuration)
             try check(model, function: function)
             functions.insert(model, forKey: function.name)
