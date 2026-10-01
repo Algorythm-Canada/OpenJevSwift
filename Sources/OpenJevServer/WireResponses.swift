@@ -32,8 +32,9 @@
 
         /// The response for an error thrown by a route: a ``WireError`` as its status, body and
         /// headers; a Hummingbird error, such as the router's 404, as FastAPI's
-        /// `{"detail": "<reason phrase>"}`; ``ClientDisconnected`` as an empty 499 that no one
-        /// receives, for the request log; anything else as Starlette's plain-text 500, logged.
+        /// `{"detail": "<reason phrase>"}`; ``ClientDisconnected`` as an empty 499, which only a
+        /// client that half-closed and still reads receives; anything else as Starlette's
+        /// plain-text 500, logged.
         static func response(for error: any Error, context: OpenJevRequestContext) -> Response {
             switch error {
             case let wire as WireError:

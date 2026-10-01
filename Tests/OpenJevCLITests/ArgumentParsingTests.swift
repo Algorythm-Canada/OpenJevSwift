@@ -103,7 +103,22 @@ struct ArgumentParsingTests {
     @Test("A command line the parser refuses exits 2 with its message and usage")
     func refusedCommandLines() async {
         let cases: [([String], String)] = [
-            (["serve", "--shutdown-timeout=-1"], "--shutdown-timeout must be 0 or more seconds"),
+            (
+                ["serve", "--shutdown-timeout=-1"],
+                "--shutdown-timeout must be between 0 and 86400 seconds"
+            ),
+            (
+                ["serve", "--shutdown-timeout", "1e19"],
+                "--shutdown-timeout must be between 0 and 86400 seconds"
+            ),
+            (
+                ["serve", "--shutdown-timeout", "inf"],
+                "--shutdown-timeout must be between 0 and 86400 seconds"
+            ),
+            (
+                ["serve", "--shutdown-timeout", "nan"],
+                "--shutdown-timeout must be between 0 and 86400 seconds"
+            ),
             (["serve", "--shutdown-timeout", "-1"], "Missing value for '--shutdown-timeout"),
             (["serve", "--shutdown-timeout", "soon"], "--shutdown-timeout"),
             (["serve", "--prot", "9"], "Unknown option '--prot'"),

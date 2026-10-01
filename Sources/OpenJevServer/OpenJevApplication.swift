@@ -15,22 +15,26 @@
     public enum OpenJevApplication {
         /// The routes over a loaded service, behind upstream's `request_id_and_auth` in its
         /// order: the request log, the headers middleware, then authentication and the body cap
-        /// for `/v1/`. Requests are not watched for clients that go away; ``application(settings:service:logger:onServerRunning:)``
-        /// builds a server that watches them.
+        /// for `/v1/`. A server's count of its requests in flight runs just inside the log. Requests are not watched for clients that go away;
+        /// ``application(settings:service:logger:onServerRunning:)`` builds a server that watches
+        /// them.
         public static func router(
             settings: ServerSettings, service: any SystemOneService
         ) -> Router<OpenJevRequestContext> {
-            router(settings: settings, service: service, connections: nil)
+            router(settings: settings, service: service, connections: nil, inFlight: nil)
         }
 
         /// The routes, cancelling the decision of a client that goes away when its connection is
-        /// in `connections`.
+        /// in `connections`, and counting each request in `inFlight` when there is one.
         static func router(
             settings: ServerSettings, service: any SystemOneService,
-            connections: ConnectionRegistry?
+            connections: ConnectionRegistry?, inFlight: RequestsInFlight?
         ) -> Router<OpenJevRequestContext> {
             let router = Router(context: OpenJevRequestContext.self)
             router.add(middleware: RequestLogMiddleware())
+            if let inFlight {
+                router.add(middleware: InFlightMiddleware(requests: inFlight))
+            }
             router.add(middleware: ResponseHeadersMiddleware())
             router.add(
                 middleware: AuthenticationMiddleware(
@@ -57,21 +61,23 @@
             settings: ServerSettings, service: any SystemOneService, logger: Logger,
             onServerRunning: @escaping @Sendable (_ port: Int) async -> Void = { _ in }
         ) -> Application<RouterResponder<OpenJevRequestContext>> {
-            let connections = ConnectionRegistry()
-            return application(
-                settings: settings, service: service, logger: logger, connections: connections,
+            application(
+                settings: settings, service: service, logger: logger,
+                connections: ConnectionRegistry(), inFlight: RequestsInFlight(),
                 onServerRunning: onServerRunning)
         }
 
         /// ``application(settings:service:logger:onServerRunning:)`` with the registry its
-        /// connections join, for tests.
+        /// connections join and the count of its requests in flight.
         static func application(
             settings: ServerSettings, service: any SystemOneService, logger: Logger,
-            connections: ConnectionRegistry,
+            connections: ConnectionRegistry, inFlight: RequestsInFlight,
             onServerRunning: @escaping @Sendable (_ port: Int) async -> Void
         ) -> Application<RouterResponder<OpenJevRequestContext>> {
             Application(
-                router: router(settings: settings, service: service, connections: connections),
+                router: router(
+                    settings: settings, service: service, connections: connections,
+                    inFlight: inFlight),
                 server: .http1(
                     configuration: HTTP1Channel.Configuration(
                         additionalChannelHandlers: [

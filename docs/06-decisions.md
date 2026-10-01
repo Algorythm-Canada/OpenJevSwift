@@ -1392,8 +1392,9 @@ Decision.
    A forwarded request will add the other server's time when #38 forwards it.
 8. **Cancellation.** A client that closes its connection cancels its decision. A channel handler
    on each connection sees the end of the client's input, and the route runs the decision in a
-   child task beside a watch of the connection; the request log shows 499, nginx's code, nothing
-   is sent and nothing is logged as a failure. A client that half-closes and still waits counts
+   child task beside a watch of the connection; the request log shows 499, nginx's code, the
+   answer is an empty 499 that only a client that half-closed and still reads receives, and
+   nothing is logged as a failure. A client that half-closes and still waits counts
    as gone, as for most HTTP servers. Upstream runs a request to its end. The encoder engine
    starts no batch for a cancelled request and Verdict no further Core ML call; a call in
    progress finishes. A decision the server cancels while stopping is the 503 naming
@@ -1404,8 +1405,10 @@ Decision.
    not cut the wait short. The model is released afterwards through `ModelReleasing.close()`,
    upstream's `close()`, a protocol a service or backend adopts when it has something to release:
    the two engines pass it on, `VerdictBackend` passes it to `CoreMLEncoderModel`, which drops its
-   loaded functions. A server cancelled before its requests finished throws
-   `ShutdownInterrupted`, exit 1. `OpenJevApplication.make(settings:provider:)` is replaced by
+   loaded functions. A server cancelled while it is answering requests throws
+   `ShutdownInterrupted`, exit 1; one cancelled with nothing in flight stops cleanly, so a
+   `--shutdown-timeout` of 0 exits 0 when no request is running. The timeout is at most a day,
+   since a larger `Duration` overflows. `OpenJevApplication.make(settings:provider:)` is replaced by
    `application(settings:service:logger:onServerRunning:)` and `DecisionServer`.
 10. **Tests.** The CLI's code stays in the executable target, and `OpenJevCLITests` imports it
     with `@testable import openjev`, which the native build system and Swift Build both build.
@@ -1426,8 +1429,9 @@ away unobserved, as uvicorn does: issue #37 asks that its reads be cancelled. (d
 ArgumentParser's 64 for a refused command line: one status for every invalid input keeps the
 table short, and it is what upstream's Python tooling exits with.
 
-Consequences. launchd's `ExitTimeOut` (20 seconds by default) must exceed `--shutdown-timeout`
-or launchd kills the server before its requests finish; docs/deployment.md says so. A
+Consequences. launchd's `ExitTimeOut`, whose default is system-defined, must exceed
+`--shutdown-timeout` or launchd may kill the server before its requests finish;
+docs/deployment.md sets it. A
 DiffusionGemma or Laya backend registers with one entry in `BackendRegistry.standard` and drops
 its placeholder.
 

@@ -132,8 +132,8 @@
     }
 
     /// The client went away before its answer was ready. The server cancelled the decision and
-    /// answers nothing anyone receives; the request log shows the status 499, nginx's code for a
-    /// client that closed its request.
+    /// answers an empty 499, nginx's code for a client that closed its request, which the request
+    /// log shows; only a client that half-closed and still reads receives it.
     struct ClientDisconnected: Error, Sendable, Equatable {}
 
     enum ClientConnection {

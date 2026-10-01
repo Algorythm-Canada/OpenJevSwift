@@ -9,7 +9,7 @@
     import Testing
 
     /// `openjev serve` with `OPENJEV_BACKEND=verdict` as a child process, on an ephemeral port:
-    /// the README quickstart is answered with three answers and the server's headers, `decide`
+    /// Jev's quickstart request is answered with three answers and the server's headers, `decide`
     /// prints the same body, and SIGTERM ends the process cleanly (issue #40).
     ///
     /// Opt-in: it needs Verdict's converted package and tokenizer, which `OPENJEV_ENCODER_MODELS`

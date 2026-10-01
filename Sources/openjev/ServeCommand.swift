@@ -51,13 +51,18 @@ struct ServeCommand: AsyncParsableCommand {
     @Option(
         name: .customLong("shutdown-timeout"),
         help: ArgumentHelp(
-            "Seconds the requests in flight get to finish after SIGINT or SIGTERM.",
+            "Seconds the requests in flight get to finish after SIGINT or SIGTERM, 0 to 86400.",
             valueName: "seconds"))
     var shutdownTimeout: Double = 30
 
+    /// The longest `--shutdown-timeout`, a day.
+    static let longestShutdownTimeout: Double = 86_400
+
     func validate() throws {
-        guard shutdownTimeout.isFinite, shutdownTimeout >= 0 else {
-            throw ValidationError("--shutdown-timeout must be 0 or more seconds")
+        guard shutdownTimeout >= 0, shutdownTimeout <= Self.longestShutdownTimeout else {
+            throw ValidationError(
+                "--shutdown-timeout must be between 0 and "
+                    + "\(SettingsSummary.seconds(Self.longestShutdownTimeout)) seconds")
         }
     }
 

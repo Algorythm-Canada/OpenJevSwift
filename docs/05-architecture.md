@@ -64,8 +64,9 @@ OpenJevSwift/                          Swift package, tools 6.2, strict concurre
     OpenJevDiffusionGemmaTests/        Unit tests on synthetic shapes; opt-in live tests
     OpenJevEncodersTests/              Fixture-driven parity tests over recorded logits; opt-in
                                        tokenizer and Core ML parity tests
-    OpenJevServerTests/                Contract tests with a stub backend; capacity, model time,
-                                       disconnects and shutdown on live sockets; SDK compatibility
+    OpenJevServerTests/                Contract tests with a stub backend, capacity and model time
+                                       among them; disconnects and shutdown on live sockets; SDK
+                                       compatibility
     OpenJevCLITests/                   Parsing, the commands in-process with stub backends, the
                                        built binary as a child process; opt-in Verdict smoke test
   Tools/
@@ -93,10 +94,10 @@ openjev (CLI) ──► OpenJevServer ──► OpenJevCore
 ```
 
 `OpenJevCore` has no third-party dependencies (an `OrderedDictionary` from `swift-collections`
-is acceptable if it saves a hand-rolled type). `OpenJevServer` depends on Hummingbird, swift-log,
-swift-nio's `NIOCore` and swift-service-lifecycle, never on a backend. The CLI picks the backend
-and links it: `OpenJevEncoders` on macOS today, `OpenJevDiffusionGemma` once #29 registers it.
-Backends depend on the core, never the reverse.
+is acceptable if it saves a hand-rolled type). `OpenJevServer` depends on Hummingbird,
+swift-http-types, swift-log, swift-nio's `NIOCore` and swift-service-lifecycle, never on a
+backend. The CLI picks the backend and links it: `OpenJevEncoders` on macOS today,
+`OpenJevDiffusionGemma` once #29 registers it. Backends depend on the core, never the reverse.
 
 ## Core types (sketch)
 

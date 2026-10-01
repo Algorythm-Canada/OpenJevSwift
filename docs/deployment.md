@@ -14,8 +14,8 @@ follows upstream's README, "Run your own", where it applies to a Mac.
 | `mlx` | `openjev-0.1`, DiffusionGemma 26B-A4B, 4-bit, MLX | issue #29 | Apple silicon | about 16 GB to load and more in service; 32 GB or more recommended |
 | `laya` | `laya-1.0`, 421M parameters, Core ML | issue #58 | Apple silicon, macOS 15 or later | about 2.9 GB at peak on the GPU (spike #56) |
 
-On an M3 Max, Verdict reads one question in 7.5 to 20 ms depending on its length, and a batch of
-16 in 4.3 to 19.3 ms per question ([spikes/encoder-runtime.md](spikes/encoder-runtime.md)). Like
+On an M3 Max, Verdict reads one question in 7.5 to 20.3 ms depending on its length, and a batch
+of 16 in 4.3 to 19.3 ms per question ([spikes/encoder-runtime.md](spikes/encoder-runtime.md)). Like
 upstream, one server serves one backend; run one process per backend, each on its own port.
 Forwarding between them (`OPENJEV_MODEL_ROUTES`) comes with issue #38.
 
@@ -52,13 +52,15 @@ tokenizer and calibrator (D-033):
   folder to the server, and set `OPENJEV_ENCODER_MODELS` to the folder that holds it. Once the
   release exists, leave the variable unset: the first start downloads the package to
   `~/Library/Application Support/OpenJevSwift/encoders` and checks every file's SHA-256.
-- **The tokenizer and calibrator.** They are read from
+- **The tokenizer and calibrator.** With `OPENJEV_ENCODER_MODELS` set, they are read from
   `$OPENJEV_ENCODER_MODELS/verdict-m18-fp16/tokenizer/` when that folder holds them, else from
-  the Hugging Face cache snapshot of `heman10x/rlcd-modernbert-151m` at `8af2496`
-  (`HF_HUB_CACHE`, else `HF_HOME/hub`, else `~/.cache/huggingface/hub`).
+  the Hugging Face cache snapshot of `heman10x/rlcd-modernbert-151m` at `8af2496`, which
+  `Tools/encoders/reference.py` downloads: `HF_HUB_CACHE`, else `HF_HOME/hub`, else
+  `XDG_CACHE_HOME/huggingface/hub`, else `~/.cache/huggingface/hub`. With downloads on, they
+  come with the package and are checked the same way.
 
-The first start compiles the package beside it (`verdict-m18-fp16.mlmodelc`, a few seconds);
-later starts reuse the compiled copy.
+The first start compiles the package and keeps the result beside it
+(`verdict-m18-fp16.mlmodelc`); later starts reuse the compiled copy until the package changes.
 
 ## Settings
 
@@ -73,7 +75,7 @@ The server reads upstream's `OPENJEV_*` variables, with upstream's defaults and 
 | `OPENJEV_API_KEY` | unset | Require `Authorization: Bearer <key>` on `/v1/` routes. |
 | `OPENJEV_ORIGIN_SECRET` | unset | Require `X-Origin-Secret` (for a server behind a proxy). |
 | `OPENJEV_ENCODER_MODELS` | unset | A folder of converted Core ML packages, used instead of downloading (this port's, D-033). |
-| `OPENJEV_ENCODER_BATCH` | `16` | Questions per Core ML call. |
+| `OPENJEV_ENCODER_BATCH` | `16` | Questions per backend call. On a Mac, Verdict splits a call into Core ML calls of at most 16 questions. |
 | `OPENJEV_MAX_QUEUE` | `512` | Decisions inside the server before a 529. `0` refuses every request, as upstream's does. |
 | `OPENJEV_MAX_QUESTIONS` | `256` | Questions per request before a 400. |
 | `OPENJEV_MAX_BODY_BYTES` | `67108864` | Request body limit before a 413. |
@@ -93,10 +95,11 @@ and the others in upstream's table) are read and checked already and apply once 
 | `--port <port>` | `OPENJEV_PORT` |
 | `--log-level <level>` | `OPENJEV_LOG_LEVEL` |
 | `--no-warmup` | `OPENJEV_WARMUP=0` |
-| `--shutdown-timeout <seconds>` | none; the time requests in flight get after SIGTERM, 30 by default |
+| `--shutdown-timeout <seconds>` | none; the time requests in flight get after SIGTERM, 0 to 86400, 30 by default |
 
-A flag's value is checked as its variable's is, so `--port abc` fails with upstream's
-`OPENJEV_PORT='abc' is not a int`.
+A flag's value is checked as its variable's is, so `--port abc` fails with
+`OPENJEV_PORT='abc' is not a int`, the wording of upstream's `_env_num`, which this port uses for
+every variable (D-030).
 
 ## Run it by hand
 
@@ -110,10 +113,13 @@ From another terminal:
 curl -s localhost:8080/v1/models
 ```
 
-The README's quickstart request gets three answers:
+Jev's quickstart request, the `quickstart` case of `Fixtures/wire/cases.json`, gets three
+answers:
 
 ```bash
-curl -s localhost:8080/v1/systemone -H 'content-type: application/json' -d '{"state":"Hi, I have been trying to connect my Stripe account but keep getting a 403 error.","model":"jev-latest","questions":{"department":{"type":"choice","instructions":"Which team should handle this","criteria":{"billing":"Payment or subscription issues","technical":"Bugs or integration problems","sales":"Pricing or account questions"}},"frustration":{"type":"score","instructions":"How frustrated the customer appears","criteria":["Calm, just stating facts","Frustrated but civil","Very angry, strong language"]},"is_urgent":{"type":"noul","instructions":"The message conveys urgency or time-sensitivity"}}}'
+curl -s localhost:8080/v1/systemone -H 'content-type: application/json' --data-binary @- <<'JSON'
+{"state":"Hi, I've been trying to connect my Stripe account but keep getting a 403 error.","model":"jev-latest","questions":{"department":{"type":"choice","instructions":"Which team should handle this","criteria":{"billing":"Payment or subscription issues","technical":"Bugs or integration problems","sales":"Pricing or account questions"}},"frustration":{"type":"score","instructions":"How frustrated the customer appears","criteria":["Calm, just stating facts","Frustrated but civil","Very angry, strong language"]},"is_urgent":{"type":"noul","instructions":"The message conveys urgency or time-sensitivity"}}}
+JSON
 ```
 
 Ctrl-C stops the server gracefully.
@@ -181,10 +187,11 @@ Run it as an ordinary user that owns the model files, here `openjev`. Save this 
   ends with status 0 stays stopped. `<key>KeepAlive</key><true/>` restarts it in every case.
   A restart waits at least `ThrottleInterval` seconds, so invalid settings (status 2) repeat their
   message every 10 seconds in the log until they are fixed.
-- **`ExitTimeOut`** is how long launchd waits after SIGTERM before it sends SIGKILL; its default
-  is 20 seconds. Keep it above `--shutdown-timeout`, or launchd kills the server before the
-  requests in flight have finished.
-- **`ProcessType`** `Interactive` keeps macOS from throttling the daemon as a background job.
+- **`ExitTimeOut`** is how long launchd waits after SIGTERM before it sends SIGKILL. Its default
+  is system-defined (launchd.plist(5)), so set it, above `--shutdown-timeout`, or launchd may
+  kill the server before the requests in flight have finished.
+- **`ProcessType`** `Interactive` lifts the light limits on CPU and I/O that launchd applies to a
+  job without a `ProcessType`.
 - **The API key** is in the file, so keep it readable by root alone.
 
 Load, stop, restart and inspect it:
@@ -198,8 +205,9 @@ sudo launchctl print system/local.openjev.serve
 sudo launchctl bootout system/local.openjev.serve
 ```
 
-`bootstrap` starts the job, `kickstart -k` restarts it, `print` shows its state and its last exit
-status, and `bootout` stops it with SIGTERM and unloads it.
+`bootstrap` loads the job, which starts at once because of `RunAtLoad`; `kickstart -k` restarts
+it; `print` shows its state and its last exit status; and `bootout` stops it with SIGTERM and
+unloads it.
 
 ## Health check
 
@@ -219,12 +227,12 @@ Everything goes to standard error, one line per event, as swift-log writes it:
 `{time} {level} openjev: [{module}] {message}`. A start and one request look like this:
 
 ```text
-info openjev: [openjev] settings: host=0.0.0.0 port=8080 backend=verdict log_level=info warmup=on max_queue=512 max_questions=256 max_body_bytes=67108864 encoder_batch=16 encoder_models=/Users/openjev/models api_key=set origin_secret=unset model_routes=none
-info openjev: [openjev] loading verdict-1.4 (OPENJEV_BACKEND=verdict)
-info openjev: [openjev] warming up
-info openjev: [HummingbirdCore] Server started and listening on 0.0.0.0:8080
-info openjev: [openjev] serving on 0.0.0.0:8080
-info openjev: [OpenJevServer] POST /v1/systemone 200 54.5ms req_176a5c837d4f88a26775a92c4cb7bbc1
+2026-10-01T11:51:53-0400 info openjev: [openjev] settings: host=0.0.0.0 port=8080 backend=verdict log_level=info warmup=on max_queue=512 max_questions=256 max_body_bytes=67108864 encoder_batch=16 encoder_models=/Users/openjev/models api_key=set origin_secret=unset model_routes=none
+2026-10-01T11:51:53-0400 info openjev: [openjev] loading verdict-1.4 (OPENJEV_BACKEND=verdict)
+2026-10-01T11:51:55-0400 info openjev: [openjev] warming up
+2026-10-01T11:51:56-0400 info openjev: [HummingbirdCore] Server started and listening on 0.0.0.0:8080
+2026-10-01T11:51:56-0400 info openjev: [openjev] serving on 0.0.0.0:8080
+2026-10-01T11:51:56-0400 info openjev: [OpenJevServer] POST /v1/systemone 200 54.5ms req_176a5c837d4f88a26775a92c4cb7bbc1
 ```
 
 - **Requests.** Each request gets one info line: the method, the path without its query string,
@@ -253,7 +261,10 @@ On SIGTERM, which `launchctl bootout` sends, or SIGINT (Ctrl-C), the server:
 3. Releases the model, logs `released verdict-1.4` and `stopped`, and exits with status 0.
 
 Requests still running after `--shutdown-timeout` seconds (30 by default) are cancelled, the
-model is released, and the exit status is 1. A second signal does not cut the wait short.
+model is released, and the exit status is 1. With none running, the exit status is 0 whatever the
+timeout, 0 included. When the timeout cancels the server, Hummingbird also logs
+`Waiting on child channel: CancellationError()` at error level. A second signal does not cut the
+wait short.
 
 ## Exit statuses
 

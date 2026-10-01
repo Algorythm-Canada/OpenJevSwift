@@ -16,7 +16,7 @@
     @Suite(
         "Live server", .enabled(if: PolicyFixtures.exists, PolicyFixtures.missingMessage))
     struct LiveServerTests {
-        /// The README quickstart, which the policy recording's `plain` case holds.
+        /// Jev's quickstart request, which the policy recording's `plain` case holds.
         private func quickstart() throws -> JSONValue {
             try #require(PolicyFixtures.policyCase(named: "plain")["request"])
         }
@@ -54,6 +54,25 @@
             // A client that went away is not a backend failure.
             let failures = recorder.lines.filter { $0.level >= .warning }
             #expect(failures.isEmpty, "\(failures)")
+        }
+
+        @Test("A client that half-closes counts as gone and gets an empty 499")
+        func halfClose() async throws {
+            let gate = ReadGate()
+            let stub = StubBackend(gate: gate)
+            let service = try await ServerHarness.diffusionService(ServerSettings(), backend: stub)
+            let request = try quickstart()
+            try await LiveServer.run(service: service) { server in
+                let client = server.client()
+                async let answer = client.execute(LiveServer.post(request))
+                await gate.waitForArrivals(1)
+                try await client.close(mode: .output)
+                let response = try await answer
+                #expect(response.status.code == 499)
+                #expect(response.body?.readableBytes ?? 0 == 0)
+                #expect(gate.cancellations == 1)
+                try? await client.shutdown()
+            }
         }
 
         @Test("A graceful shutdown answers the request in flight, refuses new ones, then releases")
@@ -121,6 +140,23 @@
             }
         }
 
+        @Test("A shutdown with no time to spare and nothing in flight still stops cleanly")
+        func zeroTimeout() async throws {
+            let stub = StubBackend()
+            let service = try await ServerHarness.diffusionService(ServerSettings(), backend: stub)
+            try await LiveServer.run(service: service, shutdownTimeout: .zero) { server in
+                // One answered request first, so the server has had a connection.
+                let client = server.client()
+                let response = try await client.execute(LiveServer.post(try quickstart()))
+                #expect(response.status == .ok)
+                try await client.shutdown()
+                await server.triggerGracefulShutdown()
+                let ended = await server.waitUntilEnded()
+                #expect(throws: Never.self) { try ended.get() }
+                #expect(stub.closeCount == 1)
+            }
+        }
+
         @Test("An address already in use stops the server with the error and releases the model")
         func addressInUse() async throws {
             let first = StubBackend()
@@ -131,10 +167,10 @@
                 let other = DecisionServer(
                     settings: settings,
                     service: try await ServerHarness.diffusionService(settings, backend: second),
-                    logger: Logger(label: "OpenJevServerTests"))
+                    logger: LiveServer.quietLogger)
                 let group = ServiceGroup(
                     configuration: ServiceGroupConfiguration(
-                        services: [other], logger: Logger(label: "OpenJevServerTests")))
+                        services: [other], logger: LiveServer.quietLogger))
                 await #expect(throws: (any Error).self) { try await group.run() }
                 #expect(second.closeCount == 1)
             }

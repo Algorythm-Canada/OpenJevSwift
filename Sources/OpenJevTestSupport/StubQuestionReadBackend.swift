@@ -67,7 +67,7 @@ public final class StubQuestionReadBackend: QuestionReadBackend, ModelReleasing,
     public let delay: Duration?
     /// Distributions by question key, used instead of the stub's for the keys named.
     public let scripted: [String: [Double]]
-    /// The contract violation every batch commits, if any.
+    /// The contract violation the batches after the first ``succeedingBatches`` commit, if any.
     public let failure: Failure?
     /// How many batches answer before ``failure`` applies to the rest; 0 fails every batch.
     public let succeedingBatches: Int

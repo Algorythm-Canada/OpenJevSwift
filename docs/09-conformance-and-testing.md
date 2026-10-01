@@ -95,9 +95,9 @@ sanity, thought channel never leaking.
   `server-timing` against the stub's own measured time, run through the router.
 - **The CLI.** `OpenJevCLITests` runs every subcommand in-process with stub backends and the built
   `openjev` binary as a child process, which is how launchd sees it: exit statuses, messages and
-  `models`. Its smoke test serves Verdict from the binary on an ephemeral port, sends the README
-  quickstart, compares `openjev decide`'s bytes and stops the server with SIGTERM; opt-in via
-  `OPENJEV_ENCODER_MODELS`, like the encoder tests.
+  `models`. Its smoke test serves Verdict from the binary on an ephemeral port, sends Jev's
+  quickstart request, compares `openjev decide`'s bytes and stops the server with SIGTERM;
+  opt-in via `OPENJEV_ENCODER_MODELS`, like the encoder tests.
 - **Live server tests.** A port of upstream's `test_live.py` against a running server with the
   real model: README example, 255 options, chunked reads, unknown model, concurrent reads, chat and
   stream when generation exists, encoder models when listed. Opt-in via `OPENJEV_LIVE_URL`.

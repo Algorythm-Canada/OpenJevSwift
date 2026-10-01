@@ -24,7 +24,7 @@
         /// `maximumGracefulShutdownDuration`.
         static func run<Value: Sendable>(
             service: any SystemOneService, settings: ServerSettings? = nil,
-            logger: Logger = Logger(label: "OpenJevServerTests"),
+            logger: Logger = LiveServer.quietLogger,
             shutdownTimeout: Duration = .seconds(10),
             _ body: @Sendable (LiveServer) async throws -> Value
         ) async throws -> Value {
@@ -65,6 +65,14 @@
                     throw error
                 }
             }
+        }
+
+        /// A logger that writes only critical lines, so Hummingbird's own error lines on a
+        /// cancelled or refused server do not clutter the test log.
+        static var quietLogger: Logger {
+            var logger = Logger(label: "OpenJevServerTests")
+            logger.logLevel = .critical
+            return logger
         }
 
         /// Starts the graceful shutdown, as SIGTERM does for `openjev serve`.

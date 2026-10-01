@@ -26,12 +26,13 @@ public final class ReadGate: @unchecked Sendable {
         lock.withLock { arrived }
     }
 
-    /// The calls whose task was cancelled while they waited.
+    /// The calls that threw because their task was cancelled, while they waited or before.
     public var cancellations: Int {
         lock.withLock { cancelled }
     }
 
-    /// Lets every waiting call through, and every later one at once.
+    /// Lets every waiting call through, and every later one at once unless its task is already
+    /// cancelled.
     public func open() {
         let released = lock.withLock { () -> [Waiter] in
             isOpen = true
@@ -61,7 +62,8 @@ public final class ReadGate: @unchecked Sendable {
 
     /// What a stub calls: counts the arrival, then returns once the gate is open.
     ///
-    /// - Throws: `CancellationError` when the task is cancelled before the gate opens.
+    /// - Throws: `CancellationError` when the task is cancelled before the gate opens, or was
+    ///   cancelled already when it called, open or not.
     public func pass() async throws {
         let (id, reached) = lock.withLock { () -> (Int, [CheckedContinuation<Void, Never>]) in
             arrived += 1

@@ -53,8 +53,8 @@ public final class StubBackend: DecisionBackend, ModelReleasing, @unchecked Send
     public let scripted: [UInt64: [[(tokenID: Int, logprob: Double)]]]
     /// The prompt tokens a scripted read bills.
     public let scriptedPromptTokens: Int
-    /// The error every read and every think call throws, after recording the call, instead of
-    /// answering; `nil` answers.
+    /// The error the reads and think calls after the first ``succeedingCalls`` throw, after
+    /// recording the call, instead of answering; `nil` answers every call.
     public let failure: (any Error)?
     /// How many calls answer before ``failure`` applies to the rest; 0 fails every call.
     public let succeedingCalls: Int

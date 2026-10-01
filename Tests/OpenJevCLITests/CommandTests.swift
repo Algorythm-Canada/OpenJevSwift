@@ -17,7 +17,7 @@ import Testing
     .enabled(if: PolicyFixtures.exists, PolicyFixtures.missingMessage),
     .enabled(if: WireFixtures.exists("models.json"), WireFixtures.missingMessage))
 struct CommandTests {
-    /// The README quickstart as the recording sent it.
+    /// Jev's quickstart request as the policy recording sent it.
     private func quickstart() throws -> [UInt8] {
         try WireEncoder().bytes(
             json: try #require(PolicyFixtures.policyCase(named: "plain")["request"]))
@@ -353,6 +353,27 @@ struct CommandTests {
         #expect(outcome.logLines.contains("info warm-up skipped (OPENJEV_WARMUP=0)"))
         #expect(!outcome.logLines.contains("info warming up"))
         #expect(encoder.calls.isEmpty)
+    }
+
+    @Test(
+        "serve exits 0 when nothing is in flight, even with a shutdown timeout of 0",
+        arguments: ["0", "0.001"])
+    func serveZeroTimeout(timeout: String) async throws {
+        let encoder = StubQuestionReadBackend()
+        let started = Handoff<@Sendable () async -> Void>()
+        async let ran = CommandHarness.run(
+            [
+                "serve", "--backend", "stub-encoder", "--port", "0", "--no-warmup",
+                "--shutdown-timeout", timeout,
+            ],
+            backends: CommandHarness.backends(encoder: encoder),
+            onServing: { _, stop in started.resolve(stop) })
+        let stop = await started.value
+        await stop()
+        let outcome = await ran
+        #expect(outcome.status == 0, "\(outcome.errors)")
+        #expect(outcome.standardError.isEmpty)
+        #expect(encoder.closeCount == 1)
     }
 
     @Test("serve exits 1 when the shutdown timeout cuts a request short, after releasing")
