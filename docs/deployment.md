@@ -1,17 +1,16 @@
 # Deployment: a Mac mini as a decision server
 
 `openjev serve` runs the Jev-compatible server on a Mac as one process, with no Docker and no
-Python. It serves Verdict (`verdict-1.4`) and Laya (`laya-1.0`) on Core ML today. DiffusionGemma
-(`OPENJEV_BACKEND=mlx`) comes with issue #29; until then it exits with status 3 and a message
-naming that issue. This document follows upstream's README, "Run your own", where it applies to
-a Mac.
+Python. It serves DiffusionGemma (`openjev-0.1`, `OPENJEV_BACKEND=mlx`) on MLX and Verdict
+(`verdict-1.4`) and Laya (`laya-1.0`) on Core ML. This document follows upstream's README, "Run
+your own", where it applies to a Mac.
 
 ## What the Mac needs
 
 | Backend | Model | In this build | Mac | Memory |
 |---|---|---|---|---|
 | `verdict` | `verdict-1.4`, 151M parameters, Core ML | yes | Apple silicon, macOS 15 or later | about 1 GB at peak on the GPU (spike #56) |
-| `mlx` | `openjev-0.1`, DiffusionGemma 26B-A4B, 4-bit, MLX | issue #29 | Apple silicon | about 16 GB to load and more in service; 32 GB or more recommended |
+| `mlx` | `openjev-0.1`, DiffusionGemma 26B-A4B, 4-bit, MLX | yes | Apple silicon | about 16 GB to load (MLX holds 14.35 GiB) and more in service (R4); 32 GB or more recommended |
 | `laya` | `laya-1.0`, 421M parameters, Core ML | yes | Apple silicon, macOS 15 or later | about 2.9 GB at peak on the GPU (spike #56) |
 
 On an M3 Max, Verdict reads one question in 7.5 to 20.3 ms depending on its length, and a batch
@@ -76,7 +75,7 @@ The server reads upstream's `OPENJEV_*` variables, with upstream's defaults and 
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `OPENJEV_BACKEND` | `mlx` | `verdict` or `laya` today; `mlx` once #29 lands. Upstream's default, `vllm`, does not exist in this port (D-030). |
+| `OPENJEV_BACKEND` | `mlx` | `mlx`, `verdict` or `laya`. Upstream's default, `vllm`, does not exist in this port (D-030). |
 | `OPENJEV_HOST` | `127.0.0.1` | The address to bind. `0.0.0.0` serves the network. |
 | `OPENJEV_PORT` | `8080` | The port to bind. `0` picks a free one, which the `serving on` line names. |
 | `OPENJEV_API_KEY` | unset | Require `Authorization: Bearer <key>` on `/v1/` routes. |
@@ -88,10 +87,14 @@ The server reads upstream's `OPENJEV_*` variables, with upstream's defaults and 
 | `OPENJEV_MAX_BODY_BYTES` | `67108864` | Request body limit before a 413. |
 | `OPENJEV_WARMUP` | `1` | `0` skips the warm-up read before the server opens. |
 | `OPENJEV_LOG_LEVEL` | `info` | `trace`, `debug`, `info`, `notice`, `warning`, `error` or `critical`. |
-| `HF_HOME`, `HF_HUB_CACHE` | unset | Where the Hugging Face cache is, for the tokenizer of a local folder. |
+| `HF_HOME`, `HF_HUB_CACHE` | unset | Where the Hugging Face cache is: DiffusionGemma's checkpoint, and the tokenizer of a local folder. |
+| `HF_TOKEN` | unset | A Hugging Face token for a gated repository; an empty value counts as unset. |
 
-The DiffusionGemma settings (`OPENJEV_MLX_MODEL`, `OPENJEV_MLX_CACHE_LIMIT_GB`, `OPENJEV_CANVAS`
-and the others in upstream's table) are read and checked already and apply once #29 lands.
+The DiffusionGemma settings are upstream's: `OPENJEV_MLX_MODEL` (a directory, or a Hub
+repository, `repo@revision` for a revision; the default repository loads its pinned revision),
+`OPENJEV_MLX_MAX_PROMPT` (32768), `OPENJEV_MLX_PROMPT_CACHE` (12 prefills), `OPENJEV_MLX_CACHE_LIMIT_GB`
+(unset leaves MLX's buffer pool alone, `0` disables it), `OPENJEV_CANVAS` and the others in
+upstream's table.
 
 `serve` takes six flags. The first five override their variable:
 
@@ -276,7 +279,7 @@ wait short.
 | 0 | Success; for `serve`, a clean shutdown | SIGTERM with no request left |
 | 1 | Any other failure | the address is in use; a shutdown that cancelled requests; `decide` whose backend failed during the read (it prints the 503 body) |
 | 2 | Invalid settings or command line; the message names the variable | `openjev: OPENJEV_PORT='eighty' is not a int`; `openjev: unknown backend 'vllm'; use one of mlx, laya, verdict (OPENJEV_BACKEND)` |
-| 3 | The backend cannot run: not in this build, or it failed to load | `openjev: OPENJEV_BACKEND=mlx: DiffusionGemma on MLX is not in this build yet; issue #29 brings it (...)`; a download that fails its checksum |
+| 3 | The backend cannot run: not in this build, or it failed to load | `openjev: openjev-0.1 failed to load (OPENJEV_BACKEND=mlx): /models/dg is not a DiffusionGemma checkpoint: it lacks config.json, ...`; a download that fails its checksum |
 | 4 | `decide` only: the request was refused (a 4xx or the 529) | an unknown model, a malformed body |
 
 A message goes to standard error, prefixed with `openjev:`. A command line the parser refuses
@@ -309,12 +312,13 @@ model, for example to check what a server will list before starting it:
 openjev models --backend verdict
 ```
 
-## DiffusionGemma, once #29 lands
+## DiffusionGemma
 
-Upstream's Apple silicon section applies as it is: `OPENJEV_BACKEND=mlx openjev serve` will run
+Upstream's Apple silicon section applies as it is: `OPENJEV_BACKEND=mlx openjev serve` runs
 DiffusionGemma inside the process on MLX, with the `mlx-community/diffusiongemma-26B-A4B-it-4bit`
-weights (`OPENJEV_MLX_MODEL`) downloaded into the Hugging Face cache on first start (issue #30).
-Loading the 4-bit weights takes about 16 GB of memory and the buffer pool grows in service;
-`OPENJEV_MLX_CACHE_LIMIT_GB` bounds it (upstream's README, "MLX memory"). Reads run one at a time
-on the GPU, so a Mac serves a few requests per second, not a fleet. Until #29 lands, the same
-command exits 3 and names the issue.
+weights (`OPENJEV_MLX_MODEL`) at their pinned revision. On first start they are downloaded into the
+Hugging Face cache in huggingface_hub's layout (13 files, 16.58 GB), resumed after an interruption
+and checked file by file, so a cache upstream or mlx-vlm filled is used as is. Loading the 4-bit
+weights takes about 16 GB of memory; `OPENJEV_MLX_CACHE_LIMIT_GB` bounds MLX's buffer pool
+(upstream's README, "MLX memory"; the figures are in docs/07 R4). Reads run one at a time on the
+GPU, so a Mac serves a few requests per second, not a fleet.

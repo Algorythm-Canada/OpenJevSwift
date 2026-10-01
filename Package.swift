@@ -201,12 +201,14 @@ var targets: [Target] = [
             swiftSettings: swiftSettings
         ),
         // The tests also load the tokenizer through mlx-swift-lm's MLXHuggingFace macros, to
-        // confirm that path gives the same results as the direct one the module uses.
+        // confirm that path gives the same results as the direct one the module uses. The live
+        // runtime tests take their requests from the wire fixtures through OpenJevTestSupport.
         .testTarget(
             name: "OpenJevDiffusionGemmaTests",
             dependencies: [
                 "OpenJevDiffusionGemma",
                 "OpenJevCore",
+                "OpenJevTestSupport",
                 .product(name: "MLX", package: "mlx-swift"),
                 .product(name: "MLXNN", package: "mlx-swift"),
                 .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
@@ -233,10 +235,11 @@ var targets: [Target] = [
             swiftSettings: swiftSettings
         ),
     ]
-    // `openjev serve` with OPENJEV_BACKEND=verdict, and its opt-in smoke test, which finds the
-    // converted package the way the store does.
+    // `openjev serve` with OPENJEV_BACKEND=verdict, laya or mlx, and its opt-in smoke test, which
+    // finds the converted package the way the store does.
     for target in targets where ["openjev", "OpenJevCLITests"].contains(target.name) {
         target.dependencies.append("OpenJevEncoders")
+        target.dependencies.append("OpenJevDiffusionGemma")
     }
 #endif
 

@@ -6,15 +6,16 @@
 #
 # It fails unless the log holds at least one Swift Testing run, every run passed, and every skipped
 # or cancelled test or suite stopped because a model opt-in variable is unset. Tests that need the
-# weights, a converted encoder package or its tokenizer, or a live server name OPENJEV_TEST_MODEL,
-# OPENJEV_ENCODER_MODELS or OPENJEV_LIVE_URL in their skip comment
+# weights, a converted encoder package or its tokenizer, a live server or the Hugging Face Hub name
+# OPENJEV_TEST_MODEL, OPENJEV_ENCODER_MODELS, OPENJEV_LIVE_URL or OPENJEV_TEST_DOWNLOAD in their
+# skip comment
 # (docs/09-conformance-and-testing.md). Any other skip fails the check, a skip without a comment
 # included: CI has every fixture, so a model-free test that skips there would silently stop
 # testing anything.
 set -euo pipefail
 
 log=${1:?usage: check-test-log.sh <file holding the output of swift test>}
-opt_in='OPENJEV_TEST_MODEL|OPENJEV_ENCODER_MODELS|OPENJEV_LIVE_URL'
+opt_in='OPENJEV_TEST_MODEL|OPENJEV_ENCODER_MODELS|OPENJEV_LIVE_URL|OPENJEV_TEST_DOWNLOAD'
 
 indent() { sed '/^$/d; s/^/  /'; }
 

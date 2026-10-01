@@ -84,19 +84,32 @@ struct CommandTests {
     }
 
     @Test(
-        "mlx exits 3 naming the issue that brings it and the variable",
+        "mlx over a directory that is not a checkpoint exits 3; on Linux mlx is unavailable",
         arguments: ["serve", "decide"])
-    func backendNotBuiltYet(subcommand: String) async {
-        let mlx = await CommandHarness.run([subcommand, "--backend", "mlx"])
+    func mlxNotACheckpoint(subcommand: String) async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("openjev-not-a-checkpoint-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let environment = ["OPENJEV_MLX_MODEL": directory.path]
+        let mlx = await CommandHarness.run(
+            [subcommand, "--backend", "mlx"], environment: environment)
         #expect(mlx.status == 3)
-        #expect(mlx.errors.hasPrefix("openjev: OPENJEV_BACKEND=mlx: "))
-        #expect(mlx.errors.contains("issue #29"))
-        // The default backend is upstream's, which this build does not have yet.
-        #expect(await CommandHarness.run([subcommand]).status == 3)
+        if canImportDiffusionGemma {
+            #expect(
+                mlx.errors.hasPrefix("openjev: openjev-0.1 failed to load (OPENJEV_BACKEND=mlx): "))
+            #expect(mlx.errors.contains("config.json"))
+        } else {
+            // Linux: MLX does not exist, so mlx is known and unavailable.
+            #expect(mlx.errors.hasPrefix("openjev: OPENJEV_BACKEND=mlx: "))
+            #expect(mlx.errors.contains("Apple silicon"))
+        }
+        // The default backend is upstream's, mlx.
+        #expect(await CommandHarness.run([subcommand], environment: environment).status == 3)
     }
 
     /// Checked without a load: Laya's package is 1.7 GB and Verdict's 306 MB.
-    @Test("verdict and laya are this build's encoder backends, mlx is a placeholder")
+    @Test("verdict and laya are this build's encoder backends, mlx its diffusion backend")
     func standardBackends() throws {
         let registry = BackendRegistry.standard
         #expect(registry.backends.map(\.name) == ["mlx", "laya", "verdict"])
@@ -114,12 +127,25 @@ struct CommandTests {
                 #expect(message.contains("Core ML"))
             }
         }
-        guard case .unavailable(let message) = try registry.backend(named: "mlx").availability
-        else {
-            Issue.record("mlx is available")
-            return
+        let mlx = try registry.backend(named: "mlx")
+        #expect(mlx.kind == .diffusion)
+        #expect(mlx.servedModels == .diffusionGemma)
+        switch mlx.availability {
+        case .available:
+            #expect(canImportDiffusionGemma, "mlx is available without MLX")
+        case .unavailable(let message):
+            #expect(!canImportDiffusionGemma, "mlx: \(message)")
+            #expect(message.hasPrefix("OPENJEV_BACKEND=mlx: "))
         }
-        #expect(message.contains("issue #29"))
+    }
+
+    /// Whether this build has the DiffusionGemma backend.
+    private var canImportDiffusionGemma: Bool {
+        #if canImport(OpenJevDiffusionGemma)
+            return true
+        #else
+            return false
+        #endif
     }
 
     /// Whether this build has the encoder backends.
