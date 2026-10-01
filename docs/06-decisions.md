@@ -1135,6 +1135,16 @@ package needs a new release tag and a new manifest, and a published asset is nev
 `openjev-models` should carry the Apache-2.0 license and a notice crediting Heman10x's checkpoint,
 and Laya's authors once #58 publishes its packages the same way.
 
+Laya (#58, D-037) adds five releases of the same shape: `laya-m18-fp16-v1`, the Mac's package
+(849 MB), and `laya-f18-b1s128-fp16-v1`, `laya-f18-b1s256-fp16-v1`, `laya-f18-b1s512-fp16-v1` and
+`laya-f18-b1s1024-fp16-v1`, the iPhone's (843 to 845 MB each). Their tokenizer and
+rl_agent_config.json are those of `convaiinnovations/laya-typed-decisions` at `1a793eb`, the
+tokenizer under the checkpoint's `tokenizer/`, and are not re-hosted. `EncoderPackageManifest.laya`
+and `layaByLength` describe them; `Tools/encoders/manifest.py --model laya` writes both and prints
+each release's commands, and each manifest keeps its downloads off until its release is published.
+The repository's NOTICE credits Heman10x's Verdict checkpoint and Laya by Nandakishor M / Convai
+Innovations (github.com/NandhaKishorM/laya); the script prints the command that adds it.
+
 Status. Accepted on 2026-10-01: GitHub Releases of `Algorythm-Canada/openjev-models`, confirmed by
 the maintainers, with `verdict-m18-fp16-v1` published and its assets verified by download.
 
@@ -1329,3 +1339,71 @@ Decision.
    test support.
 
 Status. Proposed with issues #25, #26 and #28.
+
+## D-037 Laya backend: where the port goes beyond or differs from the issue text
+
+Context. Issue #58 predates spike #56 and D-011, and describes the forward pass and the download
+as upstream's PyTorch `LayaEngine` has them. The runtime, the packages and the bounds follow the
+spike instead, in the shape D-033 and D-034 gave Verdict, and a few points needed choices the issue
+does not spell out.
+
+Decision.
+
+1. **No CLI registration yet,** as for Verdict (D-034 item 1): `OPENJEV_BACKEND=laya` is issue
+   #40. This issue exposes `LayaBackend.load(from:packageSet:)` and `load(configuration:)`, and
+   05-architecture.md documents the one-line registration beside Verdict's.
+2. **The forward pass is the Core ML package's.** The encoder, the question-type embedding, the
+   two-layer head and the scorer run inside the converted package (`convert_laya.py`), which
+   returns the scorer at every position; Swift reads it at the markers and applies the bucket's
+   temperature, the clamp, the softmax, the 4-decimal rounding and the renormalisation. The action
+   head is not converted: upstream drops its output.
+3. **Packages and batches follow D-011.** On macOS the backend runs `laya-m18-fp16` on the GPU,
+   up to 16 questions per call in the smallest function that holds them, with two functions
+   loaded. On iOS it runs `laya-f18-b1s128-fp16` to `laya-f18-b1s1024-fp16` on the Neural Engine,
+   one question per call, each through the smallest package the device holds that takes its
+   sequence. A package loads when a read first needs its length and stays loaded, because the
+   first load of a Laya package took 33 to 56 s on an A15. A sequence longer than every package
+   the device holds is `EncoderLoadError.noPackage`, which names the package to fetch; the app
+   sends that read to a server meanwhile (D-011 item 6) and fetches the package with
+   `prefetch(lengths:)`, which downloads, checks and compiles it. Rows are padded to the
+   function's or the package's length, where laya pads to the longest row; the billing, the rows'
+   unpadded lengths, is the same.
+4. **Where the files come from.** The issue's download from
+   `convaiinnovations/laya-typed-decisions` holds for the tokenizer, under the checkpoint's
+   `tokenizer/` (`EncoderPackageManifest.checkpointTokenizerFolder`), and for
+   rl_agent_config.json, the calibration file; the weights are the Core ML packages of D-033.
+   `EncoderPackageStore.tokenizerLocations(for:)` fetches the tokenizer and the configuration file
+   without a package, also while the packages are unpublished, so an iPhone can build sequences
+   before it holds any package, and `heldPackageDirectory(for:)` tells which packages it holds
+   without downloading anything. Each per-length package keeps its own copy of the tokenizer
+   (3.6 MB) in the store's layout of one folder per package.
+5. **laya's arithmetic, not an approximation of it.** laya computes the softmax in float32 with
+   numpy, and the port does the same in numpy's order: the division by the temperature, the
+   maximum subtracted, `exp`, and numpy's pairwise sum. On the recorded scores it reproduces all
+   200 of laya's unrounded distributions bit for bit, so the rounded answers are laya's own. The
+   rounding is CPython's `round(x, 4)` done with integers (the exact binary value rounded half to
+   even), and the renormalisation divides by Python's compensated sum: `pythonSum` (D-019) becomes
+   public in `OpenJevCore`.
+6. **Tolerance.** The issue's 0.021 (upstream's bfloat16) gives way to the spike's bounds, as for
+   Verdict (D-034 item 5): the largest difference at most 0.02, the mean at most 0.003, and the
+   top answer unchanged wherever the reference's top two are at least 0.01 apart, on the
+   probabilities before rounding. Float16 moves them by up to 0.004 on the Mac's GPU and 0.015 on
+   its Neural Engine (0.018 on an A15's, spike #56), so the rounded answers differ from PyTorch's
+   in most questions while the top answers hold.
+7. **The configuration file is checked at load.** `temperature` must hold a value per question
+   type (laya would fail at read time with an `IndexError`), and a `max_len` longer than the
+   packages take (1,024) is refused. `clamp_temperature` gives 1 for a string, where Python's
+   `float` would parse one that holds a number.
+8. **One tokenization of the state per batch.** laya tokenizes the state again for every
+   question; the ids are the same, and on an iPhone tokenizing costs 9 ms per question at the
+   median (spike #56).
+9. **The overflow refusal comes before any read.** A question whose options lose a marker gets
+   upstream's `"Too many choices for laya-1.0: a question's options must fit in 256 tokens."`,
+   located at `["body"]`, before the batch is read, as laya builds every sequence of a call before
+   its forward pass. A model's wrong output is `EncoderModelError` and a score with no levels gets
+   an empty distribution that the engine refuses, as D-034 item 6 decided for Verdict; the loaders
+   check the OS when they run, as D-034 item 8 did.
+10. **"[MASK]" is matched as Python matches it,** code point by code point: a combining mark
+    after the `]` does not hide the token, as Swift's character comparison would.
+
+Status. Proposed with issue #58.

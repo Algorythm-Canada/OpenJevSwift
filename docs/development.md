@@ -50,11 +50,11 @@ The package declares macOS 14 and iOS 17 as minimum deployment targets.
   `OpenJevDiffusionGemma` and `OpenJevEncoders` targets inside `#if os(macOS)`. SwiftPM evaluates
   a manifest on the host, and every Apple platform build runs on a macOS host, so on Linux those
   targets do not exist and SwiftPM never loads or builds the MLX packages.
-- **The encoders.** `OpenJevEncoders` runs Verdict (and later Laya) on Core ML (D-011). Its Core
+- **The encoders.** `OpenJevEncoders` runs Verdict and Laya on Core ML (D-011). Its Core
   ML types are `@available(macOS 15, iOS 18, *)`, because the multifunction packages need those
-  versions, while the package keeps its macOS 14 and iOS 17 floors. `VerdictBackend.load` builds
-  for those floors and throws `EncoderLoadError.unsupportedOperatingSystem` on an older OS, where
-  D-011 sends the reads to a server.
+  versions, while the package keeps its macOS 14 and iOS 17 floors. `VerdictBackend.load` and
+  `LayaBackend.load` build for those floors and throw `EncoderLoadError.unsupportedOperatingSystem`
+  on an older OS, where D-011 sends the reads to a server.
 - **The server.** `OpenJevServer` is not a library product, so library consumers never link
   Hummingbird (D-009). Its Hummingbird dependency applies only on macOS and Linux, which keeps
   Hummingbird out of iOS builds.
@@ -276,8 +276,8 @@ And took this long:
   tests read `Fixtures/` through a path derived from `#filePath`, which works unchanged in the
   simulator: the simulator runs on the host and reads the checkout in place, so the tests of both
   targets run there with no resource copying (223 and 41 on 2026-10-01). The encoder tests that
-  need Verdict's tokenizer or converted package look for them in the Mac's home, which the
-  simulator names in `SIMULATOR_HOST_HOME`, and skip on CI, which has neither.
+  need Verdict's or Laya's tokenizer or converted packages look for them in the Mac's home, which
+  the simulator names in `SIMULATOR_HOST_HOME`, and skip on CI, which has neither.
 - **Why the iOS job builds `OpenJevDiffusionGemma`.** The target declares iOS 17 like the rest of
   the package, so a build for the iOS Simulator keeps it honest. mlx-swift compiles for the
   simulator, arm64 and x86_64 both. Only the build runs: the tests need weights that no iOS

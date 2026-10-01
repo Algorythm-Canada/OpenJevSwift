@@ -19,7 +19,7 @@ is built by the main package, and no weights, converted packages or tokenizer fi
 | `stage_harness.sh` | Copies fixtures, tokenizers and packages into the app for a device run |
 | `run_macos.sh`, `run_ios.sh` | Measure every package with every compute-unit setting, one process each, on the Mac or a connected iPhone |
 | `summarize.py` | Turns the measurement results into the report's tables |
-| `manifest.py` | Writes the manifest of Verdict's package that `OpenJevEncoders` embeds (every file's URL, size and SHA-256) and prints the commands that publish the package as a GitHub release (D-033). Standard library only |
+| `manifest.py` | Writes the manifests of Verdict's package and Laya's five that `OpenJevEncoders` embeds (every file's URL, size and SHA-256) and prints the commands that publish each package as a GitHub release (D-033). Standard library only |
 
 ## Running it
 
@@ -51,29 +51,37 @@ they are the only Laya packages that run on the Neural Engine. The harness tests
 tokenizers or fixtures are missing; the measurement tests also need `ENCODER_HARNESS_BENCHMARK=1`
 and converted packages.
 
-## Publishing a package
+## Publishing the packages
 
-`OpenJevEncoders` downloads Verdict's package on first use and checks every file against the
-manifest it embeds, `Sources/OpenJevEncoders/Store/EncoderPackageManifest+Verdict.swift` (D-033).
-Verdict's package is published as release `verdict-m18-fp16-v1` of
-`Algorythm-Canada/openjev-models`, and the manifest has downloads on (`PACKAGE_DOWNLOADS_ENABLED`
-in `manifest.py`). After converting a new package, from the repository root:
+`OpenJevEncoders` downloads a model's package on first use and checks every file against the
+manifest it embeds (D-033): `Sources/OpenJevEncoders/Store/EncoderPackageManifest+Verdict.swift`
+for `verdict-m18-fp16`, and `EncoderPackageManifest+Laya.swift` for Laya's Mac package
+`laya-m18-fp16` and the iPhone's `laya-f18-b1s128-fp16` to `laya-f18-b1s1024-fp16` (D-037), one
+release each. Verdict's package is published as release `verdict-m18-fp16-v1` of
+`Algorythm-Canada/openjev-models`, and its manifest has downloads on; until a package is published,
+its manifest keeps downloads off (`PACKAGE_DOWNLOADS_ENABLED` in `manifest.py`, one entry per
+package). After converting new packages, from the repository root:
 
 ```bash
 python3 Tools/encoders/manifest.py
 ```
 
-It rewrites the manifest from `verdict-m18-fp16.mlpackage` (in `OPENJEV_ENCODER_MODELS` or
-`~/Library/Caches/OpenJevSwift/encoders`) and the checkpoint's tokenizer and calibrator (in the
-Hugging Face cache), and prints the commands that create `Algorythm-Canada/openjev-models` once
-(with the Apache-2.0 license as its first commit, since a release needs a commit to tag), copy the
-three package files under their asset names and upload them to a release. It uploads nothing itself;
-`--gh gh` prints `gh` instead of `ghp`, and `--check` fails when the committed manifest no longer
-matches the package. Every conversion writes new identifiers into the package's Manifest.json, so a
-package converted on another machine never matches the published digests: publish from the machine
-whose package the manifest describes. A new package needs a new tag (`--tag`), and a published asset
-is never replaced. A new package starts with `PACKAGE_DOWNLOADS_ENABLED = False`; once its uploaded
-assets match the manifest, set it to `True`, run the script again and commit the manifest.
+It rewrites both manifests from the packages (in `OPENJEV_ENCODER_MODELS` or
+`~/Library/Caches/OpenJevSwift/encoders`) and the checkpoints' tokenizers and calibration files (in
+the Hugging Face cache; Laya's tokenizer is under its snapshot's `tokenizer/`), and prints the
+commands that publish the packages whose downloads are still off: create
+`Algorythm-Canada/openjev-models` if it does not exist yet (with the Apache-2.0 license as its first
+commit, since a release needs a commit to tag), add its NOTICE crediting the checkpoints' authors
+if it has none, then for each package copy its three files under their asset names, create its
+release and upload them. It uploads nothing itself. `--model verdict` or `--model laya` writes one
+manifest; `--gh gh` prints `gh` instead of `ghp`; and `--check` fails when a committed manifest no
+longer matches its packages. Every conversion writes new identifiers into the package's
+Manifest.json, so a package converted on another machine never matches the published digests:
+publish from the machine whose packages the manifests describe. A changed package needs a new
+release number (`RELEASE` in the script, which names the tag `{package}-v{number}`), and a
+published asset is never replaced. A new package starts with its `PACKAGE_DOWNLOADS_ENABLED` entry
+`False`; once its release's uploaded assets match its manifest, set the entry to `True`, run the
+script again and commit the manifests.
 
 ## Known problems
 
