@@ -37,9 +37,9 @@ public enum LayaPackageSet: Sendable, Hashable, CaseIterable {
 /// returns one distribution per question in the question's option order (a noul's is
 /// `[P(true), 1 - P(true)]`) and bills the rows' lengths, laya's `usage.input_tokens`.
 ///
-/// ``load(configuration:)`` and ``load(from:packageSet:)`` run the model with Core ML. The
-/// initializer takes any ``EncoderModelRunner`` and ``LayaTokenizing``, so tests can replay
-/// recorded scores.
+/// ``load(configuration:)`` and ``load(from:packageSet:functionCapacity:)`` run the model with
+/// Core ML. The initializer takes any ``EncoderModelRunner`` and ``LayaTokenizing``, so tests can
+/// replay recorded scores.
 public actor LayaBackend: QuestionReadBackend {
     /// The settings ``load(configuration:)`` reads.
     public struct Configuration: Sendable, Hashable {
@@ -88,9 +88,9 @@ public actor LayaBackend: QuestionReadBackend {
         public var functionCapacity: Int
 
         /// Creates a configuration with D-011's defaults for the packages: the multifunction
-        /// package on the GPU with up to 16 questions per call on macOS and 1 on iOS, and two
-        /// functions loaded on macOS; the per-length packages on the Neural Engine, one question
-        /// per call.
+        /// package on the GPU with up to 16 questions per call on macOS and 1 on iOS, and every
+        /// function loaded once a call needs it on macOS (D-042); the per-length packages on the
+        /// Neural Engine, one question per call.
         public init(
             packages: Packages,
             tokenizerDirectory: URL,
@@ -133,10 +133,11 @@ public actor LayaBackend: QuestionReadBackend {
             #endif
         }
 
-        /// 2 on macOS and 1 on iOS, as for Verdict.
+        /// On macOS, every function of the multifunction package, 8, as for Verdict: each costs
+        /// 805 MB on the GPU and loading one again 0.44 to 1.85 s (D-042). 1 on iOS.
         public static var defaultFunctionCapacity: Int {
             #if os(macOS)
-                return 2
+                return EncoderPackageSpec.layaMultifunction.functions.count
             #else
                 return 1
             #endif
@@ -339,27 +340,34 @@ extension LayaBackend: ModelReleasing {
         }
 
         /// Loads Laya from the files a store finds or downloads, with this platform's defaults.
-        /// This is the server's backend for `OPENJEV_BACKEND=laya`:
+        /// This is the server's backend for `OPENJEV_BACKEND=laya`, with
+        /// `OPENJEV_ENCODER_FUNCTIONS` as `functionCapacity`:
         ///
         /// ```swift
-        /// QuestionReadBackendProvider { _ in
-        ///     try await LayaBackend.load(from: EncoderPackageStore(environment: environment))
+        /// QuestionReadBackendProvider { settings in
+        ///     try await LayaBackend.load(
+        ///         from: EncoderPackageStore(environment: environment),
+        ///         functionCapacity: settings.encoderFunctions)
         /// }
         /// ```
         ///
         /// With ``LayaPackageSet/multifunction``, the Mac's set, it gets everything
-        /// ``EncoderPackageManifest/laya`` names and runs it on the GPU. With
-        /// ``LayaPackageSet/byLength``, the iPhone's, it gets the tokenizer and the configuration
-        /// file now and no package, and runs on the Neural Engine: each read uses the smallest
-        /// package of ``EncoderPackageManifest/layaByLength`` the device holds that takes its
-        /// sequence, and a sequence longer than every one it holds is
+        /// ``EncoderPackageManifest/laya`` names and runs it on the GPU, with at most
+        /// `functionCapacity` functions loaded (`nil` is
+        /// ``Configuration/defaultFunctionCapacity``). With ``LayaPackageSet/byLength``, the
+        /// iPhone's, it gets the tokenizer and the configuration file now and no package, and runs
+        /// on the Neural Engine: each read uses the smallest package of
+        /// ``EncoderPackageManifest/layaByLength`` the device holds that takes its sequence, and a
+        /// sequence longer than every one it holds is
         /// ``EncoderLoadError/noPackage(length:package:held:)`` until ``prefetch(lengths:)`` has
-        /// fetched one. Until then the warm-up read throws that error too, so an app prefetches
-        /// at least the 128-token package before it warms up.
+        /// fetched one. Until then the warm-up read throws that error too, so an app prefetches at
+        /// least the 128-token package before it warms up. The per-length packages keep every
+        /// package loaded, whatever `functionCapacity` says.
         ///
         /// - Throws: The store's errors (``EncoderPackageError``) and ``load(configuration:)``'s.
         public static func load(
-            from store: EncoderPackageStore, packageSet: LayaPackageSet = .platformDefault
+            from store: EncoderPackageStore, packageSet: LayaPackageSet = .platformDefault,
+            functionCapacity: Int? = nil
         ) async throws -> LayaBackend {
             // Before the store, whose own check would throw EncoderPackageError instead.
             guard #available(macOS 15, iOS 18, *) else {
@@ -371,13 +379,17 @@ extension LayaBackend: ModelReleasing {
                 // Core ML does not load the multifunction package for the Neural Engine, so it
                 // runs on the GPU on an iPhone too, as Configuration's defaults have it.
                 return try await load(
-                    configuration: Configuration(locations: store.locations(for: .laya)))
+                    configuration: Configuration(
+                        locations: store.locations(for: .laya),
+                        functionCapacity: functionCapacity
+                            ?? Configuration.defaultFunctionCapacity))
             case .byLength:
                 return try await loadByLength(from: store)
             }
         }
 
-        /// ``load(from:packageSet:)`` with the per-length packages, on an OS that runs them.
+        /// ``load(from:packageSet:functionCapacity:)`` with the per-length packages, on an OS that
+        /// runs them.
         @available(macOS 15, iOS 18, *)
         private static func loadByLength(from store: EncoderPackageStore) async throws
             -> LayaBackend

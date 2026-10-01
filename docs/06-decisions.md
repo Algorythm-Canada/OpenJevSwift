@@ -1415,7 +1415,8 @@ Decision.
 10. **"[MASK]" is matched as Python matches it,** code point by code point: a combining mark
     after the `]` does not hide the token, as Swift's character comparison would.
 
-Status. Proposed with issue #58.
+Status. Proposed with issue #58. Item 3's two functions loaded on macOS are replaced by D-042:
+every function stays loaded, and `OPENJEV_ENCODER_FUNCTIONS` caps them.
 
 ## D-038 The openjev CLI, capacity and shutdown: where the port goes beyond or differs from the issue text
 
@@ -1866,4 +1867,91 @@ one-question requests of mixed lengths load functions again (Laya reloaded on 15
 requests, each reload taking several times an ordinary read), and a function's first load, which the
 warm-up's three questions do not cover, took 0.2 to 1.9 s across the runs.
 
-Status. Proposed with issue #61.
+Status. Proposed with issue #61. The two Core ML functions its runs had loaded on a Mac are
+every function since D-042.
+
+## D-042 Encoder functions on a Mac: every function stays loaded, `OPENJEV_ENCODER_FUNCTIONS` caps them
+
+Context. On a Mac both encoder backends run a multifunction package with one Core ML function per
+input shape: Verdict's six (batch 1 and 16 by 128, 256 and 512 tokens) and Laya's eight (to 1,024).
+`CoreMLEncoderModel` kept the two used most recently (`functionCapacity`, D-037 item 3), because
+spike #56 found that each loaded function holds its own copy of the weights. Issue #61's JevBench
+runs showed the cost of two: one-question requests whose lengths moved among three or four shapes
+loaded a function again, 15 times in Laya's 333 requests, 0.46 to 0.78 s each, where a read took a
+median of 20 ms at 128 tokens and 163 ms at 1,024. The measurements below are in
+[spikes/encoder-function-capacity.md](spikes/encoder-function-capacity.md), taken on 2026-10-01 on
+the M3 Max of spike #56 (128 GB, macOS 27.0.1); MB and GB there and here are 2^20 and 2^30 bytes,
+vmmap's units.
+
+Decision.
+
+1. **On macOS every function stays loaded once a read has needed it.**
+   `VerdictBackend.Configuration.defaultFunctionCapacity` is 6 and
+   `LayaBackend.Configuration.defaultFunctionCapacity` 8, the packages' function counts
+   (`EncoderPackageSpec.functions`); iOS keeps 1. A function still loads when a read first needs it,
+   so the memory follows the shapes the requests take, and no request waits for a function to load a
+   second time.
+2. **Why not a larger fixed number.** Replaying the run's requests through the cache predicts 19
+   loads, 4 first loads and 15 reloads: in a rerun, exactly the 19 requests whose model time was
+   over 300 ms. The benchmark's order, its short tiers first, hides most reloads: in random orders
+   of the same requests, two functions reload 36% of Laya's requests and 13% of Verdict's. Served
+   shuffled, 102 of Laya's 333 requests waited 439 to 633 ms (median 497) for a function that, kept,
+   answered them in a median of 50 ms; the run's 95th percentile was 568 ms against 206 and its
+   model time 72.3 s against 27.5. Verdict's 39 reloads took 219 to 515 ms (median 241) against 15
+   ms, and 23.8 s of model time against 15.3. Once one-question requests and batches mix (2 to 16
+   questions run through a batch-16 function), any capacity below the package's function count
+   reloads, because a cache smaller than the shapes in use evicts the one the next request needs:
+   Laya at 4 reloads 30 to 37% of requests, at 6 10 to 14%, at 8 none; Verdict at 4 12 to 15%, at 6
+   none.
+3. **What a loaded function costs.** On the GPU each loaded function maps its own copy of the
+   weights from files of Core ML's: 805 MB for Laya and 289 MB for Verdict, about the size of the
+   packages' weight files (806.7 and 289.8 MB). The process's physical footprint does not count
+   these file-backed pages; the resident memory is the footprint plus the copies. Laya holds 1.03 GB
+   with `b1_s128` alone, 2.05 with its two longest batch-1 functions, 3.68 with all four, 4.65 with
+   what one-question traffic loads (those and the warm-up's `b16_s128`) and 8.86 with all eight,
+   9.73 counting the footprint at its peak during a batch of 16 at 1,024 tokens; its two largest
+   functions alone hold 3.91 GB, 4.35 counting the peak. Verdict holds 0.85 GB with its two longest
+   batch-1 functions, 1.57 with what one-question traffic loads and 2.76 with all six, 2.90 counting
+   the peak. After their 333 reads the servers of item 2 held 1.99 to 2.03 GB with two functions and
+   4.44 to 4.60 GB with every function kept (Verdict 0.85 to 0.88 and 1.52 to 1.54 GB). Loading a
+   Laya function took 0.45 to 1.85 s, 0.14 to 0.25 s of it for `MLModel` to initialise and the rest
+   for its first prediction, the longest for `b16_s1024`; loading a Verdict function took 0.22 to
+   0.69 s.
+4. **`OPENJEV_ENCODER_FUNCTIONS` caps it,** this port's variable, read and checked as upstream's
+   `_env_num` settings are: unset or empty keeps every function; an integer of at least 1 is the
+   most functions loaded at once, and 0 is `OPENJEV_ENCODER_FUNCTIONS=0 is below the minimum of 1`,
+   exit 2. `ServerSettings.encoderFunctions` carries it to
+   `VerdictBackend.load(from:functionCapacity:)` and
+   `LayaBackend.load(from:packageSet:functionCapacity:)`, and `serve`'s settings line prints
+   `encoder_functions=all` or the number. For a Mac with 8 GB serving Laya, 2, the earlier default,
+   is the setting these figures suggest; no Mac that small was measured.
+5. **The warm-up stays upstream's.** Its three questions load `b16_s128`, which one-question traffic
+   never uses again. Reading each length alone too would spare the first request of each length its
+   first load, once per process (0.49 to 0.84 s in issue #61's recorded run, 1.6 to 1.7 s in a
+   rerun with a new binary), at the price of loading functions the traffic may never use, and with
+   two functions they would have been released again.
+6. **Answers do not change.** A call runs through the function its shape picks, whatever else is
+   loaded: served in both orders with two functions and with every function, all 333 answers were
+   identical, for both models. The live tests read the corpus with the new default and, one question
+   per call, with two functions, so the path that loads functions again stays tested.
+
+Alternatives rejected. (a) A larger fixed default, the number of batch-1 functions (3 for Verdict, 4
+for Laya): one-question traffic stops reloading, but traffic that mixes one-question requests and
+batches reloads 30 to 37% of Laya's requests at 4 (item 2). (b) A default scaled to the Mac's
+memory: it would spare an 8 GB Mac the variable, at the cost of behaviour that changes with the
+machine, and the variable already covers that Mac. (c) Warming every function at startup: see item
+5; it would also hold all 8.86 GB from the start. (d) Running a request through a loaded function of
+a longer length or a larger batch instead of loading its own: the padding changes the float16
+numbers, so an answer would depend on what was loaded.
+
+Consequences. A Mac serving Laya holds up to 8.86 GB (9.73 counting the peak footprint) with all
+eight functions in use, where two held at most 3.91 GB (4.35); docs/deployment.md gives the figures
+and the variable. Spike #56's peaks on the GPU, 994 MB for Verdict and 2,856 MB for Laya, were the
+footprint alone, without the weight copies. Core ML also keeps each function it has compiled, with
+its own copy of the weights, in `~/Library/Caches/<process>/com.apple.e5rt.e5bundlecache` (`openjev`
+for the server), whatever the capacity: 6.3 GB once all eight Laya functions have run and 1.7 GB for
+Verdict's six. The iPhone keeps one function: Verdict there loads one again whenever the length
+changes (0.2 s once Core ML has cached it, spike #56), which stays to be measured with three loaded
+on the Neural Engine.
+
+Status. Proposed on 2026-10-01, from issue #61's runs.

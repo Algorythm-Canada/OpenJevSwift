@@ -39,6 +39,7 @@ struct ServerSettingsTests {
         #expect(settings.verdictModel == "heman10x/rlcd-modernbert-151m")
         #expect(settings.device == "")
         #expect(settings.encoderBatch == 16)
+        #expect(settings.encoderFunctions == nil)
         #expect(settings.modelRoutes.isEmpty)
         #expect(settings.logLevel == .info)
     }
@@ -234,6 +235,34 @@ struct ServerSettingsTests {
         arguments: ["", ".", "e3", "1e", "0x1p3", "1__0", "_1.0", "1._5", "infinit", "nan1"])
     func pythonFloatRefusals(text: String) {
         #expect(PythonNumber.float(text) == nil)
+    }
+
+    /// This port's setting (D-042), read as `_env_num` reads upstream's MLX cache settings.
+    @Test("OPENJEV_ENCODER_FUNCTIONS is a number of at least 1; unset or empty is every function")
+    func encoderFunctions() throws {
+        func functions(_ value: String) throws -> Int? {
+            try ServerSettings(environment: ["OPENJEV_ENCODER_FUNCTIONS": value]).encoderFunctions
+        }
+        #expect(try functions("2") == 2)
+        #expect(try functions(" 8 ") == 8)
+        #expect(try functions("") == nil)
+        #expect(try ServerSettings(encoderFunctions: 1).encoderFunctions == 1)
+        for value in ["0", "-1"] {
+            #expect(
+                throws: ServerSettingsError(
+                    "OPENJEV_ENCODER_FUNCTIONS=\(value) is below the minimum of 1")
+            ) {
+                try functions(value)
+            }
+        }
+        #expect(throws: ServerSettingsError("OPENJEV_ENCODER_FUNCTIONS='all' is not a int")) {
+            try functions("all")
+        }
+        #expect(
+            throws: ServerSettingsError("OPENJEV_ENCODER_FUNCTIONS=0 is below the minimum of 1")
+        ) {
+            try ServerSettings(encoderFunctions: 0)
+        }
     }
 
     @Test("OPENJEV_WARMUP is off only for 0")

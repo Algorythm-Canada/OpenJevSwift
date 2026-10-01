@@ -74,6 +74,10 @@ struct CommandTests {
             ),
             (["OPENJEV_LOG_LEVEL": "loud"], "OPENJEV_LOG_LEVEL='loud' is not a log level"),
             (["OPENJEV_MODEL_ROUTES": "x"], "OPENJEV_MODEL_ROUTES: 'x' is not name=url"),
+            (
+                ["OPENJEV_ENCODER_FUNCTIONS": "0"],
+                "OPENJEV_ENCODER_FUNCTIONS=0 is below the minimum of 1"
+            ),
         ]
         for (environment, message) in cases {
             let outcome = await CommandHarness.run(
@@ -398,8 +402,8 @@ struct CommandTests {
         let expected = [
             "info settings: host=127.0.0.1 port=0 backend=stub-encoder log_level=info "
                 + "warmup=on max_queue=512 max_questions=256 max_body_bytes=67108864 "
-                + "encoder_batch=16 encoder_models=downloads api_key=set origin_secret=set "
-                + "model_routes=verdict-1.4",
+                + "encoder_batch=16 encoder_functions=all encoder_models=downloads api_key=set "
+                + "origin_secret=set model_routes=verdict-1.4",
             "info forwarding verdict-1.4 to http://127.0.0.1:9",
             "info loading laya-1.0 (OPENJEV_BACKEND=stub-encoder)",
             "info warming up",
@@ -416,6 +420,17 @@ struct CommandTests {
         // The warm-up read, then the request's.
         #expect(encoder.calls.count == 2)
         #expect(encoder.closeCount == 1)
+    }
+
+    @Test("The settings line gives an encoder's OPENJEV_ENCODER_FUNCTIONS, all when unset")
+    func settingsLineEncoderFunctions() throws {
+        let capped = try ServerSettings(environment: ["OPENJEV_ENCODER_FUNCTIONS": "3"])
+        let encoder = SettingsSummary.line(capped, environment: [:], kind: .encoder)
+        #expect(encoder.contains(" encoder_batch=16 encoder_functions=3 encoder_models="))
+        let unset = SettingsSummary.line(try ServerSettings(), environment: [:], kind: .encoder)
+        #expect(unset.contains(" encoder_functions=all "))
+        let diffusion = SettingsSummary.line(capped, environment: [:], kind: .diffusion)
+        #expect(!diffusion.contains("encoder_functions"))
     }
 
     @Test("serve --no-warmup says so and skips the read")

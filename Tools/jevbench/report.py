@@ -138,12 +138,19 @@ def typesafe_tables(docs: list) -> list:
     return out
 
 
-# The Swift encoder on a Mac (D-037 item 3): one Core ML function per input shape, at most two
-# loaded, the least recently used released first; the warm-up's three questions load the batch-16
-# function for 128 tokens. A one-question request reads through the batch-1 function of the
-# smallest shape that holds it.
-FUNCTION_CAPACITY = 2
+# The Swift encoder on a Mac: one Core ML function per input shape (batch 1 or 16 by length), the
+# least recently used released first once the server keeps as many as it may; the warm-up's three
+# questions load the batch-16 function for 128 tokens. A one-question request reads through the
+# batch-1 function of the smallest shape that holds it. A run records how many functions its server
+# kept (`function_capacity`: a number, or "all", D-042); runs recorded before kept two (D-037 item 3).
+RECORDED_FUNCTION_CAPACITY = 2
 SHAPES = {"verdict-1.4": (128, 256, 512), "laya-1.0": (128, 256, 512, 1024)}
+
+
+def function_capacity(doc: dict, shapes: tuple) -> int:
+    """How many functions the run's server kept loaded; "all" is every shape at both batches."""
+    kept = doc["server"].get("function_capacity", RECORDED_FUNCTION_CAPACITY)
+    return 2 * len(shapes) if kept == "all" else int(kept)
 
 
 def function_load_rows(docs: list) -> list:
@@ -156,6 +163,7 @@ def function_load_rows(docs: list) -> list:
         runs = [swift.get((model, name)) for name in ("jevbench", "typesafe102")]
         if not all(runs):
             continue
+        capacity = function_capacity(runs[0], shapes)
         loaded, seen, first, again, ordinary = [("b16", shapes[0])], set(), [], [], {}
         for doc in runs:
             for item in doc["items"]:
@@ -171,7 +179,7 @@ def function_load_rows(docs: list) -> list:
                     (again if key in seen else first).append(timing)
                     seen.add(key)
                 loaded.append(key)
-                del loaded[:-FUNCTION_CAPACITY]
+                del loaded[:-capacity]
         loads = first + again
         medians = ", ".join(f"{shape}: {statistics.median(ordinary[shape]):.0f}"
                             for shape in shapes if shape in ordinary)
@@ -224,9 +232,15 @@ def render(results: Path, cache: Path) -> str:
             ["model", "server", "tier", "items", "accuracy", "Brier", "ECE", "ordinal MAE"], tiers)]
     loads = function_load_rows(docs)
     if loads:
+        kept = sorted({str(doc["server"].get("function_capacity", RECORDED_FUNCTION_CAPACITY))
+                       for doc in docs if doc["server"]["name"] == "swift"
+                       and doc["model"] in SHAPES})
+        cache = ("its two-function cache" if kept == ["2"] else
+                 "its function cache (" + " or ".join(kept) + " functions kept, as each run "
+                 "records)")
         out += ["### The Swift server's Core ML function loads",
                 "Requests that had to load a Core ML function on the Swift server, from a simulation "
-                "of its two-function cache over each server's requests, and the median model time "
+                f"of {cache} over each server's requests, and the median model time "
                 "of the other requests by input shape:",
                 markdown_table(["model", "requests", "first loads", "loaded again", "load ms",
                                 "other requests' median ms by shape"], loads)]

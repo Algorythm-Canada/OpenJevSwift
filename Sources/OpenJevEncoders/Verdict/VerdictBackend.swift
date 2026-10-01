@@ -33,8 +33,8 @@ public actor VerdictBackend: QuestionReadBackend {
         public var functionCapacity: Int
 
         /// Creates a configuration with D-011's defaults for this platform: on macOS the GPU,
-        /// 16 questions per call and two functions loaded; on iOS the Neural Engine, one
-        /// question per call and one function loaded.
+        /// 16 questions per call and every function loaded once a call needs it (D-042); on iOS
+        /// the Neural Engine, one question per call and one function loaded.
         public init(
             packageDirectory: URL,
             tokenizerDirectory: URL,
@@ -76,10 +76,12 @@ public actor VerdictBackend: QuestionReadBackend {
             #endif
         }
 
-        /// 2 on macOS and 1 on iOS, as spike #56 measured them.
+        /// On macOS, every function of the package, 6, so that a server whose requests change
+        /// shape never loads a function again (each costs 289 MB on the GPU, D-042); 1 on iOS,
+        /// as spike #56 measured it.
         public static var defaultFunctionCapacity: Int {
             #if os(macOS)
-                return 2
+                return EncoderPackageSpec.verdict.functions.count
             #else
                 return 1
             #endif
@@ -236,23 +238,32 @@ extension VerdictBackend: ModelReleasing {
 
         /// Loads Verdict from the files a store finds or downloads for
         /// ``EncoderPackageManifest/verdict``, with this platform's defaults. This is the server's
-        /// backend for `OPENJEV_BACKEND=verdict`:
+        /// backend for `OPENJEV_BACKEND=verdict`, with `OPENJEV_ENCODER_FUNCTIONS` as
+        /// `functionCapacity`:
         ///
         /// ```swift
-        /// QuestionReadBackendProvider { _ in
-        ///     try await VerdictBackend.load(from: EncoderPackageStore(environment: environment))
+        /// QuestionReadBackendProvider { settings in
+        ///     try await VerdictBackend.load(
+        ///         from: EncoderPackageStore(environment: environment),
+        ///         functionCapacity: settings.encoderFunctions)
         /// }
         /// ```
         ///
+        /// - Parameter functionCapacity: The most functions loaded at once; `nil` is
+        ///   ``Configuration/defaultFunctionCapacity``.
         /// - Throws: The store's errors (``EncoderPackageError``) and ``load(configuration:)``'s.
-        public static func load(from store: EncoderPackageStore) async throws -> VerdictBackend {
+        public static func load(
+            from store: EncoderPackageStore, functionCapacity: Int? = nil
+        ) async throws -> VerdictBackend {
             // Before the store, whose own check would throw EncoderPackageError instead.
             guard #available(macOS 15, iOS 18, *) else {
                 throw EncoderLoadError.unsupportedOperatingSystem(
                     "\(EncoderPackageSpec.verdict.name) needs macOS 15 or iOS 18")
             }
             return try await load(
-                configuration: Configuration(locations: store.locations(for: .verdict)))
+                configuration: Configuration(
+                    locations: store.locations(for: .verdict),
+                    functionCapacity: functionCapacity ?? Configuration.defaultFunctionCapacity))
         }
     }
 #endif

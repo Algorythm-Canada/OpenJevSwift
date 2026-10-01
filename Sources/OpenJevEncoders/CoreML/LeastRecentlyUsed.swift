@@ -17,6 +17,23 @@ struct LeastRecentlyUsed<Key: Hashable, Value> {
         return entry.value
     }
 
+    /// The value for a key, which becomes the most recently used. When the key is absent, the
+    /// least recently used entries are removed until fewer than `capacity` remain, and only then
+    /// is the value loaded and added, so that at most `capacity` are ever held.
+    ///
+    /// - Precondition: `capacity` is at least 1.
+    mutating func value(
+        forKey key: Key, capacity: Int, loadingWith load: () throws -> Value
+    ) rethrows -> Value {
+        if let value = value(forKey: key) {
+            return value
+        }
+        trim(to: capacity - 1)
+        let value = try load()
+        insert(value, forKey: key)
+        return value
+    }
+
     /// Removes the least recently used entries until at most `count` remain, so that a new one
     /// can be loaded before the cache holds more than it may.
     mutating func trim(to count: Int) {

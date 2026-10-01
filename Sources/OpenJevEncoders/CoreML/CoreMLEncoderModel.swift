@@ -9,11 +9,13 @@
     ///
     /// A call runs through the smallest function that holds its rows and its longest row. Each
     /// function is its own `MLModel`, loaded the first time a call needs it. A loaded function
-    /// keeps its own copy of the weights once it has run (six Verdict functions took 1.5 GB for a
-    /// 306 MB package on a Mac, spike #56), so at most ``capacity`` stay loaded and the least
-    /// recently used one is released before another is loaded. A package of one program
-    /// (``EncoderPackageSpec/Layout/singleShape``) has one function, its main program, loaded
-    /// without a function name.
+    /// keeps its own copy of the weights once it has run: on a Mac's GPU, file-backed memory the
+    /// size of the package's weights (289 MB for Verdict, 805 MB for Laya), which the process's
+    /// physical footprint does not count (D-042). At most ``capacity`` stay loaded, and the least
+    /// recently used one is released before another is loaded; loading a function again took
+    /// 0.44 to 1.85 s for Laya and 0.22 to 0.69 s for Verdict on an M3 Max. A package of one
+    /// program (``EncoderPackageSpec/Layout/singleShape``) has one function, its main program,
+    /// loaded without a function name.
     ///
     /// The model is an actor on a serial queue of its own, so Core ML's blocking loads and
     /// predictions run one at a time and never hold a thread of Swift's cooperative pool.
@@ -117,19 +119,16 @@
 
         /// The loaded function, loading it after releasing the least recently used ones.
         private func model(for function: EncoderPackageSpec.Function) throws -> MLModel {
-            if let model = functions.value(forKey: function.name) {
+            try functions.value(forKey: function.name, capacity: capacity) {
+                let configuration = MLModelConfiguration()
+                configuration.computeUnits = computeUnits.mlComputeUnits
+                if spec.layout == .functionPerShape {
+                    configuration.functionName = function.name
+                }
+                let model = try MLModel(contentsOf: compiledModel, configuration: configuration)
+                try check(model, function: function)
                 return model
             }
-            functions.trim(to: capacity - 1)
-            let configuration = MLModelConfiguration()
-            configuration.computeUnits = computeUnits.mlComputeUnits
-            if spec.layout == .functionPerShape {
-                configuration.functionName = function.name
-            }
-            let model = try MLModel(contentsOf: compiledModel, configuration: configuration)
-            try check(model, function: function)
-            functions.insert(model, forKey: function.name)
-            return model
         }
 
         /// Checks that a loaded function takes and returns what the spec says, so that a wrong

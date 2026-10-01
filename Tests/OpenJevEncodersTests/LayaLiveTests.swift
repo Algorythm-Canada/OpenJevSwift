@@ -32,12 +32,20 @@
             var computeUnits: EncoderComputeUnits
             var maxBatchRows: Int
 
+            /// The Mac's setting keeps every function (D-042); one question per call keeps two,
+            /// so that the corpus's lengths load functions again. The per-length packages ignore
+            /// it.
+            var functionCapacity: Int {
+                maxBatchRows == 1 ? 2 : LayaBackend.Configuration.defaultFunctionCapacity
+            }
+
             var testDescription: String {
-                let package =
-                    length == 0
-                    ? EncoderPackageSpec.layaMultifunction.name
-                    : EncoderPackageSpec.laya(sequenceLength: length).name
-                return "\(package), \(computeUnits), \(maxBatchRows) per call"
+                guard length == 0 else {
+                    let package = EncoderPackageSpec.laya(sequenceLength: length).name
+                    return "\(package), \(computeUnits), \(maxBatchRows) per call"
+                }
+                return "\(EncoderPackageSpec.layaMultifunction.name), \(computeUnits), "
+                    + "\(maxBatchRows) per call, \(functionCapacity) loaded"
             }
 
             /// The Mac's setting, the GPU one question at a time, and the iPhone's packages.
@@ -63,7 +71,7 @@
             return LayaBackend.Configuration(
                 packages: packages, tokenizerDirectory: tokenizer.tokenizerDirectory,
                 configurationFile: tokenizer.calibratorFile, computeUnits: setting.computeUnits,
-                maxBatchRows: setting.maxBatchRows, functionCapacity: 2)
+                maxBatchRows: setting.maxBatchRows, functionCapacity: setting.functionCapacity)
         }
 
         @available(macOS 15, *)
@@ -160,6 +168,11 @@
             let reads = try #require(try LayaFixtures.readsByRequest()["quickstart"])
 
             let mac = try await LayaBackend.load(from: store, packageSet: .multifunction)
+            // Every function stays loaded by default on a Mac, and a cap reaches the model.
+            #expect((mac.model as? CoreMLEncoderModel)?.capacity == 8)
+            let capped = try await LayaBackend.load(
+                from: store, packageSet: .multifunction, functionCapacity: 2)
+            #expect((capped.model as? CoreMLEncoderModel)?.capacity == 2)
             let engine = EncoderDecisionEngine(backend: mac)
             try await engine.warmUp()
             let decision = try await engine.decide(corpus.request)

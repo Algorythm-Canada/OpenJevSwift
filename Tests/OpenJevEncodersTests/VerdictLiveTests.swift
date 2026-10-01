@@ -35,9 +35,13 @@
                 "\(computeUnits), \(maxBatchRows) per call, \(functionCapacity) loaded"
             }
 
-            /// The Mac's setting, the GPU one question at a time, and the iPhone's setting.
+            /// The Mac's setting, which keeps every function (D-042); the GPU one question at a
+            /// time with two functions, so that the corpus's three lengths load functions again;
+            /// and the iPhone's setting.
             static let all = [
-                Setting(computeUnits: .cpuAndGPU, maxBatchRows: 16, functionCapacity: 2),
+                Setting(
+                    computeUnits: .cpuAndGPU, maxBatchRows: 16,
+                    functionCapacity: VerdictBackend.Configuration.defaultFunctionCapacity),
                 Setting(computeUnits: .cpuAndGPU, maxBatchRows: 1, functionCapacity: 2),
                 Setting(computeUnits: .cpuAndNeuralEngine, maxBatchRows: 1, functionCapacity: 1),
             ]
@@ -117,6 +121,11 @@
                 localModelsDirectory: VerdictModelFiles.modelsDirectory,
                 huggingFaceHubDirectory: VerdictModelFiles.hubDirectory)
             let backend = try await VerdictBackend.load(from: store)
+            // Every function stays loaded by default on a Mac, and a cap reaches the model.
+            let model = try #require(backend.model as? CoreMLEncoderModel)
+            #expect(model.capacity == 6)
+            let capped = try await VerdictBackend.load(from: store, functionCapacity: 2)
+            #expect((capped.model as? CoreMLEncoderModel)?.capacity == 2)
             let engine = EncoderDecisionEngine(backend: backend)
             try await engine.warmUp()
             let decision = try await engine.decide(

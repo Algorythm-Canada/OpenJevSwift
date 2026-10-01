@@ -171,6 +171,7 @@ enum SettingsSummary {
             ]
         case .encoder:
             parts.append("encoder_batch=\(settings.encoderBatch)")
+            parts.append("encoder_functions=\(settings.encoderFunctions.map(String.init) ?? "all")")
             let local = environment["OPENJEV_ENCODER_MODELS"].flatMap { $0.isEmpty ? nil : $0 }
             parts.append("encoder_models=\(local ?? "downloads")")
         }
