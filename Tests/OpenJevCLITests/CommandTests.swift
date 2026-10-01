@@ -1,0 +1,407 @@
+import Foundation
+import HTTPTypes
+import Hummingbird
+import HummingbirdTesting
+import OpenJevCore
+import OpenJevServer
+import OpenJevTestSupport
+import Testing
+
+@testable import openjev
+
+/// The three subcommands run in the test process, with stub backends registered through the
+/// command context (issue #40): their exit statuses, their messages, `decide`'s bytes against the
+/// server's, `models` without a load, and `serve` from the settings line to a clean shutdown.
+@Suite(
+    "Commands",
+    .enabled(if: PolicyFixtures.exists, PolicyFixtures.missingMessage),
+    .enabled(if: WireFixtures.exists("models.json"), WireFixtures.missingMessage))
+struct CommandTests {
+    /// The README quickstart as the recording sent it.
+    private func quickstart() throws -> [UInt8] {
+        try WireEncoder().bytes(
+            json: try #require(PolicyFixtures.policyCase(named: "plain")["request"]))
+    }
+
+    // MARK: Invalid settings and backends
+
+    @Test(
+        "An invalid OPENJEV_PORT exits 2 with upstream's message, whatever the subcommand",
+        arguments: ["serve", "decide", "models"])
+    func invalidPort(subcommand: String) async {
+        let outcome = await CommandHarness.run(
+            [subcommand], environment: ["OPENJEV_PORT": "eighty", "OPENJEV_BACKEND": "verdict"])
+        #expect(outcome.status == 2)
+        #expect(outcome.errors == "openjev: OPENJEV_PORT='eighty' is not a int\n")
+        #expect(outcome.standardOutput.isEmpty)
+    }
+
+    @Test("--port is checked as OPENJEV_PORT is")
+    func invalidPortFlag() async {
+        let outcome = await CommandHarness.run(["serve", "--port", "80 80"])
+        #expect(outcome.status == 2)
+        #expect(outcome.errors == "openjev: OPENJEV_PORT='80 80' is not a int\n")
+    }
+
+    @Test(
+        "An unknown OPENJEV_BACKEND exits 2 with upstream's message and this port's backends",
+        arguments: ["serve", "decide", "models"])
+    func unknownBackend(subcommand: String) async {
+        for backend in ["vllm", "clm", "jevk5", "Verdict", ""] {
+            let outcome = await CommandHarness.run(
+                [subcommand], environment: ["OPENJEV_BACKEND": backend])
+            #expect(outcome.status == 2, "\(backend)")
+            #expect(
+                outcome.errors
+                    == "openjev: unknown backend '\(backend)'; use one of mlx, laya, verdict "
+                    + "(OPENJEV_BACKEND)\n", "\(backend)")
+        }
+        let flagged = await CommandHarness.run([subcommand, "--backend", "nope"])
+        #expect(flagged.status == 2)
+        #expect(flagged.errors.contains("unknown backend 'nope'"))
+    }
+
+    @Test("Other invalid settings exit 2 with the message upstream's checks give")
+    func otherInvalidSettings() async {
+        let cases: [([String: String], String)] = [
+            (
+                ["OPENJEV_MAX_QUEUE": "-1"],
+                "max_queue must not be negative, got -1 (OPENJEV_MAX_QUEUE)"
+            ),
+            (
+                ["OPENJEV_CANVAS_STEP": "0"],
+                "canvas_step must be at least 1, got 0 (OPENJEV_CANVAS_STEP)"
+            ),
+            (["OPENJEV_LOG_LEVEL": "loud"], "OPENJEV_LOG_LEVEL='loud' is not a log level"),
+            (["OPENJEV_MODEL_ROUTES": "x"], "OPENJEV_MODEL_ROUTES: 'x' is not name=url"),
+        ]
+        for (environment, message) in cases {
+            let outcome = await CommandHarness.run(
+                ["serve", "--backend", "verdict"], environment: environment)
+            #expect(outcome.status == 2, "\(environment)")
+            #expect(outcome.errors.hasPrefix("openjev: " + message), "\(outcome.errors)")
+        }
+    }
+
+    @Test(
+        "mlx and laya exit 3 naming the issue that brings them and the variable",
+        arguments: ["serve", "decide"])
+    func backendsNotBuiltYet(subcommand: String) async {
+        let mlx = await CommandHarness.run([subcommand, "--backend", "mlx"])
+        #expect(mlx.status == 3)
+        #expect(mlx.errors.hasPrefix("openjev: OPENJEV_BACKEND=mlx: "))
+        #expect(mlx.errors.contains("issue #29"))
+        let laya = await CommandHarness.run([subcommand], environment: ["OPENJEV_BACKEND": "laya"])
+        #expect(laya.status == 3)
+        #expect(laya.errors.hasPrefix("openjev: OPENJEV_BACKEND=laya: "))
+        #expect(laya.errors.contains("issue #58"))
+        // The default backend is upstream's, which this build does not have yet.
+        #expect(await CommandHarness.run([subcommand]).status == 3)
+    }
+
+    #if !canImport(OpenJevEncoders)
+        @Test("verdict exits 3 where Core ML does not exist")
+        func verdictWithoutCoreML() async {
+            let outcome = await CommandHarness.run(["decide", "--backend", "verdict"])
+            #expect(outcome.status == 3)
+            #expect(outcome.errors.contains("Core ML"))
+        }
+    #endif
+
+    @Test("A backend that fails to load exits 3 with the error", arguments: ["serve", "decide"])
+    func loadFailure(subcommand: String) async {
+        let outcome = await CommandHarness.run(
+            [subcommand, "--backend", "broken"], input: Array("{}".utf8),
+            backends: CommandHarness.backends())
+        #expect(outcome.status == 3)
+        #expect(
+            outcome.errors
+                == "openjev: broken-1 failed to load (OPENJEV_BACKEND=broken): the weights are "
+                + "missing\n")
+        #expect(!outcome.logLines.contains { $0.contains("serving on") })
+    }
+
+    // MARK: decide
+
+    @Test("decide prints the bytes the server sends for the same request")
+    func decideMatchesTheServer() async throws {
+        let body = try quickstart()
+        let recorded = try #require(
+            PolicyFixtures.policyCase(named: "plain")["response"]?["body_text"]?.stringValue)
+        let stub = StubBackend()
+        let outcome = await CommandHarness.run(
+            ["decide", "--backend", "stub"], input: body,
+            backends: CommandHarness.backends(diffusion: stub))
+        #expect(outcome.status == 0, "\(outcome.errors)")
+        #expect(outcome.output == recorded)
+        #expect(outcome.standardError.isEmpty)
+        #expect(stub.closeCount == 1)
+
+        // The server's answer through its router, for the same request and settings.
+        let service = try await DecisionBackendProvider { _ in StubBackend() }
+            .makeService(settings: ServerSettings())
+        let served = try await Application(
+            router: OpenJevApplication.router(settings: ServerSettings(), service: service)
+        ).test(.router) { client in
+            try await client.execute(
+                uri: "/v1/systemone", method: .post, headers: [.contentType: "application/json"],
+                body: ByteBuffer(bytes: body))
+        }
+        #expect(served.status == .ok)
+        #expect(Array(served.body.readableBytesView) == outcome.standardOutput)
+    }
+
+    @Test("decide reads --request, and - is standard input")
+    func decideFromAFile() async throws {
+        let body = try quickstart()
+        let file = FileManager.default.temporaryDirectory
+            .appendingPathComponent("openjev-decide-\(UUID().uuidString).json")
+        try Data(body).write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let backends = CommandHarness.backends()
+        let fromFile = await CommandHarness.run(
+            ["decide", "--backend", "stub", "--request", file.path], backends: backends)
+        let fromInput = await CommandHarness.run(
+            ["decide", "--backend", "stub", "--request", "-"], input: body, backends: backends)
+        #expect(fromFile.status == 0 && fromInput.status == 0)
+        #expect(fromFile.standardOutput == fromInput.standardOutput)
+        #expect(!fromFile.standardOutput.isEmpty)
+
+        let missing = await CommandHarness.run(
+            ["decide", "--backend", "stub", "--request", file.path + ".missing"],
+            backends: backends)
+        #expect(missing.status == 1)
+        #expect(missing.errors.hasPrefix("openjev: cannot read \(file.path).missing: "))
+    }
+
+    @Test("A refused request prints the server's error body to standard error and exits 4")
+    func decideRefusals() async throws {
+        let cases: [(input: String, environment: [String: String], body: String)] = [
+            (
+                #"{"state":"x","model":"gpt-4","questions":{"a":{"type":"noul"}}}"#, [:],
+                #"{"detail":{"error_type":"api_usage_error","message":"Unknown model: gpt-4"}}"#
+            ),
+            (
+                #"{"state":"#, [:],
+                #"{"detail":[{"type":"json_invalid","loc":["body",9],"msg":"JSON decode error","#
+                    + #""input":{},"ctx":{"error":"Expecting value"}}]}"#
+            ),
+            (
+                #"{"state":"x","model":"jev-latest","questions":{"a":{"type":"noul"},"b":{"type":"noul"}}}"#,
+                ["OPENJEV_MAX_QUESTIONS": "1"],
+                #"{"detail":"at most 1 questions per request"}"#
+            ),
+            (
+                #"{"state":"x","model":"jev-latest","questions":{"a":{"type":"noul"}}}"#,
+                ["OPENJEV_MAX_QUEUE": "0"],
+                #"{"detail":{"error_type":"overloaded_error","message":"OpenJev is at capacity. "#
+                    + #"Retry shortly."}}"#
+            ),
+            (
+                #"{"state":"x","model":"jev-latest","questions":{"a":{"type":"noul"}}}"#,
+                ["OPENJEV_MAX_BODY_BYTES": "16"],
+                #"{"detail":{"error_type":"api_usage_error","message":"request body is larger "#
+                    + #"than 16 bytes"}}"#
+            ),
+        ]
+        let backends = CommandHarness.backends()
+        for (input, environment, body) in cases {
+            let outcome = await CommandHarness.run(
+                ["decide", "--backend", "stub"], environment: environment,
+                input: Array(input.utf8), backends: backends)
+            #expect(outcome.status == 4, "\(input)")
+            #expect(outcome.errors == body, "\(input)")
+            #expect(outcome.standardOutput.isEmpty, "\(input)")
+        }
+        // An empty body is no body: pydantic's missing body, a refusal too.
+        let empty = await CommandHarness.run(
+            ["decide", "--backend", "stub"], input: [], backends: backends)
+        #expect(empty.status == 4)
+        #expect(empty.errors.hasPrefix(#"{"detail":[{"type":"missing","loc":["body"]"#))
+    }
+
+    @Test("A backend that fails during the decision prints the 503 body and exits 1")
+    func decideBackendFailure() async throws {
+        struct ConnectError: Error {}
+        let stub = StubBackend(failure: ConnectError())
+        let outcome = await CommandHarness.run(
+            ["decide", "--backend", "stub"], input: try quickstart(),
+            backends: CommandHarness.backends(diffusion: stub))
+        #expect(outcome.status == 1)
+        #expect(
+            outcome.errors
+                == #"{"detail":{"error_type":"api_error","message":"inference backend "#
+                + #"unavailable: ConnectError"}}"#)
+        #expect(stub.closeCount == 1)
+    }
+
+    @Test("decide skips the warm-up read")
+    func decideWithoutWarmUp() async throws {
+        let encoder = StubQuestionReadBackend()
+        let outcome = await CommandHarness.run(
+            ["decide", "--backend", "stub-encoder"], environment: ["OPENJEV_WARMUP": "1"],
+            input: try quickstart(), backends: CommandHarness.backends(encoder: encoder))
+        #expect(outcome.status == 0, "\(outcome.errors)")
+        #expect(encoder.calls.count == 1)
+        #expect(encoder.calls.first?.state != EncoderDecisionEngine.warmUpState)
+    }
+
+    // MARK: models
+
+    @Test("models prints the recorded listing of every backend without loading a model")
+    func modelsListings() async throws {
+        let loads = LoadCounter()
+        let backends = CommandHarness.backends(loads: loads)
+        for backend in ["mlx", "laya", "verdict"] {
+            let outcome = await CommandHarness.run(
+                ["models", "--backend", backend], backends: backends)
+            #expect(outcome.status == 0, "\(backend): \(outcome.errors)")
+            #expect(
+                outcome.output
+                    == (try WireFixtures.listing(forBackend: backend)["body_text"]?.stringValue),
+                "\(backend)")
+        }
+        let stub = await CommandHarness.run(["models", "--backend", "stub"], backends: backends)
+        #expect(
+            stub.output == (try WireFixtures.listing(forBackend: "mlx")["body_text"]?.stringValue))
+        #expect(loads.count == 0)
+    }
+
+    @Test("models loads a backend whose listing only the loaded model knows")
+    func modelsWithALoad() async throws {
+        let loads = LoadCounter()
+        let encoder = StubQuestionReadBackend()
+        let outcome = await CommandHarness.run(
+            ["models", "--backend", "stub-encoder"],
+            backends: CommandHarness.backends(encoder: encoder, loads: loads))
+        #expect(outcome.status == 0)
+        #expect(
+            outcome.output
+                == (try WireFixtures.listing(forBackend: "laya")["body_text"]?.stringValue))
+        #expect(loads.count == 1)
+        #expect(encoder.calls.isEmpty)
+        #expect(encoder.closeCount == 1)
+    }
+
+    // MARK: serve
+
+    @Test("serve prints its phases, logs each request and exits 0 after a graceful shutdown")
+    func serve() async throws {
+        let encoder = StubQuestionReadBackend()
+        let started = Handoff<(port: Int, stop: @Sendable () async -> Void)>()
+        let body = try quickstart()
+        async let ran = CommandHarness.run(
+            ["serve", "--backend", "stub-encoder", "--port", "0"],
+            environment: [
+                "OPENJEV_API_KEY": "sk-SECRET-KEY", "OPENJEV_ORIGIN_SECRET": "ORIGIN-SECRET",
+                "OPENJEV_MODEL_ROUTES": "verdict-1.4=http://user:PASSWORD@127.0.0.1:9",
+            ],
+            backends: CommandHarness.backends(encoder: encoder),
+            onServing: { port, stop in started.resolve((port, stop)) })
+        let (port, stop) = await started.value
+        let client = TestClient(host: "127.0.0.1", port: port)
+        client.connect()
+        let response = try await client.execute(
+            TestClient.Request(
+                "/v1/systemone", method: .post, authority: "localhost",
+                headers: [
+                    .contentType: "application/json", .authorization: "Bearer sk-SECRET-KEY",
+                    HTTPField.Name("x-origin-secret")!: "ORIGIN-SECRET",
+                ],
+                body: ByteBuffer(bytes: body)))
+        #expect(response.status == .ok)
+        try await client.shutdown()
+        await stop()
+        let outcome = await ran
+        #expect(outcome.status == 0, "\(outcome.errors)")
+        #expect(outcome.standardError.isEmpty)
+        let lines = outcome.logLines
+        let expected = [
+            "info settings: host=127.0.0.1 port=0 backend=stub-encoder log_level=info "
+                + "warmup=on max_queue=512 max_questions=256 max_body_bytes=67108864 "
+                + "encoder_batch=16 encoder_models=downloads api_key=set origin_secret=set "
+                + "model_routes=verdict-1.4",
+            "info loading laya-1.0 (OPENJEV_BACKEND=stub-encoder)",
+            "info warming up",
+            "info serving on 127.0.0.1:\(port)",
+        ]
+        #expect(Array(lines.filter { !$0.contains("Server started") }.prefix(4)) == expected)
+        #expect(lines.contains { $0.hasPrefix("info POST /v1/systemone 200 ") })
+        #expect(lines.contains { $0.hasPrefix("info shutting down") })
+        #expect(lines.contains("info released laya-1.0"))
+        #expect(lines.last == "info stopped")
+        for secret in ["SECRET-KEY", "ORIGIN-SECRET", "PASSWORD"] {
+            #expect(!lines.contains { $0.contains(secret) }, "\(secret)")
+        }
+        // The warm-up read, then the request's.
+        #expect(encoder.calls.count == 2)
+        #expect(encoder.closeCount == 1)
+    }
+
+    @Test("serve --no-warmup says so and skips the read")
+    func serveWithoutWarmUp() async throws {
+        let encoder = StubQuestionReadBackend()
+        let started = Handoff<@Sendable () async -> Void>()
+        async let ran = CommandHarness.run(
+            ["serve", "--backend", "stub-encoder", "--port", "0", "--no-warmup"],
+            backends: CommandHarness.backends(encoder: encoder),
+            onServing: { _, stop in started.resolve(stop) })
+        let stop = await started.value
+        await stop()
+        let outcome = await ran
+        #expect(outcome.status == 0)
+        #expect(outcome.logLines.contains("info warm-up skipped (OPENJEV_WARMUP=0)"))
+        #expect(!outcome.logLines.contains("info warming up"))
+        #expect(encoder.calls.isEmpty)
+    }
+
+    @Test("serve exits 1 when the shutdown timeout cuts a request short, after releasing")
+    func serveShutdownTimeout() async throws {
+        let gate = ReadGate()
+        let encoder = StubQuestionReadBackend(gate: gate)
+        let started = Handoff<(port: Int, stop: @Sendable () async -> Void)>()
+        async let ran = CommandHarness.run(
+            [
+                "serve", "--backend", "stub-encoder", "--port", "0", "--no-warmup",
+                "--shutdown-timeout", "0.2",
+            ],
+            backends: CommandHarness.backends(encoder: encoder),
+            onServing: { port, stop in started.resolve((port, stop)) })
+        let (port, stop) = await started.value
+        let client = TestClient(host: "127.0.0.1", port: port)
+        client.connect()
+        try await client.executeAndDontWaitForResponse(
+            TestClient.Request(
+                "/v1/systemone", method: .post, authority: "localhost",
+                headers: [.contentType: "application/json"],
+                body: ByteBuffer(bytes: try quickstart())))
+        await gate.waitForArrivals(1)
+        await stop()
+        let outcome = await ran
+        #expect(outcome.status == 1)
+        #expect(
+            outcome.errors
+                == "openjev: the requests in flight did not finish within the shutdown timeout "
+                + "(0.2 s) and were cancelled\n")
+        #expect(gate.cancellations == 1)
+        #expect(encoder.closeCount == 1)
+        try? await client.shutdown()
+    }
+
+    @Test("serve exits 1 when the address is taken")
+    func serveAddressInUse() async throws {
+        let first = Handoff<(port: Int, stop: @Sendable () async -> Void)>()
+        let backends = CommandHarness.backends()
+        async let running = CommandHarness.run(
+            ["serve", "--backend", "stub-encoder", "--port", "0", "--no-warmup"],
+            backends: backends, onServing: { port, stop in first.resolve((port, stop)) })
+        let (port, stop) = await first.value
+        let second = await CommandHarness.run(
+            ["serve", "--backend", "stub-encoder", "--port", String(port), "--no-warmup"],
+            backends: backends)
+        #expect(second.status == 1)
+        #expect(second.errors.hasPrefix("openjev: the server stopped: "))
+        await stop()
+        #expect(await running.status == 0)
+    }
+}

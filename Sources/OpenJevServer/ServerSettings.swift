@@ -320,6 +320,15 @@ public struct ServerSettingsError: Error, Sendable, Hashable, CustomStringConver
     static func notARoute(_ part: String) -> ServerSettingsError {
         ServerSettingsError("OPENJEV_MODEL_ROUTES: \(part.pythonRepr) is not name=url")
     }
+
+    /// `unknown backend {name!r}; use one of {known} (OPENJEV_BACKEND)`: upstream's `create_app`
+    /// message for a backend it does not have, listing the backends this port knows, with the
+    /// variable named as `__post_init__` names it.
+    public static func unknownBackend(_ name: String, known: [String]) -> ServerSettingsError {
+        ServerSettingsError(
+            "unknown backend \(name.pythonRepr); use one of \(known.joined(separator: ", ")) "
+                + "(OPENJEV_BACKEND)")
+    }
 }
 
 /// A numeric setting, kept as Python would type it so messages format it as Python does: an

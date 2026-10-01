@@ -1,36 +1,43 @@
 // A port of upstream OpenJev (razorback16/openjev at dcd2094), the `request_id_and_auth`
 // middleware of `openjev/api.py`, whose authentication and body cap are
-// `AuthenticationMiddleware` and `BodyCapMiddleware`, and the `model_ns` context variable of
-// `openjev/engine.py`. Apache-2.0. See THIRD_PARTY.md.
+// `AuthenticationMiddleware` and `BodyCapMiddleware`. The `model_ns` context variable of
+// `openjev/engine.py` is the core's `ModelTimeRecorder`. Apache-2.0. See THIRD_PARTY.md.
 
 #if canImport(Hummingbird)
     import Foundation
     import HTTPTypes
     import Hummingbird
+    import NIOCore
     import OpenJevCore
 
-    /// The request context of the OpenJev routes: Hummingbird's core storage and the request id
-    /// the headers middleware assigns.
+    /// The request context of the OpenJev routes: Hummingbird's core storage, the request id
+    /// the headers middleware assigns and the connection the request came on.
     public struct OpenJevRequestContext: RequestContext {
         /// Hummingbird's per-request storage.
         public var coreContext: CoreRequestContextStorage
         /// `req_` and 32 lowercase hex characters, upstream's `request.state.request_id`. Empty
         /// until ``ResponseHeadersMiddleware`` runs.
         public var requestID: String
+        /// The connection's channel, through which the route learns that a client has gone away.
+        public let channel: any Channel
 
         /// Creates a context for a request.
         public init(source: ApplicationRequestContextSource) {
             self.coreContext = CoreRequestContextStorage(source: source)
             self.requestID = ""
+            self.channel = source.channel
         }
     }
 
     /// Adds upstream's `server-timing`, `x-typesafe-request-id` and `x-request-id` headers to
     /// every response, error responses included, and turns a thrown error into its response.
     ///
-    /// The `model` time is what the route records in ``ModelTimeRecorder`` for the request; the
-    /// `server` time is the rest of the wall time, never below zero; `total` is the wall time.
-    /// Each is in milliseconds with one decimal, as upstream's `{:.1f}` writes them.
+    /// The `model` time is what the engine adds to the request's ``ModelTimeRecorder`` as each
+    /// backend call ends, refused and failed requests included; the `server` time is the rest of
+    /// the wall time, never below zero; `total` is the wall time. Each is in milliseconds with one
+    /// decimal, as upstream's `{:.1f}` writes them. The time of a request forwarded to another
+    /// server (`OPENJEV_MODEL_ROUTES`) will count as model time when issue #38 forwards it, as
+    /// upstream's `forward` adds it.
     struct ResponseHeadersMiddleware: RouterMiddleware {
         typealias Context = OpenJevRequestContext
 
@@ -113,31 +120,6 @@
         /// One decimal, rounded from the binary value as Python's `{:.1f}` rounds it.
         static func format(_ value: Double) -> String {
             String(format: "%.1f", value)
-        }
-    }
-
-    /// The model time of one request, upstream's `model_ns`: the route adds what the engine
-    /// reports, and ``ResponseHeadersMiddleware`` reads the sum for `server-timing`.
-    final class ModelTimeRecorder: @unchecked Sendable {
-        /// The recorder of the request the current task serves, or `nil` outside one.
-        @TaskLocal static var current: ModelTimeRecorder?
-
-        // Guarded by `lock`; routes may record from child tasks.
-        private let lock = NSLock()
-        private var sum = Duration.zero
-
-        /// The model time recorded so far.
-        var total: Duration {
-            lock.withLock { sum }
-        }
-
-        /// Adds model time to the current request's recorder, if there is one.
-        static func record(_ duration: Duration) {
-            current?.add(duration)
-        }
-
-        private func add(_ duration: Duration) {
-            lock.withLock { sum += duration }
         }
     }
 #endif

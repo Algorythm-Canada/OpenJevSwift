@@ -117,6 +117,11 @@ public actor EncoderDecisionEngine {
     /// batch one backend call under the in-flight bound, the distributions concatenated and the
     /// tokens summed. No questions means no call. Nonisolated, so the actor is free for other
     /// requests while a batch runs.
+    ///
+    /// Each call's time, wait included, also goes to ``ModelTimeRecorder/current`` when the call
+    /// ends, whether it returned, threw or was cancelled, so a request whose later batch fails
+    /// still reports the earlier ones. A cancelled request starts no further batch: the permit
+    /// refuses a cancelled task.
     private nonisolated func read(_ questions: [EncoderQuestion], state: JSONValue) async throws
         -> ReadOutcome
     {
@@ -129,10 +134,19 @@ public actor EncoderDecisionEngine {
             let end = min(start + configuration.batchSize, questions.endIndex)
             let batch = Array(questions[start..<end])
             let began = clock.now
-            let result = try await permits.withPermit {
-                try await backend.readBatch(state: state, stateText: stateText, questions: batch)
+            let result: BatchReadResult
+            do {
+                result = try await permits.withPermit {
+                    try await backend.readBatch(
+                        state: state, stateText: stateText, questions: batch)
+                }
+            } catch {
+                ModelTimeRecorder.record(clock.now - began)
+                throw error
             }
-            outcome.modelTime += clock.now - began
+            let time = clock.now - began
+            ModelTimeRecorder.record(time)
+            outcome.modelTime += time
             try validate(result, for: batch)
             outcome.probabilities += result.probabilities
             outcome.inputTokens += result.inputTokens

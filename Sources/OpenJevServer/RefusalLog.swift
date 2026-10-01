@@ -3,6 +3,7 @@
 
 #if canImport(Hummingbird)
     import Hummingbird
+    import Logging
     import OpenJevCore
 
     /// Upstream's `log_invalid`: one warning for each refused request, naming where it was wrong
@@ -14,10 +15,24 @@
     /// joined by `.`. Only the refusals upstream logs are logged: the 422s, the invalid-request
     /// 400 and the plain-detail 400s. Authentication, the body cap, a body FastAPI cannot read,
     /// an unknown model and a full queue are not. A backend failure, which upstream does not log
-    /// either, is logged at error level with the message of its 503, since this server has no
-    /// access log that would show it.
-    struct RefusalLog {
-        let context: OpenJevRequestContext
+    /// either, is logged at error level with the message of its 503, since the request log
+    /// (``RequestLogMiddleware``) shows only its status.
+    struct RefusalLog: Sendable {
+        /// Where the lines go.
+        let logger: Logger
+        /// The request's id, `req_` and 32 hex characters, or empty outside a request.
+        let requestID: String
+
+        /// The log of one request: its logger and its id.
+        init(context: OpenJevRequestContext) {
+            self.init(logger: context.logger, requestID: context.requestID)
+        }
+
+        /// A log writing to `logger` for the request `requestID`.
+        init(logger: Logger, requestID: String) {
+            self.logger = logger
+            self.requestID = requestID
+        }
 
         /// Logs a 422's problems, and returns the error to throw. Any other error is returned
         /// without a log line.
@@ -45,13 +60,13 @@
         /// Logs a backend failure at error level, with the message of its answer.
         func failure(_ error: WireError) {
             guard case .typed(let body) = error.body else { return }
-            let text = Self.line(status: error.status, requestID: context.requestID, [body.message])
-            context.logger.error("\(text)")
+            let text = Self.line(status: error.status, requestID: requestID, [body.message])
+            logger.error("\(text)")
         }
 
         private func warning(status: Int, _ problems: [String]) {
-            let text = Self.line(status: status, requestID: context.requestID, problems)
-            context.logger.warning("\(text)")
+            let text = Self.line(status: status, requestID: requestID, problems)
+            logger.warning("\(text)")
         }
 
         /// The text of a line: the status, the request id (`-` when there is none) and the

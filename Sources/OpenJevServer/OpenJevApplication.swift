@@ -1,39 +1,44 @@
 // A port of upstream OpenJev (razorback16/openjev at dcd2094), `create_app` in `openjev/api.py`:
 // the `/health`, `/v1/models` and `/v1/systemone` routes, their middleware and error answers, and
-// the host and port `openjev/__main__.py` binds. Capacity and shutdown (#37) and model routes
-// (#38) come with their own issues. Apache-2.0. See THIRD_PARTY.md.
+// the host and port `openjev/__main__.py` binds. Model routes (#38) come with their own issue.
+// Apache-2.0. See THIRD_PARTY.md.
 
 #if canImport(Hummingbird)
     import HTTPTypes
     import Hummingbird
+    import HummingbirdCore
+    import Logging
+    import NIOCore
     import OpenJevCore
 
     /// Builds the OpenJev HTTP application.
     public enum OpenJevApplication {
-        /// Loads the service through the provider, as upstream's `lifespan` loads the engine
-        /// before serving, and returns the application bound to the settings' host and port.
-        public static func make(
-            settings: ServerSettings, provider: some BackendProvider
-        ) async throws -> Application<RouterResponder<OpenJevRequestContext>> {
-            let service = try await provider.makeService(settings: settings)
-            return Application(
-                router: router(settings: settings, service: service),
-                configuration: ApplicationConfiguration(
-                    address: .hostname(settings.host, port: settings.port)))
-        }
-
         /// The routes over a loaded service, behind upstream's `request_id_and_auth` in its
-        /// order: the headers middleware, then authentication and the body cap for `/v1/`.
+        /// order: the request log, the headers middleware, then authentication and the body cap
+        /// for `/v1/`. Requests are not watched for clients that go away; ``application(settings:service:logger:onServerRunning:)``
+        /// builds a server that watches them.
         public static func router(
             settings: ServerSettings, service: any SystemOneService
         ) -> Router<OpenJevRequestContext> {
+            router(settings: settings, service: service, connections: nil)
+        }
+
+        /// The routes, cancelling the decision of a client that goes away when its connection is
+        /// in `connections`.
+        static func router(
+            settings: ServerSettings, service: any SystemOneService,
+            connections: ConnectionRegistry?
+        ) -> Router<OpenJevRequestContext> {
             let router = Router(context: OpenJevRequestContext.self)
+            router.add(middleware: RequestLogMiddleware())
             router.add(middleware: ResponseHeadersMiddleware())
             router.add(
                 middleware: AuthenticationMiddleware(
                     originSecret: settings.originSecret, apiKey: settings.apiKey))
             router.add(middleware: BodyCapMiddleware(limit: settings.maxBodyBytes))
-            let routes = Routes(settings: settings, service: service)
+            let routes = Routes(
+                settings: settings, handler: SystemOneHandler(settings: settings, service: service),
+                connections: connections)
             router.get("/health") { _, _ in try routes.health() }
             router.get("/v1/models") { _, _ in try routes.models() }
             router.post("/v1/systemone") { request, context in
@@ -41,12 +46,52 @@
             }
             return router
         }
+
+        /// The application over a loaded service, bound to the settings' host and port, as
+        /// upstream's `lifespan` loads the engine before uvicorn binds. Every connection is
+        /// watched, so a client that goes away cancels its decision. `onServerRunning` gets the
+        /// port the server listens on, which is the one bound when the settings' port is 0.
+        ///
+        /// ``DecisionServer`` runs it with a graceful shutdown and releases the model after.
+        public static func application(
+            settings: ServerSettings, service: any SystemOneService, logger: Logger,
+            onServerRunning: @escaping @Sendable (_ port: Int) async -> Void = { _ in }
+        ) -> Application<RouterResponder<OpenJevRequestContext>> {
+            let connections = ConnectionRegistry()
+            return application(
+                settings: settings, service: service, logger: logger, connections: connections,
+                onServerRunning: onServerRunning)
+        }
+
+        /// ``application(settings:service:logger:onServerRunning:)`` with the registry its
+        /// connections join, for tests.
+        static func application(
+            settings: ServerSettings, service: any SystemOneService, logger: Logger,
+            connections: ConnectionRegistry,
+            onServerRunning: @escaping @Sendable (_ port: Int) async -> Void
+        ) -> Application<RouterResponder<OpenJevRequestContext>> {
+            Application(
+                router: router(settings: settings, service: service, connections: connections),
+                server: .http1(
+                    configuration: HTTP1Channel.Configuration(
+                        additionalChannelHandlers: [
+                            ClientDisconnectHandler(registry: connections)
+                        ])),
+                configuration: ApplicationConfiguration(
+                    address: .hostname(settings.host, port: settings.port)),
+                onServerRunning: { channel in
+                    await onServerRunning(channel.localAddress?.port ?? settings.port)
+                },
+                logger: logger)
+        }
     }
 
     /// The route handlers.
     struct Routes: Sendable {
         let settings: ServerSettings
-        let service: any SystemOneService
+        let handler: SystemOneHandler
+        /// The server's connections, or `nil` when requests are not watched.
+        let connections: ConnectionRegistry?
 
         /// `GET /health`: `{"status":"ok"}`.
         func health() throws -> Response {
@@ -55,18 +100,16 @@
 
         /// `GET /v1/models`: the service's listing.
         func models() throws -> Response {
-            try WireResponses.ok(ModelsResponse(models: service.servedModels.listing))
+            try WireResponses.ok(ModelsResponse(models: handler.service.servedModels.listing))
         }
 
-        /// `POST /v1/systemone`, in upstream's order: the body, its shape, the model name, the
-        /// questions cap, then the engine. The engine's model time goes to `server-timing`, and
-        /// each refusal upstream logs is logged as ``RefusalLog`` describes.
+        /// `POST /v1/systemone`: the body as FastAPI reads it, then ``SystemOneHandler``, while
+        /// the client is there.
         ///
-        /// - Throws: A ``WireError`` for every refusal, which the headers middleware renders:
-        ///   the body's 400 and 422s (``RequestBodyReader``), the shape's 422 or 400, the unknown
-        ///   model, the questions cap, and for the engine's errors a ``SchemaError`` as the
-        ///   plain-detail 400, an ``OverloadedError`` as the 529, a ``BackendRefusal`` as the 400
-        ///   `the model rejected this request` and anything else as the 503 naming its type.
+        /// - Throws: A ``WireError`` for every refusal, which the headers middleware renders: the
+        ///   body's 400 and 422s (``RequestBodyReader``) and every error of
+        ///   ``SystemOneHandler/respond(to:log:watch:)``; ``ClientDisconnected`` when the client
+        ///   went away before the answer was ready.
         func systemOne(
             _ request: Request, context: OpenJevRequestContext
         ) async throws -> Response {
@@ -78,61 +121,9 @@
             } catch let error as WireError {
                 throw log.validation(error)
             }
-            let wireRequest: SystemOneRequest
-            do {
-                wireRequest = try RequestValidator().validate(body)
-            } catch let error where error == .invalidRequest {
-                log.invalidRequest(error, problems: RequestValidator().problems(body))
-                throw error
-            } catch {
-                throw log.validation(error)
-            }
-            let served = service.servedModels
-            guard served.accepts(wireRequest.model) else {
-                throw WireError.unknownModel(wireRequest.model)
-            }
-            // A request's questions fan out into reads; the cap bounds one body's work.
-            if wireRequest.questions.count > settings.maxQuestions {
-                let refusal = WireError.semantic400(
-                    "at most \(settings.maxQuestions) questions per request")
-                log.semantic(refusal, at: ["body", "questions"])
-                throw refusal
-            }
-            let decision = try await decide(wireRequest, log: log)
-            ModelTimeRecorder.record(decision.modelTime)
-            return try WireResponses.ok(
-                SystemOneResponse(
-                    model: served.version, answers: decision.answers,
-                    usage: Usage(
-                        inputTokens: decision.inputTokens, outputTokens: decision.outputTokens)))
-        }
-
-        /// The most characters of a backend's refusal the 400 repeats, as upstream's
-        /// `Upstream(str(msg)[:500])` keeps.
-        static let refusalCharacters = 500
-
-        /// The service's decision, or the answer for its error.
-        private func decide(_ request: SystemOneRequest, log: RefusalLog) async throws -> Decision {
-            do {
-                return try await service.decide(request)
-            } catch let error as SchemaError {
-                let refusal = WireError.semantic400(error)
-                log.semantic(refusal, at: error.loc)
-                throw refusal
-            } catch let error as OverloadedError {
-                throw WireError.overloaded529(error.message)
-            } catch let error as BackendRefusal {
-                let reason = error.reason.unicodeScalars.prefix(Self.refusalCharacters)
-                let refusal = WireError.modelRejected400(
-                    String(String.UnicodeScalarView(reason)))
-                log.semantic(refusal, at: ["body"])
-                throw refusal
-            } catch {
-                // Upstream names the httpx error its vLLM backend raised: type(e).__name__.
-                let failure = WireError.backendUnavailable503(String(describing: type(of: error)))
-                log.failure(failure)
-                throw failure
-            }
+            let bytes = try await handler.respond(
+                to: body, log: log, watch: connections?.watch(for: context.channel))
+            return WireResponses.json(status: .ok, bytes: bytes)
         }
     }
 
