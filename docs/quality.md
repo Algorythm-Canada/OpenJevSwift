@@ -7,7 +7,7 @@ one Mac, with both encoder models this port serves: Verdict (`verdict-1.4`) and 
 The DiffusionGemma run waits for the `mlx` backend's parity tests (issue #31); its commands are
 under [DiffusionGemma](#diffusiongemma), and it is the one piece of issue #61 left. How the harness
 maps items onto requests and scores them is in
-[Tools/jevbench/README.md](../Tools/jevbench/README.md) and D-040.
+[Tools/jevbench/README.md](../Tools/jevbench/README.md) and D-041.
 
 All runs: 2026-10-01, an Apple M3 Max with 128 GB and macOS 27.0.1. The Swift server is the release
 build of this branch, whose Swift package is main's at `93edceb`, serving the float16 Core ML

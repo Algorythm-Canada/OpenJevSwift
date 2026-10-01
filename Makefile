@@ -8,8 +8,11 @@ UPSTREAM_OPENJEV_COMMIT := dcd2094
 # CPython 3.14.7; another version changes the "python" pin recorded in every file.
 PYTHON ?= python3.14
 FIXTURES_PYTHON := Tools/fixtures/.venv/bin/python
+# The interpreter Tools/sdk-compat/.venv is made from; CI runs the suite with CPython 3.12.
+SDK_COMPAT_PYTHON ?= python3.12
+SDK_COMPAT_VENV_PYTHON := Tools/sdk-compat/.venv/bin/python
 
-.PHONY: format lint test upstream fixtures fixtures-venv
+.PHONY: format lint test upstream fixtures fixtures-venv sdk-compat sdk-compat-venv
 
 # Rewrite the Swift sources in place according to .swift-format.
 format:
@@ -46,3 +49,17 @@ fixtures:
 	PYTHONHASHSEED=0 $(FIXTURES_PYTHON) Tools/fixtures/wire_tables.py
 	PYTHONHASHSEED=0 $(FIXTURES_PYTHON) Tools/fixtures/upstream_tables.py
 	PYTHONHASHSEED=0 $(FIXTURES_PYTHON) Tools/fixtures/checkpoint_tables.py
+
+# Create Tools/sdk-compat/.venv with the pinned Python SDK, and install the pinned TypeScript SDK
+# into Tools/sdk-compat/typescript/node_modules (Node.js 20 or later).
+sdk-compat-venv:
+	$(SDK_COMPAT_PYTHON) -m venv Tools/sdk-compat/.venv
+	$(SDK_COMPAT_VENV_PYTHON) -m pip install --quiet --requirement Tools/sdk-compat/requirements.txt
+	npm ci --prefix Tools/sdk-compat/typescript --no-audit --no-fund
+
+# Run TypeSafe's official SDKs against openjev-stub-server, which this builds first. Pass
+# SDK_COMPAT_ARGS=--swift-sdk to also run NSStudent's JevSwiftSDK.
+sdk-compat:
+	@test -x $(SDK_COMPAT_VENV_PYTHON) || { echo "$(SDK_COMPAT_VENV_PYTHON) is missing; run make sdk-compat-venv"; exit 1; }
+	$(SWIFT) build --product openjev-stub-server
+	$(SDK_COMPAT_VENV_PYTHON) Tools/sdk-compat/run.py --server "$$($(SWIFT) build --show-bin-path)/openjev-stub-server" $(SDK_COMPAT_ARGS)

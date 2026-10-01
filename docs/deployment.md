@@ -15,8 +15,8 @@ your own", where it applies to a Mac.
 
 On an M3 Max, Verdict reads one question in 7.5 to 20.3 ms depending on its length, and a batch
 of 16 in 4.3 to 19.3 ms per question ([spikes/encoder-runtime.md](spikes/encoder-runtime.md)). Like
-upstream, one server serves one backend; run one process per backend, each on its own port.
-Forwarding between them (`OPENJEV_MODEL_ROUTES`) comes with issue #38.
+upstream, one server serves one backend; run one process per backend, each on its own port, and
+let one of them forward the others' models ([One origin for several models](#one-origin-for-several-models)).
 
 ## Build
 
@@ -85,6 +85,8 @@ The server reads upstream's `OPENJEV_*` variables, with upstream's defaults and 
 | `OPENJEV_MAX_QUEUE` | `512` | Decisions inside the server before a 529. `0` refuses every request, as upstream's does. |
 | `OPENJEV_MAX_QUESTIONS` | `256` | Questions per request before a 400. |
 | `OPENJEV_MAX_BODY_BYTES` | `67108864` | Request body limit before a 413. |
+| `OPENJEV_MODEL_ROUTES` | unset | `name=url,name=url`: other OpenJev servers whose models this one forwards ([One origin for several models](#one-origin-for-several-models)). |
+| `OPENJEV_FORWARD_TIMEOUT` | `300` | Seconds a forwarded request waits for each read and write of the other server before a 503. |
 | `OPENJEV_WARMUP` | `1` | `0` skips the warm-up read before the server opens. |
 | `OPENJEV_LOG_LEVEL` | `info` | `trace`, `debug`, `info`, `notice`, `warning`, `error` or `critical`. |
 | `HF_HOME`, `HF_HUB_CACHE` | unset | Where the Hugging Face cache is: DiffusionGemma's checkpoint, and the tokenizer of a local folder. |
@@ -133,6 +135,34 @@ JSON
 ```
 
 Ctrl-C stops the server gracefully.
+
+## One origin for several models
+
+`OPENJEV_MODEL_ROUTES` lets clients reach every model at one address, as upstream's README describes
+for its containers. Run each backend as its own server and give one of them routes to the others:
+
+```bash
+OPENJEV_BACKEND=laya OPENJEV_PORT=8081 openjev serve
+OPENJEV_BACKEND=verdict OPENJEV_MODEL_ROUTES=laya-1.0=http://127.0.0.1:8081 openjev serve
+```
+
+Clients use port 8080 for both. A request for `laya-1.0` reaches the Verdict server, which passes
+it to the Laya server unchanged, with the client's `authorization`, `x-origin-secret` and
+`content-type` headers and no other header of the client's, and sends the Laya server's answer
+back, decoded if it came compressed with `gzip` or `deflate`: its status and body, with its
+`content-type` and `retry-after`, and the forwarding server's own request id and `server-timing`,
+whose `model` counts the whole exchange. Give both servers the same `OPENJEV_API_KEY`, since the
+client's key reaches the second one. A name the forwarding server serves itself, the SDK aliases
+`jev-latest` and `jev-preview` included, is answered there even when routed. `GET /v1/models` lists
+`verdict-1.4`, then `laya-1.0`, without asking the Laya server, so it lists both while the Laya
+server is down.
+
+When the routed server cannot be reached, or sends nothing for `OPENJEV_FORWARD_TIMEOUT` seconds
+(300), the client gets the 503 `inference backend unavailable: ConnectError` (or `ReadTimeout`, and
+the other names upstream's httpx gives) with `retry-after: 2`, and the forwarding server logs an
+error line naming the model. A route's URL may hold a user name and password
+(`http://user:password@host:port`); they go to the routed server as HTTP Basic authorization, in
+place of the client's header, as upstream's client sends them, and the log never shows them.
 
 ## launchd
 
@@ -248,10 +278,13 @@ Everything goes to standard error, one line per event, as swift-log writes it:
 - **Refusals.** As upstream, a 422 and a plain-detail 400 also get a warning that says where the
   request was wrong and why, for example
   `400 req_... body.questions.q.criteria: Too many score levels. Must have at most 10 levels.`
-  A backend that fails during a decision gets an error line with its 503 message.
+  A backend that fails during a decision gets an error line with its 503 message, and so does a
+  routed server that did not answer, with the model's name:
+  `503 req_... inference backend unavailable: ConnectError (forwarding laya-1.0)`.
 - **What is never written.** A body, a state, instructions, a header value or a query string.
-  The API key and the origin secret appear only as `set` or `unset`, and the model routes as
-  names, without their URLs.
+  The API key and the origin secret appear only as `set` or `unset`. The settings line names the
+  model routes, and a `forwarding {name} to {url}` line follows it for each route, the URL without
+  the user name and password it may hold.
 - **Level.** `OPENJEV_LOG_LEVEL=warning` keeps refusals and failures and drops the phase and
   request lines.
 - **Rotation.** launchd opens the log file once. After rotating it, for example with

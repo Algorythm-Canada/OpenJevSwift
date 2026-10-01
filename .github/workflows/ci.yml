@@ -64,6 +64,68 @@ jobs:
       - name: Check that only model tests were skipped
         run: .github/scripts/check-test-log.sh "$RUNNER_TEMP/swift-test.log"
 
+  # TypeSafe's official SDKs against the Swift server over the stub backends (issue #39,
+  # Tools/sdk-compat): Python 3.12 with typesafe-sdk, Node.js 20 with @typesafe-ai/sdk, and
+  # NSStudent's JevSwiftSDK, each at the version Tools/sdk-compat pins. Linux, because the stub
+  # server needs no Core ML, and the Linux job's toolchain and build directory.
+  sdk-compat:
+    name: SDK compatibility
+    runs-on: ubuntu-24.04
+    container: swift:6.2-noble
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Show the toolchain
+        id: toolchain
+        run: |
+          swift --version
+          echo "id=$(swift --version 2>&1 | sed -n '1s/.*(\([^ )]*\).*/\1/p')" >> "$GITHUB_OUTPUT"
+
+      # The Linux job's cache, read only: that job saves it.
+      - name: Restore the build directory
+        uses: actions/cache/restore@v6
+        with:
+          path: .build/linux
+          key: linux-${{ steps.toolchain.outputs.id }}-${{ hashFiles('Package.resolved') }}
+          restore-keys: linux-${{ steps.toolchain.outputs.id }}-
+
+      - name: Build the stub server
+        run: swift build --product openjev-stub-server --scratch-path .build/linux
+
+      # Ubuntu 24.04's python3 is CPython 3.12, the version the suite pins.
+      - name: Install Python 3.12
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends python3 python3-venv
+          python3 -c 'import sys; print(sys.version); assert sys.version_info[:2] == (3, 12)'
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+
+      - name: Install the SDKs
+        run: |
+          node --version
+          python3 -m venv Tools/sdk-compat/.venv
+          Tools/sdk-compat/.venv/bin/python -m pip install --quiet --requirement Tools/sdk-compat/requirements.txt
+          npm ci --prefix Tools/sdk-compat/typescript --no-audit --no-fund
+
+      - name: Run the SDK checks
+        run: |
+          server="$(swift build --scratch-path .build/linux --show-bin-path)/openjev-stub-server"
+          Tools/sdk-compat/.venv/bin/python Tools/sdk-compat/run.py \
+            --server "$server" --swift-sdk --exchanges "$RUNNER_TEMP/sdk-compat"
+
+      - name: Upload the exchanges and the server logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sdk-compat-exchanges
+          path: ${{ runner.temp }}/sdk-compat
+          if-no-files-found: ignore
+          retention-days: 14
+
   macos:
     name: macOS
     runs-on: macos-26

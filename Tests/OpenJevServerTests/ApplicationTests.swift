@@ -47,6 +47,26 @@
             }
         }
 
+        /// Upstream's `test_typesafe_sdk_default_model_is_accepted`: the SDK names `jev-latest`
+        /// unless told otherwise, and an encoder backend answers it as its own model.
+        @Test("An encoder backend answers the SDK's default model, jev-latest")
+        func encoderAcceptsTheSDKDefault() async throws {
+            let service = try await ServerHarness.encoderService()
+            try await ServerHarness.withClient(service: service) { client in
+                let response = try await ServerHarness.post(
+                    client, ModelRouteTests.asking("jev-latest"))
+                #expect(response.status == .ok)
+                let answer = try SystemOneResponse(
+                    json: JSONParser().parse(Array(response.body.readableBytesView)))
+                #expect(answer.model == "laya-1.0")
+                guard case .choice(let choice, _, _) = answer.answers["team"] else {
+                    Issue.record("no choice answer for team: \(answer.answers)")
+                    return
+                }
+                #expect(choice == "billing")
+            }
+        }
+
         /// The policy recording's `plain` case is the README quickstart.
         @Test("The quickstart request returns the recorded response byte for byte")
         func quickstart() async throws {

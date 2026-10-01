@@ -92,6 +92,9 @@ struct ServeCommand: AsyncParsableCommand {
         let logger = context.logger(level: Logger.Level(settings.logLevel))
         logger.info(
             "\(SettingsSummary.line(settings, environment: environment, kind: selected.kind))")
+        for (name, url) in settings.modelRoutesWithoutCredentials {
+            logger.info("forwarding \(name) to \(url)")
+        }
         logger.info("loading \(selected.modelName) (OPENJEV_BACKEND=\(selected.name))")
         let service = try await selected.load(
             settings: settings, environment: environment,
@@ -145,8 +148,9 @@ final class RunningGroup: @unchecked Sendable {
     }
 }
 
-/// The settings line `serve` writes first: what the server will do, never the API key, the origin
-/// secret or the URLs of the model routes.
+/// The settings line `serve` writes first: what the server will do, never the API key or the
+/// origin secret, and the model routes by name. A line per route follows it, with the route's URL
+/// without its credentials.
 enum SettingsSummary {
     /// `settings: host=... port=...`, the settings that apply to the backend's kind.
     static func line(

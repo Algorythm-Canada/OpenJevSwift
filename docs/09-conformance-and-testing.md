@@ -92,10 +92,19 @@ sanity, thought channel never leaking.
 
 ## Layer 3: end to end, behavioural
 
-- **SDK compatibility.** A GitHub Actions job starts the Swift server with the stub backend
-  (deterministic fake logprobs, as upstream's `test_api.py` fixture) and runs the official Python
-  `typesafe-sdk` and the TypeScript `@typesafe-ai/sdk` quickstarts against it, checking decoded
-  answers, error mapping and request-id headers. Also the `/v1/models` listing.
+- **SDK compatibility.** The oracle is the official clients themselves: "TypeSafe's SDKs work
+  unchanged" is upstream's claim. `Tools/sdk-compat` (issue #39, D-040) starts
+  `openjev-stub-server`, the real application over the stub backends (deterministic fake reads, as
+  upstream's `test_api.py` and `test_encoders.py` stub them), three times with
+  `OPENJEV_API_KEY=sk-test`: the DiffusionGemma stub with `laya-1.0` routed to a Laya stub, the
+  Laya stub, and one with `OPENJEV_MAX_QUEUE=0`. The Python `typesafe-sdk` 0.7.2 and the
+  TypeScript `@typesafe-ai/sdk` 0.6.0 under Node.js 20, both pinned with lock files, run six
+  scenarios each through a recording proxy: the quickstart decodes with the SDK's default model
+  (`SystemOneResponse`, `.choices`, `.scores`, `.nouls`), the listing, a wrong key's
+  authentication error with the request id, the 529 retried with `retry-after` honoured, the
+  `samples: 33` 422 joined as `loc: msg`, and a routed model's answers through the forwarding.
+  NSStudent's JevSwiftSDK runs four of them. A failed check prints every HTTP exchange it made.
+  The CI job `SDK compatibility` runs it on Linux; `make sdk-compat` runs it locally.
 - **The server on real sockets.** `OpenJevServerTests` runs `DecisionServer` on an ephemeral
   port with a stub whose reads wait at a gate: a client that goes away cancels its read, a
   graceful shutdown answers the request in flight while new connections are refused, and a
@@ -109,7 +118,7 @@ sanity, thought channel never leaking.
 - **Live server tests.** A port of upstream's `test_live.py` against a running server with the
   real model: README example, 255 options, chunked reads, unknown model, concurrent reads, chat and
   stream when generation exists, encoder models when listed. Opt-in via `OPENJEV_LIVE_URL`.
-- **JevBench.** `Tools/jevbench` (issue #61, D-040) runs JevBench v1's 231 public items, and the 102
+- **JevBench.** `Tools/jevbench` (issue #61, D-041) runs JevBench v1's 231 public items, and the 102
   TypeSafe public-evaluation rows SemIf compares with Jev, against any `/v1/systemone` server, one
   request per item through the benchmark's own adapter, and scores them with the benchmarks' own
   code, vendored unchanged: JevBench's accuracy, Brier score and ECE, SemIf's equal-case modal
@@ -138,6 +147,8 @@ identity.
 
 - Linux job: build `OpenJevCore`, `OpenJevServer` (stub backend) and `openjev`, run their tests,
   fixture tests included. Cheap and fast; catches order and serialisation bugs.
+- SDK compatibility job: build `openjev-stub-server` with the Linux job's toolchain and run
+  `Tools/sdk-compat` with Python 3.12 and Node.js 20, uploading the exchanges when it fails.
 - macOS Apple silicon job: build everything with Swift Build, run every test target, and run
   swift-format. MLX unit tests on synthetic small shapes run there on the runner's GPU (issue #8
   and D-028). The JevBench harness's smoke test (`Tools/jevbench/smoke_test.py`) runs there too.

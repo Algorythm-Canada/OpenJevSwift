@@ -17,11 +17,15 @@
 
     /// The `settings` of a recorded case, upstream's `Settings` field names, as `ServerSettings`.
     enum RecordedSettings {
-        /// The settings, from upstream's defaults.
+        /// The settings, from upstream's defaults. A model route whose recorded URL is a key of
+        /// `routeURLs` goes to that key's value instead, the in-process server that stands in for
+        /// the one upstream's recording stubbed; `forwardTimeout` is `OPENJEV_FORWARD_TIMEOUT`.
         ///
         /// - Throws: ``FixtureError`` for a field this map does not know, so that a new kind of
         ///   recording cannot pass by being ignored.
-        static func serverSettings(_ value: JSONValue?) throws -> ServerSettings {
+        static func serverSettings(
+            _ value: JSONValue?, routeURLs: [String: String] = [:], forwardTimeout: Double = 300
+        ) throws -> ServerSettings {
             let fields = value?.objectValue ?? [:]
             func integer(_ name: String, _ defaultValue: Int) throws -> Int {
                 guard let field = fields[name] else { return defaultValue }
@@ -31,11 +35,16 @@
                 let known = [
                     "upstream", "api_key", "origin_secret", "max_body_bytes", "canvas",
                     "max_image_bytes", "max_images", "max_queue", "mlx_max_prompt", "backend",
-                    "warmup",
+                    "warmup", "model_routes",
                 ]
                 if !known.contains(name) {
                     throw FixtureError("settings.\(name) has no ServerSettings counterpart here")
                 }
+            }
+            var routes = OrderedMap<String>()
+            for (name, url) in fields["model_routes"]?.objectValue ?? [:] {
+                let recorded = try #require(url.stringValue, "settings.model_routes.\(name)")
+                routes.updateValue(routeURLs[recorded] ?? recorded, forKey: name)
             }
             // `upstream` is the vLLM URL, which this port does not have.
             return try ServerSettings(
@@ -44,11 +53,13 @@
                 canvas: try integer("canvas", 64),
                 maxQueue: try integer("max_queue", 512),
                 maxBodyBytes: try integer("max_body_bytes", 64 * 1024 * 1024),
+                forwardTimeout: forwardTimeout,
                 apiKey: fields["api_key"]?.stringValue ?? "",
                 originSecret: fields["origin_secret"]?.stringValue ?? "",
                 maxImages: try integer("max_images", 8),
                 maxImageBytes: try integer("max_image_bytes", 5 * 1024 * 1024),
-                warmup: fields["warmup"]?.boolValue ?? true)
+                warmup: fields["warmup"]?.boolValue ?? true,
+                modelRoutes: routes)
         }
     }
 
@@ -154,14 +165,15 @@
             throw FixtureError("no stub for \(String(describing: stub))")
         }
 
-        /// Out of scope, and so not replayed:
+        /// Not replayed here:
         ///
         /// - `backend_*`: upstream's vLLM backend answered by a mock transport. This port has no
         ///   vLLM backend, so how a vLLM response becomes a refusal or a failure is not ported;
         ///   the 400 `the model rejected this request` a backend's ``BackendRefusal`` gets is
         ///   checked by ``modelRejection()`` with the three recorded refusals whose reason is
         ///   `error.message`.
-        /// - `route_*`: `OPENJEV_MODEL_ROUTES` forwarding, issue #38.
+        /// - `route_*`: `OPENJEV_MODEL_ROUTES` forwarding, which ``ModelRouteTests`` replays
+        ///   against an in-process server that does what each row's `stub` says.
         ///
         /// `canvas_9_single_noul_fits` and `image_decoded_at_limit` pass validation and end in
         /// upstream's 503 like the others, which the unreachable stub reproduces.

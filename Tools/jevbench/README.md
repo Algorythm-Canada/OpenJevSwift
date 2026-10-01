@@ -3,7 +3,7 @@
 Runs JevBench v1's public items, and the TypeSafe subset SemIf compares with Jev, against any
 `/v1/systemone` server, scores the answers with each benchmark's own code and compares two runs of
 one model item by item. [docs/quality.md](../../docs/quality.md) holds the tables it produced for
-the Swift and upstream servers and what they mean; the decision behind its choices is D-040 in
+the Swift and upstream servers and what they mean; the decision behind its choices is D-041 in
 [docs/06-decisions.md](../../docs/06-decisions.md).
 
 | Path | What it is |
@@ -60,7 +60,7 @@ JevBench's widest choice has 6 options and the TypeSafe rows' 8. A 4xx other tha
 is a **refusal**: it is recorded with the server's detail and counts as a wrong answer, as the
 benchmark counts a failed decision. Three failures in a row, or a 401, 403 or 429, stop the run and
 leave the rest unattempted, as the benchmark's runner does, except that a refusal does not count
-towards the three (the runner exempts only a 422; D-040).
+towards the three (the runner exempts only a 422; D-041).
 
 ## Scoring
 

@@ -8,8 +8,9 @@ struct ModelsCommand: AsyncParsableCommand {
         commandName: "models",
         abstract: "Print the GET /v1/models body the server would send for the backend.",
         discussion: """
-            The body is printed exactly as the server sends it, without a trailing newline. A \
-            backend's listing needs no model, so nothing is loaded, and the listing of mlx is \
+            The body is printed exactly as the server sends it, without a trailing newline: \
+            the backend's models, then each model OPENJEV_MODEL_ROUTES routes to another server. \
+            A backend's listing needs no model, so nothing is loaded, and the listing of mlx is \
             printed although this build cannot serve it yet. The settings are read from the \
             OPENJEV_* variables, as serve reads them, and checked the same way.
             """)
@@ -30,7 +31,9 @@ struct ModelsCommand: AsyncParsableCommand {
             served = service.servedModels
             await (service as? any ModelReleasing)?.close()
         }
-        let body = ModelsResponse(models: served.listing)
+        // The routed models follow the backend's own, as the server lists them; the routed
+        // servers are not asked.
+        let body = ModelsResponse(models: served.listing(routedNames: settings.modelRoutes.keys))
         // A listing holds strings only, so writing it cannot fail.
         guard let bytes = try? WireEncoder().bytes(body) else {
             throw CommandFailure(.failure, message: "the model listing could not be written")
