@@ -8,24 +8,6 @@ import MLX
 import MLXLMCommon
 import MLXNN
 
-/// `model.decoder.self_conditioning`: holds the checkpoint's self-conditioning parameters so the
-/// tree's key set is the checkpoint's. Its forward pass, `post_norm(embeddings +
-/// down(geglu(gate(pre_norm(signal)), up(pre_norm(signal)))))`, arrives with #28.
-public final class SelfConditioning: Module {
-    @ModuleInfo(key: "pre_norm") public var preNorm: RMSNorm
-    @ModuleInfo(key: "gate_proj") public var gateProj: Linear
-    @ModuleInfo(key: "up_proj") public var upProj: Linear
-    @ModuleInfo(key: "down_proj") public var downProj: Linear
-
-    public init(_ config: DiffusionGemmaTextConfiguration) {
-        _preNorm.wrappedValue = rmsNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps)
-        _gateProj.wrappedValue = Linear(config.hiddenSize, config.intermediateSize, bias: false)
-        _upProj.wrappedValue = Linear(config.hiddenSize, config.intermediateSize, bias: false)
-        _downProj.wrappedValue = Linear(config.intermediateSize, config.hiddenSize, bias: false)
-        super.init()
-    }
-}
-
 /// `model.decoder`: the embedding, the layers, the final norm and self-conditioning. The encoder
 /// runs these same layers with its own scalars.
 public final class DecoderModel: Module {
@@ -114,10 +96,15 @@ public final class DiffusionGemmaModel: Module, BaseLanguageModel {
     /// The text configuration the tree was built from.
     public let configuration: DiffusionGemmaTextConfiguration
 
+    /// `tanh(x / cap) * cap` in float32 with the configuration's `final_logit_softcapping`,
+    /// compiled once, as diffusion_gemma.py compiles it at init.
+    let softcap: @Sendable (MLXArray) -> MLXArray
+
     /// Builds the tree with MLXNN's initial values. Nothing is evaluated except the five 256-entry
     /// RoPE tables, so the real-size tree costs no memory until weights replace its arrays.
     public init(_ configuration: DiffusionGemmaTextConfiguration) {
         self.configuration = configuration
+        softcap = makeSoftcap(configuration.finalLogitSoftcapping)
         _model.wrappedValue = Backbone(configuration)
         super.init()
     }
@@ -208,8 +195,8 @@ public final class DiffusionGemmaModel: Module, BaseLanguageModel {
 
     /// language.py `EncoderModel.__call__` for a text prompt in one piece, as upstream's
     /// `MlxRuntime._prefill` runs it: the embeddings, then every layer in encoder mode at RoPE
-    /// offset 0 with the encoder's scalar, filling one cache per layer. #25 builds the prefill
-    /// API on this.
+    /// offset 0 with the encoder's scalar, filling one cache per layer. The read path calls
+    /// ``prefill(promptIDs:)``, which validates the ids and wraps the caches.
     ///
     /// - Parameter ids: `[1, length]` token ids.
     /// - Returns: the caches, one per layer.

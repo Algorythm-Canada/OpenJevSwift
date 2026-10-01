@@ -36,7 +36,9 @@ OpenJevSwift/                          Swift package, tools 6.2, strict concurre
                      Router, Experts, DecoderLayer, LayerCache, Softcap (text blocks, #24);
                      ModelTree (decoder, encoder scalars, root with sanitize and a one-piece
                      prefill) and WeightLoading (strict coverage, loadWeights, metrics) (#27);
-                     self-conditioning's forward pass (#28), decoder read pass (#26)
+                     SelfConditioning (#28); Prefill (PromptCache, prefill(promptIDs:), cache
+                     digests, #25); DecoderPass (decoder masks, logits, self-conditioning
+                     signal, #26 and #28); Read (SlotRequest, ReadOutput, read(), #26 and #28)
       Runtime/       DiffusionGemmaRuntime actor: prefill cache, read(), think(), generate()
       Tokenization/  Tokenizer adapter, chat prompt builder, label discovery hookup
       Vision/        Processor parity, pixel embedding, block ids (later milestone)

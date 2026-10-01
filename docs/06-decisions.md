@@ -1247,3 +1247,84 @@ Decision.
    one serialized parent suite.
 
 Status. Proposed with issues #24 and #27.
+
+## D-036 DiffusionGemma prefill, decoder read pass and multi-step reads: where the port goes beyond or differs from the issue text
+
+Context. Issues #25, #26 and #28 port the read path of mlx-vlm 0.6.15's DiffusionGemma onto the
+blocks of D-035: the one-piece text prefill (`language.py` lines 555 to 771 and the Backbone's
+`diffusion_prefill_cache`), the decoder pass with its masks and self-conditioning (`language.py`
+lines 351 to 553, `diffusion_gemma.py` lines 183 to 202), and upstream's `MlxRuntime.read`
+(`mlx_backend.py` lines 175 to 208), into `Sources/OpenJevDiffusionGemma/Model/`
+(`SelfConditioning.swift`, `Prefill.swift`, `DecoderPass.swift`, `Read.swift`). The reference is
+spike #22's transliteration, bit-identical with mlx-vlm on all 27 oracle reads.
+
+Decision.
+
+1. **The prefill is one piece, and reads never chunk.** `prefill(promptIDs:)` runs the encoder
+   over the whole prompt, as `MlxRuntime._prefill` calls `diffusion_prefill_cache` without
+   `chunk_prefill`, evaluates the caches and returns a `PromptCache` (the per-layer
+   `LayerCache`s, the offset, the prompt token count) that every read of the prompt shares and
+   none writes. A chunked prefill is exact in real arithmetic, but in bfloat16 it moves read
+   probabilities by up to 0.62 and fails 0.02 on 67 of 156 slots (spike #22), so the issue's
+   chunked prefill and its "chunked and unchunked give the same logits" criterion are not
+   implemented. The prefill refuses an empty prompt and ids outside the vocabulary with
+   `ReadInputError`; the read refuses an empty canvas, canvas or label ids outside the
+   vocabulary, no slots, a slot outside the canvas or without labels, `steps` below 1, `topK`
+   outside `1 ..< vocab` and a cache from a model with another layer count. Upstream sends none
+   of these, so `read` throws, a departure from the signature in the brief.
+2. **The issue's other hooks are documented, not built.** Image placeholders replaced by `pad`
+   with the vision features scattered after the embedding, and the bidirectional overlay over
+   each image's block, belong to the vision milestone. Chunked prefill for prompts that do not fit
+   one pass and `diffusion_update_cache` (appending committed tokens, which needs a cache that
+   takes several updates and a sliding cache that rotates in place) belong to generation,
+   milestone 5. The issue's `KVCacheSimple` and `RotatingKVCache(maxSize: 1024)` are D-035's
+   `LayerCache`, which keeps every position after a one-piece prefill, as mlx-vlm's caches do;
+   no static prefix cache is built. `decoder_attention_mask` (padded prompts) is not ported:
+   reads run one unpadded prompt.
+3. **What `post_norm` is.** The checkpoint has `self_conditioning.pre_norm.weight` and no
+   `post_norm` tensor because `post_norm` is `RMSNormNoScale`, a norm without a weight. The
+   module is `post_norm(embeddings + down_proj(geglu(gate_proj(pre_norm(signal)),
+   up_proj(pre_norm(signal)))))`. On the first step the signal is zeros and the module runs, as
+   mlx-vlm runs it; skipping it is a measured bug (spike #22).
+4. **Self-conditioning for the quantized embedding.** `decoderLogits(canvas:cache:conditioning:masks:)`
+   takes nil on the first step and the previous step's full float32 logits afterwards. With the
+   checkpoint's 8-bit `QuantizedEmbedding` (mlx-vlm's `prefers_logits_self_conditioning`), the
+   signal is `softmax(logits, precise: true)` cast to the embedding dtype, `quantizedMM` against
+   the embedding's weight, scales and biases with `transpose: false` and its group size, bits and
+   mode, cast to the embedding dtype, times the embedding scale. A dense embedding takes
+   `diffusion_self_conditioning`'s path (the logits cast to the weight's dtype, the precise
+   softmax, `probs @ weight`, the scale), which only the tiny synthetic model exercises. The
+   masks are made once per read and the canvas's RoPE offset is the prompt length. Between steps
+   only the slot positions take their argmax; the template is never overwritten.
+5. **The slot-only projection (D-015) failed its condition, so reads project every row.**
+   `decoderSlotLogits` takes the slot rows of `norm(h)` through the tied head. The smaller
+   quantized matmul rounds differently: on the 27 oracle reads its final-step maps were identical
+   to the full projection's on 29 of 156 slots in the exact tier and 40 under native kernels,
+   with logprobs up to 0.16 apart. `read` therefore defaults to `SlotProjection.full`;
+   `.slotsOnly` stays for measurement. D-015 remains allowed in principle but is unproven for
+   this checkpoint.
+6. **The read output and #29.** `read(canvas:slots:cache:steps:topK:projection:)` returns
+   `ReadOutput`: per slot the `(token id, logprob)` pairs of the top 20 and every label, sorted by
+   token id, each logprob the float32 log-softmax value widened to Double (what `MlxRuntime.read`
+   returns and Python's `tolist()` gives); the argmaxes written between steps; and the prompt
+   token count, which steps do not change. `ReadOutput.readResult(for:)` hands the maps and the
+   slots' label ids to `ReadResult(tops:labelIDs:promptTokens:)`, which applies
+   `SlotDistribution.compute` as upstream's `one_read` applies `slot_distribution`; #29's
+   runtime returns that to the engine.
+7. **Measured on 2026-10-01 (Apple silicon Mac, the pinned checkpoint).** Exact tier (the
+   wheel's `mlx.metallib`, SHA-256 as in the oracle's generator, through a temporary Xcode scheme
+   setting `OPENJEV_MLX_METALLIB`, and the oracle's RoPE table): 27 of 27 reads bit-identical,
+   all 72 cache digests equal (layers 0 and 29 of the 12 prompts, and the sliding layer's
+   decoder view), the written argmaxes equal on 6 of 6 multi-step reads, every prompt token
+   count equal. Native kernels: mean absolute label probability difference 0.0084 over 1,763
+   labels (bound 0.02) and 0.0054 over the 50 long-prompt slots (bound 0.01); mean absolute
+   entropy difference 0.086 over 156 slots and 0.131 over the long prompts (bound 0.2 each); top
+   label 150 of 156 (96.2%, bound 90%) and 120 of 120 where the oracle's margin is at least 0.5
+   (bound 97%); written argmaxes equal on 4 of 6. These are the spike transliteration's figures
+   to the reported precision. A cached and a cold prefill give bit-identical reads in one process.
+8. **Concurrency.** `PromptCache` and the model hold MLX arrays and are not Sendable; the caller
+   serialises them, as before. `SlotRequest`, `ReadOutput`, `TensorDigest` and `ReadInputError`
+   are Sendable values. The live suites share one model load through `LiveCheckpoint` in the
+   test support.
+
+Status. Proposed with issues #25, #26 and #28.
