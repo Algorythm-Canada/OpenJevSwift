@@ -893,7 +893,8 @@ Decision.
 
 Status. Proposed with issue #34. Items 5 and 6 are completed by D-031 (issues #35 and #36): the
 503 for a backend failure, the body cap in a middleware after authentication, and the
-`json_invalid` messages, positions and content-type rules.
+`json_invalid` messages, positions and content-type rules. Item 7's zero for a refused request is
+replaced by D-037 item 7 (issue #37): the engines record the time they spent.
 
 ## D-031 Error contract and authentication: where the port goes beyond or differs from the issue text
 
@@ -1329,3 +1330,105 @@ Decision.
    test support.
 
 Status. Proposed with issues #25, #26 and #28.
+
+## D-037 The openjev CLI, capacity and shutdown: where the port goes beyond or differs from the issue text
+
+Context. Issue #40 builds the `openjev` command line tool and issue #37 finishes the server's
+capacity, model-time and shutdown work. Both predate the Verdict backend (#57) and the
+DiffusionGemma runtime (#29), which has not landed, and several points needed choices the issues
+do not spell out.
+
+Decision.
+
+1. **Backends.** `OPENJEV_BACKEND` selects from the CLI's `BackendRegistry`: `verdict` on Core
+   ML (macOS), and `mlx` and `laya`, which upstream has and this build does not yet. Those two
+   exit 3 with a message naming the variable and the issue that brings them (#29, #58). Every
+   other name, upstream's `vllm`, `clm` and `jevk5` included, is upstream's `create_app` error
+   with this port's list and the variable named as `__post_init__` names it:
+   `unknown backend 'vllm'; use one of mlx, laya, verdict (OPENJEV_BACKEND)`, exit 2. The check
+   is the CLI's rather than `ServerSettings`', so tests register stub backends in the registry.
+   On Linux `verdict` is known and exits 3. The issue's `mlx` acceptance criterion, the 4-bit
+   checkpoint serving the README example, waits for #29; the live smoke test serves Verdict.
+2. **Flags.** `serve` takes `--host`, `--port`, `--backend`, `--log-level` and `--no-warmup`,
+   each written over its variable before `ServerSettings(environment:)` reads it, so a flag's
+   value is checked and refused with the variable's message (`OPENJEV_PORT='abc' is not a int`).
+   `--shutdown-timeout` (30 seconds) has no variable, since upstream has none. `decide` and
+   `models` take `--backend`; the issue's `decide --model <source>` is `--backend`, because the
+   files a backend loads come from its own variables (`OPENJEV_ENCODER_MODELS`,
+   `OPENJEV_MLX_MODEL`).
+3. **Exit statuses.** 0 for success and, for `serve`, a clean shutdown; 1 for any other failure
+   (an unreadable request file, a backend that fails during `decide`, an address in use, a
+   shutdown that had to cancel requests); 2 for invalid settings and for a command line the
+   parser refuses, whose status 64 becomes 2, as Python's argparse exits; 3 for a backend this
+   build lacks or that failed to load, with the error's description; 4 for a request `decide`
+   was refused, which the server answers with a 4xx or the 529. Messages go to standard error
+   prefixed `openjev: `. launchd and docs/deployment.md read these.
+4. **decide and models.** `decide` prints the 200's body exactly, without a trailing newline,
+   through `SystemOneHandler`, which the route calls too. The body is read as a JSON body, under
+   the body cap's 413. An error prints the server's error body to standard error, exactly.
+   `decide` skips the warm-up read, which only delays its one read. `models` prints the listing
+   of every known backend without loading a model, `mlx` and `laya` included; a backend whose
+   listing only the loaded model knows is loaded, as the test registry's stub encoder is.
+5. **Phases and the request log.** `serve` logs to standard error through swift-log: the
+   settings line, with the API key and the origin secret as `set` or `unset` and the model routes
+   by name; `loading {model}`; `warming up`, from a new callback of `QuestionReadBackendProvider`;
+   `serving on host:port`, with the bound port, so port 0 works; `shutting down`,
+   `released {model}` and `stopped`. Hummingbird's own `Server started and listening` line stays.
+   `RequestLogMiddleware` runs outside every other middleware and writes
+   `{method} {path} {status} {ms}ms {request id}` at info for every request, refusals included,
+   in the place of uvicorn's access log, which also writes the client's address and the query
+   string; this one writes neither, nor a body or a header value.
+6. **The queue bound of 0.** The issue's acceptance line ("with `maxQueue` 0 and a slow stub, a
+   second concurrent request gets 529") is `maxQueue` 1 under upstream's
+   `waiting >= max_queue`, as D-027 item 5 found. The server test holds the first request at a
+   gate with `maxQueue` 1, expects the 529 with `retry-after: 1` for the second and a 200 for the
+   first, and checks that 0 refuses the first request too.
+7. **Model time.** `ModelTimeRecorder` moves from the server to `OpenJevCore`, a task-local
+   reference as upstream's `model_ns` is a context variable holding a list. The engines add each
+   backend call, the wait for a permit included, when the call ends, whether it returned, threw
+   or was cancelled, as upstream's `_post` adds in its `finally`. A request refused after a
+   thought or a read, or failed after a batch, now reports that time, where D-030 item 7 reported
+   zero, and the route no longer records `Decision.modelTime`, which stays for library callers.
+   A forwarded request will add the other server's time when #38 forwards it.
+8. **Cancellation.** A client that closes its connection cancels its decision. A channel handler
+   on each connection sees the end of the client's input, and the route runs the decision in a
+   child task beside a watch of the connection; the request log shows 499, nginx's code, nothing
+   is sent and nothing is logged as a failure. A client that half-closes and still waits counts
+   as gone, as for most HTTP servers. Upstream runs a request to its end. The encoder engine
+   starts no batch for a cancelled request and Verdict no further Core ML call; a call in
+   progress finishes. A decision the server cancels while stopping is the 503 naming
+   `CancellationError`, D-031 item 7's mapping. Request handling creates no unstructured task.
+9. **Shutdown and release.** `DecisionServer` is a swift-service-lifecycle `Service`; the CLI
+   runs it in a service group with SIGINT and SIGTERM as its graceful shutdown signals and
+   `--shutdown-timeout` as the group's `maximumGracefulShutdownDuration`. A second signal does
+   not cut the wait short. The model is released afterwards through `ModelReleasing.close()`,
+   upstream's `close()`, a protocol a service or backend adopts when it has something to release:
+   the two engines pass it on, `VerdictBackend` passes it to `CoreMLEncoderModel`, which drops its
+   loaded functions. A server cancelled before its requests finished throws
+   `ShutdownInterrupted`, exit 1. `OpenJevApplication.make(settings:provider:)` is replaced by
+   `application(settings:service:logger:onServerRunning:)` and `DecisionServer`.
+10. **Tests.** The CLI's code stays in the executable target, and `OpenJevCLITests` imports it
+    with `@testable import openjev`, which the native build system and Swift Build both build.
+    The commands read a task-local `CommandContext` (environment, streams, backends, loggers,
+    shutdown signals), so tests run them in-process with stub backends. Child-process tests of the
+    built binary check the exit statuses and `models` in CI. A stub backend compiled into the
+    shipped binary would have let a child-process test run `decide` without a model; instead the
+    opt-in smoke test serves Verdict from the binary, and `decide` against a stub is tested
+    in-process. `ReadGate` in `OpenJevTestSupport` holds a stub's calls until a test opens it,
+    and the stubs record their own call times, count `close()` and can fail after a number of
+    calls.
+
+Alternatives rejected. (a) Checking `OPENJEV_BACKEND` in `ServerSettings`: the library would
+have to know every backend name, a test could not register a stub, and upstream checks it in
+`create_app` too. (b) A library target for the CLI's code: the executable target tests under both
+build systems, and the issue places the code in `Sources/openjev`. (c) Leaving a client that goes
+away unobserved, as uvicorn does: issue #37 asks that its reads be cancelled. (d) Keeping
+ArgumentParser's 64 for a refused command line: one status for every invalid input keeps the
+table short, and it is what upstream's Python tooling exits with.
+
+Consequences. launchd's `ExitTimeOut` (20 seconds by default) must exceed `--shutdown-timeout`
+or launchd kills the server before its requests finish; docs/deployment.md says so. A
+DiffusionGemma or Laya backend registers with one entry in `BackendRegistry.standard` and drops
+its placeholder.
+
+Status. Proposed with issues #40 and #37.

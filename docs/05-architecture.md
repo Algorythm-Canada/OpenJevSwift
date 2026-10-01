@@ -315,7 +315,7 @@ Every connection carries a `ClientDisconnectHandler`, which sees the end of the 
 The route runs the decision in a child task beside a watch of its connection: a client that goes
 away cancels the decision, which reaches the reads through task cancellation, and the request log
 shows 499. Request handling creates no unstructured or detached task. Decisions D-030, D-031 and
-D-035 record where the server differs from upstream. `OPENJEV_MODEL_ROUTES` forwarding uses
+D-037 record where the server differs from upstream. `OPENJEV_MODEL_ROUTES` forwarding uses
 `URLSession` or Hummingbird's client. Text generation routes are added only when a
 generation-capable backend is loaded.
 

@@ -13,6 +13,10 @@ Read in order the first time. Later, each document stands alone.
 9. [09-conformance-and-testing.md](09-conformance-and-testing.md): how correctness is proven.
 10. [10-other-models.md](10-other-models.md): the non-DiffusionGemma models upstream serves.
 
+[deployment.md](deployment.md) runs the server on a Mac: the build, the settings, a launchd job,
+the logs, the graceful shutdown and the exit statuses. [development.md](development.md) builds and
+tests the package.
+
 [spikes/](spikes/) holds the written outcome of each spike: what was measured, how, and the
 minimal reproductions of anything that differed. The decision each one feeds is in
 06-decisions.md.
