@@ -59,27 +59,30 @@ OpenJevSwift/                          Swift package, tools 6.2, strict concurre
                                        OpenJevApplication (routes), SystemOneHandler, request id,
                                        server-timing, request log, authentication and body cap
                                        middleware, the body reader, the refusal log, the client
-                                       disconnect watch and DecisionServer (graceful shutdown);
-                                       later forwarding.
+                                       disconnect watch, DecisionServer (graceful shutdown) and
+                                       ModelRouter (the model routes).
     OpenJevTestSupport/                Fixture loaders, FixtureTokenizer, the stub backends and
                                        ReadGate the test targets share. Foundation only; not a
                                        product.
     openjev/                           CLI executable: serve, decide, models; the backend registry
+    openjev-stub-server/               The server over OpenJevTestSupport's stubs, for the SDK
+                                       suite; an executable target, not a product
   Tests/
     OpenJevCoreTests/                  Fixture-driven unit tests (no model)
     OpenJevDiffusionGemmaTests/        Unit tests on synthetic shapes; opt-in live tests
     OpenJevEncodersTests/              Fixture-driven parity tests over recorded logits; opt-in
                                        tokenizer and Core ML parity tests
     OpenJevServerTests/                Contract tests with a stub backend, capacity and model time
-                                       among them; disconnects and shutdown on live sockets; SDK
-                                       compatibility
+                                       among them; disconnects and shutdown on live sockets; the
+                                       model routes against an in-process routed server
     OpenJevCLITests/                   Parsing, the commands in-process with stub backends, the
                                        built binary as a child process; opt-in Verdict smoke test
   Tools/
     fixtures/                          Python: generate golden fixtures from pinned upstream
     encoders/                          Python and Swift: Verdict's and Laya's reference outputs,
                                        the Core ML converters and the package manifest
-    sdk-compat/                        Python and TypeScript SDK smoke tests against a server
+    sdk-compat/                        Python: TypeSafe's Python and TypeScript SDKs, and
+                                       JevSwiftSDK, against openjev-stub-server
   Fixtures/                            Checked-in JSON fixtures (small)
 ```
 
@@ -101,8 +104,8 @@ openjev (CLI) ──► OpenJevServer ──► OpenJevCore
 
 `OpenJevCore` has no third-party dependencies (an `OrderedDictionary` from `swift-collections`
 is acceptable if it saves a hand-rolled type). `OpenJevServer` depends on Hummingbird,
-swift-http-types, swift-log, swift-nio's `NIOCore` and swift-service-lifecycle, never on a
-backend. The CLI picks the backend and links it: `OpenJevEncoders` on macOS today,
+swift-http-types, swift-log, swift-nio's `NIOCore`, `NIOPosix` and `NIOHTTP1`,
+swift-service-lifecycle and AsyncHTTPClient, never on a backend. The CLI picks the backend and links it: `OpenJevEncoders` on macOS today,
 `OpenJevDiffusionGemma` once #29 registers it. Backends depend on the core, never the reverse.
 
 ## Core types (sketch)
@@ -316,15 +319,29 @@ installs a task-local `ModelTimeRecorder` (OpenJevCore) per request, the engines
 call to it when the call ends, wait for a permit included, whether it returned, threw or was
 cancelled, and the middleware reports the sum as `server-timing`'s `model`. Concurrent reads sum,
 so `model` can exceed `total`, and a request refused after a read still reports the read. A
-request forwarded to another server will add that server's time when #38 forwards it.
+request forwarded to another server reports the whole exchange, network included.
 
 Every connection carries a `ClientDisconnectHandler`, which sees the end of the client's input.
 The route runs the decision in a child task beside a watch of its connection: a client that goes
 away cancels the decision, which reaches the reads through task cancellation, and the request log
 shows 499. Request handling creates no unstructured or detached task. Decisions D-030, D-031 and
-D-038 record where the server differs from upstream. `OPENJEV_MODEL_ROUTES` forwarding uses
-`URLSession` or Hummingbird's client. Text generation routes are added only when a
+D-038 record where the server differs from upstream. Text generation routes are added only when a
 generation-capable backend is loaded.
+
+`ModelRouter` is `OPENJEV_MODEL_ROUTES`, upstream's `forward`. The route asks it once the body has
+passed validation, before the model name is checked: a model with a route that the service does
+not accept is sent to `{url}/v1/systemone` as the bytes the client sent, with the client's
+`authorization`, `x-origin-secret` and `content-type`, through an AsyncHTTPClient made for that
+request on swift-nio's shared event loops and shut down before the route returns. The routed
+status and body come back with only `content-type` and `retry-after`; a transport failure is the
+503 naming httpx's error for it (`ForwardingFailure`), logged with the model's name. The exchange
+is model time, and a client that goes away cancels it, as it cancels a decision. `GET /v1/models`
+lists the routed names after the service's own (`ServedModels.listing(routedNames:)`), without
+asking the routed servers. D-039 records the choices.
+
+`openjev-stub-server`, an executable target that is not a product, runs a `DecisionServer` over
+OpenJevTestSupport's stubs with the `OPENJEV_*` settings and prints the port it bound. The SDK
+compatibility suite in `Tools/sdk-compat` starts it, on Linux in CI, where Core ML does not exist.
 
 Configuration: a `ServerSettings` struct with the same names, defaults and startup validation as
 upstream's `Settings`, populated from `OPENJEV_*` variables by the CLI so existing deployment
@@ -388,7 +405,7 @@ and the warm-up read loads the first Core ML function.
 |---|---|---|---|---|
 | macOS 14+ Apple silicon | yes | yes (32 GB+ recommended) | yes | yes, from macOS 15 (Core ML's multifunction packages) |
 | iOS 17+ | yes | no (memory) | no | yes, from iOS 18 |
-| Linux | yes (tests, tooling) | no | builds with a stub backend for contract tests | no (Core ML) |
+| Linux | yes (tests, tooling) | no | builds with a stub backend for contract tests and the SDK suite's stub server | no (Core ML) |
 
 ## Deliberately not in scope for 0.1
 

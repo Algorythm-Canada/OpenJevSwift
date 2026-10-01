@@ -894,7 +894,8 @@ Decision.
 Status. Proposed with issue #34. Items 5 and 6 are completed by D-031 (issues #35 and #36): the
 503 for a backend failure, the body cap in a middleware after authentication, and the
 `json_invalid` messages, positions and content-type rules. Item 7's zero for a refused request is
-replaced by D-038 item 7 (issue #37): the engines record the time they spent.
+replaced by D-038 item 7 (issue #37): the engines record the time they spent. Item 2's routed
+models are forwarded and listed by D-039 (issue #38).
 
 ## D-031 Error contract and authentication: where the port goes beyond or differs from the issue text
 
@@ -1521,4 +1522,128 @@ docs/deployment.md sets it. The
 DiffusionGemma backend registers with one entry in `BackendRegistry.standard` and drops its
 placeholder, as Laya's did.
 
-Status. Proposed with issues #40 and #37.
+Status. Proposed with issues #40 and #37. Item 7's forwarded request reports the routed server's
+time as model time since D-039 (issue #38).
+
+## D-039 Model routes and the SDK compatibility suite: where the port goes beyond or differs from the issue text
+
+Context. Issue #38 forwards a request for a routed model and lists the routed models, upstream's
+`forward`, `parse_routes` and `models_list`, and issue #39 runs TypeSafe's official SDKs against the
+Swift server in CI. Upstream forwards through httpx, which a Swift server does not have, and the
+SDK suite needs a server that answers without a model on Linux. Several points needed choices the
+issues do not spell out.
+
+Decision.
+
+1. **The forwarding client is AsyncHTTPClient.** It runs on swift-nio's sockets on macOS and
+   Linux alike: the router hands it NIOPosix's shared event loops rather than letting it pick
+   Network.framework on macOS. It was already resolved, as a dependency of Hummingbird's
+   HummingbirdTesting, so `Package.resolved` is unchanged. Its options map onto httpx's one for
+   one: 5 seconds to connect and `OPENJEV_FORWARD_TIMEOUT` for each read and write, upstream's
+   `httpx.Timeout(forward_timeout, connect=5.0)`; no redirect followed; HTTP/1.1; no body decoded;
+   and a refused connection reported at once rather than retried until the connect timeout. Its
+   errors become httpx's exception names, which the 503 repeats as upstream's
+   `type(e).__name__` does: `ConnectError`, `ConnectTimeout`, `ReadTimeout`, `WriteTimeout`,
+   `ReadError`, `WriteError`, `RemoteProtocolError` and `UnsupportedProtocol`
+   (`ForwardingFailure`). Any other error is the 503 naming its Swift type, as a backend's is
+   (D-031 item 7). The cost is the binary: `openjev` now links AsyncHTTPClient and swift-nio-ssl
+   with BoringSSL, which the server did not use before. A stripped release build for Linux grows
+   from 11.2 MB to 17.4 MB.
+2. **One client per forwarded request.** The client is made when a request is forwarded and shut
+   down before the route returns, so nothing outlives the request and the server has no client to
+   shut down when it stops. A routed server that closes an idle keep-alive connection cannot fail
+   the next forwarded request, a race httpx's connection pool has. The cost is a new connection
+   for each forwarded request, a fraction of a millisecond on the same Mac or the LAN, against
+   reads of milliseconds; an `https` route pays a TLS handshake each time.
+3. **What is forwarded and what comes back,** as upstream: after the body has passed validation
+   and before the model name is checked, a request whose model has a route and is not accepted
+   here, so the SDK aliases and the served names stay local; the bytes the client sent; the first
+   field of `authorization`, `x-origin-secret` and `content-type`, as Starlette reads a header; and
+   the routed status and body unchanged, with only `content-type` and `retry-after`, several
+   fields joined with `, ` as httpx joins them, and no `content-type` when the routed server sent
+   none. This server's request ids and `server-timing` replace the routed server's. The questions
+   cap is the routed server's to apply, since upstream forwards before it. A route URL with
+   `user:password@` sends them as `Authorization: Basic` in place of the client's header, as httpx
+   0.28.1 does (recorded with it). Departures: the client adds only `host` and `content-length`,
+   where httpx adds `accept`, `accept-encoding: gzip, deflate`, `connection` and `user-agent`; it
+   ignores `HTTP_PROXY` and the other proxy variables httpx reads; and a route URL Foundation
+   cannot parse is the 503 `InvalidURL`, where httpx's `InvalidURL` is not an `HTTPError` and
+   upstream answers Starlette's bare 500. The routed answer is read whole without a bound, as
+   httpx's `r.content` is: the routed server is the operator's own.
+4. **Model time, cancellation and the log.** The time from sending the request to reading the
+   whole answer is added to the request's `ModelTimeRecorder` when the exchange ends, failed or
+   not, as upstream's `finally` adds it to `model_ns`, so `server-timing`'s `model` reports it;
+   this is D-038 item 7's follow-up. A client that goes away cancels the exchange, which closes the
+   connection to the routed server, as it cancels a decision (D-038 item 8); upstream runs the
+   forward to its end. A failed exchange is logged at error level with its 503's message and the
+   routed model's name, as a backend failure is (D-031 item 8), never the URL.
+5. **The listing.** `GET /v1/models` and `openjev models` list the backend's models, then each
+   routed name the backend does not accept, in the routes' order: `KnownEncoderModels`' entry for
+   a name an encoder backend serves, and an empty description and release date for any other.
+   Upstream's `known` holds only `ENCODER_MODELS`, so a route named `openjev-0.1` is listed with
+   empty texts too, and `diffusiongemma-26b`, which the DiffusionGemma backend lists without
+   accepting it for System One, is listed twice when routed, as upstream lists it. The routed
+   servers are never asked, so the listing holds while one is down. `openjev decide` never
+   forwards: it answers with the loaded model, so a model only a route serves is the
+   unknown-model 400 there.
+6. **The routes in the log.** `serve` logs `forwarding {name} to {url}` for each route after the
+   settings line, the URL without the `user:password@` it may hold; the settings line keeps
+   naming the routes alone.
+7. **Parsing.** `parse_routes` is read as Python reads it, code point by code point, so a `,` or
+   an `=` followed by a combining mark still separates, and trimmed of the characters
+   `str.strip()` removes, which include U+001C to U+001F that Foundation's whitespace set leaves.
+   A URL is not checked at startup, as upstream checks only the `name=url` shape; an unusable one
+   is the 503 of item 3 at request time.
+8. **The stub server.** `openjev-stub-server` is an executable target that is not a product and
+   never ships: the real application, `DecisionServer` and the `OPENJEV_*` settings over
+   OpenJevTestSupport's stubs, `StubBackend` behind the DiffusionGemma engine for `mlx`, the
+   default, and `StubQuestionReadBackend` for `laya` and `verdict`, so the suite runs on Linux,
+   where Core ML does not exist. It prints the port it bound alone on a line, which is how a
+   caller learns it when `OPENJEV_PORT` is 0, logs to standard error, and exits 0 on SIGTERM.
+   Prompts the tokenizer fixtures never recorded get stand-in ids from `AnyPromptTokenizer`, which
+   moves from the server tests into OpenJevTestSupport; the stubs never read them.
+9. **The suite.** `Tools/sdk-compat/run.py`, standard library only, starts three stub servers
+   with `OPENJEV_API_KEY=sk-test`: the DiffusionGemma stub with `laya-1.0` routed to the second, a
+   Laya stub, and one with `OPENJEV_MAX_QUEUE=0`, which refuses every request with the 529. Each
+   SDK reaches them through a recording proxy and runs each scenario in a process of its own,
+   configured from `TYPESAFE_BASE_URL` and `TYPESAFE_API_KEY`; the runner checks what the SDK
+   observed and the exchanges the proxy recorded, prints every exchange of a failed check and
+   exits 1. The scenarios: Jev's quickstart decodes, with the SDK's default model `jev-latest`
+   (`SystemOneResponse` with `.choices`, `.scores` and `.nouls`); the listing, routed model
+   included; a wrong key raises the authentication error with the request id and is not retried;
+   the 529 is retried twice, each time after the one second `retry-after` asks for, with
+   `X-TypeSafe-Retry-Count`, then raised as `TypeSafeInternalServerError`, a `TypeSafeAPIError`;
+   `samples: 33` raises the 422 joined as `samples: Input should be less than or equal to 32`; and
+   a routed model's answers come back through the forwarding, which exercises issue #38 with real
+   SDKs. The TypeScript SDK runs the same six under Node.js. The pins are typesafe-sdk 0.7.2
+   (2026-09-26) with its dependencies in `requirements.txt`, a complete lock for CPython 3.12, and
+   `@typesafe-ai/sdk` 0.6.0 (2026-09-15) in `package.json` and `package-lock.json`, the newest
+   releases on PyPI and npm on 2026-10-01.
+10. **JevSwiftSDK.** It takes a base URL, as `JevConfiguration(baseURL:)` and from
+    `TYPESAFE_BASE_URL`, so the runner's `--swift-sdk` builds it at 0.1.0 (commit `ce35d20`) in a
+    package of its own, `Tools/sdk-compat/swift`, and CI runs it: the listing, the wrong key, the
+    529 and the routed answers. It sends only state, model and questions, so `samples: 33` cannot
+    reach the server. It writes the questions and the choice criteria from Swift dictionaries,
+    whose order changes from run to run, and the DiffusionGemma stub answers from tokenizations
+    upstream's tests recorded in their order, so its quickstart answers are read through the Laya
+    stub, in the routed scenario. Jev defines the labels and the answer order by that order, so
+    against a real model the SDK's answers to one request change between runs.
+
+Alternatives rejected. (a) URLSession: on Linux it is FoundationNetworking over libcurl, which
+behaves unlike macOS's CFNetwork; it has one timeout for the connection and the reads, so a route
+whose host drops the connection attempt waits out `OPENJEV_FORWARD_TIMEOUT` and is a `ReadTimeout`
+where upstream answers a `ConnectTimeout` after 5 seconds, and its `URLError.timedOut` cannot tell
+the two apart; and it follows redirects and adds `User-Agent`, `Accept-Language` and
+`Accept-Encoding` unless a delegate stops it. (b) One long-lived client shut down with the server:
+`OpenJevApplication.router(settings:service:)` has no end to shut it down at, and AsyncHTTPClient
+stops a debug build whose client is released without a shutdown. (c) A hidden `--backend stub` in
+`openjev`, enabled by a variable: D-038 item 10 kept stubs out of the shipped binary, and the
+binary would link the fixture loaders. (d) Recording exchanges through each SDK's hooks, httpx2's
+event hooks and a custom `fetch`: a proxy records the three SDKs alike, as the server saw them.
+
+Consequences. D-030 item 2's routes and D-038 item 7's forwarded model time are done. The suite
+runs Node.js 20, the TypeScript SDK's floor, which reached its end of life in April 2026. When an
+SDK publishes a release, update its pin and the lock with it; the CI job then says whether this
+server still satisfies it.
+
+Status. Proposed with issues #38 and #39.

@@ -1,0 +1,5 @@
+# Made by make sdk-compat-venv and run.py, never committed. The virtual environment and the Swift
+# build folder are ignored at the repository's root.
+typescript/node_modules/
+swift/Package.resolved
+exchanges/

@@ -1,0 +1,16 @@
+# Complete lock for Tools/sdk-compat/.venv (make sdk-compat-venv), CPython 3.12.
+# typesafe-sdk is the SDK under test, pinned to its newest release, 0.7.2 (2026-09-26); the rest
+# are its dependencies at the versions that release resolved to, so a run never changes under us.
+annotated-types==0.8.0
+anyio==4.15.1
+h11==0.16.0
+httpcore2==2.13.1
+httpx2==2.13.1
+idna==3.20
+pydantic==2.13.5
+pydantic_core==2.46.5
+tenacity==9.1.4
+truststore==0.10.4
+typesafe-sdk==0.7.2
+typing-inspection==0.4.4
+typing_extensions==4.16.0
