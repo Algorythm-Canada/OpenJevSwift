@@ -299,10 +299,12 @@ QuestionReadBackendProvider { _ in
 `EncoderPackageStore(environment:)` uses the folder `OPENJEV_ENCODER_MODELS` names when it is set,
 as the converters in `Tools/encoders` write it. Otherwise it downloads Verdict's package, tokenizer
 and calibrator to Application Support on first use and checks every file's SHA-256 against the
-manifest the library embeds (D-033). `VerdictBackend.load(configuration:)` takes the three
-locations directly. Both loaders build for the package's macOS 14 floor and throw on an OS
-older than macOS 15 or iOS 18, which the Core ML packages need (D-034). The provider builds the `EncoderDecisionEngine` from `OPENJEV_ENCODER_BATCH`,
-`OPENJEV_MAX_QUEUE` and `OPENJEV_WARMUP`, and the warm-up read loads the first Core ML function.
+manifest the library embeds, once the package's release is published; until then it refuses with
+`EncoderPackageError.packageDownloadsUnavailable` (D-033). `VerdictBackend.load(configuration:)`
+takes the three locations directly. Both loaders build for the package's macOS 14 floor and throw on
+an OS older than macOS 15 or iOS 18, which the Core ML packages need (D-034). The provider builds
+the `EncoderDecisionEngine` from `OPENJEV_ENCODER_BATCH`, `OPENJEV_MAX_QUEUE` and `OPENJEV_WARMUP`,
+and the warm-up read loads the first Core ML function.
 
 ## Platform support matrix
 

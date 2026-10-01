@@ -31,13 +31,14 @@ struct VerdictBackendTests {
         let result = try await backend.readBatch(
             state: .string("state"), stateText: "state", questions: questions)
         #expect(result.inputTokens == 8)
+        // Upstream compares with pytest.approx, a relative 1e-6, which float32 arithmetic meets.
         // k = 3 has its own temperature (1.0); the abstention's mass is renormalised away.
         let noul = [1 / (1 + exp(-2.0)), 1 / (1 + exp(2.0))]
-        #expect(zip(result.probabilities[0], noul).allSatisfy { abs($0 - $1) < 1e-9 })
+        #expect(zip(result.probabilities[0], noul).allSatisfy { abs($0 - $1) <= 1e-6 * $1 })
         // k = 4 has no entry, so the global temperature (2.0) applies.
         let e = [1.0, 3.0, 0.0].map { exp($0 / 2) }
         let choice = e.map { $0 / e.reduce(0, +) }
-        #expect(zip(result.probabilities[1], choice).allSatisfy { abs($0 - $1) < 1e-9 })
+        #expect(zip(result.probabilities[1], choice).allSatisfy { abs($0 - $1) <= 1e-6 * $1 })
         #expect(await model.rowCounts == [2])
     }
 

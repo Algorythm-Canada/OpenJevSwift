@@ -3,8 +3,8 @@
 Scripts and a Swift harness that answer spike #56: should Verdict and Laya, upstream's two
 ModernBERT encoder models, run on Core ML or on an MLX port, on iOS and macOS? The findings are in
 [docs/spikes/encoder-runtime.md](../../docs/spikes/encoder-runtime.md). The converters and
-`manifest.py` also produce and describe the packages that `OpenJevEncoders` downloads. Nothing here is built by
-the main package, and no weights, converted packages or tokenizer files are committed.
+`manifest.py` also produce and describe the packages that `OpenJevEncoders` downloads. Nothing here
+is built by the main package, and no weights, converted packages or tokenizer files are committed.
 
 | Path | What it is |
 |---|---|
@@ -55,7 +55,8 @@ and converted packages.
 
 `OpenJevEncoders` downloads Verdict's package on first use and checks every file against the
 manifest it embeds, `Sources/OpenJevEncoders/Store/EncoderPackageManifest+Verdict.swift` (D-033).
-After converting a new package, from the repository root:
+Until the package is published, the manifest keeps downloads off (`PACKAGE_DOWNLOADS_ENABLED` in
+`manifest.py`). After converting a new package, from the repository root:
 
 ```bash
 python3 Tools/encoders/manifest.py
@@ -65,12 +66,13 @@ It rewrites the manifest from `verdict-m18-fp16.mlpackage` (in `OPENJEV_ENCODER_
 `~/Library/Caches/OpenJevSwift/encoders`) and the checkpoint's tokenizer and calibrator (in the
 Hugging Face cache), and prints the commands that create `Algorythm-Canada/openjev-models` once
 (with the Apache-2.0 license as its first commit, since a release needs a commit to tag), copy the
-three package files under their asset names and upload them to a release. It uploads nothing
-itself; `--gh gh` prints `gh` instead of `ghp`, and `--check` fails when the committed manifest
-no longer matches the package. Every conversion writes new identifiers into the package's
-Manifest.json, so a package converted on another machine never matches the published digests:
-publish from the machine whose package the manifest describes. Commit the manifest and publish the release together: a new
-package needs a new tag (`--tag`), and a published asset is never replaced.
+three package files under their asset names and upload them to a release. It uploads nothing itself;
+`--gh gh` prints `gh` instead of `ghp`, and `--check` fails when the committed manifest no longer
+matches the package. Every conversion writes new identifiers into the package's Manifest.json, so a
+package converted on another machine never matches the published digests: publish from the machine
+whose package the manifest describes. A new package needs a new tag (`--tag`), and a published asset
+is never replaced. Once the uploaded assets match the manifest, set
+`PACKAGE_DOWNLOADS_ENABLED = True`, run the script again and commit the manifest.
 
 ## Known problems
 

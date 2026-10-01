@@ -40,22 +40,37 @@ struct VerdictCalibrationTests {
         #expect(
             calibration.probabilities(logits: [-.infinity, -.infinity, -.infinity], k: 3)
                 == [0.5, 0.5])
-        #expect(calibration.probabilities(logits: [0, 1, 200], k: 3) == [0.5, 0.5])
+        // Both options' float32 exponentials underflow to zero, as in upstream's PyTorch, which
+        // returns the uniform answer here; double arithmetic would answer [0.3775, 0.6225].
+        #expect(calibration.probabilities(logits: [0, 1, 400], k: 3) == [0.5, 0.5])
         // A logit of minus infinity for one option is a finite answer, not a fallback.
         #expect(calibration.probabilities(logits: [-.infinity, 0, 0], k: 3) == [0, 1])
         // A question without options, only the abstention, has no distribution.
         #expect(calibration.probabilities(logits: [1, 2, 3], k: 1) == [])
     }
 
+    @Test("Subnormal float32 exponentials give upstream's answer, not the double one")
+    func subnormalExponentials() {
+        // Upstream's PyTorch (torch 2.13 on the CPU) answers [0.3802816867828369,
+        // 0.6197183132171631] for these logits: e^-100 and e^-99.5 survive as float32
+        // subnormals. Double arithmetic would answer [0.3775, 0.6225].
+        let p = VerdictCalibration(temperature: 2, perK: [:]).probabilities(
+            logits: [0, 1, 200], k: 3)
+        #expect(p.count == 2)
+        #expect(abs(p[0] - 0.380_281_686_782_836_9) < 1e-7, "\(p)")
+        #expect(abs(p[1] - 0.619_718_313_217_163_1) < 1e-7, "\(p)")
+    }
+
     @Test("Reads only the first k logits, and drops and renormalises the abstention")
     func firstKAndAbstention() {
         let calibration = VerdictCalibration(temperature: 1, perK: [:])
         // The abstention (third) takes most of the mass; the options share the rest 1:e.
+        // The arithmetic is float32, as upstream's, so the comparison allows float32 rounding.
         let p = calibration.probabilities(logits: [0, 1, 5, 99, 99], k: 3)
         #expect(p.count == 2)
-        #expect(abs(p[0] - 1 / (1 + exp(1.0))) < 1e-12)
-        #expect(abs(p[1] - exp(1.0) / (1 + exp(1.0))) < 1e-12)
-        #expect(abs(p.reduce(0, +) - 1) < 1e-12)
+        #expect(abs(p[0] - 1 / (1 + exp(1.0))) < 1e-6)
+        #expect(abs(p[1] - exp(1.0) / (1 + exp(1.0))) < 1e-6)
+        #expect(abs(p.reduce(0, +) - 1) < 1e-6)
     }
 
     @Test("calibrator.json decodes as upstream reads it")

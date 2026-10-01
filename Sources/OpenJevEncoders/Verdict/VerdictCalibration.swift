@@ -13,8 +13,11 @@ import Foundation
 /// probability is dropped and the rest renormalised. When that is not finite the answer is
 /// uniform over the `k - 1` options.
 ///
-/// The softmax, abstention drop and renormalisation use float32, as upstream does. Only the
-/// returned probabilities are converted to `Double`.
+/// Upstream computes in float32 on the CPU, and so does this: the division by the temperature,
+/// the softmax, the abstention drop and the renormalisation run in `Float`, and only the result
+/// is widened to `Double`. That keeps upstream's underflow behaviour. When every kept exponential
+/// underflows to zero, the result is not finite and the answer is uniform, which upstream writes
+/// as Python doubles, `1.0 / (k - 1)`, as this does.
 public struct VerdictCalibration: Sendable, Hashable, Codable {
     /// The global temperature, calibrator.json's `temperature`.
     public var temperature: Double
@@ -99,7 +102,7 @@ public struct VerdictCalibration: Sendable, Hashable, Codable {
         let keptTotal = kept.reduce(0, +)
         let probabilities = kept.map { $0 / keptTotal }
         guard probabilities.reduce(0, +).isFinite else {
-            return Array(repeating: Double(1 / Float(kept.count)), count: kept.count)
+            return Array(repeating: 1.0 / Double(kept.count), count: kept.count)
         }
         return probabilities.map(Double.init)
     }

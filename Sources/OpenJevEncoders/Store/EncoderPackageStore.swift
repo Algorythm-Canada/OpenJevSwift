@@ -254,6 +254,7 @@ public struct EncoderPackageStore: Sendable {
 
     /// Rejects symlinks in a destination's ancestors and makes sure its resolved path remains
     /// under the resolved package root, itself under the resolved store directory.
+    @discardableResult
     private static func checkDestination(root: URL, storeDirectory: URL, path: String) throws
         -> URL
     {

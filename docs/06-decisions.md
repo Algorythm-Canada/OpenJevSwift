@@ -1099,35 +1099,41 @@ Decision.
 5. **Storage.** `EncoderPackageStore` keeps the files in
    `Application Support/OpenJevSwift/encoders/{package}/`, excluded from backups: the package under
    `{package}.mlpackage/`, the tokenizer and the calibrator under `tokenizer/`. Each download goes
-   to a temporary file and is moved into place only when its size and SHA-256 match the manifest.
-   A mismatch is refused with an error naming the file, its URL and both digests. `verified.json`
-   records the digest each file was checked against, so a later launch downloads only what is
-   missing or what a newer manifest changed, without hashing 300 MB at every launch. A package
-   that needs a newer OS than the device runs is refused before anything is downloaded.
-   `CompiledEncoderModel` compiles the package once with `MLModel.compileModel(at:)` and keeps
-   `{package}.mlmodelc` beside it, compiling again when the package's files change.
+   to a temporary file and is moved into place only when its size and SHA-256 match the manifest. A
+   mismatch is refused with an error naming the file, its URL and both digests. Every destination
+   must resolve inside the package's folder with no symbolic link on the way, so a link left in the
+   folder cannot redirect a checked download. `verified.json` records the digest each file was
+   checked against, so a later launch downloads only what is missing or what a newer manifest
+   changed, without hashing 300 MB at every launch. A package that needs a newer OS than the device
+   runs is refused before anything is downloaded. `CompiledEncoderModel` compiles the package once
+   with `MLModel.compileModel(at:)` and keeps `{package}.mlmodelc` beside it, compiling again when
+   the package's files change.
 6. **Local packages.** When `OPENJEV_ENCODER_MODELS` names a folder, the store downloads and checks
    nothing: the package is `{folder}/{package}.mlpackage`, as the converters write it, and the
    tokenizer and the calibrator are read from `{folder}/{package}/tokenizer/`, else from the
-   checkpoint's snapshot in the Hugging Face cache. The library never reads the environment
-   itself: `EncoderPackageStore(environment:)` takes the one the CLI passes.
+   checkpoint's snapshot in the Hugging Face cache. The OS check applies there too. The library
+   never reads the environment itself: `EncoderPackageStore(environment:)` takes the one the CLI
+   passes.
 
-Publishing is a manual step after review: `python3 Tools/encoders/manifest.py` rewrites the
-manifest (unchanged for the spike's package) and prints the commands. They create the repository
-once, with the Apache-2.0 license as its first commit, since a release needs a commit to tag;
-then they copy the three files under their asset names, create the release and upload them.
+Publishing is a manual step after review: `python3 Tools/encoders/manifest.py` rewrites the manifest
+(unchanged for the spike's package) and prints the commands. They create the repository once, with
+the Apache-2.0 license as its first commit, since a release needs a commit to tag; then they copy
+the three files under their asset names, create the release and upload them. Once the uploaded
+assets match the manifest, `PACKAGE_DOWNLOADS_ENABLED` in the script turns the downloads on, and the
+script runs again.
 
-Alternatives rejected. (a) The organisation's Hugging Face account, the spike report's
-suggestion: it needs a new account, where GitHub needs none; it stays open for a later move,
-since only the URLs change. (b) An archive per package: an unzip on iOS and a second copy on disk while
-it expands. (c) Git LFS in this repository: the repository never holds weights
-(CONTRIBUTING.md). (d) The package in the app bundle: rejected by D-011.
+Alternatives rejected. (a) The organisation's Hugging Face account, the spike report's suggestion:
+it needs a new account, where GitHub needs none; it stays open for a later move, since only the URLs
+change. (b) An archive per package: an unzip on iOS and a second copy on disk while it expands. (c)
+Git LFS in this repository: the repository never holds weights (CONTRIBUTING.md). (d) The package in
+the app bundle: rejected by D-011.
 
-Consequences. Until the release exists, a download fails with HTTP 404
-(`EncoderPackageError.httpStatus`); a deployment sets `OPENJEV_ENCODER_MODELS` in the meantime. A
-changed package needs a new release tag and a new manifest, and a published asset is never
-replaced. `openjev-models` should carry the Apache-2.0 license and a notice crediting Heman10x's
-checkpoint, and Laya's authors once #58 publishes its packages the same way.
+Consequences. Until the release exists, the embedded manifest has `packageDownloadsEnabled` false,
+and the store refuses with `EncoderPackageError.packageDownloadsUnavailable` instead of requesting
+assets that are not there; a deployment sets `OPENJEV_ENCODER_MODELS` in the meantime. A changed
+package needs a new release tag and a new manifest, and a published asset is never replaced.
+`openjev-models` should carry the Apache-2.0 license and a notice crediting Heman10x's checkpoint,
+and Laya's authors once #58 publishes its packages the same way.
 
 Status. Proposed with issue #57; the host needs the maintainers' confirmation.
 
@@ -1153,12 +1159,14 @@ Decision.
    for the tokenizer and the calibrator; the weights are the Core ML package of D-033.
 4. **Compute units.** `EncoderComputeUnits` has no `.all`, so D-011's rule against it holds by
    type; `.cpuOnly` remains for tests.
-5. **Tolerance.** The calibration runs in double on the float32 logits, as the spike's harness
-   did, where upstream runs in float32; the two agree within 1e-6 on the corpus and differ only
-   where float32 underflows. The Core ML acceptance bounds are the spike's scope notes rather
-   than the issue's 0.007 (bfloat16 moved probabilities by up to 0.0115 on this corpus): the
-   largest difference at most 0.02, the mean at most 0.003, and the top answer unchanged wherever
-   the reference's top two are at least 0.01 apart.
+5. **Tolerance.** The calibration runs in float32, as upstream's does, and widens only the result to
+   double, so it underflows where upstream's does. At temperature 2, the logits `[0, 1, 400]` fall
+   back to the uniform answer and `[0, 1, 200]` keep their subnormal exponentials, and both answers
+   equal upstream's PyTorch; double arithmetic answers neither. The uniform answer is upstream's
+   Python double, `1.0 / (k - 1)`. The Core ML acceptance bounds are the spike's scope notes rather
+   than the issue's 0.007 (bfloat16 moved probabilities by up to 0.0115 on this corpus): the largest
+   difference at most 0.02, the mean at most 0.003, and the top answer unchanged wherever the
+   reference's top two are at least 0.01 apart.
 6. **A model's wrong output is an error.** A model that returns the wrong number of rows, or fewer
    logits than a question's labels, throws `EncoderModelError`, which the server answers as a
    backend failure, where upstream would raise from the same place or broadcast silently. A score
@@ -1167,9 +1175,10 @@ Decision.
 7. **The core gains `Double.pythonRepr`**, CPython's `repr(float)`, for the score labels'
    `float(i)`. It lays out finite values as the JSON writer does and is checked against the whole
    `python-json/float_repr.json` table.
-8. **The loaders check the OS when they run.** The Core ML types are `@available(macOS 15, iOS
-   18, *)`, as D-011 item 4 says, but `VerdictBackend.load(configuration:)` and `load(from:)` are
-   not: they throw `EncoderLoadError.unsupportedOperatingSystem` on an older OS. The CLI and the
-   server build for the package's macOS 14 floor, and this keeps their registration one line.
+8. **The loaders check the OS when they run.** The Core ML types are
+   `@available(macOS 15, iOS 18, *)`, as D-011 item 4 says, but
+   `VerdictBackend.load(configuration:)` and `load(from:)` are not: they throw
+   `EncoderLoadError.unsupportedOperatingSystem` on an older OS. The CLI and the server build for
+   the package's macOS 14 floor, and this keeps their registration one line.
 
 Status. Proposed with issue #57.
