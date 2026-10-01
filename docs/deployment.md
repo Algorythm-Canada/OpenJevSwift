@@ -63,12 +63,11 @@ The first start compiles the package and keeps the result beside it
 (`verdict-m18-fp16.mlmodelc`); later starts reuse the compiled copy until the package changes.
 
 Laya on a Mac runs its multifunction package, `laya-m18-fp16` (810 MB), with its tokenizer and
-`rl_agent_config.json` (D-037). Its release is not published yet, so its downloads are off:
-without `OPENJEV_ENCODER_MODELS`, `OPENJEV_BACKEND=laya` exits 3 with
-`remote files for laya-m18-fp16 are not yet published; set OPENJEV_ENCODER_MODELS to a local
-models folder`. Convert it with `Tools/encoders/convert_laya.py` and point the variable at the
-folder that holds it, as for a local Verdict package. On an M3 Max, the first `decide` took 12
-seconds, most of it compiling the package, and later ones 2.5 seconds.
+`rl_agent_config.json` (D-037). Its release `laya-m18-fp16-v1` is published, so without
+`OPENJEV_ENCODER_MODELS` the first start downloads about 850 MB into Application Support and
+checks every file's SHA-256; a local package converted with `Tools/encoders/convert_laya.py` works
+through the variable, as for Verdict. On an M3 Max, the first `decide` took 12 seconds, most of it
+compiling the package, and later ones 2.5 seconds.
 
 ## Settings
 

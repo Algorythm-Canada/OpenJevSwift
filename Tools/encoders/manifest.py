@@ -39,11 +39,11 @@ LINE_LENGTH = 100  # .swift-format's lineLength
 # Enable a package's downloads only after its release assets are published and verified.
 PACKAGE_DOWNLOADS_ENABLED = {
     "verdict-m18-fp16": True,  # verdict-m18-fp16-v1 is published; its assets match (D-033).
-    "laya-m18-fp16": False,
-    "laya-f18-b1s128-fp16": False,
-    "laya-f18-b1s256-fp16": False,
-    "laya-f18-b1s512-fp16": False,
-    "laya-f18-b1s1024-fp16": False,
+    "laya-m18-fp16": True,  # laya-m18-fp16-v1 is published; its assets match (D-033).
+    "laya-f18-b1s128-fp16": True,  # laya-f18-b1s128-fp16-v1 is published; assets match.
+    "laya-f18-b1s256-fp16": True,  # laya-f18-b1s256-fp16-v1 is published; assets match.
+    "laya-f18-b1s512-fp16": True,  # laya-f18-b1s512-fp16-v1 is published; assets match.
+    "laya-f18-b1s1024-fp16": True,  # laya-f18-b1s1024-fp16-v1 is published; assets match.
 }
 # A published asset is never replaced: a changed package gets the next release number.
 RELEASE = {name: 1 for name in PACKAGE_DOWNLOADS_ENABLED}
