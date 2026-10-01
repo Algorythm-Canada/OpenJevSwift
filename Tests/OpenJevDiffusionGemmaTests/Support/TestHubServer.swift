@@ -160,10 +160,13 @@ final class TestHubServer: @unchecked Sendable {
             headers[line[..<colon].lowercased()] = line[line.index(after: colon)...]
                 .trimmingCharacters(in: .whitespaces)
         }
-        let (forced, corrupt, interrupt, redirect) = lock.withLock {
-            seen.append(Request(path: path, headers: headers))
-            return (status, self.corrupt, interruptAfter, self.redirect)
-        }
+        lock.lock()
+        seen.append(Request(path: path, headers: headers))
+        let forced = status
+        let corrupt = self.corrupt
+        let interrupt = interruptAfter
+        let redirect = self.redirect
+        lock.unlock()
         if let forced {
             send(connection, status: forced, body: Data(#"{"error": "refused"}"#.utf8))
             return

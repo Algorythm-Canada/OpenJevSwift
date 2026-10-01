@@ -84,7 +84,7 @@ struct CommandTests {
     }
 
     @Test(
-        "mlx over a directory that is not a checkpoint exits 3 naming the variable and the file",
+        "mlx over a directory that is not a checkpoint exits 3; on Linux mlx is unavailable",
         arguments: ["serve", "decide"])
     func mlxNotACheckpoint(subcommand: String) async throws {
         let directory = FileManager.default.temporaryDirectory
@@ -95,8 +95,15 @@ struct CommandTests {
         let mlx = await CommandHarness.run(
             [subcommand, "--backend", "mlx"], environment: environment)
         #expect(mlx.status == 3)
-        #expect(mlx.errors.hasPrefix("openjev: openjev-0.1 failed to load (OPENJEV_BACKEND=mlx): "))
-        #expect(mlx.errors.contains("config.json"))
+        if canImportDiffusionGemma {
+            #expect(
+                mlx.errors.hasPrefix("openjev: openjev-0.1 failed to load (OPENJEV_BACKEND=mlx): "))
+            #expect(mlx.errors.contains("config.json"))
+        } else {
+            // Linux: MLX does not exist, so mlx is known and unavailable.
+            #expect(mlx.errors.hasPrefix("openjev: OPENJEV_BACKEND=mlx: "))
+            #expect(mlx.errors.contains("Apple silicon"))
+        }
         // The default backend is upstream's, mlx.
         #expect(await CommandHarness.run([subcommand], environment: environment).status == 3)
     }

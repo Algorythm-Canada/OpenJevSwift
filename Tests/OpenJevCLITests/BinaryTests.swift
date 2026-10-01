@@ -42,7 +42,9 @@ struct BinaryTests {
         #expect(usage.errors.contains("Unknown option '--prot'"))
     }
 
-    @Test("mlx over a directory that is not a checkpoint exits 3 naming what it lacks")
+    @Test(
+        "mlx over a non-checkpoint directory exits 3 naming what it lacks; on Linux mlx is unavailable"
+    )
     func mlxNotACheckpoint() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("openjev-not-a-checkpoint-\(UUID().uuidString)")
@@ -51,13 +53,19 @@ struct BinaryTests {
         let environment = BuiltBinary.environment(["OPENJEV_MLX_MODEL": directory.path])
         let outcome = try await BuiltBinary.run(
             ["serve", "--backend", "mlx"], environment: environment)
+        #if canImport(OpenJevDiffusionGemma)
+            let expected = "config.json"
+        #else
+            // Linux: MLX does not exist, so mlx is known and unavailable.
+            let expected = "Apple silicon"
+        #endif
         #expect(outcome.status == 3)
         #expect(outcome.errors.contains("OPENJEV_BACKEND=mlx"))
-        #expect(outcome.errors.contains("config.json"))
+        #expect(outcome.errors.contains(expected))
         // mlx is the default backend, as upstream's settings have it in this port.
         let byDefault = try await BuiltBinary.run(["serve"], environment: environment)
         #expect(byDefault.status == 3)
-        #expect(byDefault.errors.contains("config.json"))
+        #expect(byDefault.errors.contains(expected))
     }
 
     @Test(

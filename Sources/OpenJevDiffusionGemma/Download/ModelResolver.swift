@@ -301,34 +301,11 @@ final class FileTransfer: NSObject, URLSessionDataDelegate, @unchecked Sendable 
         _ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
         completionHandler: @escaping @Sendable (URLSession.ResponseDisposition) -> Void
     ) {
-        let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-        let disposition: URLSession.ResponseDisposition = lock.withLock {
-            status = code
-            switch code {
-            case 200 where offset > 0:
-                // The server ignored the range: the file starts again.
-                do {
-                    try handle.truncate(atOffset: 0)
-                    bytes = 0
-                    return .allow
-                } catch {
-                    failure = "\(error)"
-                    return .cancel
-                }
-            case 200:
-                return .allow
-            case 206:
-                let range = (response as? HTTPURLResponse)?.value(
-                    forHTTPHeaderField: "Content-Range")
-                if Self.rangeStart(range) == offset {
-                    return .allow
-                }
-                restart = true
-                return .cancel
-            default:
-                return .cancel
-            }
-        }
+        let http = response as? HTTPURLResponse
+        lock.lock()
+        let disposition = accept(
+            status: http?.statusCode ?? 0, range: http?.value(forHTTPHeaderField: "Content-Range"))
+        lock.unlock()
         completionHandler(disposition)
     }
 
@@ -346,19 +323,52 @@ final class FileTransfer: NSObject, URLSessionDataDelegate, @unchecked Sendable 
         completionHandler(request)
     }
 
-    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
-        let total: Int? = lock.withLock {
+    /// Whether to take the response's body, and what it means for the file. Called under the
+    /// lock.
+    private func accept(status code: Int, range: String?) -> URLSession.ResponseDisposition {
+        status = code
+        switch code {
+        case 200 where offset > 0:
+            // The server ignored the range: the file starts again.
             do {
-                try handle.write(contentsOf: data)
-                bytes += data.count
-                written += data.count
-                return bytes
+                try handle.truncate(atOffset: 0)
+                bytes = 0
+                return .allow
             } catch {
                 failure = "\(error)"
-                dataTask.cancel()
-                return nil
+                return .cancel
             }
+        case 200:
+            return .allow
+        case 206 where Self.rangeStart(range) == offset:
+            return .allow
+        case 206:
+            restart = true
+            return .cancel
+        default:
+            return .cancel
         }
+    }
+
+    /// Appends a chunk to the file and returns the bytes in it, or nil after a write error.
+    /// Called under the lock.
+    private func append(_ data: Data, cancelling task: URLSessionDataTask) -> Int? {
+        do {
+            try handle.write(contentsOf: data)
+            bytes += data.count
+            written += data.count
+            return bytes
+        } catch {
+            failure = "\(error)"
+            task.cancel()
+            return nil
+        }
+    }
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        lock.lock()
+        let total = append(data, cancelling: dataTask)
+        lock.unlock()
         if let total {
             onBytes(total)
         }
@@ -367,24 +377,20 @@ final class FileTransfer: NSObject, URLSessionDataDelegate, @unchecked Sendable 
     func urlSession(
         _ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?
     ) {
-        let (continuation, outcome) = lock.withLock {
-            let disposition = continuation
-            continuation = nil
-            var failure = failure
-            if failure == nil, let error, (200...299).contains(status), !restart {
-                failure = error.localizedDescription
-            }
-            if failure == nil, status == 0, let error {
-                failure = error.localizedDescription
-            }
-            return (
-                disposition,
-                Outcome(
-                    status: status, bytes: bytes, written: written, restart: restart,
-                    error: failure)
-            )
+        lock.lock()
+        let waiting = self.continuation
+        self.continuation = nil
+        var reason = self.failure
+        if reason == nil, let error, (200...299).contains(status), !restart {
+            reason = error.localizedDescription
         }
-        continuation?.resume(returning: outcome)
+        if reason == nil, status == 0, let error {
+            reason = error.localizedDescription
+        }
+        let outcome = Outcome(
+            status: status, bytes: bytes, written: written, restart: restart, error: reason)
+        lock.unlock()
+        waiting?.resume(returning: outcome)
     }
 
     /// The first byte of `bytes start-end/total`.
@@ -856,10 +862,10 @@ private final class ReportedBytes: @unchecked Sendable {
     private var last = 0
 
     func shouldReport(_ bytes: Int, every: Int) -> Bool {
-        lock.withLock {
-            guard bytes - last >= every else { return false }
-            last = bytes
-            return true
-        }
+        lock.lock()
+        defer { lock.unlock() }
+        guard bytes - last >= every else { return false }
+        last = bytes
+        return true
     }
 }
