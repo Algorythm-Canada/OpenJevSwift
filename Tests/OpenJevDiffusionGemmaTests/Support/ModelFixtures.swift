@@ -82,9 +82,19 @@ enum ModelFixtures {
         return TokenizerFixtures.cachedSnapshot
     }()
 
-    /// True when the checkpoint directory holds `config.json` and the shard index.
+    /// True when the checkpoint directory holds `config.json`, the shard index and every shard.
     static var checkpointAvailable: Bool {
-        ["config.json", "model.safetensors.index.json"].allSatisfy {
+        let configURL = checkpointDirectory.appendingPathComponent("config.json")
+        let indexURL = checkpointDirectory.appendingPathComponent("model.safetensors.index.json")
+        guard FileManager.default.fileExists(atPath: configURL.path),
+            let data = try? Data(contentsOf: indexURL)
+        else { return false }
+        struct Index: Decodable {
+            let weightMap: [String: String]
+            enum CodingKeys: String, CodingKey { case weightMap = "weight_map" }
+        }
+        guard let index = try? JSONDecoder().decode(Index.self, from: data) else { return false }
+        return Set(index.weightMap.values).allSatisfy {
             FileManager.default.fileExists(
                 atPath: checkpointDirectory.appendingPathComponent($0).path)
         }
