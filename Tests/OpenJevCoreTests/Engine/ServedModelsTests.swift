@@ -22,12 +22,14 @@ struct ServedModelsTests {
         }
     }
 
+    /// The listing recorded with `model_routes` set lists the routed models after the backend's
+    /// own, upstream's `models_list`.
     @Test("Every recorded listing, version and accepted name set is reproduced")
     func listings() throws {
         let listings = try #require(
             UpstreamFixtures.load("wire/models.json")["listings"]?.arrayValue)
-        var checked: Set<String> = []
-        for listing in listings where listing["model_routes"] == nil {
+        var checked: [String] = []
+        for listing in listings {
             let backend = try #require(listing["backend"]?.stringValue)
             let served = try #require(Self.served(backend: backend), "unknown backend \(backend)")
             #expect(
@@ -37,12 +39,29 @@ struct ServedModelsTests {
                 try #require($0.stringValue)
             }
             #expect(served.acceptedNames == Set(names), Comment(rawValue: backend))
+            let routes = listing["model_routes"]?.objectValue?.keys ?? []
             #expect(
-                try WireEncoder().string(ModelsResponse(models: served.listing))
+                try WireEncoder().string(
+                    ModelsResponse(models: served.listing(routedNames: routes)))
                     == listing["body_text"]?.stringValue, Comment(rawValue: backend))
-            checked.insert(backend)
+            checked.append(routes.isEmpty ? backend : "\(backend) with routes")
         }
-        #expect(checked == ["vllm", "mlx", "laya", "verdict", "clm", "jevk5"])
+        #expect(
+            checked == [
+                "vllm", "mlx", "laya", "verdict", "clm", "jevk5", "vllm with routes",
+            ])
+    }
+
+    @Test("A routed name this backend accepts is not listed again")
+    func routedNamesServedHere() {
+        let laya = ServedModels.encoder(KnownEncoderModels.laya)
+        #expect(
+            laya.listing(routedNames: ["verdict-1.4", "laya-1.0", "jev-latest", "openjev-0.1"])
+                == [
+                    KnownEncoderModels.laya, KnownEncoderModels.verdict,
+                    ModelInfo(name: "openjev-0.1", description: "", releaseDate: ""),
+                ])
+        #expect(laya.listing(routedNames: []) == laya.listing)
     }
 
     @Test("The SDK aliases are accepted by every variant")

@@ -301,6 +301,25 @@ struct CommandTests {
         #expect(loads.count == 0)
     }
 
+    @Test("models lists the routed models after the backend's, as the server does")
+    func modelsWithRoutes() async throws {
+        let listings = try #require(WireFixtures.load("models.json")["listings"]?.arrayValue)
+        let routed = try #require(listings.first { $0["model_routes"] != nil })
+        let routes = (routed["model_routes"]?.objectValue ?? [:]).map { name, url in
+            "\(name)=\(url.stringValue ?? "")"
+        }
+        #expect(routes == ["verdict-1.4=http://verdict:8000", "custom-model=http://custom:8000"])
+        let loads = LoadCounter()
+        // The recording's backend is vllm, whose listing is mlx's; the routed hosts are not asked.
+        let outcome = await CommandHarness.run(
+            ["models", "--backend", "mlx"],
+            environment: ["OPENJEV_MODEL_ROUTES": routes.joined(separator: ",")],
+            backends: CommandHarness.backends(loads: loads))
+        #expect(outcome.status == 0, "\(outcome.errors)")
+        #expect(outcome.output == routed["body_text"]?.stringValue)
+        #expect(loads.count == 0)
+    }
+
     @Test("models loads a backend whose listing only the loaded model knows")
     func modelsWithALoad() async throws {
         let loads = LoadCounter()
@@ -355,11 +374,12 @@ struct CommandTests {
                 + "warmup=on max_queue=512 max_questions=256 max_body_bytes=67108864 "
                 + "encoder_batch=16 encoder_models=downloads api_key=set origin_secret=set "
                 + "model_routes=verdict-1.4",
+            "info forwarding verdict-1.4 to http://127.0.0.1:9",
             "info loading laya-1.0 (OPENJEV_BACKEND=stub-encoder)",
             "info warming up",
             "info serving on 127.0.0.1:\(port)",
         ]
-        #expect(Array(lines.filter { !$0.contains("Server started") }.prefix(4)) == expected)
+        #expect(Array(lines.filter { !$0.contains("Server started") }.prefix(5)) == expected)
         #expect(lines.contains { $0.hasPrefix("info POST /v1/systemone 200 ") })
         #expect(lines.contains { $0.hasPrefix("info shutting down") })
         #expect(lines.contains("info released laya-1.0"))
