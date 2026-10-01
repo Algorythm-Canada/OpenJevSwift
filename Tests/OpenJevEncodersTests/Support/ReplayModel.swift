@@ -23,46 +23,62 @@ struct ReplayTokenizer: VerdictTokenizing {
     }
 }
 
-/// A model that returns the logits Fixtures/encoders recorded for the rows it is handed: each
-/// row's first k logits, then `filler` up to Verdict's 25, so a backend that reads past k gets
-/// visibly wrong probabilities. Rows with the same ids get their recorded logits in order.
+/// A model that returns the outputs Fixtures/encoders recorded for the rows it is handed, found
+/// by the rows' token ids. Rows with the same ids get their recorded outputs in order.
+///
+/// For Verdict each output is the row's first k logits, then `filler` up to the head's 25, so a
+/// backend that reads past k gets visibly wrong probabilities. For Laya it is a score per
+/// position, the recorded scores at the markers and `filler` elsewhere
+/// (``init(laya:filler:)``).
 actor ReplayModel: EncoderModelRunner {
     struct UnknownRow: Error, CustomStringConvertible {
         var ids: [Int]
-        var description: String { "no recorded logits for a row of \(ids.count) tokens" }
+        var description: String { "no recorded output for a row of \(ids.count) tokens" }
     }
 
-    /// One call: the rows' token ids and the attention masks' sums.
+    /// One call: the rows' token ids, the attention masks' sums and every row's planes.
     struct Call: Sendable {
         var ids: [[Int]]
         var maskSums: [Int]
+        var planes: [[[Int32]]]
     }
 
-    private var logits: [[Int]: [[Float]]]
-    private let width: Int
-    private let filler: Float
+    private var outputs: [[Int]: [[Float]]]
     private(set) var calls: [Call] = []
 
-    init(_ reads: [VerdictFixtures.Read], width: Int = 25, filler: Float = 50) {
-        var logits: [[Int]: [[Float]]] = [:]
-        for read in reads {
-            logits[read.inputIDs, default: []].append(read.logits)
+    /// A model that answers each row of `ids` with its `output`.
+    init(rows: [(ids: [Int], output: [Float])]) {
+        var outputs: [[Int]: [[Float]]] = [:]
+        for row in rows {
+            outputs[row.ids, default: []].append(row.output)
         }
-        self.logits = logits
-        self.width = width
-        self.filler = filler
+        self.outputs = outputs
+    }
+
+    /// Verdict's recorded logits, padded to `width` with `filler`.
+    init(_ reads: [VerdictFixtures.Read], width: Int = 25, filler: Float = 50) {
+        self.init(
+            rows: reads.map { read in
+                (
+                    read.inputIDs,
+                    read.logits
+                        + [Float](repeating: filler, count: max(0, width - read.logits.count))
+                )
+            })
     }
 
     func run(_ rows: [[[Int32]]]) throws -> [[Float]] {
         let ids = rows.map { $0[0].map { Int($0) } }
-        calls.append(Call(ids: ids, maskSums: rows.map { $0[1].reduce(0) { $0 + Int($1) } }))
+        calls.append(
+            Call(
+                ids: ids, maskSums: rows.map { $0[1].reduce(0) { $0 + Int($1) } }, planes: rows))
         return try ids.map { row in
-            guard var queue = logits[row], !queue.isEmpty else {
+            guard var queue = outputs[row], !queue.isEmpty else {
                 throw UnknownRow(ids: row)
             }
             let recorded = queue.removeFirst()
-            logits[row] = queue
-            return recorded + [Float](repeating: filler, count: max(0, width - recorded.count))
+            outputs[row] = queue
+            return recorded
         }
     }
 }
