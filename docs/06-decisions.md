@@ -1133,8 +1133,8 @@ Consequences. The release `verdict-m18-fp16-v1` was published on 2026-10-01 and 
 match the embedded manifest, so `packageDownloadsEnabled` is true and the store downloads the
 package on first use; a deployment without network sets `OPENJEV_ENCODER_MODELS` instead. A changed
 package needs a new release tag and a new manifest, and a published asset is never replaced.
-`openjev-models` should carry the Apache-2.0 license and a notice crediting Heman10x's checkpoint,
-and Laya's authors once #58 publishes its packages the same way.
+`openjev-models` carries the Apache-2.0 license and a NOTICE crediting Heman10x's checkpoint and
+Laya's authors.
 
 Laya (#58, D-037) adds five releases of the same shape: `laya-m18-fp16-v1`, the Mac's package
 (849 MB), and `laya-f18-b1s128-fp16-v1`, `laya-f18-b1s256-fp16-v1`, `laya-f18-b1s512-fp16-v1` and
@@ -1142,12 +1142,14 @@ Laya (#58, D-037) adds five releases of the same shape: `laya-m18-fp16-v1`, the 
 rl_agent_config.json are those of `convaiinnovations/laya-typed-decisions` at `1a793eb`, the
 tokenizer under the checkpoint's `tokenizer/`, and are not re-hosted. `EncoderPackageManifest.laya`
 and `layaByLength` describe them; `Tools/encoders/manifest.py --model laya` writes both and prints
-each release's commands, and each manifest keeps its downloads off until its release is published.
-The repository's NOTICE credits Heman10x's Verdict checkpoint and Laya by Nandakishor M / Convai
-Innovations (github.com/NandhaKishorM/laya); the script prints the command that adds it.
+each release's commands. The five releases were published on 2026-10-01, each asset verified by
+download against its manifest, and every Laya manifest has its downloads on. The repository's
+NOTICE credits Heman10x's Verdict checkpoint and Laya by Nandakishor M / Convai Innovations
+(github.com/NandhaKishorM/laya).
 
 Status. Accepted on 2026-10-01: GitHub Releases of `Algorythm-Canada/openjev-models`, confirmed by
-the maintainers, with `verdict-m18-fp16-v1` published and its assets verified by download.
+the maintainers, with `verdict-m18-fp16-v1` and Laya's five releases published and their assets
+verified by download.
 
 ## D-034 Verdict backend: where the port goes beyond or differs from the issue text
 

@@ -78,7 +78,7 @@ struct LayaPackageStoreTests {
         for manifest in all {
             #expect(manifest.model == KnownEncoderModels.laya.name)
             #expect(manifest.minimumOS == .init(iOS: 18, macOS: 15))
-            #expect(!manifest.packageDownloadsEnabled)
+            #expect(manifest.packageDownloadsEnabled)
             #expect(manifest.checkpoint.repository == "convaiinnovations/laya-typed-decisions")
             #expect(manifest.checkpointTokenizerFolder == "tokenizer")
             #expect(

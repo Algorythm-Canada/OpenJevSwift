@@ -16,7 +16,7 @@ extension EncoderPackageManifest {
         checkpoint: Checkpoint(
             repository: "convaiinnovations/laya-typed-decisions",
             revision: "1a793eb568e6718f15941d08f85432581df534e3"),
-        packageDownloadsEnabled: false,
+        packageDownloadsEnabled: true,
         packageFiles: [
             File(
                 path: "Data/com.apple.CoreML/model.mlmodel",
@@ -66,7 +66,7 @@ extension EncoderPackageManifest {
             checkpoint: Checkpoint(
                 repository: "convaiinnovations/laya-typed-decisions",
                 revision: "1a793eb568e6718f15941d08f85432581df534e3"),
-            packageDownloadsEnabled: false,
+            packageDownloadsEnabled: true,
             packageFiles: [
                 File(
                     path: "Data/com.apple.CoreML/model.mlmodel",
@@ -111,7 +111,7 @@ extension EncoderPackageManifest {
             checkpoint: Checkpoint(
                 repository: "convaiinnovations/laya-typed-decisions",
                 revision: "1a793eb568e6718f15941d08f85432581df534e3"),
-            packageDownloadsEnabled: false,
+            packageDownloadsEnabled: true,
             packageFiles: [
                 File(
                     path: "Data/com.apple.CoreML/model.mlmodel",
@@ -156,7 +156,7 @@ extension EncoderPackageManifest {
             checkpoint: Checkpoint(
                 repository: "convaiinnovations/laya-typed-decisions",
                 revision: "1a793eb568e6718f15941d08f85432581df534e3"),
-            packageDownloadsEnabled: false,
+            packageDownloadsEnabled: true,
             packageFiles: [
                 File(
                     path: "Data/com.apple.CoreML/model.mlmodel",
@@ -201,7 +201,7 @@ extension EncoderPackageManifest {
             checkpoint: Checkpoint(
                 repository: "convaiinnovations/laya-typed-decisions",
                 revision: "1a793eb568e6718f15941d08f85432581df534e3"),
-            packageDownloadsEnabled: false,
+            packageDownloadsEnabled: true,
             packageFiles: [
                 File(
                     path: "Data/com.apple.CoreML/model.mlmodel",

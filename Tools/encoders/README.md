@@ -57,10 +57,10 @@ and converted packages.
 manifest it embeds (D-033): `Sources/OpenJevEncoders/Store/EncoderPackageManifest+Verdict.swift`
 for `verdict-m18-fp16`, and `EncoderPackageManifest+Laya.swift` for Laya's Mac package
 `laya-m18-fp16` and the iPhone's `laya-f18-b1s128-fp16` to `laya-f18-b1s1024-fp16` (D-037), one
-release each. Verdict's package is published as release `verdict-m18-fp16-v1` of
-`Algorythm-Canada/openjev-models`, and its manifest has downloads on; until a package is published,
-its manifest keeps downloads off (`PACKAGE_DOWNLOADS_ENABLED` in `manifest.py`, one entry per
-package). After converting new packages, from the repository root:
+release each. All six are published releases of `Algorythm-Canada/openjev-models`, and every
+manifest has downloads on; a new package's manifest keeps downloads off until its release exists
+(`PACKAGE_DOWNLOADS_ENABLED` in `manifest.py`, one entry per package). After converting new
+packages, from the repository root:
 
 ```bash
 python3 Tools/encoders/manifest.py
