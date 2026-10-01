@@ -1758,3 +1758,112 @@ SDK publishes a release, update its pin and the lock with it; the CI job then sa
 server still satisfies it.
 
 Status. Proposed with issues #38 and #39.
+
+## D-041 JevBench harness: where the port goes beyond or differs from the issue text
+
+Context. Issue #61 asks for a runner that submits JevBench v1's public items to `/v1/systemone`,
+scores them with the benchmark's own scoring where it exists, and runs it against the Swift server
+on DiffusionGemma 4-bit and upstream's Python MLX server on the same machine and weights; then the
+SemIf/TypeSafe public-evaluation subset if its artifacts are still available. Verdict (#57) and
+Laya (#58) are served today; the DiffusionGemma backend reached main with #29 and #30 (D-039) while
+this work was under way, and its parity with mlx-vlm (#31) has not been shown, so the runs this
+issue records are the two encoder models'. Several points needed choices the issue does not spell
+out.
+
+Decision.
+
+1. **The dataset pin.** JevBench is `fstandhartinger/jevbench` at `bb05a33` (2026-09-29), MIT. Its
+   231 public items are `datasets/public/easy.jsonl` (48), `original.jsonl` (72, the benchmark's
+   "standard" tier) and `hard.jsonl` (111); their SHA-256 match the benchmark's own
+   `datasets/manifest.json`. `Tools/jevbench/harness.py` downloads them, and the published results
+   it compares with, into a cache outside the repository and checks every file's size and SHA-256.
+   The benchmark's held-out and imported items (24, 24, 109 and 146) are not public, and its
+   published tier accuracies include them, so only its public accuracy and its per-item outcomes
+   (`results/v1.2/jevbench-v1.2-per-task.json`, the v1.3.0 board) compare item for item.
+2. **The scoring source is the benchmark's code, unchanged.** `scoring.score_task` (exact label
+   set, a sum within 1e-3 or rescaled inside the 2e-2 rounding band, argmax with the smallest
+   label on a tie), `summarize.metric` and `summarize.summarize` (accuracy, the multi-class Brier
+   sum, the ECE over 10 equal-width bins of top-label confidence, ordinal MAE, paraphrase
+   consistency), with `tasks.py` and `metrics.py`, are vendored byte for byte under
+   `Tools/jevbench/vendor/` with the MIT license and pinned by SHA-256: a run refuses a changed
+   copy, `harness.py fetch` compares each with its commit, and the smoke test checks the pins
+   offline. Nothing is re-implemented. The benchmark's `Runner` (a spending ledger, raw evidence
+   kept outside its repository) is not used; its per-item record is reproduced, and its stop rule
+   except for refusals (item 4).
+3. **Item shapes map onto questions through JevBench's own adapter.** Each item is one request
+   built by the vendored `adapters/typesafe.py`: question id `decision`, `{type, instructions,
+   criteria}` with `criteria` left out when null, the state as the item holds it, every key order
+   kept; the answer is read as that adapter reads it (a noul as `{"yes": p, "no": 1 - p}`, a
+   choice's `choice` required to be one of the labels). The harness replaces only the adapter's
+   HTTP call, with one that sends the same bytes and also keeps the response's `server-timing` and
+   `x-request-id`.
+4. **What is skipped, and what counts as wrong.** A question the model cannot take is skipped,
+   never sent, and counted: more than 24 options for `verdict-1.4`, more than 255 options or 10
+   levels for any model. A skipped item lowers the coverage and stays out of the accuracy, as an
+   unattempted item does in the benchmark. Neither dataset has such an item (JevBench's widest
+   choice has 6 options, the TypeSafe rows' 8), so nothing was skipped. A 4xx other than 401, 403
+   or 429 is a refusal, recorded with its detail and counted wrong, as the benchmark counts a failed
+   decision; the benchmark's stop rule exempts only a 422, while here every refusal is exempt,
+   because Jev's contract answers a question it cannot ask with a 400.
+5. **The second dataset is SemIf's TypeSafe subset.** Upstream reports on neither TypeSafe's
+   evaluations nor SemIf's subset: no revision of its README, none of its branches and none of its
+   five issues and five pull requests (2026-10-01) mention them. SemIf does
+   (`TheoLeeCJ/SemIf-OpenJev`, its "TypeSafe subset agreement": Jev 0.883, Qwen3.5-4B 0.845).
+   SemIf's selection at `23cf1f3` names 102 rows of 20 cases and pins the parsed payload of four
+   case snapshots that evals.typesafe.ai still served on 2026-10-01 with those hashes. The harness
+   downloads them (1.4 MB), rebuilds the rows with SemIf's own `build_typesafe.py`, pins the rows it
+   writes by SHA-256 too, and scores them with SemIf's own `evaluate_external.type_safe` (equal-case
+   modal agreement and total variation), both vendored unchanged, and with JevBench's metrics. A
+   request carries TypeSafe's own question and document, as TypeSafe asked Jev, not SemIf's prompt
+   rendering of them. TypeSafe's snapshots carry no license grant, so a result file stores ids,
+   digests and the servers' answers only, and the TypeSafe scores are computed from the cache.
+6. **The servers.** `servers.py` runs the Swift release build (`openjev serve`, the float16
+   multifunction package on the GPU, D-034 and D-037), from the converted packages' folder, whose
+   bytes `Tools/encoders/manifest.py --check` shows to be the published ones (a package that fails
+   the check stops the run before the server starts), and upstream's server (`python -m openjev` at
+   `dcd2094`, PyTorch float32 on the CPU, which upstream picks without CUDA), each on 127.0.0.1 with
+   warm-up on, one request at a time. Upstream reads its checkpoints from the pinned snapshots
+   (`OPENJEV_VERDICT_MODEL`, `OPENJEV_LAYA_MODEL`, `HF_HUB_OFFLINE=1`) rather than the Hub's current
+   revision, from the environment `Tools/jevbench/requirements-upstream.txt` locks, with the pinned
+   checkout on `PYTHONPATH` rather than an installed copy, so a moved pin cannot run stale code.
+   Every result file records its server's versions and the hardware.
+7. **The published rows are other setups.** JevBench's `openjev-verdict-1.4` row ran the same
+   weights through the author's v1.4 engine and the benchmark's `verdict_local` adapter, which adds
+   a noul's criteria to its proposition where upstream ignores them; its `laya` row ran another
+   checkpoint, `convaiinnovations/laya`, with a 512-token budget. Upstream issue #6 reports only
+   the DiffusionGemma rows (81.8% on the public items, 28.6% sealed). The harness compares the
+   Verdict and Laya runs with their rows item by item and says how each row was produced; the
+   DiffusionGemma rows wait for the `mlx` runs.
+8. **What compare measures.** Two runs of one model, the upstream run as the reference: top-answer
+   agreement under JevBench's argmax; the mean and largest absolute difference over every label
+   probability of every item both answered, per question type, as spike #56 measured Core ML
+   against PyTorch; identical answers; correctness flips with an exact McNemar test; every
+   disagreement; and the items where the reference's top two are less than 0.01 apart, where the
+   parity bound of D-034 and D-037 allows a changed top answer.
+9. **Result files are committed, trimmed.** One per run, under `Tools/jevbench/results/`, at most
+   about 400 KB: a JevBench item keeps its question whole (MIT) and its state as a SHA-256 and a
+   length, since the hard tier's states alone are 480 KB.
+10. **CI.** The harness's smoke test (a fake server inside the process, no model, no download)
+    runs as one more step of the macOS job, with the image's `python3`; the harness needs only
+    the standard library, so no job and no install step were added.
+
+Alternatives rejected. (a) Re-implementing JevBench's scoring: its code is small and available, and
+a byte-for-byte copy cannot drift from the published numbers. (b) Downloading the scoring code at
+run time: the smoke test and CI would need the network. (c) A Swift harness: the benchmarks' code
+is Python, and Tools/README.md keeps Swift code in the package. (d) Reusing `Tools/encoders/.venv`
+for upstream's server: its lock is complete for the encoder scripts, and adding FastAPI and uvicorn
+would make it wrong. (e) SemIf's own rendering of the TypeSafe rows (the document as indented JSON
+text, options as `id: description`): that is SemIf's input to its scorer, not a Jev request.
+
+Consequences. On both datasets the Swift server and upstream's give the same top answer on every
+item, for both models, the same accuracy, and Brier scores and ECEs within 0.0003
+([quality.md](quality.md)); the agreement figures become a release metric for 0.1. The
+DiffusionGemma comparison the issue asks for, the Swift server against upstream's MLX server on the
+same machine and weights, is the one remaining piece: `servers.py --backend mlx` runs both sides
+today and is to be recorded once #31 shows the backend's parity. The runs also show a latency cost
+the answers do not: on a Mac the encoder keeps two Core ML functions loaded, one per input shape, so
+one-question requests of mixed lengths load functions again (Laya reloaded on 15 of its 333
+requests, each reload taking several times an ordinary read), and a function's first load, which the
+warm-up's three questions do not cover, took 0.2 to 1.9 s across the runs.
+
+Status. Proposed with issue #61.

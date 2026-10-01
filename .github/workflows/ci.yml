@@ -193,6 +193,15 @@ jobs:
         if: ${{ !cancelled() && steps.toolchain.outcome == 'success' }}
         run: make lint
 
+      # The JevBench harness's own test (Tools/jevbench, issue #61): a fake server inside the
+      # process, the image's python3 and the standard library only, no model and no download.
+      # Like the lint, it runs whatever the Swift steps did.
+      - name: JevBench harness smoke test
+        if: ${{ !cancelled() }}
+        run: |
+          python3 --version
+          python3 Tools/jevbench/smoke_test.py
+
   ios:
     name: iOS
     runs-on: macos-26

@@ -15,7 +15,8 @@ Read in order the first time. Later, each document stands alone.
 
 [deployment.md](deployment.md) runs the server on a Mac: the build, the settings, a launchd job,
 the logs, the graceful shutdown and the exit statuses. [development.md](development.md) builds and
-tests the package.
+tests the package. [quality.md](quality.md) compares the Swift server's answers with upstream's on
+JevBench and TypeSafe's public evaluations, and both with the published results.
 
 [spikes/](spikes/) holds the written outcome of each spike: what was measured, how, and the
 minimal reproductions of anything that differed. The decision each one feeds is in

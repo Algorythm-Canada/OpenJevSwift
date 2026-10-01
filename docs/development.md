@@ -267,6 +267,29 @@ no weights are downloaded, and generated fixture outputs are confined to `Fixtur
 twice gives no diff. `FixturePinTests` in `OpenJevCoreTests` fails when a file records another
 upstream commit or tokenizer revision.
 
+## The JevBench harness
+
+`Tools/jevbench` (issue #61) runs the JevBench v1 public items and SemIf's TypeSafe subset against a
+`/v1/systemone` server and compares runs; [quality.md](quality.md) holds its tables and
+[Tools/jevbench/README.md](../Tools/jevbench/README.md) every command. The harness needs only the
+standard library, so its test runs anywhere and in the macOS CI job:
+
+```bash
+python3 Tools/jevbench/smoke_test.py
+```
+
+Running upstream's server for the comparison needs a virtual environment of its own,
+`Tools/jevbench/.venv` (CPython 3.12, about 1 GB, ignored by git like every `.venv`), and the
+checked-out upstream (`make upstream`):
+
+```bash
+/usr/local/bin/python3.12 -m venv Tools/jevbench/.venv
+Tools/jevbench/.venv/bin/python -m pip install -r Tools/jevbench/requirements-upstream.txt
+```
+
+The datasets are downloaded into `~/Library/Caches/OpenJevSwift/jevbench`, outside the
+repository, by `python3 Tools/jevbench/harness.py fetch`.
+
 ## Continuous integration
 
 Three workflows run on GitHub-hosted runners. The repository is public, so the standard runners
@@ -275,7 +298,7 @@ cost nothing. No workflow uses the billed `-xlarge` runners unless asked to.
 | Workflow | When it runs | Job | Runner | What it runs |
 |---|---|---|---|---|
 | [ci.yml](../.github/workflows/ci.yml) | Every pull request and every push to `main`, except changes that touch only Markdown files | `Linux` | `ubuntu-24.04` with the `swift:6.2-noble` container | `swift build --build-tests` and `swift test`, both with `--scratch-path .build/linux`, then the test log check |
-| | | `macOS` | `macos-26` with Xcode 26.6, selected with `DEVELOPER_DIR` | `swift build --build-tests` and `swift test`, both with `--build-system swiftbuild`, the test log check, then `make lint` |
+| | | `macOS` | `macos-26` with Xcode 26.6, selected with `DEVELOPER_DIR` | `swift build --build-tests` and `swift test`, both with `--build-system swiftbuild`, the test log check, `make lint`, then the JevBench harness's smoke test with the image's `python3` |
 | | | `iOS` | `macos-26` with Xcode 26.6, selected with `DEVELOPER_DIR` | `xcodebuild test` of the `OpenJevCore-iOS` scheme on an iPhone 17 Pro simulator, the test log check, then a build of `OpenJevDiffusionGemma` for the iOS Simulator |
 | | | `SDK compatibility` | `ubuntu-24.04` with the `swift:6.2-noble` container | `swift build --product openjev-stub-server` with `--scratch-path .build/linux`, Ubuntu's CPython 3.12 and Node.js 20 from `actions/setup-node`, the pinned SDKs, then `Tools/sdk-compat/run.py --swift-sdk`; the exchanges are uploaded when it fails |
 | [fixtures.yml](../.github/workflows/fixtures.yml) | Pull requests that change `Fixtures/`, `Tools/fixtures/`, `THIRD_PARTY.md`, the `Makefile` or the workflow; manual runs; Mondays at 06:23 UTC | `Regenerate the fixtures` | `macos-26` with CPython 3.14.7 from `actions/setup-python` | `make upstream`, `make fixtures-venv` and `make fixtures`, then fails if `git status --porcelain Fixtures/` lists a file, and prints and uploads the diff |
@@ -396,6 +419,7 @@ swift build --build-tests --build-system swiftbuild
 swift test --build-system swiftbuild 2>&1 | tee .build/test.log
 .github/scripts/check-test-log.sh .build/test.log
 make lint
+python3 Tools/jevbench/smoke_test.py
 ```
 
 With Xcode 27, the reference toolchain, leave out `DEVELOPER_DIR` and `--build-system swiftbuild`:
