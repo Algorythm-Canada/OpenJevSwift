@@ -91,6 +91,10 @@ TYPESAFE_SNAPSHOTS = {
                            "6c96b19f192d07004613afc281a31712aa7d04bd75e31a3afe2322174ade0645"),
 }
 TYPESAFE_ROWS = 102
+# What SemIf's builder writes from the pinned selection and snapshots: the rows themselves are
+# pinned, so a stale or edited cached copy is rebuilt rather than used.
+TYPESAFE_BUILT = ("typesafe102.jsonl", 1431505,
+                  "734bfa7c56a1e4616e3dee56a71b3dd44b2717def0644622f00c6006d3e80f75")
 # The models TypeSafe's snapshots publish answers for, as SemIf's builder keys them.
 TYPESAFE_PUBLISHED = ("typesafe", "opus", "sol")
 
@@ -201,9 +205,19 @@ def github_raw(repo: str, commit: str, path: str) -> str:
     return f"https://raw.githubusercontent.com/{repo}/{commit}/{path}"
 
 
+def is_pinned(path: Path, size: int, digest: str) -> bool:
+    return path.is_file() and path.stat().st_size == size and sha256_file(path) == digest
+
+
+def require_pinned(path: Path, size: int, digest: str) -> Path:
+    if not is_pinned(path, size, digest):
+        raise PinError(f"{path} is missing or not the pinned file; run fetch")
+    return path
+
+
 def download(url: str, dest: Path, size: int, digest: str) -> Path:
     """Download url to dest unless dest already holds the pinned bytes; refuse any other bytes."""
-    if dest.is_file() and dest.stat().st_size == size and sha256_file(dest) == digest:
+    if is_pinned(dest, size, digest):
         return dest
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     with urllib.request.urlopen(request, timeout=120) as response:
@@ -273,7 +287,8 @@ def fetch_jevbench(cache: Path) -> None:
 
 def fetch_typesafe(cache: Path) -> Path:
     """Download SemIf's selection and TypeSafe's four snapshots; rebuild the 102 rows with SemIf's
-    own builder, which checks each snapshot's parsed payload against the selection's hash."""
+    own builder, which checks each snapshot's parsed payload against the selection's hash, unless
+    the cache already holds the pinned rows."""
     root = typesafe_root(cache)
     path, size, digest = SEMIF_SELECTION
     selection = download(github_raw(SEMIF_REPO, SEMIF_COMMIT, path), root / "source-selection.jsonl",
@@ -281,13 +296,17 @@ def fetch_typesafe(cache: Path) -> Path:
     for workflow, (name, size, digest) in TYPESAFE_SNAPSHOTS.items():
         download(TYPESAFE_EVALS + name, root / "sources" / f"typesafe-{workflow}-cases.js", size,
                  digest)
-    output = root / "typesafe102.jsonl"
-    if not output.is_file():
-        building = root / "typesafe102.jsonl.part"
+    name, size, digest = TYPESAFE_BUILT
+    output = root / name
+    if not is_pinned(output, size, digest):
+        building = root / (name + ".part")
         building.unlink(missing_ok=True)
         subprocess.run([sys.executable, str(VENDOR / "semif" / "build_typesafe.py"),
                         "--source-dir", str(root / "sources"), "--selection", str(selection),
                         "--output", str(building)], check=True, stdout=subprocess.DEVNULL)
+        if not is_pinned(building, size, digest):
+            raise PinError(f"SemIf's builder wrote {sha256_file(building)} from the pinned "
+                           f"snapshots, where {digest} is pinned")
         os.replace(building, output)
     return output
 
@@ -319,8 +338,7 @@ def load_jevbench(cache: Path, fetch: bool = True) -> Dataset:
     root = jevbench_root(cache)
     tasks, tiers, files = [], {}, []
     for path, (tier, size, digest) in JEVBENCH_SPLITS.items():
-        if sha256_file(root / path) != digest:
-            raise PinError(f"{root / path} is not the pinned file; run fetch")
+        require_pinned(root / path, size, digest)
         for task in jb_tasks.load_jsonl(str(root / path)):
             tasks.append(task)
             tiers[task.id] = tier
@@ -378,10 +396,13 @@ def typesafe_task(row: dict, question: dict, document) -> object:
 
 
 def load_typesafe(cache: Path, fetch: bool = True) -> Dataset:
-    built = fetch_typesafe(cache) if fetch else typesafe_root(cache) / "typesafe102.jsonl"
     root = typesafe_root(cache)
-    if not built.is_file():
-        raise PinError(f"{built} is missing; run fetch")
+    if fetch:
+        fetch_typesafe(cache)
+    # the rows and the snapshots the questions and documents come from, checked on every load
+    built = require_pinned(root / TYPESAFE_BUILT[0], *TYPESAFE_BUILT[1:])
+    for workflow, (_, size, digest) in TYPESAFE_SNAPSHOTS.items():
+        require_pinned(root / "sources" / f"typesafe-{workflow}-cases.js", size, digest)
     rows = [json.loads(line) for line in built.read_text(encoding="utf-8").splitlines()
             if line.strip()]
     if len(rows) != TYPESAFE_ROWS:
@@ -405,7 +426,7 @@ def load_typesafe(cache: Path, fetch: bool = True) -> Dataset:
                        "sha256": SEMIF_SELECTION[2]}]
                      + [{"path": TYPESAFE_EVALS + name, "bytes": size, "sha256": digest}
                         for name, size, digest in TYPESAFE_SNAPSHOTS.values()],
-            "built_sha256": sha256_file(built), "items": len(tasks),
+            "built_sha256": TYPESAFE_BUILT[2], "items": len(tasks),
             "license": "SemIf's selection and builder: MIT, Copyright (c) 2026 TheoLeeCJ. "
                        "TypeSafe's snapshots carry no license grant: no text, reference answer or "
                        "published distribution of theirs is stored in a result file."}
@@ -921,10 +942,12 @@ def compare_docs(a: dict, b: dict, top: int = 10) -> dict:
 
     both = [item_id for item_id in items_a if usable(items_a[item_id])
             and usable(items_b.get(item_id))]
-    one_side = [{"id": item_id, "a": items_a[item_id]["status"],
-                 "b": items_b.get(item_id, {}).get("status")}
-                for item_id in items_a
-                if usable(items_a[item_id]) != usable(items_b.get(item_id))]
+    # every item either run holds, so one run's missing coverage shows whichever run it is
+    ids = list(items_a) + [item_id for item_id in items_b if item_id not in items_a]
+    one_side = [{"id": item_id, "a": (items_a.get(item_id) or {}).get("status", "absent"),
+                 "b": (items_b.get(item_id) or {}).get("status", "absent")}
+                for item_id in ids
+                if usable(items_a.get(item_id)) != usable(items_b.get(item_id))]
     groups, disagreements, deviations, near_ties = {}, [], [], []
     flips = {"both_correct": 0, "both_wrong": 0, "a_only": 0, "b_only": 0}
     for item_id in both:

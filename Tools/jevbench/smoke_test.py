@@ -285,6 +285,11 @@ class HarnessSmokeTest(unittest.TestCase):
         self.assertEqual([d["id"] for d in result["near_ties"]], ["t-dict-state"])
         with self.assertRaises(ValueError):
             harness.compare_docs(self.doc_a, {**self.doc_b, "model": "laya-1.0"})
+        # an item only the reference run holds is listed too
+        extra = {**self.items["t-noul-1"], "id": "t-extra"}
+        wider = {**self.doc_b, "items": self.doc_b["items"] + [extra]}
+        self.assertIn({"id": "t-extra", "a": "absent", "b": "answered"},
+                      harness.compare_docs(self.doc_a, wider)["answered_by_one_only"])
 
     def test_command_line(self):
         a, b = self.tmp / "cli" / "a.json", self.tmp / "cli" / "b.json"
@@ -411,6 +416,33 @@ class HarnessSmokeTest(unittest.TestCase):
         third_party = (harness.ROOT / "THIRD_PARTY.md").read_text()
         for commit in (harness.JEVBENCH_COMMIT, harness.SEMIF_COMMIT):
             self.assertIn(f"`{commit[:7]}`", third_party)
+
+    def test_cached_files_must_be_the_pinned_ones(self):
+        cached = self.tmp / "cached.jsonl"
+        cached.write_bytes(b"{}\n")
+        digest = hashlib.sha256(b"{}\n").hexdigest()
+        self.assertEqual(harness.require_pinned(cached, 3, digest), cached)
+        with self.assertRaises(harness.PinError):
+            harness.require_pinned(cached, 3, "0" * 64)
+        with self.assertRaises(harness.PinError):  # an empty cache is refused, not read
+            harness.load_typesafe(self.tmp / "empty-cache", fetch=False)
+
+    def test_a_package_that_fails_its_check_stops_the_swift_server(self):
+        import subprocess
+        import servers
+
+        def fake_run(command, *args, **kwargs):
+            failing = any("manifest.py" in str(part) for part in command)
+            return subprocess.CompletedProcess(command, 1 if failing else 0,
+                                               stdout="verdict-m18-fp16 differs\n", stderr="")
+
+        saved, servers.subprocess.run = servers.subprocess.run, fake_run
+        try:
+            with self.assertRaises(SystemExit) as stopped:
+                servers.swift_server("verdict", Path(sys.executable), str(self.tmp))
+        finally:
+            servers.subprocess.run = saved
+        self.assertIn("is not the published package", str(stopped.exception))
 
     def test_helpers(self):
         self.assertEqual(harness.parse_server_timing("model;dur=41.2, server;dur=2.8, total;dur=44"),

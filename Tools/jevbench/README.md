@@ -36,9 +36,10 @@ is committed.
   subset agreement"). SemIf's selection manifest at `23cf1f3` names the rows and pins each case
   snapshot's parsed payload; the harness downloads the four snapshots
   (`{workflow}-cases.js`, 1.4 MB together) from evals.typesafe.ai and rebuilds the rows with SemIf's
-  own `build_typesafe.py`, which checks those hashes. TypeSafe's snapshots carry no license grant,
-  so a result file keeps only ids, digests and the server's answers: no TypeSafe text, reference
-  answer or published distribution.
+  own `build_typesafe.py`, which checks those hashes. The rows it writes are pinned by SHA-256 too,
+  so a cached copy that is not the pinned one is built again rather than used. TypeSafe's snapshots
+  carry no license grant, so a result file keeps only ids, digests and the server's answers: no
+  TypeSafe text, reference answer or published distribution.
 
 ## How an item becomes a request
 
@@ -123,7 +124,8 @@ The DiffusionGemma runs, `--backend mlx`, wait for issue #31; their commands are
 [docs/quality.md](../../docs/quality.md#diffusiongemma). `--encoder-models` names the folder the
 converters write to; without it the Swift server downloads
 the published packages (D-033), which have the same bytes (`Tools/encoders/manifest.py --check`,
-which `servers.py` runs and records). Add `--force` to replace earlier result files. Any other
+which `servers.py` runs and records, and which stops the run before the server starts when a
+package differs). Add `--force` to replace earlier result files. Any other
 server: `python3 Tools/jevbench/harness.py run --base-url URL --model NAME --server LABEL
 [--dataset typesafe102] [--api-key-env VARIABLE]`, then `summary`, `compare` and `published` on the
 files it writes. `--ids a,b` runs only those items.

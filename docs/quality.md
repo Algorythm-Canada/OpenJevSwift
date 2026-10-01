@@ -9,13 +9,13 @@ under [DiffusionGemma](#diffusiongemma), and it is the one piece of issue #61 le
 maps items onto requests and scores them is in
 [Tools/jevbench/README.md](../Tools/jevbench/README.md) and D-041.
 
-All runs: 2026-10-01, an Apple M3 Max with 128 GB and macOS 27.0.1. The Swift server is the release
-build of this branch, whose Swift package is main's at `93edceb`, serving the float16 Core ML
-packages on the GPU (D-011); upstream is razorback16/openjev at `dcd2094` serving the PyTorch
-checkpoints in float32 on the CPU, as it does on any machine without CUDA: the arithmetic of the
-reference in [Fixtures/encoders](../Fixtures/encoders/README.md), on PyTorch's default of 12
-threads where the reference pins 8, which moves only the last bits. Every request asked one
-question, one request at a time.
+All runs: 2026-10-01, an Apple M3 Max with 128 GB and macOS 27.0.1. The Swift server is a release
+build of the package as main's `c77cca9` left it, serving the float16 Core ML packages on the GPU
+(D-011); upstream is razorback16/openjev at `dcd2094` serving the PyTorch checkpoints in float32 on
+the CPU, as it does on any machine without CUDA: the arithmetic of the reference in
+[Fixtures/encoders](../Fixtures/encoders/README.md), on PyTorch's default of 12 threads where the
+reference pins 8, which moves only the last bits. Every request asked one question, one request at a
+time.
 
 ## What the runs show
 
@@ -46,14 +46,14 @@ are the caller's time and the `model` part of the server's `server-timing` heade
 
 | dataset | model | server | items | answered | skipped | refused, failed or invalid | accuracy | Brier | ECE | p50 ms | p95 ms | model p50 ms |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| jevbench | laya-1.0 | swift | 231 | 231 | 0 | 0 | 53.7% | 0.5090 | 0.0769 | 23.4 | 428.2 | 21.1 |
-| jevbench | laya-1.0 | upstream | 231 | 231 | 0 | 0 | 53.7% | 0.5090 | 0.0769 | 170.5 | 758.0 | 167.8 |
-| jevbench | verdict-1.4 | swift | 231 | 231 | 0 | 0 | 56.3% | 0.5381 | 0.0788 | 18.9 | 95.4 | 18.2 |
-| jevbench | verdict-1.4 | upstream | 231 | 231 | 0 | 0 | 56.3% | 0.5382 | 0.0788 | 77.3 | 188.8 | 68.0 |
-| typesafe102 | laya-1.0 | swift | 102 | 102 | 0 | 0 | 47.1% | 0.5866 | 0.0727 | 133.4 | 518.2 | 132.4 |
-| typesafe102 | laya-1.0 | upstream | 102 | 102 | 0 | 0 | 47.1% | 0.5865 | 0.0727 | 677.0 | 1200.3 | 669.6 |
-| typesafe102 | verdict-1.4 | swift | 102 | 102 | 0 | 0 | 52.9% | 0.5408 | 0.1015 | 62.1 | 204.2 | 61.2 |
-| typesafe102 | verdict-1.4 | upstream | 102 | 102 | 0 | 0 | 52.9% | 0.5409 | 0.1014 | 152.7 | 1312.0 | 150.2 |
+| jevbench | laya-1.0 | swift | 231 | 231 | 0 | 0 | 53.7% | 0.5090 | 0.0769 | 30.3 | 510.2 | 29.4 |
+| jevbench | laya-1.0 | upstream | 231 | 231 | 0 | 0 | 53.7% | 0.5090 | 0.0769 | 171.3 | 761.2 | 158.5 |
+| jevbench | verdict-1.4 | swift | 231 | 231 | 0 | 0 | 56.3% | 0.5381 | 0.0788 | 19.4 | 110.9 | 18.6 |
+| jevbench | verdict-1.4 | upstream | 231 | 231 | 0 | 0 | 56.3% | 0.5382 | 0.0788 | 77.0 | 202.5 | 73.2 |
+| typesafe102 | laya-1.0 | swift | 102 | 102 | 0 | 0 | 47.1% | 0.5866 | 0.0727 | 166.7 | 760.4 | 164.9 |
+| typesafe102 | laya-1.0 | upstream | 102 | 102 | 0 | 0 | 47.1% | 0.5865 | 0.0727 | 684.2 | 892.4 | 681.2 |
+| typesafe102 | verdict-1.4 | swift | 102 | 102 | 0 | 0 | 52.9% | 0.5408 | 0.1015 | 52.6 | 213.3 | 51.8 |
+| typesafe102 | verdict-1.4 | upstream | 102 | 102 | 0 | 0 | 52.9% | 0.5409 | 0.1014 | 160.3 | 216.5 | 158.4 |
 
 ### Swift against upstream
 
@@ -187,16 +187,16 @@ input shape:
 
 | model | requests | first loads | loaded again | load ms | other requests' median ms by shape |
 |---|---|---|---|---|---|
-| verdict-1.4 | 333 | 3 | 0 | 684 to 764 | 128: 14, 256: 15, 512: 48 |
-| laya-1.0 | 333 | 4 | 15 | 453 to 1815 | 128: 18, 256: 29, 512: 50, 1024: 133 |
+| verdict-1.4 | 333 | 3 | 0 | 698 to 1213 | 128: 14, 256: 16, 512: 47 |
+| laya-1.0 | 333 | 4 | 15 | 461 to 838 | 128: 20, 256: 29, 512: 62, 1024: 163 |
 
 ### Machines and versions
 
 | datasets | model | server | code | runtime | machine | run on |
 |---|---|---|---|---|---|---|
-| jevbench, typesafe102 | laya-1.0 | swift | OpenJevSwift 0.1.0-dev at 93edceb | Core ML, float16 multifunction package, .cpuAndGPU, up to 16 questions per call | Apple M3 Max, 128 GB, macOS 27.0.1 (26A434) | 2026-10-01 |
+| jevbench, typesafe102 | laya-1.0 | swift | OpenJevSwift 0.1.0-dev at c77cca9 | Core ML, float16 multifunction package, .cpuAndGPU, up to 16 questions per call | Apple M3 Max, 128 GB, macOS 27.0.1 (26A434) | 2026-10-01 |
 | jevbench, typesafe102 | laya-1.0 | upstream | openjev 0.5.0 at dcd2094, Python 3.12.2 | PyTorch 2.13.0 on the cpu, float32, 12 threads | Apple M3 Max, 128 GB, macOS 27.0.1 (26A434) | 2026-10-01 |
-| jevbench, typesafe102 | verdict-1.4 | swift | OpenJevSwift 0.1.0-dev at 93edceb | Core ML, float16 multifunction package, .cpuAndGPU, up to 16 questions per call | Apple M3 Max, 128 GB, macOS 27.0.1 (26A434) | 2026-10-01 |
+| jevbench, typesafe102 | verdict-1.4 | swift | OpenJevSwift 0.1.0-dev at c77cca9 | Core ML, float16 multifunction package, .cpuAndGPU, up to 16 questions per call | Apple M3 Max, 128 GB, macOS 27.0.1 (26A434) | 2026-10-01 |
 | jevbench, typesafe102 | verdict-1.4 | upstream | openjev 0.5.0 at dcd2094, Python 3.12.2 | PyTorch 2.13.0 on the cpu, float32, 12 threads | Apple M3 Max, 128 GB, macOS 27.0.1 (26A434) | 2026-10-01 |
 
 
@@ -269,11 +269,11 @@ reruns, while the scores do not. The Swift server's 95th percentile shows someth
 the encoder keeps two Core ML functions loaded (`functionCapacity`, D-037 item 3), one per input
 shape, and one-question requests whose lengths move among three or four shapes load a function
 again. The function-load table above counts them in the recorded runs: Laya loaded a function 19
-times in its 333 requests, 4 first loads of 1.7 to 1.8 s and 15 reloads of 0.45 to 1.15 s, where an
-ordinary read took tens of milliseconds, and Verdict's requests used three shapes, each loaded once,
-in about 0.7 s. A function's first load varied between 0.2 and 1.9 s across the runs on this Mac.
-The answers do not change. A server that sees mixed lengths may want more functions loaded, at the
-cost of one more copy of the weights in memory for each.
+times in its 333 requests, 4 first loads and 15 reloads, and Verdict's requests used three shapes,
+each loaded once. A load took about half a second to a second, several times an ordinary read, and a
+function's first load varied between 0.2 and 1.9 s across the runs on this Mac. The answers do not
+change. A server that sees mixed lengths may want more functions loaded, at the cost of one more
+copy of the weights in memory for each.
 
 ## Rerunning every table
 
@@ -295,7 +295,7 @@ python3 Tools/jevbench/servers.py --server upstream --backend laya --force
 python3 Tools/jevbench/harness.py report
 ```
 
-The scores are deterministic: five sets of runs on this machine, on two builds, gave the same
+The scores are deterministic: six sets of runs on this machine, on three builds, gave the same
 answers to the last digit (the earlier ones are not committed), and only the timings move. Each
 comparison also prints item by item:
 

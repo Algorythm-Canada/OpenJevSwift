@@ -1811,22 +1811,22 @@ Decision.
    (`TheoLeeCJ/SemIf-OpenJev`, its "TypeSafe subset agreement": Jev 0.883, Qwen3.5-4B 0.845).
    SemIf's selection at `23cf1f3` names 102 rows of 20 cases and pins the parsed payload of four
    case snapshots that evals.typesafe.ai still served on 2026-10-01 with those hashes. The harness
-   downloads them (1.4 MB), rebuilds the rows with SemIf's own `build_typesafe.py` and scores them
-   with SemIf's own `evaluate_external.type_safe` (equal-case modal agreement and total variation),
-   both vendored unchanged, and with JevBench's metrics. A request carries TypeSafe's own question
-   and document, as TypeSafe asked Jev, not SemIf's prompt rendering of them. TypeSafe's snapshots
-   carry no license grant, so a result file stores ids, digests and the servers' answers only, and
-   the TypeSafe scores are computed from the cache.
+   downloads them (1.4 MB), rebuilds the rows with SemIf's own `build_typesafe.py`, pins the rows it
+   writes by SHA-256 too, and scores them with SemIf's own `evaluate_external.type_safe` (equal-case
+   modal agreement and total variation), both vendored unchanged, and with JevBench's metrics. A
+   request carries TypeSafe's own question and document, as TypeSafe asked Jev, not SemIf's prompt
+   rendering of them. TypeSafe's snapshots carry no license grant, so a result file stores ids,
+   digests and the servers' answers only, and the TypeSafe scores are computed from the cache.
 6. **The servers.** `servers.py` runs the Swift release build (`openjev serve`, the float16
-   multifunction package on the GPU, D-034 and D-037), from the converted packages'
-   folder, whose bytes `Tools/encoders/manifest.py --check` shows to be the published ones, and
-   upstream's server (`python -m openjev` at `dcd2094`, PyTorch float32 on the CPU, which upstream
-   picks without CUDA), each on 127.0.0.1 with warm-up on, one request at a time. Upstream reads
-   its checkpoints from the pinned snapshots (`OPENJEV_VERDICT_MODEL`, `OPENJEV_LAYA_MODEL`,
-   `HF_HUB_OFFLINE=1`) rather than the Hub's current revision, from the environment
-   `Tools/jevbench/requirements-upstream.txt` locks, with the pinned checkout on `PYTHONPATH`
-   rather than an installed copy, so a moved pin cannot run stale code. Every result file records
-   its server's versions and the hardware.
+   multifunction package on the GPU, D-034 and D-037), from the converted packages' folder, whose
+   bytes `Tools/encoders/manifest.py --check` shows to be the published ones (a package that fails
+   the check stops the run before the server starts), and upstream's server (`python -m openjev` at
+   `dcd2094`, PyTorch float32 on the CPU, which upstream picks without CUDA), each on 127.0.0.1 with
+   warm-up on, one request at a time. Upstream reads its checkpoints from the pinned snapshots
+   (`OPENJEV_VERDICT_MODEL`, `OPENJEV_LAYA_MODEL`, `HF_HUB_OFFLINE=1`) rather than the Hub's current
+   revision, from the environment `Tools/jevbench/requirements-upstream.txt` locks, with the pinned
+   checkout on `PYTHONPATH` rather than an installed copy, so a moved pin cannot run stale code.
+   Every result file records its server's versions and the hardware.
 7. **The published rows are other setups.** JevBench's `openjev-verdict-1.4` row ran the same
    weights through the author's v1.4 engine and the benchmark's `verdict_local` adapter, which adds
    a noul's criteria to its proposition where upstream ignores them; its `laya` row ran another
@@ -1861,10 +1861,9 @@ item, for both models, the same accuracy, and Brier scores and ECEs within 0.000
 DiffusionGemma comparison the issue asks for, the Swift server against upstream's MLX server on the
 same machine and weights, is the one remaining piece: `servers.py --backend mlx` runs both sides
 today and is to be recorded once #31 shows the backend's parity. The runs also show a latency cost
-the answers do not: on a Mac the encoder keeps two Core ML functions loaded, one per input shape,
-so one-question requests of mixed lengths load functions again (Laya reloaded on 15 of its 333
-requests, at 0.45 to 1.15 s each against tens of milliseconds for an ordinary read), and a
-function's first load, which the warm-up's three questions do not cover, took 0.2 to 1.9 s across
-the runs.
+the answers do not: on a Mac the encoder keeps two Core ML functions loaded, one per input shape, so
+one-question requests of mixed lengths load functions again (Laya reloaded on 15 of its 333
+requests, each reload taking several times an ordinary read), and a function's first load, which the
+warm-up's three questions do not cover, took 0.2 to 1.9 s across the runs.
 
 Status. Proposed with issue #61.

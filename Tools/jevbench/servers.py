@@ -113,7 +113,8 @@ def swift_server(backend: str, binary: Path, encoder_models: str | None) -> tupl
         "version": output([str(binary), "--version"]),
         # the last commit that changed the package, which a rebase of the branch keeps
         "commit": output(["git", "log", "-1", "--format=%H", "--", *PACKAGE_PATHS], cwd=ROOT),
-        "source_changes": bool(output(["git", "status", "--porcelain", "--untracked-files=no",
+        # untracked files included: SwiftPM builds every source file under Sources/
+        "source_changes": bool(output(["git", "status", "--porcelain", "--untracked-files=all",
                                        "--", *PACKAGE_PATHS], cwd=ROOT)),
         "binary": os.path.relpath(binary, ROOT), "binary_sha256": harness.sha256_file(binary),
         "toolchain": first_line(output(["swift", "--version"])),
@@ -132,6 +133,10 @@ def swift_server(backend: str, binary: Path, encoder_models: str | None) -> tupl
             lines = (check.stdout.strip() or check.stderr.strip()).splitlines()
             info["package_check"] = (lines[-1].replace(str(folder), harness.display_path(folder))
                                      if lines else None)
+            if check.returncode != 0:
+                sys.exit(f"{package} in {harness.display_path(folder)} is not the published "
+                         f"package: {info['package_check']}; convert it again, or leave out "
+                         "--encoder-models to download the published one")
             manifest = folder / f"{package}.mlpackage" / "Manifest.json"
             if manifest.is_file():
                 info["package_manifest_sha256"] = harness.sha256_file(manifest)
