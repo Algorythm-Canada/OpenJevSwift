@@ -33,7 +33,7 @@ OUTPUT = ROOT / "Sources" / "OpenJevEncoders" / "Store" / "EncoderPackageManifes
 MODEL = "verdict-1.4"
 PACKAGE = "verdict-m18-fp16"
 MINIMUM_OS = {"iOS": 18, "macOS": 15}
-PACKAGE_DOWNLOADS_ENABLED = False  # Enable only after the release assets are published and verified.
+PACKAGE_DOWNLOADS_ENABLED = True  # verdict-m18-fp16-v1 is published; its assets match the manifest (D-033).
 TOKENIZER_FILES = ["tokenizer.json", "tokenizer_config.json"]
 CALIBRATOR = "calibrator.json"
 
@@ -147,7 +147,7 @@ extension EncoderPackageManifest {{
 {calibrator})
 }}
 
-/// A package file's URL: an asset of the GitHub release (proposed in D-033).
+/// A package file's URL: an asset of the GitHub release (D-033).
 private func verdictRelease(_ asset: String) -> URL {{
     URL(
         string: "{release_prefix}"

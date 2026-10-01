@@ -1128,14 +1128,15 @@ change. (b) An archive per package: an unzip on iOS and a second copy on disk wh
 Git LFS in this repository: the repository never holds weights (CONTRIBUTING.md). (d) The package in
 the app bundle: rejected by D-011.
 
-Consequences. Until the release exists, the embedded manifest has `packageDownloadsEnabled` false,
-and the store refuses with `EncoderPackageError.packageDownloadsUnavailable` instead of requesting
-assets that are not there; a deployment sets `OPENJEV_ENCODER_MODELS` in the meantime. A changed
+Consequences. The release `verdict-m18-fp16-v1` was published on 2026-10-01 and its three assets
+match the embedded manifest, so `packageDownloadsEnabled` is true and the store downloads the
+package on first use; a deployment without network sets `OPENJEV_ENCODER_MODELS` instead. A changed
 package needs a new release tag and a new manifest, and a published asset is never replaced.
 `openjev-models` should carry the Apache-2.0 license and a notice crediting Heman10x's checkpoint,
 and Laya's authors once #58 publishes its packages the same way.
 
-Status. Proposed with issue #57; the host needs the maintainers' confirmation.
+Status. Accepted on 2026-10-01: GitHub Releases of `Algorythm-Canada/openjev-models`, confirmed by
+the maintainers, with `verdict-m18-fp16-v1` published and its assets verified by download.
 
 ## D-034 Verdict backend: where the port goes beyond or differs from the issue text
 
