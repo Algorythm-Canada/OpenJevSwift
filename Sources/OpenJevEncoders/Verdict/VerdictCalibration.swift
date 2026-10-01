@@ -13,10 +13,8 @@ import Foundation
 /// probability is dropped and the rest renormalised. When that is not finite the answer is
 /// uniform over the `k - 1` options.
 ///
-/// Upstream computes in float32. This computes in double from the float32 logits, which differs
-/// by less than 1e-6 on the reference corpus. The two differ more only where float32
-/// underflows: when the abstention's scaled logit exceeds every option's by more than about 100,
-/// upstream falls back to the uniform answer and this does not.
+/// The softmax, abstention drop and renormalisation use float32, as upstream does. Only the
+/// returned probabilities are converted to `Double`.
 public struct VerdictCalibration: Sendable, Hashable, Codable {
     /// The global temperature, calibrator.json's `temperature`.
     public var temperature: Double
@@ -93,7 +91,7 @@ public struct VerdictCalibration: Sendable, Hashable, Codable {
         guard logits.count >= 2 else {
             return []
         }
-        let scaled = logits.map { Double($0) / temperature }
+        let scaled = logits.map { $0 / Float(temperature) }
         let top = scaled.max() ?? 0
         let exponentials = scaled.map { exp($0 - top) }
         let total = exponentials.reduce(0, +)
@@ -101,8 +99,8 @@ public struct VerdictCalibration: Sendable, Hashable, Codable {
         let keptTotal = kept.reduce(0, +)
         let probabilities = kept.map { $0 / keptTotal }
         guard probabilities.reduce(0, +).isFinite else {
-            return Array(repeating: 1.0 / Double(kept.count), count: kept.count)
+            return Array(repeating: Double(1 / Float(kept.count)), count: kept.count)
         }
-        return probabilities
+        return probabilities.map(Double.init)
     }
 }

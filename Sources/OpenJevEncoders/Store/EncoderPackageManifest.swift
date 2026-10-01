@@ -76,6 +76,8 @@ public struct EncoderPackageManifest: Sendable, Hashable, Codable {
     /// The checkpoint the package was converted from, which publishes the tokenizer and the
     /// calibrator.
     public var checkpoint: Checkpoint
+    /// Whether the manifest's remote package files are published and ready to download.
+    public var packageDownloadsEnabled: Bool
     /// The package's files, paths relative to the `.mlpackage` folder.
     public var packageFiles: [File]
     /// The tokenizer's files, tokenizer.json and tokenizer_config.json.
@@ -86,12 +88,14 @@ public struct EncoderPackageManifest: Sendable, Hashable, Codable {
     /// Creates a manifest.
     public init(
         model: String, package: String, minimumOS: MinimumOS, checkpoint: Checkpoint,
+        packageDownloadsEnabled: Bool = true,
         packageFiles: [File], tokenizerFiles: [File], calibrator: File
     ) {
         self.model = model
         self.package = package
         self.minimumOS = minimumOS
         self.checkpoint = checkpoint
+        self.packageDownloadsEnabled = packageDownloadsEnabled
         self.packageFiles = packageFiles
         self.tokenizerFiles = tokenizerFiles
         self.calibrator = calibrator

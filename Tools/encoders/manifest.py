@@ -33,6 +33,7 @@ OUTPUT = ROOT / "Sources" / "OpenJevEncoders" / "Store" / "EncoderPackageManifes
 MODEL = "verdict-1.4"
 PACKAGE = "verdict-m18-fp16"
 MINIMUM_OS = {"iOS": 18, "macOS": 15}
+PACKAGE_DOWNLOADS_ENABLED = False  # Enable only after the release assets are published and verified.
 TOKENIZER_FILES = ["tokenizer.json", "tokenizer_config.json"]
 CALIBRATOR = "calibrator.json"
 
@@ -92,6 +93,14 @@ def number(value):
     return f"{value:_}" if value >= 10_000 else str(value)
 
 
+def display_path(path):
+    """A path relative to the checkout when possible, or its original spelling otherwise."""
+    try:
+        return str(path.resolve().relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
 def swift_file(entry, release_url, checkpoint_url, repository, revision, tag, owner_repository):
     def file_literal(path, base, name, size, sha):
         return (f"            File(\n"
@@ -130,6 +139,7 @@ extension EncoderPackageManifest {{
         checkpoint: Checkpoint(
             repository: "{repository}",
             revision: "{revision}"),
+        packageDownloadsEnabled: {str(PACKAGE_DOWNLOADS_ENABLED).lower()},
         packageFiles: [
 {package_lines}        ],
         tokenizerFiles: [
@@ -193,12 +203,12 @@ def main():
     if args.check:
         current = args.output.read_text(encoding="utf-8") if args.output.exists() else ""
         if current != text:
-            sys.exit(f"{args.output.relative_to(ROOT)} differs from {package}; run "
+            sys.exit(f"{display_path(args.output)} differs from {package}; run "
                      "Tools/encoders/manifest.py")
-        print(f"{args.output.relative_to(ROOT)} matches {package}")
+        print(f"{display_path(args.output)} matches {package}")
         return
     args.output.write_text(text, encoding="utf-8")
-    print(f"Wrote {args.output.relative_to(ROOT)}:")
+    print(f"Wrote {display_path(args.output)}:")
     for path, size, sha in entry["package"] + entry["tokenizer"] + [entry["calibrator"]]:
         print(f"  {path}: {size:,} bytes, sha256 {sha}")
 

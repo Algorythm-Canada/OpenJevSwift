@@ -40,6 +40,7 @@ struct VerdictCalibrationTests {
         #expect(
             calibration.probabilities(logits: [-.infinity, -.infinity, -.infinity], k: 3)
                 == [0.5, 0.5])
+        #expect(calibration.probabilities(logits: [0, 1, 200], k: 3) == [0.5, 0.5])
         // A logit of minus infinity for one option is a finite answer, not a fallback.
         #expect(calibration.probabilities(logits: [-.infinity, 0, 0], k: 3) == [0, 1])
         // A question without options, only the abstention, has no distribution.

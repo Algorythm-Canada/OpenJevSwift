@@ -172,6 +172,16 @@ struct EncoderPackageStoreTests {
             Issue.record("expected an unsupported OS, got \(String(describing: tooOld))")
             return
         }
+        let local = EncoderPackageStore(
+            directory: storeFolder,
+            localModelsDirectory: folder.appendingPathComponent("models", isDirectory: true))
+        let tooOldLocally = await #expect(throws: EncoderPackageError.self) {
+            try await local.locations(for: future)
+        }
+        guard case .unsupportedOperatingSystem = tooOldLocally else {
+            Issue.record("expected a local package to reject an unsupported OS")
+            return
+        }
         for path in ["../escape.bin", "/etc/escape", "Data//model.mlmodel", "./Manifest.json", ""] {
             var escaping = try sourceManifest(in: folder)
             escaping.packageFiles[0].path = path
@@ -186,6 +196,34 @@ struct EncoderPackageStoreTests {
             try await store.locations(for: badPackage)
         }
         #expect(!FileManager.default.fileExists(atPath: storeFolder.path))
+    }
+
+    @Test("A pre-existing symlink in the package path cannot redirect a download")
+    func refusesSymlinkedPackagePath() async throws {
+        let folder = try temporaryFolder()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let manifest = try sourceManifest(in: folder)
+        let storeFolder = folder.appendingPathComponent("store", isDirectory: true)
+        let root = storeFolder.appendingPathComponent("test-package", isDirectory: true)
+        let outside = folder.appendingPathComponent("outside", isDirectory: true)
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+        let sentinel = try write("unchanged", to: "model.mlmodel", in: outside)
+        try FileManager.default.createDirectory(
+            at: root.appendingPathComponent("test-package.mlpackage", isDirectory: true),
+            withIntermediateDirectories: true)
+        try FileManager.default.createSymbolicLink(
+            at: root.appendingPathComponent("test-package.mlpackage/Data", isDirectory: true),
+            withDestinationURL: outside)
+        let store = EncoderPackageStore(directory: storeFolder)
+
+        let error = await #expect(throws: EncoderPackageError.self) {
+            try await store.locations(for: manifest)
+        }
+        #expect(
+            error
+                == .symlinkedPath(
+                    "test-package.mlpackage/Data/com.apple.CoreML/model.mlmodel"))
+        #expect(try String(contentsOf: sentinel, encoding: .utf8) == "unchanged")
     }
 
     @Test("A newer manifest's changed file is downloaded again")
@@ -296,6 +334,7 @@ struct EncoderPackageStoreTests {
         #expect(manifest.model == KnownEncoderModels.verdict.name)
         #expect(manifest.package == EncoderPackageSpec.verdict.name)
         #expect(manifest.minimumOS == .init(iOS: 18, macOS: 15))
+        #expect(!manifest.packageDownloadsEnabled)
         #expect(manifest.checkpoint.repository == "heman10x/rlcd-modernbert-151m")
         #expect(manifest.checkpoint.revision == (try VerdictFixtures.reference().verdictRevision))
         #expect(

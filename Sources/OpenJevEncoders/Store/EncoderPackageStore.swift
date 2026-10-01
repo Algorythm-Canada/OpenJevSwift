@@ -118,13 +118,18 @@ public struct EncoderPackageStore: Sendable {
         -> EncoderPackageLocations
     {
         try Self.checkPaths(of: manifest)
+        try Self.checkOperatingSystem(for: manifest)
         if let localModelsDirectory {
             return try localLocations(for: manifest, in: localModelsDirectory)
         }
-        try Self.checkOperatingSystem(for: manifest)
+        guard manifest.packageDownloadsEnabled else {
+            throw EncoderPackageError.packageDownloadsUnavailable(manifest.package)
+        }
         let fileManager = FileManager.default
         let root = directory.appendingPathComponent(manifest.package, isDirectory: true)
         try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
+        let recordFile = root.appendingPathComponent("verified.json")
+        try Self.checkDestination(root: root, storeDirectory: directory, path: "verified.json")
         var values = URLResourceValues()
         values.isExcludedFromBackup = true
         var excluded = root
@@ -134,20 +139,23 @@ public struct EncoderPackageStore: Sendable {
         let entries =
             manifest.packageFiles.map { (packageFolder + "/" + $0.path, $0) }
             + (manifest.tokenizerFiles + [manifest.calibrator]).map { ("tokenizer/" + $0.path, $0) }
-        let recordFile = root.appendingPathComponent("verified.json")
         var verified =
             (try? JSONDecoder().decode([String: String].self, from: Data(contentsOf: recordFile)))
             ?? [:]
         for (path, file) in entries {
-            let destination = root.appendingPathComponent(path)
+            let destination = try Self.checkDestination(
+                root: root, storeDirectory: directory, path: path)
             if verified[path] == file.sha256.lowercased(),
                 (try? Self.size(of: destination)) == file.bytes
             {
                 continue
             }
             verified[path] = nil
-            try await download(file, named: path, to: destination)
+            try await download(
+                file, named: path, to: destination, root: root, storeDirectory: directory)
             verified[path] = file.sha256.lowercased()
+            try Self.checkDestination(
+                root: root, storeDirectory: directory, path: "verified.json")
             try JSONEncoder().encode(verified).write(to: recordFile, options: .atomic)
         }
         let tokenizer = root.appendingPathComponent("tokenizer", isDirectory: true)
@@ -159,8 +167,10 @@ public struct EncoderPackageStore: Sendable {
 
     /// Downloads one file to a temporary file, checks it and moves it into place.
     private func download(
-        _ file: EncoderPackageManifest.File, named name: String, to destination: URL
+        _ file: EncoderPackageManifest.File, named name: String, to destination: URL,
+        root: URL, storeDirectory: URL
     ) async throws {
+        _ = try Self.checkDestination(root: root, storeDirectory: storeDirectory, path: name)
         let (temporary, response) = try await session.download(from: file.url)
         defer { try? FileManager.default.removeItem(at: temporary) }
         if let response = response as? HTTPURLResponse, !(200..<300).contains(response.statusCode) {
@@ -170,6 +180,7 @@ public struct EncoderPackageStore: Sendable {
         let fileManager = FileManager.default
         try fileManager.createDirectory(
             at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+        _ = try Self.checkDestination(root: root, storeDirectory: storeDirectory, path: name)
         if fileManager.fileExists(atPath: destination.path) {
             try fileManager.removeItem(at: destination)
         }
@@ -241,6 +252,40 @@ public struct EncoderPackageStore: Sendable {
         }
     }
 
+    /// Rejects symlinks in a destination's ancestors and makes sure its resolved path remains
+    /// under the resolved package root, itself under the resolved store directory.
+    private static func checkDestination(root: URL, storeDirectory: URL, path: String) throws
+        -> URL
+    {
+        let fileManager = FileManager.default
+        let resolvedStore = storeDirectory.resolvingSymlinksInPath().standardizedFileURL
+        let resolvedRoot = root.resolvingSymlinksInPath().standardizedFileURL
+        let rootPath = root.standardizedFileURL.path
+        let storePrefix =
+            resolvedStore.path.hasSuffix("/") ? resolvedStore.path : resolvedStore.path + "/"
+        if (try? fileManager.destinationOfSymbolicLink(atPath: rootPath)) != nil {
+            throw EncoderPackageError.symlinkedPath(path)
+        }
+        guard resolvedRoot.path.hasPrefix(storePrefix) else {
+            throw EncoderPackageError.invalidPath(path)
+        }
+
+        var current = root.standardizedFileURL
+        for component in path.split(separator: "/") {
+            current.appendPathComponent(String(component))
+            if (try? fileManager.destinationOfSymbolicLink(atPath: current.path)) != nil {
+                throw EncoderPackageError.symlinkedPath(path)
+            }
+        }
+        let resolvedDestination = current.resolvingSymlinksInPath().standardizedFileURL
+        let rootPrefix =
+            resolvedRoot.path.hasSuffix("/") ? resolvedRoot.path : resolvedRoot.path + "/"
+        guard resolvedDestination.path.hasPrefix(rootPrefix) else {
+            throw EncoderPackageError.invalidPath(path)
+        }
+        return current
+    }
+
     /// Checks a file against its manifest entry: its size, then its SHA-256.
     ///
     /// - Parameter name: The file's name in messages, such as its path in the package.
@@ -305,6 +350,10 @@ public enum EncoderPackageError: Error, Sendable, Hashable, CustomStringConverti
     case unsupportedOperatingSystem(package: String, minimum: String)
     /// A manifest's package name or file path would leave the store's folder.
     case invalidPath(String)
+    /// A store destination or one of its ancestors is a symbolic link.
+    case symlinkedPath(String)
+    /// Remote package assets have not yet been published.
+    case packageDownloadsUnavailable(String)
 
     /// What went wrong, naming the file and where it came from.
     public var description: String {
@@ -328,6 +377,11 @@ public enum EncoderPackageError: Error, Sendable, Hashable, CustomStringConverti
         case .invalidPath(let path):
             return "the manifest names \(path.debugDescription), which is not a relative path "
                 + "inside the package's folder"
+        case .symlinkedPath(let path):
+            return "the store path \(path.debugDescription) traverses a symbolic link"
+        case .packageDownloadsUnavailable(let package):
+            return "remote files for \(package) are not yet published; set "
+                + "\(EncoderPackageStore.localModelsVariable) to a local models folder"
         }
     }
 }

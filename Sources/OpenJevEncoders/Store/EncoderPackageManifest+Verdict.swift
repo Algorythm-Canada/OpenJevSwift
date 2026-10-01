@@ -16,6 +16,7 @@ extension EncoderPackageManifest {
         checkpoint: Checkpoint(
             repository: "heman10x/rlcd-modernbert-151m",
             revision: "8af2496eb63c7fa66d7d234e1f62629380030eb4"),
+        packageDownloadsEnabled: false,
         packageFiles: [
             File(
                 path: "Data/com.apple.CoreML/model.mlmodel",
