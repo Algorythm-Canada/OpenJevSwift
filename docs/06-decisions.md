@@ -2192,11 +2192,11 @@ Decision.
    `samples 1` so that the read count equals the group count whatever the entropies. Under the
    automatic policy the re-reads would add reads but no billing. The 24-noul figures (657 tokens
    plain, 1,147 sequential) are asserted in the upstream case under the default policy.
-4. **"Per group" is shown with an uncertain question among certain ones.** No natural request was
-   found whose groups split into one read and four. On the 24 nouls, the group of 17 has 2
-   questions above the 0.1 threshold and 15 below, and all 17 are re-read 4 times, which is the
-   behaviour `read_group` specifies. The test asserts, for every group, 4 reads when any question of
-   its first read is above the threshold and 1 otherwise, each re-read covering the whole group.
+4. **"Per group" is shown with an uncertain question among certain ones.** Only the 24-noul
+   request was tried, and both its groups are re-read. In the group of 17, 2 questions are above
+   the 0.1 threshold and 15 below, and all 17 are re-read 4 times, which is the behaviour
+   `read_group` specifies. The test asserts, for every group, 4 reads when any question of its
+   first read is above the threshold and 1 otherwise, each re-read covering the whole group.
 5. **`OPENJEV_AUTO_MAX=1` is shown at the settings level.** The engine's `auto_max 1` case was
    already in `Fixtures/policies/auto_rereads.json`. The new test feeds `ServerSettings(environment:)`
    through `DecisionBackendProvider` to a stub whose every read is uncertain: 4 reads by default, 1
@@ -2210,9 +2210,9 @@ Decision.
    0.0089, 16 of 16, written equal on 2 of 3; steps 3, 0.0003, 16 of 16, 2 of 3. The two that differ
    are the quickstart's, whose `is_urgent` is near 0.5 in the oracle.
 
-Alternatives rejected. (a) A recording `DecisionBackend` wrapper around the runtime: it would see
-`CanvasRead`s but not which reads hit the prefill cache, and could not map a read to its prompt
-once the engine builds it. (b) Lowering `autoThreshold` to force a one-read group beside a
+Alternatives rejected. (a) A recording `DecisionBackend` wrapped around the runtime: it would see
+each `CanvasRead` and its prompt, but not the model calls under the prefill cache, which the
+`ModelCalls` seam already exposes. (b) Lowering `autoThreshold` to force a one-read group beside a
 four-read one: the issue asks for the defaults. (c) Asserting quickstart thresholds at `steps 8`:
 upstream sets none, and the read sharpens (`is_urgent` 0.0006 against 0.444 at `steps 1`), which is
 the model's behaviour, not a port defect.
