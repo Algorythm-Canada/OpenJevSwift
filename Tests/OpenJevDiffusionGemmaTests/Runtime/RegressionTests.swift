@@ -245,7 +245,7 @@ extension MLXTests {
                     #expect(gotRead.steps == wantRead.steps, "\(want.id)")
                     for (index, (a, b)) in zip(wantRead.slots, gotRead.slots).enumerated() {
                         slots += 1
-                        topAgree += a.topLabel == b.topLabel ? 1 : 0
+topAgree += a.topLabelID == b.topLabelID ? 1 : 0
                         let moved =
                             zip(a.probabilities, b.probabilities).map { abs($0 - $1) } + [
                                 abs(a.entropy - b.entropy)
@@ -254,7 +254,8 @@ extension MLXTests {
                         largest = max(largest, moved.max() ?? 0)
                         if exact {
                             #expect(
-                                (moved.max() ?? 0) <= Self.tolerance && a.topLabel == b.topLabel,
+                                (moved.max() ?? 0) <= Self.tolerance && a.topLabel == b.topLabel
+                                    && a.topLabelID == b.topLabelID,
                                 "\(want.id) slot \(index): recorded \(a), now \(b)")
                         }
                     }
