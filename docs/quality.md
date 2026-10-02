@@ -44,8 +44,10 @@ asked one question, one request at a time.
   101 of 102 on TypeSafe, every one of the 299 whose upstream top two are at least 0.5 apart among
   them, with a mean probability difference of 0.0135 and 0.0069. Seven items are right on one server
   only, five of them upstream's (McNemar p = 0.45). That meets D-014's aggregate bounds but one: on
-  JevBench's 41 prompts over 1,024 tokens the mean difference is 0.0396, where D-014 allows 0.01 ([A
-  disagreement on DiffusionGemma](#a-disagreement-on-diffusiongemma)).
+  JevBench's 41 prompts over 1,024 tokens the mean difference is 0.0396, where D-014 allows 0.01,
+  and in D-014's exact tier the port's reads of the four items whose top answers differ at a wide
+  margin are mlx-vlm's bit for bit, so the difference is the kernels' ([A disagreement on
+  DiffusionGemma](#a-disagreement-on-diffusiongemma)).
 - **DiffusionGemma scores like the benchmark's published row, and like Jev on TypeSafe.** JevBench's
   `openjev-razorback16` row, the NVFP4 weights on vLLM, has 81.8% on the public items; these runs
   have 81.4% (Swift) and 82.3% (upstream), with the published outcome on 96.1% of the items. On
@@ -349,14 +351,57 @@ short prompts and grows past 1,024 tokens, the length of the model's sliding win
 No question type always differs (on JevBench noul 71 of 74, choice 137 of 139, score 17 of 18; on
 TypeSafe noul 65 of 66, choice 36 of 36), and no type's probabilities lean one way: the Swift server
 gives upstream's top choice a higher probability on 81 items and a lower one on 58 (sign test p =
-0.06), and a higher P(yes) on 36 nouls and a lower one on 38. So the difference looks like the
-kernels' rather than a defect in the port's arithmetic. It is not settled, though: the long-prompt
-excess is past what D-014 measured, and the wide-margin flips all went one way. D-014's oracle reads
-hold four prompts of 1,572 to 2,939 tokens, three of them long for their questions and options and
-one, `long_state`, for its state, and the port met the long-prompt bound there with 0.0054 (D-044).
-Reading the four items above under the exact tier, where the port must give mlx-vlm's answers bit
-for bit, would settle it; long states with uncertain answers, the case the oracle fixture holds
-once, are what it would need more of.
+0.06), and a higher P(yes) on 36 nouls and a lower one on 38. The four wide-margin flips settle
+where the difference comes from: read under D-014's exact tier, with the mlx-metal wheel's metallib
+and the oracle's RoPE table in the five full-attention layers, the port gives mlx-vlm's reads of all
+four bit for bit.
+
+- **The same reads.** Upstream's own `MlxEngine.decide` on the harness's request bodies (their
+  SHA-256 is the result files' `body_sha256`) gives upstream's four answers bit for bit, and the
+  port's `DecisionEngine` builds the same prompt ids, canvases, slots and steps from the same
+  bodies: four reads per item, at the request seed and the three re-read seeds, each one step over
+  a 16-token canvas with the slot at position 7.
+- **The same numbers.** All 16 reads are identical in every token id and float32 logprob of the top
+  20 and the labels, and so are the prefill caches of all 30 layers, the 25 sliding layers' last
+  1,023 positions (what a read sees) and the prompt token counts. The answers equal upstream's
+  result files to the last bit: 0.7244154751137403, 0.3748895786709909, 0.6016278724196832, and
+  `east_ward` with confidence 0.2770513449574379.
+- **The control.** On the Swift server's own kernels and RoPE table the same harness gives the Swift
+  result files' four answers bit for bit, so it reads what the server read. There the first
+  difference is layer 0's keys, after RoPE: their sums of squares differ from mlx-vlm's by 5e-9 to
+  3e-8 relative, and the values are equal. With the wheel's metallib and the port's own table,
+  layers 0 to 4 are equal and the first difference is layer 5, the first full-attention layer.
+
+These states move with any last-bit change, mlx-vlm's own included. Against upstream's 16 reads,
+over their 40 label probabilities, and in the top label of the four answers:
+
+| read by | mean \|Δp\| | largest \|Δp\| | answers flipped |
+|---|---|---|---|
+| the port on the Swift server's kernels and its own RoPE table, as the server reads | 0.210 | 0.500 | 4 of 4 |
+| the port on the wheel's metallib, with its own table | 0.083 | 0.247 | 1 of 4 |
+| the port on the Swift server's kernels, with the oracle's table | 0.226 | 0.913 | 2 of 4 |
+| mlx-vlm itself with a 64-token chunked prefill (`Tools/oracle/sensitivity.py`) | 0.119 | 0.476 | 1 of 4 |
+| the port in the exact tier, the wheel's metallib and the oracle's table | 0 | 0 | 0 of 4 |
+
+mlx-vlm's own chunked prefill, exact in real arithmetic, flips `hard-sol-b-long_policy-06` to
+`no_award` at 0.628, as the Swift server did, and moves the other three answers by 0.05 to 0.14;
+upstream's own four reads of `hard-opus-a-long_policy-19` put P(yes) anywhere from 0.06 to 0.63.
+Either kernel difference alone flips some of these items, and the oracle's table alone would not
+bring the Swift server's reads closer. `Tools/oracle/item_reads.py` runs the check on any JevBench
+or TypeSafe item ([Tools/README.md](../Tools/README.md#reading-benchmark-items-against-upstream)),
+and `Tools/oracle/results/item_reads_long_flips.json` keeps this run, without TypeSafe's text.
+
+What the long-prompt excess says about D-014 is an observation, and its bounds stay as they are.
+The long-prompt bound is a mean over the 1,496 label probabilities of the oracle fixture's 50 slots
+on prompts over 1,024 tokens (four prompts of 1,572 to 2,939 tokens, where the port met it with
+0.0054, D-044), and 1,440 of them belong to the 26 slots with 10 to 255 labels, most of them near 0.
+The other 24 slots have two or three labels, the only long slots of the fixture with no more labels
+than a benchmark question (two to six on JevBench, two to eight on TypeSafe). Over their 56 labels
+spike #22's committed runs give 0.0428 for mlx-vlm's chunked prefill and 0.0537 for the
+transliteration on native kernels, against 0.0064 and 0.0054 over all labels, and 27 of the 50
+slots have an oracle top-two margin under 0.5. JevBench's 0.0396 over its 41 long prompts is of
+that size, a little under both. `item_reads.py long-slots` recomputes these figures from the
+committed files.
 
 ### Against the published results
 
@@ -475,8 +520,9 @@ the backend's parity tests (issue #31, D-044), and these runs record it.
   OPENJEV_MLX_CACHE_LIMIT_GB=4`, which kept the server at 19 to 24 GB. The cap changes no answer:
   the capped JevBench run gave the uncapped one's 231 answers bit for bit, from the same binary in a
   new process. Upstream ran with the same cap, at up to 25 GB. A deployment that reads long prompts
-  should set a cap ([deployment.md](deployment.md)). The Swift server's settings line does not print
-  it, so a log cannot show whether a run had one; the result files record it.
+  should set a cap ([deployment.md](deployment.md)). The settings line of the server that ran,
+  `2414408`, did not print it, so its log cannot show whether a run had one; the result files
+  record it, and since PR #106 the settings line prints `mlx_cache_limit_gb`.
 - **What is recorded** is the capped runs: `openjev-0.1-swift.json` and `openjev-0.1-upstream.json`
   for JevBench and their pair under `typesafe102/`. The uncapped run's JevBench file is not
   committed, since it is the same.
