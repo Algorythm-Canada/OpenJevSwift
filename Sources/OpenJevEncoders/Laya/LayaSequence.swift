@@ -45,7 +45,12 @@ public struct LayaSequence: Sendable, Hashable {
     /// given, so that a batch tokenizes its state once for all its questions.
     ///
     /// - Parameters:
+    ///   - prompt: The question's head and options, as ``LayaPrompt`` renders them.
     ///   - stateIDs: The ids of ``LayaPrompt/stateText(_:)`` of the state, uncut.
+    ///   - tokenizer: The checkpoint's tokenizer, which encodes the head and the options and
+    ///     gives the special tokens.
+    ///   - maxLength: The longest sequence, laya's `max_len`.
+    ///   - headMaxLength: The longest head, the question and its options, laya's `head_max_len`.
     public init(
         prompt: LayaPrompt, stateIDs: [Int], tokenizer: any LayaTokenizing, maxLength: Int,
         headMaxLength: Int

@@ -96,7 +96,7 @@ public struct ReadResult: Sendable {
     ///
     /// `tops[i]` is the backend's map for slot `i`, in the backend's order (the top 20 tokens
     /// and every label, for the MLX runtime), and `labelIDs[i]` that slot's label ids. Each slot
-    /// goes through ``SlotDistribution/compute(top:labelIDs:)``.
+    /// goes through ``SlotDistribution/compute(top:labelIDs:)-8yv2d``.
     ///
     /// - Precondition: `tops` and `labelIDs` have the same count, and no map is empty.
     public init(

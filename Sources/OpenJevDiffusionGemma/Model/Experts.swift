@@ -15,7 +15,10 @@ import MLXNN
 /// gathered quantized matmuls are mlx-vlm's. Not mlx-swift-lm's `Gemma4TextExperts`, whose
 /// `SwitchGLU` keeps gate and up apart.
 public final class Experts: Module {
+    /// Every expert's gate and up projections in one `SwitchLinear`, `gate_up_proj`, split at
+    /// ``hiddenDims``.
     @ModuleInfo(key: "gate_up_proj") public var gateUpProj: SwitchLinear
+    /// Every expert's down projection, `down_proj`.
     @ModuleInfo(key: "down_proj") public var downProj: SwitchLinear
 
     /// `moe_intermediate_size`, where `gate_up_proj`'s output splits.
@@ -25,6 +28,7 @@ public final class Experts: Module {
     /// matmuls, as switch_layers.py does.
     public static let sortThreshold = 64
 
+    /// Builds the experts with the configuration's expert count and sizes, without biases.
     public init(_ config: DiffusionGemmaTextConfiguration) {
         hiddenDims = config.moeIntermediateSize
         _gateUpProj.wrappedValue = SwitchLinear(

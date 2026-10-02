@@ -21,12 +21,21 @@ import OpenJevCore
 public struct ServerSettings: Sendable, Hashable {
     /// A log level, uvicorn's names plus swift-log's `notice`.
     public enum LogLevel: String, Sendable, Hashable, CaseIterable {
+        /// What `info` writes, and the most detail the libraries log.
         case trace
+        /// What `info` writes, and the libraries' debugging detail.
         case debug
+        /// The default: the settings, the phases and one line per request, with the refusals
+        /// and failures.
         case info
+        /// swift-log's level between `info` and `warning`, which uvicorn does not have. The
+        /// server writes nothing at it, so it keeps what `warning` keeps.
         case notice
+        /// The refusals and failures, without the phase and request lines.
         case warning
+        /// The failures alone, such as the 503 of a backend or of a routed server.
         case error
+        /// Nothing the server writes; only the libraries' critical messages.
         case critical
     }
 
@@ -233,8 +242,8 @@ public struct ServerSettings: Sendable, Hashable {
     /// are trimmed, empty parts are skipped and every trailing `/` is dropped from a URL. A name
     /// given twice keeps its first place and takes its last URL, as a Python dict does.
     ///
-    /// The text is read code point by code point, as Python reads it, and trimmed of the
-    /// characters `str.strip()` removes (``TextOf/isPythonWhitespace(_:)``), so a `,` or `=`
+    /// The text is read code point by code point, as Python reads it, and trimmed of the characters
+    /// `str.strip()` removes (``/OpenJevCore/TextOf/isPythonWhitespace(_:)``), so a `,` or `=`
     /// followed by a combining mark still separates, and U+001C to U+001F are trimmed.
     ///
     /// - Throws: ``ServerSettingsError`` `OPENJEV_MODEL_ROUTES: {part!r} is not name=url` for a

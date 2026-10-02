@@ -12,6 +12,7 @@ public struct SlotRequest: Equatable, Sendable {
     /// The label token ids, in option order.
     public var labelIDs: [Int]
 
+    /// Creates a slot.
     public init(position: Int, labelIDs: [Int]) {
         self.position = position
         self.labelIDs = labelIDs
@@ -30,14 +31,15 @@ public struct ReadOutput: Sendable {
     /// The prompt tokens the prefill processed. Steps do not change it.
     public var promptTokens: Int
 
+    /// Creates a read's output.
     public init(slots: [[(tokenID: Int, logprob: Double)]], written: [[Int]], promptTokens: Int) {
         self.slots = slots
         self.written = written
         self.promptTokens = promptTokens
     }
 
-    /// The engine's ``ReadResult``: each slot's map through `slot_distribution`, as upstream's
-    /// `one_read` does with what `MlxRuntime.read` returns.
+    /// The engine's ``/OpenJevCore/ReadResult``: each slot's map through `slot_distribution`, as
+    /// upstream's `one_read` does with what `MlxRuntime.read` returns.
     ///
     /// - Parameter slots: the read's slots, for their label ids.
     public func readResult(for slots: [SlotRequest]) -> ReadResult {

@@ -15,8 +15,8 @@ public protocol BackendProvider: Sendable {
     func makeService(settings: ServerSettings) async throws -> any SystemOneService
 }
 
-/// A provider that loads a ``DecisionBackend`` and serves it through a ``DecisionEngine``
-/// configured from the settings.
+/// A provider that loads a ``/OpenJevCore/DecisionBackend`` and serves it through a
+/// ``/OpenJevCore/DecisionEngine`` configured from the settings.
 public struct DecisionBackendProvider: BackendProvider {
     private let load: @Sendable (ServerSettings) async throws -> any DecisionBackend
 
@@ -32,8 +32,9 @@ public struct DecisionBackendProvider: BackendProvider {
     }
 }
 
-/// A provider that loads a ``QuestionReadBackend`` and serves it through an
-/// ``EncoderDecisionEngine`` configured from the settings, warmed up when `OPENJEV_WARMUP` asks.
+/// A provider that loads a ``/OpenJevCore/QuestionReadBackend`` and serves it through an
+/// ``/OpenJevCore/EncoderDecisionEngine`` configured from the settings, warmed up when
+/// `OPENJEV_WARMUP` asks.
 public struct QuestionReadBackendProvider: BackendProvider {
     private let load: @Sendable (ServerSettings) async throws -> any QuestionReadBackend
     private let willWarmUp: @Sendable () -> Void
@@ -63,11 +64,12 @@ public struct QuestionReadBackendProvider: BackendProvider {
     }
 }
 
+/// The engine settings that `OPENJEV_*` variables set, for ``DecisionBackendProvider``.
 extension EngineConfiguration {
     /// The settings `Engine` reads: the canvas, the re-read policy, the read and queue bounds and
     /// the image limits. The rest keep their defaults.
     ///
-    /// - Throws: ``CanvasGeometryError``, which validated settings never cause.
+    /// - Throws: ``/OpenJevCore/CanvasGeometryError``, which validated settings never cause.
     public init(_ settings: ServerSettings) throws {
         self.init(
             geometry: try CanvasGeometry(canvas: settings.canvas, step: settings.canvasStep),
@@ -80,6 +82,7 @@ extension EngineConfiguration {
     }
 }
 
+/// The engine settings that `OPENJEV_*` variables set, for ``QuestionReadBackendProvider``.
 extension EncoderEngineConfiguration {
     /// The settings `EncoderEngine` reads: the batch size, the queue bound and the warm-up. Reads
     /// stay one at a time, upstream's one model thread.

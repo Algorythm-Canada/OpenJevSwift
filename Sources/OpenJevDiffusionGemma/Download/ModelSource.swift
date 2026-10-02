@@ -61,6 +61,7 @@ public enum ModelSource: Sendable, Hashable, CustomStringConvertible {
         self = .hub(repository: repository, revision: nil)
     }
 
+    /// The directory's path, or the repository with `@revision` when a revision is set.
     public var description: String {
         switch self {
         case .directory(let url):

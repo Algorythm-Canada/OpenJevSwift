@@ -5,7 +5,7 @@ import Jinja
 import OpenJevCore
 import Tokenizers
 
-/// The production ``DecisionTokenizer``: the DiffusionGemma tokenizer loaded through
+/// The production ``/OpenJevCore/DecisionTokenizer``: the DiffusionGemma tokenizer loaded through
 /// swift-transformers' `Tokenizers`, with the shipped Gemma 4 chat template rendered by
 /// swift-jinja (decision D-008, spikes #20 and #21).
 ///
@@ -67,7 +67,7 @@ public struct SwiftTransformersTokenizer: DecisionTokenizer {
     /// false, Python's default since transformers 4.45, where swift-transformers would default to
     /// true and rewrite `" ."` to `"."` in every decode.
     ///
-    /// - Throws: An ``OpenJevCore/TokenizerError`` describing what swift-transformers or the
+    /// - Throws: An ``/OpenJevCore/TokenizerError`` describing what swift-transformers or the
     ///   template compiler refused, or the error reading a file gave.
     public static func load(from files: TokenizerFiles) async throws -> Self {
         let before = ResourceUsage.current()
@@ -179,6 +179,8 @@ public struct SwiftTransformersTokenizer: DecisionTokenizer {
         tokenizer.convertIdToToken(id)
     }
 
+    /// The ids of `text`, through swift-transformers' `encode(text:addSpecialTokens:)`, which the
+    /// tokenizer parity spike matched with Python's `tokenizers` on every recorded text (D-008).
     public func encode(_ text: String, addSpecialTokens: Bool) throws -> [Int] {
         tokenizer.encode(text: text, addSpecialTokens: addSpecialTokens)
     }
@@ -215,6 +217,9 @@ public struct SwiftTransformersTokenizer: DecisionTokenizer {
         return UInt8(token.dropFirst(3).dropLast(), radix: 16)
     }
 
+    /// The prompt ids of `[system, user]` with the generation prompt, the shipped chat template
+    /// rendered with `enable_thinking` set to `thinking`, as upstream's `apply_chat_template` gives
+    /// them (D-008).
     public func chatPromptIDs(system: String, user: String, thinking: Bool) throws -> [Int] {
         try applyChatTemplate(
             messages: Self.messages(system: system, user: user), thinking: thinking)
@@ -224,7 +229,7 @@ public struct SwiftTransformersTokenizer: DecisionTokenizer {
     /// over `[system, user]` with the generation prompt and `enable_thinking` set to `thinking`,
     /// upstream's `apply_chat_template(..., tokenize=False)`.
     ///
-    /// - Throws: An ``OpenJevCore/TokenizerError`` when the template does not render.
+    /// - Throws: An ``/OpenJevCore/TokenizerError`` when the template does not render.
     public func chatPromptText(system: String, user: String, thinking: Bool) throws -> String {
         try renderChatTemplate(
             messages: Self.messages(system: system, user: user), addGenerationPrompt: true,
@@ -235,7 +240,7 @@ public struct SwiftTransformersTokenizer: DecisionTokenizer {
     /// prompt and `enable_thinking` set to `thinking`. `messages` are chat messages as
     /// dictionaries, `role` and `content`, with `content` a string or a list of parts.
     ///
-    /// - Throws: An ``OpenJevCore/TokenizerError`` when the template does not render.
+    /// - Throws: An ``/OpenJevCore/TokenizerError`` when the template does not render.
     public func applyChatTemplate(messages: [[String: any Sendable]], thinking: Bool) throws
         -> [Int]
     {
@@ -257,7 +262,7 @@ public struct SwiftTransformersTokenizer: DecisionTokenizer {
     /// `messages` are chat messages as dictionaries, `role` and `content`, with `content` a
     /// string or a list of parts such as `{"type": "image"}` and `{"type": "text", "text": ...}`.
     ///
-    /// - Throws: An ``OpenJevCore/TokenizerError`` when the template does not render.
+    /// - Throws: An ``/OpenJevCore/TokenizerError`` when the template does not render.
     public func renderChatTemplate(
         messages: [[String: any Sendable]], addGenerationPrompt: Bool, thinking: Bool
     ) throws -> String {

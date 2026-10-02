@@ -13,8 +13,11 @@ import MLXNN
 /// dtype, `proj`, the top `top_k_experts` scores by `argpartition`, a precise softmax over them,
 /// then times `per_expert_scale[indices]`.
 public final class Router: Module {
+    /// The projection to one score per expert, `proj`.
     @ModuleInfo public var proj: Linear
+    /// The per-dimension input scale, `scale`.
     @ParameterInfo public var scale: MLXArray
+    /// The weight each chosen expert's softmax share is multiplied by, `per_expert_scale`.
     @ParameterInfo(key: "per_expert_scale") public var perExpertScale: MLXArray
 
     let eps: Float
@@ -22,6 +25,7 @@ public final class Router: Module {
     /// The experts each token goes to.
     public let topK: Int
 
+    /// Builds the router with the configuration's hidden size, expert count and `top_k_experts`.
     public init(_ config: DiffusionGemmaTextConfiguration) {
         _proj.wrappedValue = Linear(config.hiddenSize, config.numExperts, bias: false)
         _scale.wrappedValue = MLXArray.ones([config.hiddenSize])

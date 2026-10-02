@@ -81,6 +81,7 @@ extension DiffusionGemmaRuntime {
         /// The process's peak resident size in bytes (`getrusage`).
         public var peakResidentBytes: Int
 
+        /// Creates a report from figures in bytes.
         public init(
             activeBytes: Int, cacheBytes: Int, peakBytes: Int, residentBytes: Int,
             peakResidentBytes: Int
@@ -101,6 +102,7 @@ extension DiffusionGemmaRuntime {
                 peakResidentBytes: usage.peakResidentBytes)
         }
 
+        /// The five figures in GiB, for logs.
         public var description: String {
             func gib(_ bytes: Int) -> String {
                 String(format: "%.2f GiB", Double(bytes) / Double(1 << 30))

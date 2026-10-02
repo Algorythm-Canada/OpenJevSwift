@@ -19,8 +19,8 @@ import OpenJevCore
 /// - Every question ends with the label `insufficient evidence`, the abstention the model may
 ///   choose. ``VerdictCalibration`` drops its probability again.
 ///
-/// The instructions and descriptions are ``EncoderQuestion``'s, which are upstream's `text_of`
-/// renderings, and the context is ``StateText/render(_:)`` of the state.
+/// The instructions and descriptions are ``/OpenJevCore/EncoderQuestion``'s, which are upstream's
+/// `text_of` renderings, and the context is ``/OpenJevCore/StateText/render(_:)`` of the state.
 public struct VerdictPrompt: Sendable, Hashable {
     /// The marker before each label, upstream's `LABEL_MARKER`.
     public static let labelMarker = "<<LABEL>>"

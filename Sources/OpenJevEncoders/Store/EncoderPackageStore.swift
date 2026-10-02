@@ -463,7 +463,10 @@ public struct EncoderPackageStore: Sendable {
 
     /// Checks a file against its manifest entry: its size, then its SHA-256.
     ///
-    /// - Parameter name: The file's name in messages, such as its path in the package.
+    /// - Parameters:
+    ///   - file: The file on disk.
+    ///   - expected: The manifest's entry for it, with its size and SHA-256.
+    ///   - name: The file's name in messages, such as its path in the package.
     /// - Throws: ``EncoderPackageError/sizeMismatch(file:url:expected:actual:)`` or
     ///   ``EncoderPackageError/digestMismatch(file:url:expected:actual:)``.
     public static func verify(

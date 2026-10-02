@@ -10,7 +10,7 @@
 
     /// The OpenJev server over a loaded service, run as a swift-service-lifecycle `Service`: it
     /// serves until a graceful shutdown, lets the requests in flight finish, then releases the
-    /// service's model (``ModelReleasing``).
+    /// service's model (``/OpenJevCore/ModelReleasing``).
     ///
     /// On a graceful shutdown the listening socket closes at once, so a new connection is
     /// refused; an idle connection is closed, and one with a request in flight is closed once its

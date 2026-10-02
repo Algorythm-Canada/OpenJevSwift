@@ -16,6 +16,7 @@ public enum DiffusionGemmaRuntimeError: Error, Sendable, Hashable, CustomStringC
     /// more.
     case invalidCacheLimit(Double)
 
+    /// What was refused, naming the setting or the milestone that brings the feature.
     public var description: String {
         switch self {
         case .invalidCacheLimit(let gb):
@@ -33,13 +34,13 @@ public enum DiffusionGemmaRuntimeError: Error, Sendable, Hashable, CustomStringC
     }
 }
 
-/// DiffusionGemma on MLX behind the core's ``DecisionBackend``.
+/// DiffusionGemma on MLX behind the core's ``/OpenJevCore/DecisionBackend``.
 ///
 /// The actor owns the model, the tokenizer and the prefill cache, and every MLX evaluation runs
-/// inside it, one at a time, as upstream runs them on its one MLX thread (R14). Only values
-/// cross its boundary: ``CanvasRead`` in, ``ReadResult`` out. Concurrent callers queue on the
-/// actor, so concurrency buys prefill cache reuse and overlap of the engine's CPU work, not GPU
-/// parallelism.
+/// inside it, one at a time, as upstream runs them on its one MLX thread (R14). Only values cross
+/// its boundary: ``/OpenJevCore/CanvasRead`` in, ``/OpenJevCore/ReadResult`` out. Concurrent
+/// callers queue on the actor, so concurrency buys prefill cache reuse and overlap of the engine's
+/// CPU work, not GPU parallelism.
 ///
 /// ```swift
 /// let runtime = try await DiffusionGemmaRuntime.load(.fourBit)
@@ -60,6 +61,8 @@ public actor DiffusionGemmaRuntime: DecisionBackend {
             ) throws -> ReadOutput
     }
 
+    /// The checkpoint's tokenizer, a ``SwiftTransformersTokenizer``, which the engine encodes the
+    /// markers, the labels and the templates with.
     public nonisolated let tokenizer: any DecisionTokenizer
     /// The runtime's settings.
     public nonisolated let configuration: Configuration
@@ -70,7 +73,7 @@ public actor DiffusionGemmaRuntime: DecisionBackend {
     /// image refusal.
     public nonisolated let capabilities = BackendCapabilities(
         steps: true, samples: true, think: false, sequential: true, images: false)
-    /// `openjev-0.1`, ``ServedModels/diffusionGemmaVersion``.
+    /// `openjev-0.1`, ``/OpenJevCore/ServedModels/diffusionGemmaVersion``.
     public nonisolated let modelName = ServedModels.diffusionGemmaVersion
 
     /// The model the live tests share with the model-level suites, so the 16 GB checkpoint loads
@@ -233,10 +236,10 @@ public actor DiffusionGemmaRuntime: DecisionBackend {
     /// prefill or a cached one, `steps` decoder passes over the canvas, and each slot's top 20
     /// and labels through `slot_distribution`.
     ///
-    /// - Throws: ``SchemaError`` `"the request is {n} tokens; the limit is {max}"` before anything
-    ///   runs when the prompt is longer than ``maxPromptTokens``;
-    ///   ``DiffusionGemmaRuntimeError/unsupported(_:)`` for an image prompt; ``ReadInputError``
-    ///   for a canvas or slots the model refuses.
+    /// - Throws: ``/OpenJevCore/SchemaError`` `"the request is {n} tokens; the limit is {max}"`
+    ///   before anything runs when the prompt is longer than ``maxPromptTokens``;
+    ///   ``DiffusionGemmaRuntimeError/unsupported(_:)`` for an image prompt; ``ReadInputError`` for
+    ///   a canvas or slots the model refuses.
     public func read(_ read: CanvasRead) async throws -> ReadResult {
         let (output, slots) = try modelRead(read)
         return output.readResult(for: slots)
@@ -285,9 +288,10 @@ public actor DiffusionGemmaRuntime: DecisionBackend {
         choices: [(name: "yes", description: ""), (name: "no", description: "")],
         labels: ["yes", "no"], legend: nil)
 
-    /// Runs one small read on the model, outside the prefill cache, so the first user does not
-    /// pay kernel compilation: one noul question over upstream's warm-up state, its prompt from
-    /// the chat template and its canvas from ``CanvasBuilder`` with seed 0. No engine is needed.
+    /// Runs one small read on the model, outside the prefill cache, so the first user does not pay
+    /// kernel compilation: one noul question over upstream's warm-up state, its prompt from the
+    /// chat template and its canvas from ``/OpenJevCore/CanvasBuilder`` with seed 0. No engine is
+    /// needed.
     ///
     /// - Returns: the time it took.
     @discardableResult

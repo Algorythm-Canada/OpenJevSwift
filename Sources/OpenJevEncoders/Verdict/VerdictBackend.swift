@@ -88,7 +88,7 @@ public actor VerdictBackend: QuestionReadBackend {
         }
     }
 
-    /// ``KnownEncoderModels/verdict``: `verdict-1.4` with upstream's description.
+    /// ``/OpenJevCore/KnownEncoderModels/verdict``: `verdict-1.4` with upstream's description.
     public nonisolated let modelInfo = KnownEncoderModels.verdict
     /// 24: the head has 25 logits, and the last is kept for the abstention.
     public nonisolated let maxChoices = 24
@@ -166,8 +166,9 @@ public actor VerdictBackend: QuestionReadBackend {
 }
 
 extension VerdictBackend: ModelReleasing {
-    /// Releases the model's loaded Core ML functions, when the runner adopts ``ModelReleasing``
-    /// as ``CoreMLEncoderModel`` does. A later read loads them again.
+    /// Releases the model's loaded Core ML functions, when the runner adopts
+    /// ``/OpenJevCore/ModelReleasing`` as ``CoreMLEncoderModel`` does. A later read loads them
+    /// again.
     public nonisolated func close() async {
         await (model as? any ModelReleasing)?.close()
     }
@@ -179,8 +180,8 @@ extension VerdictBackend: ModelReleasing {
         /// which is compiled with `MLModel.compileModel(at:)` unless a compile of it is kept
         /// beside it (``CompiledEncoderModel``).
         ///
-        /// Package functions load when a read first needs them; ``EncoderDecisionEngine``'s
-        /// warm-up read loads the first one.
+        /// Package functions load when a read first needs them;
+        /// ``/OpenJevCore/EncoderDecisionEngine``'s warm-up read loads the first one.
         ///
         /// It can be called from code built for the package's macOS 14 and iOS 17 floors: the
         /// multifunction package needs macOS 15 or iOS 18, and an older OS gets
@@ -249,8 +250,11 @@ extension VerdictBackend: ModelReleasing {
         /// }
         /// ```
         ///
-        /// - Parameter functionCapacity: The most functions loaded at once; `nil` is
-        ///   ``Configuration/defaultFunctionCapacity``.
+        /// - Parameters:
+        ///   - store: Where the package, the tokenizer and the calibrator are found or downloaded
+        ///     to.
+        ///   - functionCapacity: The most functions loaded at once; `nil` is
+        ///     ``Configuration/defaultFunctionCapacity``.
         /// - Throws: The store's errors (``EncoderPackageError``) and ``load(configuration:)``'s.
         public static func load(
             from store: EncoderPackageStore, functionCapacity: Int? = nil
