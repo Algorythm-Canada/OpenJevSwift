@@ -447,6 +447,33 @@ per-read slot maps equal to the oracle's or to the unlimited run's. The planted-
 summarized in `tolerance_stats.json` rather than kept whole. With Xcode 27 the first build of each
 scratch package takes about 4 minutes; later builds take seconds.
 
+The exact tier also reaches beyond the fixture. `Tools/oracle/item_reads.py` and the `ItemReads`
+target read any JevBench or TypeSafe item through upstream's `MlxEngine.decide` and through the
+port's `DecisionEngine` and model, and compare the two read by read and prefill layer by layer
+(issue #62; [Tools/README.md](../../Tools/README.md#reading-benchmark-items-against-upstream)). This
+settled the four long-prompt items whose top answers differ between the servers in
+[quality.md](../quality.md#a-disagreement-on-diffusiongemma). It ran from `Tools/jevbench/.venv`,
+which holds the same MLX and mlx-vlm as the oracle's environment, with the venv and the datasets
+made as [quality.md](../quality.md#rerunning-every-table) says:
+
+```bash
+PY=Tools/jevbench/.venv/bin/python
+WHEEL_METALLIB="$PWD/Tools/jevbench/.venv/lib/python3.12/site-packages/mlx/lib/mlx.metallib"
+$PY Tools/oracle/item_reads.py bodies jevbench:hard-opus-c-long_policy-04 jevbench:hard-sol-b-long_policy-06 jevbench:hard-opus-a-long_policy-19 typesafe102:e2e58201a90c11192f70edbf
+$PY Tools/oracle/item_reads.py upstream --variants chunked_prefill
+swift run --package-path Tools/oracle/UpstreamProbe -c release ItemReads --metallib "$WHEEL_METALLIB" --oracle-rope
+swift run --package-path Tools/oracle/UpstreamProbe -c release ItemReads
+swift run --package-path Tools/oracle/UpstreamProbe -c release ItemReads --metallib "$WHEEL_METALLIB"
+swift run --package-path Tools/oracle/UpstreamProbe -c release ItemReads --oracle-rope
+$PY Tools/oracle/item_reads.py compare --summary Tools/oracle/results/item_reads_long_flips.json
+$PY Tools/oracle/item_reads.py long-slots
+```
+
+`compare` writes `item_reads_long_flips.json`, a summary without TypeSafe's text or prompt ids; the
+full runs stay in `~/Library/Caches/OpenJevSwift/item-reads`. `long-slots` recomputes, from
+`Fixtures/oracle/reads.json`, `sensitivity.json` and `transliteration_run.json`, the long-prompt
+row of the D-014 table over the slots with at most four labels.
+
 ## Deviations from the brief
 
 - **The oracle's script is `Tools/fixtures/mlx_vlm_oracle.py`, not `Tools/oracle/mlx_vlm_oracle.py`.** `Tests/OpenJevCoreTests/Fixtures/FixturePinTests.swift` requires every JSON file under `Fixtures/` to name a generator script under `Tools/fixtures/`. Keeping the script there leaves the main package untouched. The issue also places the generator in `Tools/fixtures/`. It runs from `Tools/oracle/.venv`, which holds MLX. The fetch script, the probes, the sensitivity, cross-feed and statistics scripts, and all timings live in `Tools/oracle/`.

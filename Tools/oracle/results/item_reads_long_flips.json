@@ -1,0 +1,2499 @@
+{
+ "what": "PR #105 follow-up: upstream's reads of JevBench and TypeSafe items against the port's, by Tools/oracle/item_reads.py and UpstreamProbe ItemReads. Bit-for-bit flags compare token ids and float32 logprob bits (reads) and SHA-256 (prefill layers); label probabilities are slot_distribution's, per read in read order. No state text, prompt ids or reference answers.",
+ "upstream": {
+  "run_on": "2026-10-02",
+  "machine": {
+   "chip": "Apple M3 Max",
+   "macos": "27.0.1"
+  },
+  "upstream_commit": "dcd2094",
+  "python": "3.12.2",
+  "packages": {
+   "mlx": "0.32.2",
+   "mlx-metal": "0.32.2",
+   "mlx-vlm": "0.6.15",
+   "transformers": "5.17.0"
+  },
+  "metallib": {
+   "wheel": "mlx-metal 0.32.2",
+   "path": "mlx/lib/mlx.metallib",
+   "sha256": "dc59d1cceb1a5c7e578232e6e41e28e2c73c9463ac6dbc3886c3ee17ffc270ed"
+  },
+  "model": {
+   "repo": "mlx-community/diffusiongemma-26B-A4B-it-4bit",
+   "revision": "a7a81407613811e8ba63af92ac0d852b809e191f"
+  },
+  "settings": {
+   "mlx_cache_limit_gb": 4.0,
+   "auto_threshold": 0.1,
+   "auto_max": 4,
+   "canvas": 64,
+   "canvas_step": 16
+  }
+ },
+ "items": [
+  {
+   "dataset": "jevbench",
+   "id": "hard-opus-c-long_policy-04",
+   "type": "noul",
+   "questions": [
+    {
+     "key": "decision",
+     "type": "noul",
+     "options": [
+      "yes",
+      "no"
+     ]
+    }
+   ],
+   "body_sha256": "9360bc0c174610525b81ff51508a9357073c09b9054804ac15d76107b3c9e550",
+   "result_files_checked": [
+    "swift",
+    "upstream"
+   ],
+   "seed": 436693227,
+   "prompts": [
+    {
+     "prompt_ids_sha256": "ce9a1c03eb94fbe84888f46405f828037e7ff2323df24b51e9340b310e567020",
+     "tokens": 3264
+    }
+   ],
+   "prompt_tokens": [
+    3264,
+    3264,
+    3264,
+    3264
+   ],
+   "read_seed_offsets": [
+    0,
+    7919,
+    15838,
+    23757
+   ],
+   "steps": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "label_probabilities": [
+    [
+     [
+      0.9777009687441982,
+      0.02229903125580184
+     ]
+    ],
+    [
+     [
+      0.4597933072665528,
+      0.5402066927334472
+     ]
+    ],
+    [
+     [
+      0.8086442860577275,
+      0.19135571394227252
+     ]
+    ],
+    [
+     [
+      0.6515233383864826,
+      0.3484766616135174
+     ]
+    ]
+   ],
+   "answers": {
+    "decision": {
+     "type": "noul",
+     "noul": 0.7244154751137403
+    }
+   },
+   "answers_equal_result_files": {
+    "swift": false,
+    "upstream": true
+   },
+   "result_file_answers": {
+    "swift": {
+     "type": "noul",
+     "noul": 0.31779558707122896
+    },
+    "upstream": {
+     "type": "noul",
+     "noul": 0.7244154751137403
+    }
+   }
+  },
+  {
+   "dataset": "jevbench",
+   "id": "hard-sol-b-long_policy-06",
+   "type": "choice",
+   "questions": [
+    {
+     "key": "decision",
+     "type": "choice",
+     "options": [
+      "east_ward",
+      "harbor_neighbors",
+      "no_award",
+      "river_arts"
+     ]
+    }
+   ],
+   "body_sha256": "0f202c6007ae07a35012fcf54d1babd3b17dbd29c651c5b7266ada0b71c75c2f",
+   "result_files_checked": [
+    "swift",
+    "upstream"
+   ],
+   "seed": 207696157,
+   "prompts": [
+    {
+     "prompt_ids_sha256": "9b2ec63b5099d068c31037ac70970ab2adf3cb683b51efd065f56ca1def1e992",
+     "tokens": 2647
+    }
+   ],
+   "prompt_tokens": [
+    2647,
+    2647,
+    2647,
+    2647
+   ],
+   "read_seed_offsets": [
+    0,
+    7919,
+    15838,
+    23757
+   ],
+   "steps": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "label_probabilities": [
+    [
+     [
+      0.5243171238053203,
+      0.06771782855629295,
+      0.3015428684841068,
+      0.10642217915427997
+     ]
+    ],
+    [
+     [
+      0.5757047401889993,
+      0.04003037048874033,
+      0.30485653650691963,
+      0.07940835281534071
+     ]
+    ],
+    [
+     [
+      0.6960547265044066,
+      0.05694808243136933,
+      0.2000504711529746,
+      0.04694671991124946
+     ]
+    ],
+    [
+     [
+      0.5221015362831953,
+      0.01797470691889315,
+      0.4211719662162482,
+      0.038751790581663365
+     ]
+    ]
+   ],
+   "answers": {
+    "decision": {
+     "type": "choice",
+     "choice": "east_ward",
+     "probabilities": {
+      "east_ward": 0.5795445316954804,
+      "harbor_neighbors": 0.045667747098823944,
+      "no_award": 0.3069054605900623,
+      "river_arts": 0.06788226061563338
+     },
+     "confidence": 0.2770513449574379
+    }
+   },
+   "answers_equal_result_files": {
+    "swift": false,
+    "upstream": true
+   },
+   "result_file_answers": {
+    "swift": {
+     "type": "choice",
+     "choice": "no_award",
+     "probabilities": {
+      "east_ward": 0.28369809622271475,
+      "harbor_neighbors": 0.06727716494295859,
+      "no_award": 0.602908810626982,
+      "river_arts": 0.04611592820734469
+     },
+     "confidence": 0.2887962684490105
+    },
+    "upstream": {
+     "type": "choice",
+     "choice": "east_ward",
+     "probabilities": {
+      "east_ward": 0.5795445316954804,
+      "harbor_neighbors": 0.045667747098823944,
+      "no_award": 0.3069054605900623,
+      "river_arts": 0.06788226061563338
+     },
+     "confidence": 0.2770513449574379
+    }
+   }
+  },
+  {
+   "dataset": "jevbench",
+   "id": "hard-opus-a-long_policy-19",
+   "type": "noul",
+   "questions": [
+    {
+     "key": "decision",
+     "type": "noul",
+     "options": [
+      "yes",
+      "no"
+     ]
+    }
+   ],
+   "body_sha256": "b94902dbb8261200bb53e49f91ff74889b68a43b3506d02129a24825a1842f55",
+   "result_files_checked": [
+    "swift",
+    "upstream"
+   ],
+   "seed": 1425264548,
+   "prompts": [
+    {
+     "prompt_ids_sha256": "f0038f83b922398f56cd2c410dccc62f327cceff1d1f2e9cbd6d4bec460ac650",
+     "tokens": 2318
+    }
+   ],
+   "prompt_tokens": [
+    2318,
+    2318,
+    2318,
+    2318
+   ],
+   "read_seed_offsets": [
+    0,
+    7919,
+    15838,
+    23757
+   ],
+   "steps": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "label_probabilities": [
+    [
+     [
+      0.46645870178402127,
+      0.5335412982159787
+     ]
+    ],
+    [
+     [
+      0.06209878900906671,
+      0.9379012109909334
+     ]
+    ],
+    [
+     [
+      0.33798792278370626,
+      0.6620120772162936
+     ]
+    ],
+    [
+     [
+      0.6330129011071692,
+      0.3669870988928308
+     ]
+    ]
+   ],
+   "answers": {
+    "decision": {
+     "type": "noul",
+     "noul": 0.3748895786709909
+    }
+   },
+   "answers_equal_result_files": {
+    "swift": false,
+    "upstream": true
+   },
+   "result_file_answers": {
+    "swift": {
+     "type": "noul",
+     "noul": 0.5385062708200351
+    },
+    "upstream": {
+     "type": "noul",
+     "noul": 0.3748895786709909
+    }
+   }
+  },
+  {
+   "dataset": "typesafe102",
+   "id": "e2e58201a90c11192f70edbf",
+   "type": "noul",
+   "questions": [
+    {
+     "key": "decision",
+     "type": "noul",
+     "options": [
+      "yes",
+      "no"
+     ]
+    }
+   ],
+   "body_sha256": "1e3e28f397f16c16dbf04b5ccd82f65f5a8b90a1287d59d6d250ee62e1c24bf4",
+   "result_files_checked": [
+    "swift",
+    "upstream"
+   ],
+   "seed": 4286875913,
+   "prompts": [
+    {
+     "prompt_ids_sha256": "1bc47a099e7f5e14cbe0ed3a1f5afbdebdf142c8c997ae2574ad984e772c392c",
+     "tokens": 2925
+    }
+   ],
+   "prompt_tokens": [
+    2925,
+    2925,
+    2925,
+    2925
+   ],
+   "read_seed_offsets": [
+    0,
+    7919,
+    15838,
+    23757
+   ],
+   "steps": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "label_probabilities": [
+    [
+     [
+      0.6797208173577545,
+      0.3202791826422456
+     ]
+    ],
+    [
+     [
+      0.7095245311241377,
+      0.29047546887586234
+     ]
+    ],
+    [
+     [
+      0.4873641221698976,
+      0.5126358778301024
+     ]
+    ],
+    [
+     [
+      0.5299020190269428,
+      0.47009798097305716
+     ]
+    ]
+   ],
+   "answers": {
+    "decision": {
+     "type": "noul",
+     "noul": 0.6016278724196832
+    }
+   },
+   "answers_equal_result_files": {
+    "swift": false,
+    "upstream": true
+   },
+   "result_file_answers": {
+    "swift": {
+     "type": "noul",
+     "noul": 0.4411774144595294
+    },
+    "upstream": {
+     "type": "noul",
+     "noul": 0.6016278724196832
+    }
+   }
+  }
+ ],
+ "configurations": [
+  {
+   "name": "exact",
+   "description": "the exact tier: the wheel's metallib and the oracle's RoPE table",
+   "metallib": {
+    "path": "mlx.metallib",
+    "sha256": "dc59d1cceb1a5c7e578232e6e41e28e2c73c9463ac6dbc3886c3ee17ffc270ed"
+   },
+   "rope_table": "oracle",
+   "own_rope_entries_differing_from_oracle": 23,
+   "run_on": "2026-10-02",
+   "items": [
+    {
+     "id": "hard-opus-c-long_policy-04",
+     "replay": {
+      "reads_identical": [
+       true,
+       true,
+       true,
+       true
+      ],
+      "prompt_tokens_equal": true,
+      "label_probabilities": [
+       [
+        [
+         0.9777009687441982,
+         0.02229903125580184
+        ]
+       ],
+       [
+        [
+         0.4597933072665528,
+         0.5402066927334472
+        ]
+       ],
+       [
+        [
+         0.8086442860577275,
+         0.19135571394227252
+        ]
+       ],
+       [
+        [
+         0.6515233383864826,
+         0.3484766616135174
+        ]
+       ]
+      ]
+     },
+     "prefill": [
+      {
+       "layers": 30,
+       "layers_in_port": 30,
+       "layers_equal": 30,
+       "keys_equal_layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29
+       ],
+       "values_equal_layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29
+       ],
+       "sliding_views_equal": 25,
+       "sliding_views": 25,
+       "structure_differences": [],
+       "first_differing_layer": null
+      }
+     ],
+     "engine": {
+      "same_reads_as_upstream": true,
+      "read_seed_offsets": [
+       0,
+       7919,
+       15838,
+       23757
+      ],
+      "reads_identical": [
+       true,
+       true,
+       true,
+       true
+      ],
+      "prompt_tokens_equal": true,
+      "answers": {
+       "decision": {
+        "type": "noul",
+        "noul": 0.7244154751137403
+       }
+      },
+      "answers_equal": {
+       "upstream run": true,
+       "swift result file": false,
+       "upstream result file": true
+      },
+      "usage": {
+       "input_tokens": 3264,
+       "output_tokens": 0
+      }
+     }
+    },
+    {
+     "id": "hard-sol-b-long_policy-06",
+     "replay": {
+      "reads_identical": [
+       true,
+       true,
+       true,
+       true
+      ],
+      "prompt_tokens_equal": true,
+      "label_probabilities": [
+       [
+        [
+         0.5243171238053203,
+         0.06771782855629295,
+         0.3015428684841068,
+         0.10642217915427997
+        ]
+       ],
+       [
+        [
+         0.5757047401889993,
+         0.04003037048874033,
+         0.30485653650691963,
+         0.07940835281534071
+        ]
+       ],
+       [
+        [
+         0.6960547265044066,
+         0.05694808243136933,
+         0.2000504711529746,
+         0.04694671991124946
+        ]
+       ],
+       [
+        [
+         0.5221015362831953,
+         0.01797470691889315,
+         0.4211719662162482,
+         0.038751790581663365
+        ]
+       ]
+      ]
+     },
+     "prefill": [
+      {
+       "layers": 30,
+       "layers_in_port": 30,
+       "layers_equal": 30,
+       "keys_equal_layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29
+       ],
+       "values_equal_layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29
+       ],
+       "sliding_views_equal": 25,
+       "sliding_views": 25,
+       "structure_differences": [],
+       "first_differing_layer": null
+      }
+     ],
+     "engine": {
+      "same_reads_as_upstream": true,
+      "read_seed_offsets": [
+       0,
+       7919,
+       15838,
+       23757
+      ],
+      "reads_identical": [
+       true,
+       true,
+       true,
+       true
+      ],
+      "prompt_tokens_equal": true,
+      "answers": {
+       "decision": {
+        "type": "choice",
+        "choice": "east_ward",
+        "probabilities": {
+         "east_ward": 0.5795445316954804,
+         "harbor_neighbors": 0.045667747098823944,
+         "no_award": 0.3069054605900623,
+         "river_arts": 0.06788226061563338
+        },
+        "confidence": 0.2770513449574379
+       }
+      },
+      "answers_equal": {
+       "upstream run": true,
+       "swift result file": false,
+       "upstream result file": true
+      },
+      "usage": {
+       "input_tokens": 2647,
+       "output_tokens": 0
+      }
+     }
+    },
+    {
+     "id": "hard-opus-a-long_policy-19",
+     "replay": {
+      "reads_identical": [
+       true,
+       true,
+       true,
+       true
+      ],
+      "prompt_tokens_equal": true,
+      "label_probabilities": [
+       [
+        [
+         0.46645870178402127,
+         0.5335412982159787
+        ]
+       ],
+       [
+        [
+         0.06209878900906671,
+         0.9379012109909334
+        ]
+       ],
+       [
+        [
+         0.33798792278370626,
+         0.6620120772162936
+        ]
+       ],
+       [
+        [
+         0.6330129011071692,
+         0.3669870988928308
+        ]
+       ]
+      ]
+     },
+     "prefill": [
+      {
+       "layers": 30,
+       "layers_in_port": 30,
+       "layers_equal": 30,
+       "keys_equal_layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29
+       ],
+       "values_equal_layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29
+       ],
+       "sliding_views_equal": 25,
+       "sliding_views": 25,
+       "structure_differences": [],
+       "first_differing_layer": null
+      }
+     ],
+     "engine": {
+      "same_reads_as_upstream": true,
+      "read_seed_offsets": [
+       0,
+       7919,
+       15838,
+       23757
+      ],
+      "reads_identical": [
+       true,
+       true,
+       true,
+       true
+      ],
+      "prompt_tokens_equal": true,
+      "answers": {
+       "decision": {
+        "type": "noul",
+        "noul": 0.3748895786709909
+       }
+      },
+      "answers_equal": {
+       "upstream run": true,
+       "swift result file": false,
+       "upstream result file": true
+      },
+      "usage": {
+       "input_tokens": 2318,
+       "output_tokens": 0
+      }
+     }
+    },
+    {
+     "id": "e2e58201a90c11192f70edbf",
+     "replay": {
+      "reads_identical": [
+       true,
+       true,
+       true,
+       true
+      ],
+      "prompt_tokens_equal": true,
+      "label_probabilities": [
+       [
+        [
+         0.6797208173577545,
+         0.3202791826422456
+        ]
+       ],
+       [
+        [
+         0.7095245311241377,
+         0.29047546887586234
+        ]
+       ],
+       [
+        [
+         0.4873641221698976,
+         0.5126358778301024
+        ]
+       ],
+       [
+        [
+         0.5299020190269428,
+         0.47009798097305716
+        ]
+       ]
+      ]
+     },
+     "prefill": [
+      {
+       "layers": 30,
+       "layers_in_port": 30,
+       "layers_equal": 30,
+       "keys_equal_layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29
+       ],
+       "values_equal_layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29
+       ],
+       "sliding_views_equal": 25,
+       "sliding_views": 25,
+       "structure_differences": [],
+       "first_differing_layer": null
+      }
+     ],
+     "engine": {
+      "same_reads_as_upstream": true,
+      "read_seed_offsets": [
+       0,
+       7919,
+       15838,
+       23757
+      ],
+      "reads_identical": [
+       true,
+       true,
+       true,
+       true
+      ],
+      "prompt_tokens_equal": true,
+      "answers": {
+       "decision": {
+        "type": "noul",
+        "noul": 0.6016278724196832
+       }
+      },
+      "answers_equal": {
+       "upstream run": true,
+       "swift result file": false,
+       "upstream result file": true
+      },
+      "usage": {
+       "input_tokens": 2925,
+       "output_tokens": 0
+      }
+     }
+    }
+   ],
+   "totals": {
+    "reads": 16,
+    "reads_identical": 16,
+    "labels": 40,
+    "mean_abs_dp": 0.0,
+    "max_abs_dp": 0.0,
+    "items": 4,
+    "answers_flipped": 0
+   },
+   "engine_totals": {
+    "items": 4,
+    "items_with_upstream_reads": 4,
+    "reads": 16,
+    "reads_identical": 16,
+    "answers_equal_upstream": 4
+   }
+  },
+  {
+   "name": "native",
+   "description": "the port's own kernels and RoPE table, as the Swift server reads",
+   "metallib": {
+    "path": "Tools/oracle/UpstreamProbe/.build/out/Products/Release/mlx-swift_Cmlx.bundle/Contents/Resources/default.metallib",
+    "sha256": "282550b064507602f7da8cfa2dab2ca8f10341c2802191234a1cbf17f892952f"
+   },
+   "rope_table": "own",
+   "own_rope_entries_differing_from_oracle": 23,
+   "run_on": "2026-10-02",
+   "items": [
+    {
+     "id": "hard-opus-c-long_policy-04",
+     "replay": {
+      "reads_identical": [
+       false,
+       false,
+       false,
+       false
+      ],
+      "prompt_tokens_equal": true,
+      "label_probabilities": [
+       [
+        [
+         0.547101138120656,
+         0.4528988618793441
+        ]
+       ],
+       [
+        [
+         0.13443486989420958,
+         0.8655651301057905
+        ]
+       ],
+       [
+        [
+         0.3090676982741585,
+         0.6909323017258415
+        ]
+       ],
+       [
+        [
+         0.2805786419958919,
+         0.7194213580041081
+        ]
+       ]
+      ]
+     },
+     "prefill": [
+      {
+       "layers": 30,
+       "layers_in_port": 30,
+       "layers_equal": 0,
+       "keys_equal_layers": [],
+       "values_equal_layers": [
+        0
+       ],
+       "sliding_views_equal": 0,
+       "sliding_views": 25,
+       "structure_differences": [],
+       "first_differing_layer": {
+        "layer": 0,
+        "keys_equal": false,
+        "values_equal": true,
+        "keys_relative_sum_of_squares_difference": 5.185450816831574e-09
+       }
+      }
+     ],
+     "engine": {
+      "same_reads_as_upstream": true,
+      "read_seed_offsets": [
+       0,
+       7919,
+       15838,
+       23757
+      ],
+      "reads_identical": [
+       false,
+       false,
+       false,
+       false
+      ],
+      "prompt_tokens_equal": true,
+      "answers": {
+       "decision": {
+        "type": "noul",
+        "noul": 0.31779558707122896
+       }
+      },
+      "answers_equal": {
+       "upstream run": false,
+       "swift result file": true,
+       "upstream result file": false
+      },
+      "usage": {
+       "input_tokens": 3264,
+       "output_tokens": 0
+      }
+     }
+    },
+    {
+     "id": "hard-sol-b-long_policy-06",
+     "replay": {
+      "reads_identical": [
+       false,
+       false,
+       false,
+       false
+      ],
+      "prompt_tokens_equal": true,
+      "label_probabilities": [
+       [
+        [
+         0.24980883145590033,
+         0.07112059129038749,
+         0.6079499859633246,
+         0.07112059129038749
+        ]
+       ],
+       [
+        [
+         0.2606659603755558,
+         0.07420340733498182,
+         0.6197801690568275,
+         0.04535046323263485
+        ]
+       ],
+       [
+        [
+         0.39356427423225854,
+         0.09871862032642607,
+         0.47414003493329515,
+         0.033577070508020265
+        ]
+       ],
+       [
+        [
+         0.23075331882714428,
+         0.02506604082003897,
+         0.7097650525544805,
+         0.03441558779833616
+        ]
+       ]
+      ]
+     },
+     "prefill": [
+      {
+       "layers": 30,
+       "layers_in_port": 30,
+       "layers_equal": 0,
+       "keys_equal_layers": [],
+       "values_equal_layers": [
+        0
+       ],
+       "sliding_views_equal": 0,
+       "sliding_views": 25,
+       "structure_differences": [],
+       "first_differing_layer": {
+        "layer": 0,
+        "keys_equal": false,
+        "values_equal": true,
+        "keys_relative_sum_of_squares_difference": 1.903935209845336e-08
+       }
+      }
+     ],
+     "engine": {
+      "same_reads_as_upstream": true,
+      "read_seed_offsets": [
+       0,
+       7919,
+       15838,
+       23757
+      ],
+      "reads_identical": [
+       false,
+       false,
+       false,
+       false
+      ],
+      "prompt_tokens_equal": true,
+      "answers": {
+       "decision": {
+        "type": "choice",
+        "choice": "no_award",
+        "probabilities": {
+         "east_ward": 0.28369809622271475,
+         "harbor_neighbors": 0.06727716494295859,
+         "no_award": 0.602908810626982,
+         "river_arts": 0.04611592820734469
+        },
+        "confidence": 0.2887962684490105
+       }
+      },
+      "answers_equal": {
+       "upstream run": false,
+       "swift result file": true,
+       "upstream result file": false
+      },
+      "usage": {
+       "input_tokens": 2647,
+       "output_tokens": 0
+      }
+     }
+    },
+    {
+     "id": "hard-opus-a-long_policy-19",
+     "replay": {
+      "reads_identical": [
+       false,
+       false,
+       false,
+       false
+      ],
+      "prompt_tokens_equal": true,
+      "label_probabilities": [
+       [
+        [
+         0.6898502721192452,
+         0.31014972788075473
+        ]
+       ],
+       [
+        [
+         0.10650894523713367,
+         0.8934910547628664
+        ]
+       ],
+       [
+        [
+         0.5173956250888132,
+         0.4826043749111868
+        ]
+       ],
+       [
+        [
+         0.8402702408349483,
+         0.1597297591650517
+        ]
+       ]
+      ]
+     },
+     "prefill": [
+      {
+       "layers": 30,
+       "layers_in_port": 30,
+       "layers_equal": 0,
+       "keys_equal_layers": [],
+       "values_equal_layers": [
+        0
+       ],
+       "sliding_views_equal": 0,
+       "sliding_views": 25,
+       "structure_differences": [],
+       "first_differing_layer": {
+        "layer": 0,
+        "keys_equal": false,
+        "values_equal": true,
+        "keys_relative_sum_of_squares_difference": 1.0831433257835084e-08
+       }
+      }
+     ],
+     "engine": {
+      "same_reads_as_upstream": true,
+      "read_seed_offsets": [
+       0,
+       7919,
+       15838,
+       23757
+      ],
+      "reads_identical": [
+       false,
+       false,
+       false,
+       false
+      ],
+      "prompt_tokens_equal": true,
+      "answers": {
+       "decision": {
+        "type": "noul",
+        "noul": 0.5385062708200351
+       }
+      },
+      "answers_equal": {
+       "upstream run": false,
+       "swift result file": true,
+       "upstream result file": false
+      },
+      "usage": {
+       "input_tokens": 2318,
+       "output_tokens": 0
+      }
+     }
+    },
+    {
+     "id": "e2e58201a90c11192f70edbf",
+     "replay": {
+      "reads_identical": [
+       false,
+       false,
+       false,
+       false
+      ],
+      "prompt_tokens_equal": true,
+      "label_probabilities": [
+       [
+        [
+         0.6079896166389706,
+         0.39201038336102945
+        ]
+       ],
+       [
+        [
+         0.514220692972459,
+         0.485779307027541
+        ]
+       ],
+       [
+        [
+         0.25929814040548227,
+         0.7407018595945178
+        ]
+       ],
+       [
+        [
+         0.3832012078212057,
+         0.6167987921787943
+        ]
+       ]
+      ]
+     },
+     "prefill": [
+      {
+       "layers": 30,
+       "layers_in_port": 30,
+       "layers_equal": 0,
+       "keys_equal_layers": [],
+       "values_equal_layers": [
+        0
+       ],
+       "sliding_views_equal": 0,
+       "sliding_views": 25,
+       "structure_differences": [],
+       "first_differing_layer": {
+        "layer": 0,
+        "keys_equal": false,
+        "values_equal": true,
+        "keys_relative_sum_of_squares_difference": 3.167092162629114e-08
+       }
+      }
+     ],
+     "engine": {
+      "same_reads_as_upstream": true,
+      "read_seed_offsets": [
+       0,
+       7919,
+       15838,
+       23757
+      ],
+      "reads_identical": [
+       false,
+       false,
+       false,
+       false
+      ],
+      "prompt_tokens_equal": true,
+      "answers": {
+       "decision": {
+        "type": "noul",
+        "noul": 0.4411774144595294
+       }
+      },
+      "answers_equal": {
+       "upstream run": false,
+       "swift result file": true,
+       "upstream result file": false
+      },
+      "usage": {
+       "input_tokens": 2925,
+       "output_tokens": 0
+      }
+     }
+    }
+   ],
+   "totals": {
+    "reads": 16,
+    "reads_identical": 0,
+    "labels": 40,
+    "mean_abs_dp": 0.2096599612065527,
+    "max_abs_dp": 0.49957658778356906,
+    "items": 4,
+    "answers_flipped": 4
+   },
+   "engine_totals": {
+    "items": 4,
+    "items_with_upstream_reads": 4,
+    "reads": 16,
+    "reads_identical": 0,
+    "answers_equal_upstream": 0
+   }
+  },
+  {
+   "name": "wheel_metallib",
+   "description": "the wheel's metallib with the port's own RoPE table",
+   "metallib": {
+    "path": "mlx.metallib",
+    "sha256": "dc59d1cceb1a5c7e578232e6e41e28e2c73c9463ac6dbc3886c3ee17ffc270ed"
+   },
+   "rope_table": "own",
+   "own_rope_entries_differing_from_oracle": 23,
+   "run_on": "2026-10-02",
+   "items": [
+    {
+     "id": "hard-opus-c-long_policy-04",
+     "replay": {
+      "reads_identical": [
+       false,
+       false,
+       false,
+       false
+      ],
+      "prompt_tokens_equal": true,
+      "label_probabilities": [
+       [
+        [
+         0.9770885642078715,
+         0.022911435792128596
+        ]
+       ],
+       [
+        [
+         0.4826043749111868,
+         0.5173956250888132
+        ]
+       ],
+       [
+        [
+         0.7495236094693688,
+         0.2504763905306312
+        ]
+       ],
+       [
+        [
+         0.5807877076929353,
+         0.4192122923070647
+        ]
+       ]
+      ]
+     },
+     "prefill": [
+      {
+       "layers": 30,
+       "layers_in_port": 30,
+       "layers_equal": 5,
+       "keys_equal_layers": [
+        0,
+        1,
+        2,
+        3,
+        4
+       ],
+       "values_equal_layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+       ],
+       "sliding_views_equal": 5,
+       "sliding_views": 25,
+       "structure_differences": [],
+       "first_differing_layer": {
+        "layer": 5,
+        "keys_equal": false,
+        "values_equal": true,
+        "keys_relative_sum_of_squares_difference": 1.1455459429083728e-07
+       }
+      }
+     ],
+     "engine": {
+      "same_reads_as_upstream": true,
+      "read_seed_offsets": [
+       0,
+       7919,
+       15838,
+       23757
+      ],
+      "reads_identical": [
+       false,
+       false,
+       false,
+       false
+      ],
+      "prompt_tokens_equal": true,
+      "answers": {
+       "decision": {
+        "type": "noul",
+        "noul": 0.6975010640703406
+       }
+      },
+      "answers_equal": {
+       "upstream run": false,
+       "swift result file": false,
+       "upstream result file": false
+      },
+      "usage": {
+       "input_tokens": 3264,
+       "output_tokens": 0
+      }
+     }
+    },
+    {
+     "id": "hard-sol-b-long_policy-06",
+     "replay": {
+      "reads_identical": [
+       false,
+       false,
+       false,
+       false
+      ],
+      "prompt_tokens_equal": true,
+      "label_probabilities": [
+       [
+        [
+         0.3763819123752418,
+         0.10346880849337835,
+         0.4338984603109421,
+         0.08625081882043772
+        ]
+       ],
+       [
+        [
+         0.32834487944203916,
+         0.10196046576187781,
+         0.4913964893072643,
+         0.07829816548881864
+        ]
+       ],
+       [
+        [
+         0.5367085048182327,
+         0.05837970659720262,
+         0.3544761728092101,
+         0.050435615775354596
+        ]
+       ],
+       [
+        [
+         0.33081054287847583,
+         0.05324291246118836,
+         0.5540203124092102,
+         0.061926232251125576
+        ]
+       ]
+      ]
+     },
+     "prefill": [
+      {
+       "layers": 30,
+       "layers_in_port": 30,
+       "layers_equal": 5,
+       "keys_equal_layers": [
+        0,
+        1,
+        2,
+        3,
+        4
+       ],
+       "values_equal_layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+       ],
+       "sliding_views_equal": 5,
+       "sliding_views": 25,
+       "structure_differences": [],
+       "first_differing_layer": {
+        "layer": 5,
+        "keys_equal": false,
+        "values_equal": true,
+        "keys_relative_sum_of_squares_difference": 1.1548407336264246e-07
+       }
+      }
+     ],
+     "engine": {
+      "same_reads_as_upstream": true,
+      "read_seed_offsets": [
+       0,
+       7919,
+       15838,
+       23757
+      ],
+      "reads_identical": [
+       false,
+       false,
+       false,
+       false
+      ],
+      "prompt_tokens_equal": true,
+      "answers": {
+       "decision": {
+        "type": "choice",
+        "choice": "no_award",
+        "probabilities": {
+         "east_ward": 0.3930614598784974,
+         "harbor_neighbors": 0.07926297332841178,
+         "no_award": 0.4584478587091567,
+         "river_arts": 0.06922770808393414
+        },
+        "confidence": 0.19903234761498
+       }
+      },
+      "answers_equal": {
+       "upstream run": false,
+       "swift result file": false,
+       "upstream result file": false
+      },
+      "usage": {
+       "input_tokens": 2647,
+       "output_tokens": 0
+      }
+     }
+    },
+    {
+     "id": "hard-opus-a-long_policy-19",
+     "replay": {
+      "reads_identical": [
+       false,
+       false,
+       false,
+       false
+      ],
+      "prompt_tokens_equal": true,
+      "label_probabilities": [
+       [
+        [
+         0.616279768717739,
+         0.38372023128226096
+        ]
+       ],
+       [
+        [
+         0.04518433268649913,
+         0.9548156673135009
+        ]
+       ],
+       [
+        [
+         0.46549473009864323,
+         0.5345052699013568
+        ]
+       ],
+       [
+        [
+         0.4826043749111868,
+         0.5173956250888132
+        ]
+       ]
+      ]
+     },
+     "prefill": [
+      {
+       "layers": 30,
+       "layers_in_port": 30,
+       "layers_equal": 5,
+       "keys_equal_layers": [
+        0,
+        1,
+        2,
+        3,
+        4
+       ],
+       "values_equal_layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+       ],
+       "sliding_views_equal": 5,
+       "sliding_views": 25,
+       "structure_differences": [],
+       "first_differing_layer": {
+        "layer": 5,
+        "keys_equal": false,
+        "values_equal": true,
+        "keys_relative_sum_of_squares_difference": 8.823724506926112e-09
+       }
+      }
+     ],
+     "engine": {
+      "same_reads_as_upstream": true,
+      "read_seed_offsets": [
+       0,
+       7919,
+       15838,
+       23757
+      ],
+      "reads_identical": [
+       false,
+       false,
+       false,
+       false
+      ],
+      "prompt_tokens_equal": true,
+      "answers": {
+       "decision": {
+        "type": "noul",
+        "noul": 0.40239080160351703
+       }
+      },
+      "answers_equal": {
+       "upstream run": false,
+       "swift result file": false,
+       "upstream result file": false
+      },
+      "usage": {
+       "input_tokens": 2318,
+       "output_tokens": 0
+      }
+     }
+    },
+    {
+     "id": "e2e58201a90c11192f70edbf",
+     "replay": {
+      "reads_identical": [
+       false,
+       false,
+       false,
+       false
+      ],
+      "prompt_tokens_equal": true,
+      "label_probabilities": [
+       [
+        [
+         0.6008394771654448,
+         0.39916052283455505
+        ]
+       ],
+       [
+        [
+         0.5604589349128953,
+         0.43954106508710467
+        ]
+       ],
+       [
+        [
+         0.42516605197223795,
+         0.5748339480277621
+        ]
+       ],
+       [
+        [
+         0.5330670513858942,
+         0.4669329486141058
+        ]
+       ]
+      ]
+     },
+     "prefill": [
+      {
+       "layers": 30,
+       "layers_in_port": 30,
+       "layers_equal": 5,
+       "keys_equal_layers": [
+        0,
+        1,
+        2,
+        3,
+        4
+       ],
+       "values_equal_layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+       ],
+       "sliding_views_equal": 5,
+       "sliding_views": 25,
+       "structure_differences": [],
+       "first_differing_layer": {
+        "layer": 5,
+        "keys_equal": false,
+        "values_equal": true,
+        "keys_relative_sum_of_squares_difference": 6.007175297634785e-08
+       }
+      }
+     ],
+     "engine": {
+      "same_reads_as_upstream": true,
+      "read_seed_offsets": [
+       0,
+       7919,
+       15838,
+       23757
+      ],
+      "reads_identical": [
+       false,
+       false,
+       false,
+       false
+      ],
+      "prompt_tokens_equal": true,
+      "answers": {
+       "decision": {
+        "type": "noul",
+        "noul": 0.5298828788591181
+       }
+      },
+      "answers_equal": {
+       "upstream run": false,
+       "swift result file": false,
+       "upstream result file": false
+      },
+      "usage": {
+       "input_tokens": 2925,
+       "output_tokens": 0
+      }
+     }
+    }
+   ],
+   "totals": {
+    "reads": 16,
+    "reads_identical": 0,
+    "labels": 40,
+    "mean_abs_dp": 0.08292272550592653,
+    "max_abs_dp": 0.24735986074696015,
+    "items": 4,
+    "answers_flipped": 1
+   },
+   "engine_totals": {
+    "items": 4,
+    "items_with_upstream_reads": 4,
+    "reads": 16,
+    "reads_identical": 0,
+    "answers_equal_upstream": 0
+   }
+  },
+  {
+   "name": "oracle_rope",
+   "description": "the port's own kernels with the oracle's RoPE table",
+   "metallib": {
+    "path": "Tools/oracle/UpstreamProbe/.build/out/Products/Release/mlx-swift_Cmlx.bundle/Contents/Resources/default.metallib",
+    "sha256": "282550b064507602f7da8cfa2dab2ca8f10341c2802191234a1cbf17f892952f"
+   },
+   "rope_table": "oracle",
+   "own_rope_entries_differing_from_oracle": 23,
+   "run_on": "2026-10-02",
+   "items": [
+    {
+     "id": "hard-opus-c-long_policy-04",
+     "replay": {
+      "reads_identical": [
+       false,
+       false,
+       false,
+       false
+      ],
+      "prompt_tokens_equal": true,
+      "label_probabilities": [
+       [
+        [
+         0.06496932361943605,
+         0.935030676380564
+        ]
+       ],
+       [
+        [
+         0.035068090301935306,
+         0.9649319096980646
+        ]
+       ],
+       [
+        [
+         0.10812474525120566,
+         0.8918752547487944
+        ]
+       ],
+       [
+        [
+         0.025329039551212785,
+         0.9746709604487872
+        ]
+       ]
+      ]
+     },
+     "prefill": [
+      {
+       "layers": 30,
+       "layers_in_port": 30,
+       "layers_equal": 0,
+       "keys_equal_layers": [],
+       "values_equal_layers": [
+        0
+       ],
+       "sliding_views_equal": 0,
+       "sliding_views": 25,
+       "structure_differences": [],
+       "first_differing_layer": {
+        "layer": 0,
+        "keys_equal": false,
+        "values_equal": true,
+        "keys_relative_sum_of_squares_difference": 5.185450816831574e-09
+       }
+      }
+     ],
+     "engine": {
+      "same_reads_as_upstream": true,
+      "read_seed_offsets": [
+       0,
+       7919,
+       15838,
+       23757
+      ],
+      "reads_identical": [
+       false,
+       false,
+       false,
+       false
+      ],
+      "prompt_tokens_equal": true,
+      "answers": {
+       "decision": {
+        "type": "noul",
+        "noul": 0.058372799680947454
+       }
+      },
+      "answers_equal": {
+       "upstream run": false,
+       "swift result file": false,
+       "upstream result file": false
+      },
+      "usage": {
+       "input_tokens": 3264,
+       "output_tokens": 0
+      }
+     }
+    },
+    {
+     "id": "hard-sol-b-long_policy-06",
+     "replay": {
+      "reads_identical": [
+       false,
+       false,
+       false,
+       false
+      ],
+      "prompt_tokens_equal": true,
+      "label_probabilities": [
+       [
+        [
+         0.82781258018386,
+         0.04763618609640463,
+         0.06376396019500569,
+         0.060787273524729755
+        ]
+       ],
+       [
+        [
+         0.8327569789435925,
+         0.04300437764593593,
+         0.09456385495919696,
+         0.029674788451274556
+        ]
+       ],
+       [
+        [
+         0.893133179632594,
+         0.03807738664391456,
+         0.04196413190486421,
+         0.026825301818627224
+        ]
+       ],
+       [
+        [
+         0.8280124913715283,
+         0.03811498841268497,
+         0.10616788521078814,
+         0.027704635004998656
+        ]
+       ]
+      ]
+     },
+     "prefill": [
+      {
+       "layers": 30,
+       "layers_in_port": 30,
+       "layers_equal": 0,
+       "keys_equal_layers": [],
+       "values_equal_layers": [
+        0
+       ],
+       "sliding_views_equal": 0,
+       "sliding_views": 25,
+       "structure_differences": [],
+       "first_differing_layer": {
+        "layer": 0,
+        "keys_equal": false,
+        "values_equal": true,
+        "keys_relative_sum_of_squares_difference": 1.903935209845336e-08
+       }
+      }
+     ],
+     "engine": {
+      "same_reads_as_upstream": true,
+      "read_seed_offsets": [
+       0,
+       7919,
+       15838,
+       23757
+      ],
+      "reads_identical": [
+       false,
+       false,
+       false,
+       false
+      ],
+      "prompt_tokens_equal": true,
+      "answers": {
+       "decision": {
+        "type": "choice",
+        "choice": "east_ward",
+        "probabilities": {
+         "east_ward": 0.8454288075328937,
+         "harbor_neighbors": 0.041708234699735024,
+         "no_award": 0.07661495806746375,
+         "river_arts": 0.03624799969990755
+        },
+        "confidence": 0.5732973020158858
+       }
+      },
+      "answers_equal": {
+       "upstream run": false,
+       "swift result file": false,
+       "upstream result file": false
+      },
+      "usage": {
+       "input_tokens": 2647,
+       "output_tokens": 0
+      }
+     }
+    },
+    {
+     "id": "hard-opus-a-long_policy-19",
+     "replay": {
+      "reads_identical": [
+       false,
+       false,
+       false,
+       false
+      ],
+      "prompt_tokens_equal": true,
+      "label_probabilities": [
+       [
+        [
+         0.5,
+         0.5
+        ]
+       ],
+       [
+        [
+         0.12058780820528915,
+         0.8794121917947108
+        ]
+       ],
+       [
+        [
+         0.4457481721546252,
+         0.5542518278453747
+        ]
+       ],
+       [
+        [
+         0.75289507919352,
+         0.2471049208064801
+        ]
+       ]
+      ]
+     },
+     "prefill": [
+      {
+       "layers": 30,
+       "layers_in_port": 30,
+       "layers_equal": 0,
+       "keys_equal_layers": [],
+       "values_equal_layers": [
+        0
+       ],
+       "sliding_views_equal": 0,
+       "sliding_views": 25,
+       "structure_differences": [],
+       "first_differing_layer": {
+        "layer": 0,
+        "keys_equal": false,
+        "values_equal": true,
+        "keys_relative_sum_of_squares_difference": 1.0831433257835084e-08
+       }
+      }
+     ],
+     "engine": {
+      "same_reads_as_upstream": true,
+      "read_seed_offsets": [
+       0,
+       7919,
+       15838,
+       23757
+      ],
+      "reads_identical": [
+       false,
+       false,
+       false,
+       false
+      ],
+      "prompt_tokens_equal": true,
+      "answers": {
+       "decision": {
+        "type": "noul",
+        "noul": 0.45480776488835856
+       }
+      },
+      "answers_equal": {
+       "upstream run": false,
+       "swift result file": false,
+       "upstream result file": false
+      },
+      "usage": {
+       "input_tokens": 2318,
+       "output_tokens": 0
+      }
+     }
+    },
+    {
+     "id": "e2e58201a90c11192f70edbf",
+     "replay": {
+      "reads_identical": [
+       false,
+       false,
+       false,
+       false
+      ],
+      "prompt_tokens_equal": true,
+      "label_probabilities": [
+       [
+        [
+         0.5716204204608918,
+         0.42837957953910816
+        ]
+       ],
+       [
+        [
+         0.6040367628314585,
+         0.39596323716854154
+        ]
+       ],
+       [
+        [
+         0.37347807984930165,
+         0.6265219201506984
+        ]
+       ],
+       [
+        [
+         0.39947848754582127,
+         0.6005215124541787
+        ]
+       ]
+      ]
+     },
+     "prefill": [
+      {
+       "layers": 30,
+       "layers_in_port": 30,
+       "layers_equal": 0,
+       "keys_equal_layers": [],
+       "values_equal_layers": [
+        0
+       ],
+       "sliding_views_equal": 0,
+       "sliding_views": 25,
+       "structure_differences": [],
+       "first_differing_layer": {
+        "layer": 0,
+        "keys_equal": false,
+        "values_equal": true,
+        "keys_relative_sum_of_squares_difference": 3.167092162629114e-08
+       }
+      }
+     ],
+     "engine": {
+      "same_reads_as_upstream": true,
+      "read_seed_offsets": [
+       0,
+       7919,
+       15838,
+       23757
+      ],
+      "reads_identical": [
+       false,
+       false,
+       false,
+       false
+      ],
+      "prompt_tokens_equal": true,
+      "answers": {
+       "decision": {
+        "type": "noul",
+        "noul": 0.4871534376718683
+       }
+      },
+      "answers_equal": {
+       "upstream run": false,
+       "swift result file": false,
+       "upstream result file": false
+      },
+      "usage": {
+       "input_tokens": 2925,
+       "output_tokens": 0
+      }
+     }
+    }
+   ],
+   "totals": {
+    "reads": 16,
+    "reads_identical": 0,
+    "labels": 40,
+    "mean_abs_dp": 0.2264196288796271,
+    "max_abs_dp": 0.9127316451247622,
+    "items": 4,
+    "answers_flipped": 2
+   },
+   "engine_totals": {
+    "items": 4,
+    "items_with_upstream_reads": 4,
+    "reads": 16,
+    "reads_identical": 0,
+    "answers_equal_upstream": 0
+   }
+  },
+  {
+   "name": "chunked_prefill",
+   "description": "mlx-vlm itself with a 64-token chunked prefill (sensitivity.py)",
+   "chunk": 64,
+   "items": [
+    {
+     "id": "hard-opus-c-long_policy-04",
+     "reads_identical": [
+      false,
+      false,
+      false,
+      false
+     ],
+     "label_probabilities": [
+      [
+       [
+        0.8312739056296029,
+        0.16872609437039704
+       ]
+      ],
+      [
+       [
+        0.4418677388134797,
+        0.5581322611865204
+       ]
+      ],
+      [
+       [
+        0.7871314101594571,
+        0.21286858984054297
+       ]
+      ],
+      [
+       [
+        0.5424490873855542,
+        0.45755091261444575
+       ]
+      ]
+     ],
+     "means": [
+      [
+       0.6506805354970234,
+       0.3493194645029765
+      ]
+     ],
+     "top_label_differs": [
+      false
+     ]
+    },
+    {
+     "id": "hard-sol-b-long_policy-06",
+     "reads_identical": [
+      false,
+      false,
+      false,
+      false
+     ],
+     "label_probabilities": [
+      [
+       [
+        0.19567031095062587,
+        0.05310089537850659,
+        0.6808144164260567,
+        0.07041437724481088
+       ]
+      ],
+      [
+       [
+        0.1351460542710643,
+        0.02209921689554186,
+        0.7806663783712766,
+        0.06208835046211718
+       ]
+      ],
+      [
+       [
+        0.5524909514024209,
+        0.055856414782586745,
+        0.32989734757934847,
+        0.061755286235643934
+       ]
+      ],
+      [
+       [
+        0.20886397898334397,
+        0.02745526652002739,
+        0.7210966567911168,
+        0.04258409770551181
+       ]
+      ]
+     ],
+     "means": [
+      [
+       0.27304282390186374,
+       0.03962794839416565,
+       0.6281186997919497,
+       0.05921052791202095
+      ]
+     ],
+     "top_label_differs": [
+      true
+     ]
+    },
+    {
+     "id": "hard-opus-a-long_policy-19",
+     "reads_identical": [
+      false,
+      false,
+      false,
+      false
+     ],
+     "label_probabilities": [
+      [
+       [
+        0.5178937755736247,
+        0.4821062244263752
+       ]
+      ],
+      [
+       [
+        0.08483108746811881,
+        0.9151689125318812
+       ]
+      ],
+      [
+       [
+        0.3252500795087668,
+        0.6747499204912333
+       ]
+      ],
+      [
+       [
+        0.7557496785931423,
+        0.24425032140685765
+       ]
+      ]
+     ],
+     "means": [
+      [
+       0.4209311552859132,
+       0.5790688447140868
+      ]
+     ],
+     "top_label_differs": [
+      false
+     ]
+    },
+    {
+     "id": "e2e58201a90c11192f70edbf",
+     "reads_identical": [
+      false,
+      false,
+      false,
+      false
+     ],
+     "label_probabilities": [
+      [
+       [
+        0.8787868023654128,
+        0.1212131976345871
+       ]
+      ],
+      [
+       [
+        0.7203694191324445,
+        0.2796305808675556
+       ]
+      ],
+      [
+       [
+        0.658004711417441,
+        0.34199528858255906
+       ]
+      ],
+      [
+       [
+        0.7121711960245091,
+        0.28782880397549093
+       ]
+      ]
+     ],
+     "means": [
+      [
+       0.7423330322349518,
+       0.25766696776504816
+      ]
+     ],
+     "top_label_differs": [
+      false
+     ]
+    }
+   ],
+   "totals": {
+    "reads": 16,
+    "reads_identical": 0,
+    "labels": 40,
+    "mean_abs_dp": 0.11901883902972184,
+    "max_abs_dp": 0.475809841864357,
+    "items": 4,
+    "answers_flipped": 1
+   }
+  }
+ ]
+}
