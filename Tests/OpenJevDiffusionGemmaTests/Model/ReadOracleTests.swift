@@ -327,7 +327,8 @@ extension MLXTests {
                     let writtenNote =
                         steps > 1 ? ", written argmaxes equal on \(written)/\(reads) reads" : ""
                     return String(
-                        format: "steps %d: %d reads, mean |dp| %.4f over %d labels, top label %d/%d%@",
+                        format:
+                            "steps %d: %d reads, mean |dp| %.4f over %d labels, top label %d/%d%@",
                         steps, reads, Aggregates.mean(figures.labelDifferences),
                         figures.labelDifferences.count, figures.topAgree, figures.slots,
                         writtenNote)

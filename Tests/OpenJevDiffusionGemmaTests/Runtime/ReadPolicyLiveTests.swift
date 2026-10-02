@@ -222,7 +222,7 @@ extension MLXTests {
             #expect(decision.inputTokens == 657)
         }
 
-        @Test("sequential: one read per group in series, each prompt carrying the earlier answers (#45)")
+        @Test("sequential: one read per group in series, carrying the earlier answers (#45)")
         func sequentialGroups() async throws {
             let (runtime, recorder) = try await instrumentedRuntime()
             let engine = try DecisionEngine(backend: runtime, configuration: .default)
@@ -267,7 +267,8 @@ extension MLXTests {
                     let continuation = try tokenizer.decode(
                         Array(read.prompt.dropFirst(base.count)), skipSpecialTokens: false)
                     for (j, line) in lines.enumerated() {
-                        #expect(continuation.contains(line), "group \(k) lacks group \(j)'s answers")
+                        #expect(
+                            continuation.contains(line), "group \(k) lacks group \(j)'s answers")
                     }
                     print(
                         "sequential group \(k): \(read.prompt.count) prompt tokens, base "

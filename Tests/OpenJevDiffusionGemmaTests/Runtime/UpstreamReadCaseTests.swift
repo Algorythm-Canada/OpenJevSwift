@@ -184,8 +184,10 @@ extension MLXTests {
         func stepsOneIsTheDefault() async throws {
             let live = try await LiveCheckpoint.shared()
             let engine = try DecisionEngine(backend: live.runtime, configuration: .default)
-            for request in [try readmeRequest(state: upstreamStates[0].state), try quickstartRequest()]
-            {
+            let requests = [
+                try readmeRequest(state: upstreamStates[0].state), try quickstartRequest(),
+            ]
+            for request in requests {
                 var explicit = request
                 explicit.steps = 1
                 let plain = try await engine.decide(request)
