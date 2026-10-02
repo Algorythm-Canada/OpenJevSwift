@@ -15,13 +15,17 @@
 #
 # macOS only: OpenJevDiffusionGemma and OpenJevEncoders exist only on a macOS host. The output
 # directory, .build/docs-site by default, is replaced; another directory must be empty, absent or
-# a site this script built.
+# a site this script built, whose front page carries the generator line below.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"
-output="${1:-$root/.build/docs-site}"
+default_output="$root/.build/docs-site"
+output="${1:-$default_output}"
 hosting_base_path="OpenJevSwift"
 modules=(OpenJevCore OpenJevServer OpenJevDiffusionGemma OpenJevEncoders)
+# Tools/docs/index.html's generator line. Only a site this script built has it in its index.html,
+# so a non-empty directory without it, another DocC site included, is never replaced.
+marker='<meta name="generator" content="OpenJevSwift Tools/docs/build-site.sh">'
 
 if [[ "$(uname -s)" != "Darwin" ]]; then
     echo "build-site.sh: the documentation needs a macOS host, where every module exists" >&2
@@ -34,9 +38,9 @@ if [[ -e "$output" || -L "$output" ]] && [[ ! -d "$output" ]]; then
     echo "build-site.sh: $output exists and is not a directory; not replacing it" >&2
     exit 1
 fi
-if [[ -d "$output" ]] && [[ -n "$(ls -A "$output")" ]]; then
-    if [[ ! -f "$output/metadata.json" || ! -d "$output/documentation" ]]; then
-        echo "build-site.sh: $output is not empty and is not a documentation site; not replacing it" >&2
+if [[ "$output" != "$default_output" ]] && [[ -d "$output" ]] && [[ -n "$(ls -A "$output")" ]]; then
+    if ! grep -qsF "$marker" "$output/index.html"; then
+        echo "build-site.sh: $output is not empty and is not a site this script built; not replacing it" >&2
         exit 1
     fi
 fi
@@ -57,6 +61,10 @@ swift package --allow-writing-to-directory "$output" generate-documentation \
     --output-path "$output"
 
 cp "$root/Tools/docs/index.html" "$output/index.html"
+if ! grep -qF "$marker" "$output/index.html"; then
+    echo "build-site.sh: Tools/docs/index.html lacks the generator line that marks the script's sites" >&2
+    exit 1
+fi
 
 for module in "${modules[@]}"; do
     page="$output/documentation/$(echo "$module" | tr '[:upper:]' '[:lower:]')/index.html"

@@ -9,12 +9,12 @@ import Testing
 /// what the server reads.
 ///
 /// The table must list exactly the variables ``ServerSettings/init(environment:)`` reads, found in
-/// its source, and `OPENJEV_ENCODER_MODELS`, which the encoder store reads. Each documented
-/// default must be the code's: setting a variable to it, or to the empty string when the table
-/// says unset, must give the same settings as leaving it out, and for the three numbers an empty
-/// value leaves at their default, the setting itself must hold the documented value or nothing.
-/// And every variable the settings table of `docs/deployment.md` lists must be in the reference
-/// with the same default.
+/// its source, and `OPENJEV_ENCODER_MODELS`, which the encoder store reads, documented as unset
+/// since the store takes a missing or empty value for no folder. Each documented default must be
+/// the code's: setting a variable to it, or to the empty string when the table says unset, must
+/// give the same settings as leaving it out, and for the three numbers an empty value leaves at
+/// their default, the setting itself must hold the documented value or nothing. And every variable
+/// the settings table of `docs/deployment.md` lists must be in the reference with the same default.
 @Suite("Configuration reference")
 struct ConfigurationReferenceTests {
     /// The repository root, found relative to this source file.
@@ -110,10 +110,16 @@ struct ConfigurationReferenceTests {
         #expect(unlisted.isEmpty, "read but not listed: \(unlisted)")
     }
 
+    /// The store's source, since `OpenJevEncoders` exists only on Apple platforms and this test runs
+    /// on Linux too. `EncoderPackageStoreTests` checks there what the read does: a folder for a
+    /// value, none for a missing or empty one.
     @Test("The encoder store reads the variable the table lists for it")
     func storeReadsItsVariable() throws {
         let source = try Self.text(Self.storeSourcePath)
         #expect(source.contains("localModelsVariable = \"\(Self.storeVariable)\""))
+        #expect(
+            source.contains("environment[Self.localModelsVariable]"),
+            "EncoderPackageStore(environment:) no longer reads \(Self.storeVariable)")
     }
 
     @Test("Each documented default is the one ServerSettings applies")
@@ -121,6 +127,10 @@ struct ConfigurationReferenceTests {
         let defaults = try ServerSettings(environment: [:])
         let rows = try Self.rows(of: Self.referencePath)
         #expect(!rows.isEmpty)
+        // The store's variable has no ServerSettings to compare with: a missing or empty value
+        // means no folder (EncoderPackageStoreTests), so the table must say unset.
+        let store = try #require(rows.first { $0.name == Self.storeVariable })
+        #expect(store.defaultValue == nil, "\(store) but the store's default is no folder")
         for row in rows where row.name != Self.storeVariable {
             let value = row.defaultValue ?? ""
             let settings = try ServerSettings(environment: [row.name: value])
