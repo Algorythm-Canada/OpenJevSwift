@@ -2130,8 +2130,9 @@ Decision.
 7. **Instruments could not record.** `xctrace record` 27.0 (27A266a) on macOS 27.0.1 stops with an
    assertion in `XRAugmentationManager` for every template and target, `/bin/sleep` included,
    inside and outside the sandbox. The issue's "profile the read with Instruments" is answered by
-   the stage profile for the GPU side and by macOS's `sample` on a running `openjev-bench reads`
-   for the host side ([benchmarks.md](benchmarks.md)).
+   the stage profile on the GPU side; a host-side call tree with macOS's `sample` was queued but
+   not taken, because the Mac ran on battery for the rest of the session ([benchmarks.md](benchmarks.md),
+   "Not measured").
 8. **Not measured: a 32 GB or 48 GB Mac.** None was available. benchmarks.md has the row, marked
    not measured, and R4 says so; the issue's acceptance criterion for that machine is not met.
 9. **Measured on 2026-10-01 (M3 Max, 128 GB, macOS 27.0.1).** Parity, from the live tests, native
@@ -2158,7 +2159,7 @@ trips double the decoder pass and inflate every small stage, the router most.
 Consequences. Milestone 2's parity is shown on the reference machine and recorded in docs/09
 layer 2, and the baseline in [benchmarks.md](benchmarks.md) answers R5: the port reads as fast as
 upstream's Python MLX backend on the same Mac. The follow-ups with more than 10% headroom are filed
-for milestone 7; the 32 or 48 GB measurement waits for such a Mac. The DiffusionGemma JevBench runs
+for milestone 7 (#100, #101, #102); the 32 or 48 GB measurement waits for such a Mac. The DiffusionGemma JevBench runs
 that D-041 left for after #31 can now be recorded.
 
 Status. Proposed with issues #31 and #32.

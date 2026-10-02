@@ -399,9 +399,12 @@ python3 Tools/jevbench/servers.py --server swift --backend mlx --binary .build/r
 ```
 
 Before a timing run, check that nothing else is building or serving a model
-(`pgrep -fl 'swift-build|xcodebuild|openjev|python'`), and keep the Mac on AC power. Profile with
-Instruments the same way: `xctrace record --template 'Time Profiler' --launch --
-.build/release/openjev-bench reads --runs 20`. Traces stay out of git.
+(`pgrep -fl 'swift-build|xcodebuild|openjev|python'`), and keep the Mac on AC power. `openjev-bench
+profile` splits a read into its stages on the GPU (`--state-tokens` for a long state, `--metallib` for
+another Metal library). For the host side, `xctrace record --template 'Time Profiler' --launch --
+.build/release/openjev-bench reads --runs 20` would be the tool, but xctrace 27.0 (27A266a) stops
+on an assertion for every template on macOS 27.0.1 (D-043); `sample <pid> 30` on a running bench
+gives a call tree meanwhile. Traces stay out of git.
 
 ## Continuous integration
 

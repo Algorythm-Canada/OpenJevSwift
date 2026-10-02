@@ -181,24 +181,38 @@ library in the run before it: equal within run-to-run spread.
 Instruments could not record on this machine: `xctrace record` 27.0 (27A266a) stops with
 `Assertion failed: (_coreForNextRun != core)` in `XRAugmentationManager` for every template (Time
 Profiler, CPU Profiler, Metal System Trace) and every target, `/bin/sleep` included, inside and
-outside the sandbox, and writes an empty trace. The stage profile above is the GPU-side answer;
-the host-side call tree is in the next section.
+outside the sandbox, and writes an empty trace. The stage profile above is the GPU-side answer. A
+host-side call tree (macOS's `sample` on a running `openjev-bench reads`) was queued but not taken:
+the Mac went on battery for the rest of the session, and the protocol times only on AC power.
 
 ## Follow-up issues
 
 Each optimisation with more than 10% headroom by the figures above has an issue in milestone 7
 (label `area/diffusiongemma`):
 
-- **The expert matmuls** take 61% of the prefill and 62% of the decoder pass:
-  measure the sort threshold (64 assignments, mlx-vlm's), the gathered-matmul path and compiling
-  the expert block.
-- **Long-prompt attention**: the prefill rate halves from 1,000 to 10,000 tokens, and the sliding
-  layers build a dense `[L, L]` boolean band mask, 100 million entries at 10,000 tokens.
-- **Throughput under concurrency** stays at 3.0 to 3.4 requests/s from 1 to 16 callers; the
-  decoder passes of queued requests (87 ms of a 300 ms read) could run as one batch.
+- [#100](https://github.com/Algorythm-Canada/OpenJevSwift/issues/100) **The expert matmuls** take
+  61% of the prefill and 62% of the decoder pass: measure the sort threshold (64 assignments,
+  mlx-vlm's), the gathered-matmul path and compiling the expert block.
+- [#101](https://github.com/Algorythm-Canada/OpenJevSwift/issues/101) **Long-prompt prefill**: the
+  rate falls from 1,301 to 757 tokens/s from 1,000 to 10,000 tokens, and the sliding layers build a
+  dense `[L, L]` boolean band mask, 100 million entries at 10,000 tokens (from the code; a profile
+  at 10,000 tokens, `openjev-bench profile --state-tokens 10000`, was not taken).
+- [#102](https://github.com/Algorythm-Canada/OpenJevSwift/issues/102) **Throughput under
+  concurrency** stays at 3.0 to 3.4 requests/s from 1 to 16 callers; the decoder passes of queued
+  requests (87 ms of a 300 ms read) could run as one batch.
 
 Below 10%, so not filed: the slot-only projection (D-015; the output projection is 5.2% of a
 decoder pass and about 1.5% of a cold read, and its result is not bit-identical), compiling the
 softcap (0.7%), and the host round trips of the slot extraction (2.7% of a decoder pass, six
 `asArray` copies for three slots) and of the separate prefill evaluation (one round trip, about
 0.5 ms).
+
+## Not measured
+
+- A 32 GB or 48 GB Mac (none was available).
+- Swift's and upstream's servers under concurrency over HTTP, a third `reads` round of each, the
+  10,000-token stage profile and the `sample` call tree: queued under the protocol, but the Mac ran
+  on battery from 22:20 to the end of the session. The in-process concurrency table above is the
+  port's; upstream's README figure (about 4 requests/s at 16 concurrent, on an M3 Ultra or M4 Max)
+  is the only upstream row.
+- Instruments traces, for the reason above.
