@@ -61,9 +61,9 @@ OpenJevSwift/                          Swift package, tools 6.2, strict concurre
                                        middleware, the body reader, the refusal log, the client
                                        disconnect watch, DecisionServer (graceful shutdown) and
                                        ModelRouter (the model routes).
-    OpenJevTestSupport/                Fixture loaders, FixtureTokenizer, the stub backends and
-                                       ReadGate the test targets share. Foundation only; not a
-                                       product.
+    OpenJevTestSupport/                Fixture loaders, FixtureTokenizer, the stub backends,
+                                       ReadGate and ReadBarrier the test targets share.
+                                       Foundation only; not a product.
     openjev/                           CLI executable: serve, decide, models; the backend registry
     openjev-stub-server/               The server over OpenJevTestSupport's stubs, for the SDK
                                        suite; an executable target, not a product

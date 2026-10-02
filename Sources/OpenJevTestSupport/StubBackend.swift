@@ -14,10 +14,11 @@ import OpenJevCore
 ///   log-probability maps of `Fixtures/distributions/`, through ``ReadResult``'s raw initializer.
 ///
 /// Every ``CanvasRead`` and every think call is recorded in call order, with the time each call
-/// took inside the stub (``callTimes``). ``gate`` holds each call until the test opens it and
-/// ``delay`` makes each one take at least that long, for the capacity, timing and shutdown tests;
-/// both let cancellation through. ``failure`` makes each call after the first
-/// ``succeedingCalls`` throw, for the error contract tests. ``close()`` is counted.
+/// took inside the stub (``callTimes``). ``gate`` holds each call until the test opens it,
+/// ``barrier`` holds each call until a round of calls is waiting, and ``delay`` makes each one
+/// take at least that long, for the capacity, timing and shutdown tests; all three let
+/// cancellation through. ``failure`` makes each call after the first ``succeedingCalls`` throw,
+/// for the error contract tests. ``close()`` is counted.
 public final class StubBackend: DecisionBackend, ModelReleasing, @unchecked Sendable {
     /// One recorded think call.
     public struct ThinkCall: Equatable, Sendable {
@@ -60,6 +61,8 @@ public final class StubBackend: DecisionBackend, ModelReleasing, @unchecked Send
     public let succeedingCalls: Int
     /// Holds every call until it is opened; `nil` lets calls through.
     public let gate: ReadGate?
+    /// Holds every call until a round of calls is waiting; `nil` lets calls through.
+    public let barrier: ReadBarrier?
 
     private let lock = NSLock()
     private var recordedReads: [CanvasRead] = []
@@ -82,7 +85,8 @@ public final class StubBackend: DecisionBackend, ModelReleasing, @unchecked Send
         scriptedPromptTokens: Int = 100,
         failure: (any Error)? = nil,
         succeedingCalls: Int = 0,
-        gate: ReadGate? = nil
+        gate: ReadGate? = nil,
+        barrier: ReadBarrier? = nil
     ) {
         self.tokenizer = tokenizer
         self.maxPromptTokens = maxPromptTokens
@@ -97,6 +101,7 @@ public final class StubBackend: DecisionBackend, ModelReleasing, @unchecked Send
         self.failure = failure
         self.succeedingCalls = succeedingCalls
         self.gate = gate
+        self.barrier = barrier
     }
 
     /// Every read so far, in call order.
@@ -109,8 +114,8 @@ public final class StubBackend: DecisionBackend, ModelReleasing, @unchecked Send
         lock.withLock { recordedThinks }
     }
 
-    /// The time each finished call spent inside the stub, gate and delay included, in the order
-    /// the calls finished; a call that was cancelled or failed counts too.
+    /// The time each finished call spent inside the stub, gate, barrier and delay included, in
+    /// the order the calls finished; a call that was cancelled or failed counts too.
     public var callTimes: [Duration] {
         lock.withLock { recordedTimes }
     }
@@ -124,8 +129,8 @@ public final class StubBackend: DecisionBackend, ModelReleasing, @unchecked Send
         lock.withLock { closed += 1 }
     }
 
-    /// Waits for the gate and the delay, counting the call, timing it and throwing ``failure``
-    /// once ``succeedingCalls`` calls have answered.
+    /// Waits for the gate, the barrier and the delay, counting the call, timing it and throwing
+    /// ``failure`` once ``succeedingCalls`` calls have answered.
     private func simulateCall() async throws {
         let clock = ContinuousClock()
         let started = clock.now
@@ -138,6 +143,7 @@ public final class StubBackend: DecisionBackend, ModelReleasing, @unchecked Send
             lock.withLock { recordedTimes.append(time) }
         }
         try await gate?.pass()
+        try await barrier?.arrive()
         if let delay {
             try await Task.sleep(for: delay)
         }
