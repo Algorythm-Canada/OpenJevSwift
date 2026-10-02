@@ -2164,3 +2164,62 @@ for milestone 7 (#100, #101, #102); the 32 or 48 GB measurement waits for such a
 that D-041 left for after #31 can now be recorded.
 
 Status. Proposed with issues #31 and #32.
+
+## D-045 Read extensions on the checkpoint: where the port goes beyond or differs from the issue text
+
+Context. Issues #43, #44 and #45 ask for `steps`, `samples` with the automatic re-read policy, and
+`sequential` to be verified end to end on the DiffusionGemma backend. The engine had implemented all
+three against the stub since milestone 1, and the runtime had declared them since #29, so this work
+is live tests and an instrumented runtime rather than new behaviour. No answer changed, so
+`Fixtures/regression/reads.json` is untouched.
+
+Decision.
+
+1. **The instrument is the runtime's own test seam.** The read-policy tests build a
+   `DiffusionGemmaRuntime` through the internal `init(tokenizer:configuration:calls:setCacheLimit:)`,
+   whose `ModelCalls` call the shared checkpoint's model and record each read with the token ids of
+   the prompt its cache came from (prompt caches are looked up by identity and kept alive for the
+   test). Each test gets a fresh runtime, so a fresh prefill cache and fresh `ReadStatistics`, over
+   the one loaded 16 GB model. Nothing is added to the shipping runtime.
+2. **"Template positions hold" is shown by replay.** The model does not expose the canvas between
+   steps. The steps 8 test therefore replays the step loop with the model's own decoder passes,
+   checks that each step changes only slot positions, and requires the runtime's eight-step read to
+   equal the replay bit for bit, written argmaxes included. Exposing a per-step hook in `read` was
+   rejected because it would change a hot path for a test.
+3. **sequential is shown on 40 questions, not 24.** The 24-noul request of upstream's
+   `test_many_questions_chunk_and_run_in_sequence` chunks into two groups (17 and 7), and the issue's
+   check needs a group k > 1. 40 nouls give three groups (17, 14, 9). That request is sent with
+   `samples 1` so that the read count equals the group count whatever the entropies. Under the
+   automatic policy the re-reads would add reads but no billing. The 24-noul figures (657 tokens
+   plain, 1,147 sequential) are asserted in the upstream case under the default policy.
+4. **"Per group" is shown with an uncertain question among certain ones.** No natural request was
+   found whose groups split into one read and four. On the 24 nouls, the group of 17 has 2
+   questions above the 0.1 threshold and 15 below, and all 17 are re-read 4 times, which is the
+   behaviour `read_group` specifies. The test asserts, for every group, 4 reads when any question of
+   its first read is above the threshold and 1 otherwise, each re-read covering the whole group.
+5. **`OPENJEV_AUTO_MAX=1` is shown at the settings level.** The engine's `auto_max 1` case was
+   already in `Fixtures/policies/auto_rereads.json`. The new test feeds `ServerSettings(environment:)`
+   through `DecisionBackendProvider` to a stub whose every read is uncertain: 4 reads by default, 1
+   with the variable. A live server run would add only the model.
+6. **Already covered, cited.** The 422 for `steps` 0 and 9 is replayed byte for byte from upstream's
+   recordings by `ApplicationTests`'s recorded refusals. Images with `sequential` or `think` are
+   refused before the backend by `DecisionEngineTests`. No new test duplicates either.
+7. **The oracle breakdown by steps is printed by the existing test.** `ReadOracleTests` reports mean
+   |dp|, top-label agreement and equal written argmaxes per steps value beside D-014's aggregates;
+   the bounds stay aggregate. Native tier, 2026-10-02: steps 1, 0.0086 and 118 of 124; steps 2,
+   0.0089, 16 of 16, written equal on 2 of 3; steps 3, 0.0003, 16 of 16, 2 of 3. The two that differ
+   are the quickstart's, whose `is_urgent` is near 0.5 in the oracle.
+
+Alternatives rejected. (a) A recording `DecisionBackend` wrapper around the runtime: it would see
+`CanvasRead`s but not which reads hit the prefill cache, and could not map a read to its prompt
+once the engine builds it. (b) Lowering `autoThreshold` to force a one-read group beside a
+four-read one: the issue asks for the defaults. (c) Asserting quickstart thresholds at `steps 8`:
+upstream sets none, and the read sharpens (`is_urgent` 0.0006 against 0.444 at `steps 1`), which is
+the model's behaviour, not a port defect.
+
+Consequences. The text part of milestone 4 is verified on the real model and recorded in docs/09
+layer 2. The image issues (#46 to #48) and `think` with `sequential` (#52) remain; the `think`
+attribution to the first group is checked on the stub by the recorded `sequential_think` case
+of Fixtures/policies until then.
+
+Status. Proposed with issues #43, #44 and #45.

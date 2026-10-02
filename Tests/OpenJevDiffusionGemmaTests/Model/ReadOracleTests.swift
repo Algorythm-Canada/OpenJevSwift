@@ -159,6 +159,9 @@ extension MLXTests {
                     order.append(read.prompt)
                 }
                 var aggregates = Aggregates()
+                // The same figures per steps value (#43): reads, label differences, top labels,
+                // and the written argmaxes of the multi-step reads.
+                var bySteps: [Int: (reads: Int, figures: Aggregates, written: Int)] = [:]
                 var lines: [String] = []
                 var moved: [String] = []
                 var identicalReads = 0
@@ -219,9 +222,11 @@ extension MLXTests {
 
                         #expect(output.promptTokens == read.promptTokens, "\(read.id)")
                         #expect(output.slots.count == read.slots.count, "\(read.id)")
+                        bySteps[read.steps, default: (0, Aggregates(), 0)].reads += 1
                         if read.steps > 1 {
                             writtenTotal += 1
                             writtenEqual += output.written == read.written ? 1 : 0
+                            bySteps[read.steps]?.written += output.written == read.written ? 1 : 0
                         }
                         let recorded = read.maps
                         let same = zip(output.slots, recorded).allSatisfy { identical($0, $1) }
@@ -263,6 +268,7 @@ extension MLXTests {
                             let entropy = abs(got.entropy - want.entropy)
                             aggregates.labelDifferences += differences
                             aggregates.entropyDifferences.append(entropy)
+                            bySteps[read.steps]?.figures.labelDifferences += differences
                             if long {
                                 aggregates.longLabelDifferences += differences
                                 aggregates.longEntropyDifferences.append(entropy)
@@ -279,6 +285,8 @@ extension MLXTests {
                                 == ReadDivergence.firstLargest(want.probabilities)
                             aggregates.slots += 1
                             aggregates.topAgree += agree ? 1 : 0
+                            bySteps[read.steps]?.figures.slots += 1
+                            bySteps[read.steps]?.figures.topAgree += agree ? 1 : 0
                             let ranked = want.probabilities.sorted(by: >)
                             let margin = ranked[0] - (ranked.count > 1 ? ranked[1] : 0)
                             if margin >= 0.5 {
@@ -314,6 +322,16 @@ extension MLXTests {
                 let confidentShare =
                     Double(aggregates.confidentAgree) / Double(aggregates.confidentSlots)
                 let slotCount = aggregates.slots
+                let stepLines = bySteps.keys.sorted().map { steps in
+                    let (reads, figures, written) = bySteps[steps] ?? (0, Aggregates(), 0)
+                    let writtenNote =
+                        steps > 1 ? ", written argmaxes equal on \(written)/\(reads) reads" : ""
+                    return String(
+                        format: "steps %d: %d reads, mean |dp| %.4f over %d labels, top label %d/%d%@",
+                        steps, reads, Aggregates.mean(figures.labelDifferences),
+                        figures.labelDifferences.count, figures.topAgree, figures.slots,
+                        writtenNote)
+                }
                 let report =
                     """
                     \(exact ? "exact tier (wheel metallib, oracle RoPE)" : "native kernels"): \
@@ -331,6 +349,7 @@ extension MLXTests {
                     top label, oracle margin >= 0.5: \(aggregates.confidentAgree)/\(aggregates.confidentSlots) \
                     \(String(format: "%.1f%%", confidentShare * 100)) (bound 97%)
                     """
+                    + "\n" + stepLines.joined(separator: "\n")
                     + "\n" + lines.joined(separator: "\n")
                     + "\nreads with a slot whose top label moved or whose max |dp| exceeds "
                     + "\(ReadDivergence.threshold): \(moved.count)\n"
