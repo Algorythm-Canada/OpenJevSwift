@@ -16,11 +16,11 @@ It needs an Apple silicon Mac. The pinned 4-bit checkpoint is 16.58 GB on disk a
 16 GB of memory to load; a Mac with 32 GB or more is recommended. The module compiles for iOS,
 which CI checks, but no iPhone holds the model.
 
-The port matches mlx-vlm bit for bit on all 27 recorded oracle reads when it runs on the oracle's
-Metal library, and stays within the bounds of decision D-014 on mlx-swift's own kernels, which is
-how it runs in production. `steps`, `samples` and `sequential` work; images (issues #46 to #48)
-and `think` with text generation (issues #50 to #53) do not yet, and the engine refuses them with
-upstream's messages.
+The port matches mlx-vlm bit for bit on all 63 recorded oracle reads when it runs on the oracle's
+Metal library, and stays within the bounds of decisions D-014 and D-048 on mlx-swift's own kernels,
+which is how it runs in production. `steps`, `samples` and `sequential` work; images
+(issues #46 to #48) and `think` with text generation (issues #50 to #53) do not yet, and the engine
+refuses them with upstream's messages.
 
 <doc:ReadingWithDiffusionGemma> loads the model and covers its settings, memory and downloads.
 
