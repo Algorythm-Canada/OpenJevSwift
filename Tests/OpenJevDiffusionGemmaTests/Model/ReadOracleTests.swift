@@ -93,15 +93,6 @@ private func identical(
         }
 }
 
-/// The index of the first largest value, as Python's `max(range(n), key=p.__getitem__)`.
-private func firstLargest(_ values: [Double]) -> Int {
-    var best = 0
-    for index in values.indices where values[index] > values[best] {
-        best = index
-    }
-    return best
-}
-
 /// Installs the oracle's RoPE table in the full-attention layers when the exact tier is on
 /// (`OPENJEV_MLX_METALLIB` taken), runs `body`, and restores the model's own tables.
 private func withTier<T>(
@@ -169,6 +160,7 @@ extension MLXTests {
                 }
                 var aggregates = Aggregates()
                 var lines: [String] = []
+                var moved: [String] = []
                 var identicalReads = 0
                 var slotOnlyIdentical = 0
                 var slotOnlyMax = 0.0
@@ -251,6 +243,7 @@ extension MLXTests {
 
                         var readMaxDifference = 0.0
                         var readMaxEntropy = 0.0
+                        var compared: [ReadDivergence.Slot] = []
                         for (index, slot) in read.slots.enumerated() {
                             let want = SlotDistribution.compute(
                                 top: recorded[index], labelIDs: slot.labelIDs)
@@ -276,9 +269,14 @@ extension MLXTests {
                             }
                             readMaxDifference = max(readMaxDifference, differences.max() ?? 0)
                             readMaxEntropy = max(readMaxEntropy, entropy)
+                            compared.append(
+                                .init(
+                                    labelIDs: slot.labelIDs, ours: got.probabilities,
+                                    oracle: want.probabilities))
 
                             let agree =
-                                firstLargest(got.probabilities) == firstLargest(want.probabilities)
+                                ReadDivergence.firstLargest(got.probabilities)
+                                == ReadDivergence.firstLargest(want.probabilities)
                             aggregates.slots += 1
                             aggregates.topAgree += agree ? 1 : 0
                             let ranked = want.probabilities.sorted(by: >)
@@ -287,6 +285,12 @@ extension MLXTests {
                                 aggregates.confidentSlots += 1
                                 aggregates.confidentAgree += agree ? 1 : 0
                             }
+                        }
+                        if let report = ReadDivergence.report(
+                            id: read.id, prompt: read.prompt, width: read.width,
+                            steps: read.steps, slots: compared)
+                        {
+                            moved.append(report)
                         }
                         let writtenNote =
                             read.steps > 1
@@ -328,6 +332,9 @@ extension MLXTests {
                     \(String(format: "%.1f%%", confidentShare * 100)) (bound 97%)
                     """
                     + "\n" + lines.joined(separator: "\n")
+                    + "\nreads with a slot whose top label moved or whose max |dp| exceeds "
+                    + "\(ReadDivergence.threshold): \(moved.count)\n"
+                    + moved.joined(separator: "\n")
                 print(report)
                 SpikeReport.record("read-parity", report)
 

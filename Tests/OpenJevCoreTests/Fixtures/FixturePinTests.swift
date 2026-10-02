@@ -82,6 +82,8 @@ struct FixturePinTests {
     /// with each model's own tokenizer, so it pins the checkpoints instead of the tokenizer.
     /// model/ holds the DiffusionGemma checkpoint's own JSON files, which involve no upstream
     /// code, so it pins the checkpoint (the tokenizer's repository and revision) and not upstream.
+    /// regression/ holds the Swift port's own answers, which RegressionTests records on the
+    /// checkpoint, so it pins the checkpoint, MLX, macOS and the GPU and not upstream.
     /// Every other file comes from upstream's code with the real tokenizer and records both pins
     /// and the version of the script that wrote it.
     static func problems(in generator: JSONValue, of file: String) -> [String] {
@@ -91,6 +93,19 @@ struct FixturePinTests {
             if found != value {
                 out.append("\(file): generator.\(key) is \(found ?? "missing"), expected \(value)")
             }
+        }
+        if file.hasPrefix("regression/") {
+            expect("script", "Tests/OpenJevDiffusionGemmaTests/Runtime/RegressionTests.swift")
+            expect("model_repo", tokenizerRepository)
+            expect("model_revision", tokenizerRevision)
+            for key in ["mlx_swift", "macos", "gpu", "date"]
+            where generator[key]?.stringValue == nil {
+                out.append("\(file): generator.\(key) is missing")
+            }
+            if generator["version"]?.intValue == nil {
+                out.append("\(file): generator.version is missing")
+            }
+            return out
         }
         let encoders = file.hasPrefix("encoders/")
         let scripts = encoders ? "Tools/encoders" : "Tools/fixtures"

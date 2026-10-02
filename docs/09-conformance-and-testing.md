@@ -61,9 +61,52 @@ D-014:
 Below the reads, the text blocks (#24) are compared stage by stage with dumps of mlx-vlm's own
 prefill written by `Tools/oracle/stage_dump.py` (attention, MLP, router, experts and layer output
 of layers 0 to 5): bit-identical in the exact tier, within bounds measured at twice the native
-differences otherwise. The read-level cases still to cover are canvas widths 16 to 64, `steps` 2
-and 3, cached against uncached prefill, determinism across runs, and image reads once the vision
-path exists (upstream's `tests/data/hotdog.jpg` case).
+differences otherwise. Above them, the read-level cases are covered (issue #31): the 27 oracle
+reads span canvas widths 16 to 64, prompts of 78 to 2,939 tokens (four past the 1,024-token
+window) and `steps` 1 to 3; `ReadOracleTests` compares a cached and a cold prefill bit for bit;
+`RuntimeLiveTests` checks the same request twice and a cold against a cached read through the
+runtime; and the regression file (below) checks determinism across runs. Image reads wait for the
+vision path (#48, upstream's `tests/data/hotdog.jpg` case).
+
+Measured on 2026-10-01 on the reference machine (M3 Max, 128 GB, macOS 27.0.1, the pinned 4-bit
+checkpoint, mlx-swift 0.32.2), native tier, through the model (`ReadOracleTests`) and through the
+runtime (`RuntimeLiveTests`), which agree bit for bit:
+
+| Figure | Measured | D-014 bound |
+|---|---|---|
+| Top label agreement, all slots | 150 of 156 (96.2%) | 90% |
+| Top label agreement, oracle margin at least 0.5 | 120 of 120 (100%) | 97% |
+| Mean label probability difference, all labels (1,763) | 0.0084 | 0.02 |
+| Mean label probability difference, prompts past 1,024 tokens (1,496) | 0.0054 | 0.01 |
+| Mean entropy difference, all slots | 0.086 | 0.2 |
+| Mean entropy difference, prompts past 1,024 tokens (50 slots) | 0.131 | 0.2 |
+| Largest label probability difference (reported) | 0.374, quickstart/g0/c1, slot 2 (`is_urgent`) | none |
+| Largest entropy difference (reported) | 0.591, non_ascii/g0/c0 | none |
+| Reads bit-identical to the oracle (exact tier only) | 0 of 27 natively; 27 of 27 in the exact tier | |
+| Written argmaxes equal on multi-step reads | 4 of 6 | |
+
+The six slots whose top label moved are quickstart/g0 c0 and c2 slot 2 (`is_urgent`, the oracle at
+0.57 and 0.52), indexed_12_mixed/g0 c0 slots 0 and 11 and c1 slot 3, and many_choices/g0 c0
+slot 3; every one has an oracle margin under 0.5. When a slot's top label moves or its largest
+|dp| exceeds 0.05, both oracle tests print the read's id, prompt key, width and steps and both
+distributions with their label ids: 17 of the 27 reads have such a slot. The per-read figures are
+reported; the assertions stay D-014's aggregates.
+
+Per-read latency in the same run, a debug test build (Xcode's Test action), the model called
+directly: prefill 160 ms for 78 tokens, 233 ms for 182, 498 ms for 329, 1.94 s for 1,572,
+3.15 s for 2,442 and 4.85 s for 2,939; a one-step read over a cached prefill 62 to 332 ms (canvas
+16 to 64), two steps 297 to 407 ms, three steps 455 to 596 ms. Through the runtime, a read that
+prefills took 0.39 s (78 tokens) to 5.30 s (2,939 tokens) and one over a cached prefill 0.13 to
+0.27 s. The release build is faster; its figures are in [benchmarks.md](benchmarks.md).
+
+The regression file, [Fixtures/regression](../Fixtures/regression/README.md), records the port's own
+answers (not upstream's) for the 27 oracle reads, the wire quickstart and upstream's README example
+through the engine: per slot the probabilities, entropy and top label, the prompt tokens, and for
+the engine requests the billed tokens and answers, with the checkpoint, mlx-swift, macOS and GPU
+it was recorded under. `RegressionTests` fails when any value moves while those pins match: six
+runs in separate processes on the reference machine reproduced all 180 slots bit for bit, so the
+tolerance is 0 (D-043). On another machine it holds the port to D-014's aggregate bounds and says
+to record that machine's own file (`OPENJEV_RECORD_REGRESSION=1`).
 
 The encoder backends (`OpenJevEncodersTests`, issues #57 and #58) take their oracle from
 `Fixtures/encoders`, PyTorch float32 reads through upstream's own code. Without any model they
@@ -86,9 +129,19 @@ Planted bugs must each break a bound: for Verdict the global temperature where `
 the abstention's mass kept; for Laya the type's temperature where a bucket has its own and a read
 one position off each marker, on recorded scores and, in the Core ML test, on the model's own.
 
-Layer 2 also covers the port of upstream's `test_mlx_model.py` cases: README example answers,
-chunked question reads, more steps costing no more prompt tokens, `think` billing, chat completion
-sanity, thought channel never leaking.
+Layer 2 also covers the port of upstream's `test_mlx_model.py` read cases through
+`DecisionEngine` over `DiffusionGemmaRuntime`: the README example (`RuntimeLiveTests`, the
+looser bounds of upstream's `test_live.py`), the same request answering the same and a cached
+prefill reading the same (`RuntimeLiveTests`, `ReadOracleTests`), and, under upstream's names in
+`UpstreamReadCaseTests`, `test_many_questions_chunk_and_run_in_sequence` (24 nouls: 8 reads, 657
+input tokens; sequential 5 reads, 1,147 tokens), `test_more_steps_still_answer_and_cost_no_more_prompt`
+(upstream's three states with its thresholds at `steps` 4, the same billed tokens, and no second
+prefill by `ReadStatistics`), `test_steps_hold_the_template_and_reuse_one_prefill` (one prefill
+miss and one cached prefill for `steps` 1 and 4, a hit and the same bits for `steps` 4 again,
+and `steps` 1 bit-identical to the single decoder pass as it was before the step loop) and
+`test_the_prompt_cache_is_bounded_in_tokens` (12 prompts of 1,883 tokens leave 8 cached, 15,066
+tokens of the 16,384 budget). The image cases (#48), `think` (#52) and chat (#53) are disabled
+tests under upstream's names whose comments name the issue and `OPENJEV_TEST_MODEL`.
 
 ## Layer 3: end to end, behavioural
 
