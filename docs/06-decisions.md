@@ -2322,3 +2322,105 @@ calibrated probabilities fits a T on its own labelled answers with the harness a
 client-side. The conditions of item 6 are what would reopen the question.
 
 Status. Proposed with issue #62.
+
+## D-047 API documentation, guides and compatibility matrix: where the port goes beyond or differs from the issue text
+
+Context. Issue #64 asks for DocC catalogs for `OpenJevCore`, `OpenJevDiffusionGemma` and
+`OpenJevServer` (getting started in a Mac app and with the server, the request and answer types,
+the backend protocol, the `OPENJEV_*` configuration reference), a compatibility page, a credits
+page and a README for the implemented state, with `swift package generate-documentation`
+succeeding and the documentation published through the Swift Package Index or GitHub Pages.
+`OpenJevEncoders` was written after the issue, and a few points needed choices the issue does not
+spell out.
+
+Decision.
+
+1. **Four catalogs.** `OpenJevEncoders`, Verdict and Laya on Core ML and the path to iOS, gets a
+   catalog too. Each catalog's root page curates its module's symbols. The articles live where the
+   symbols they link live: making decisions in an app, the request and answer types and
+   implementing a backend in `OpenJevCore`; running the server and the configuration reference in
+   `OpenJevServer`; one reading article in each backend module. `OpenJevCore` depends on no other
+   module, so its getting-started article shows the backends in code samples and names their
+   types in code voice, and the backend modules' articles link back to it.
+2. **One site from one build.** `Tools/docs/build-site.sh`, which `make docs` and the Documentation
+   workflow run, builds the four archives in one `generate-documentation` call with
+   `--enable-experimental-combined-documentation`: each archive with the issue's
+   `--transform-for-static-hosting --hosting-base-path OpenJevSwift`, then `docc merge` into one
+   site with one sidebar and DocC's own landing page of the four modules at `documentation/`, and
+   `Tools/docs/index.html` as the site's front page. Built that way, each module's archive is
+   converted with its dependencies' archives, so a server or backend page can link to a core symbol.
+   Such a link is absolute, ``` ``/OpenJevCore/DecisionEngine`` ```. `OpenJevServer` extends two
+   core types, which gives it a page of its own named `OpenJevCore`: a relative `OpenJevCore/...`
+   link resolves against that page and fails, and Swift 6.2's DocC did the same with every absolute
+   form, where 6.4's falls back to the dependency. The build therefore passes
+   `--exclude-extended-types`, so the two `init(_:)` the server adds to `EngineConfiguration` and
+   `EncoderEngineConfiguration` are documented in the source but not on the site. Under Xcode 27's
+   Swift Build the symbol graphs keep the extensions anyway, and 6.4's DocC resolves the links
+   regardless. On Linux, where SwiftPM builds with the native build system, the default of the
+   workflow's Xcode 26.6 too, the flag removed the page.
+3. **Every warning is an error.** The build passes `--warnings-as-errors`, so a symbol link that
+   does not resolve, or a parameter documented under the wrong name, fails it. Before this change
+   DocC warned 66 times: 2 in `OpenJevCore`, 12 in `OpenJevServer`, 26 in `OpenJevEncoders` and 26
+   in `OpenJevDiffusionGemma`, nearly all links into other modules or to internal types, and
+   parameter lists that missed parameters. 93 public symbols had no doc comment: 81 in DiffusionGemma's model
+   tree, configuration and loaders, the 7 log levels of `ServerSettings.LogLevel` and 5 extension
+   blocks. Both are fixed in the doc comments alone, so no behaviour changes; one comment was wrong,
+   `EncoderDecisionEngine` calling a `BackendContractError` a 500, where the server answers the 503
+   of D-031 item 7.
+4. **GitHub Pages, deployed only once enabled.** `.github/workflows/docs.yml` builds the site on
+   `macos-26` with the macOS CI job's Xcode 26.6 for every pull request and push to `main` that
+   changes the sources or the site's files, uploads it with `actions/upload-pages-artifact` and, on
+   `main`, deploys it with `actions/deploy-pages`. A job asks the Pages API with the workflow's
+   token whether Pages publishes from GitHub Actions; until it does, the deploy job is skipped and
+   the run carries a notice, instead of failing. Enabling Pages is a repository setting the
+   maintainers make. The Swift Package Index is left to release 0.1.0 (#65).
+5. **The configuration reference is one table, checked by a test.** It lists the 32 variables the
+   server and the tool read, the 31 of `ServerSettings(environment:)` and `OPENJEV_ENCODER_MODELS`,
+   which the encoder store reads, with the default, the backends each applies to and what it does.
+   It says what no decision recorded: `OPENJEV_VERDICT_MODEL`, `OPENJEV_LAYA_MODEL` and
+   `OPENJEV_DEVICE` are read as upstream reads them but have no effect, since the
+   encoders load the packages and checkpoint revisions their manifests pin (D-033) on the compute
+   units D-011 chose; `OPENJEV_GEN_MAX_INFLIGHT`, `OPENJEV_GEN_MAX_QUEUE` and
+   `OPENJEV_GEN_MAX_TOKENS` have no effect until generation (#53); and `OPENJEV_MAX_IMAGES` and
+   `OPENJEV_MAX_IMAGE_BYTES` none until images (#48), since every backend refuses images first.
+   `ConfigurationReferenceTests` (`OpenJevServerTests`) parses the table: its names must be exactly
+   the `env.<reader>("OPENJEV_...")` reads of `ServerSettings.swift` and the store's variable, each
+   documented default must leave `ServerSettings` as an unset variable does, and every variable of
+   [deployment.md](deployment.md)'s settings table must appear with the same default. Changing a
+   default, adding a read or dropping a row fails it.
+6. **The compatibility page.** [compatibility.md](compatibility.md) has the three tables the issue
+   names, each difference with its decision number, and the matrix of three platforms by four kinds
+   of backend by seven features, each cell "yes", "no" with an issue, or "n/a". The matrix follows
+   from `BackendCapabilities`, the CLI's `BackendRegistry` and the platform matrix of
+   [05-architecture.md](05-architecture.md); no test checks it, because the DiffusionGemma
+   runtime's capabilities belong to a loaded runtime.
+7. **Credits beyond the served models.** [credits.md](credits.md) credits the three models served,
+   the two upstream serves that this port does not yet, where each model's weights come from (the
+   `Algorythm-Canada/openjev-models` releases for Verdict and Laya, the Hugging Face Hub for
+   DiffusionGemma), the upstream projects, and the license of each of the 35 packages
+   `Package.resolved` pins, read from their license files.
+8. **The README's commands were run.** On 2026-10-02 on the reference Mac: the release build,
+   `openjev serve --backend verdict` from an empty Application Support (it downloaded about 310 MB
+   and served after 37 s), the `curl`, `openjev decide` and the graceful stop. The answers the
+   README and the requests article show are the ones it gave. The articles' code samples were
+   compiled against the package, in a test file deleted before the commit.
+9. **swift-docc-plugin on every host.** The plugin is declared for Linux too, where
+   `generate-documentation` builds `OpenJevCore` and `OpenJevServer`; no Linux job builds
+   documentation, since the site needs the two Apple-only modules.
+
+Alternatives rejected. (a) Four separate archives copied into one folder: their navigator indexes
+and root files collide, so the sidebar would show one module, and no link could cross modules. (b)
+A hosting base path per module: four sites with four sidebars and no links between them, and not
+the issue's `--hosting-base-path OpenJevSwift`. (c) A documentation-only umbrella target linking
+every module: a target for documentation alone, which Linux could not build. (d) Generating the
+configuration table from `ServerSettings`: DocC has no build step for it, and the test keeps a
+written table honest at a fraction of the cost.
+
+Consequences. A pull request that changes only DocC Markdown starts no CI run (`paths-ignore`) but
+starts the Documentation workflow, which builds the site. The workflow has no cache, so each run
+compiles the dependencies on the macOS runner. The site is published at
+<https://algorythm-canada.github.io/OpenJevSwift/> once GitHub Pages is enabled with GitHub Actions
+as its source; until then the deploy job is skipped. A new public symbol needs a doc comment, and a
+new setting a row in the reference.
+
+Status. Proposed with issue #64.

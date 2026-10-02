@@ -111,6 +111,10 @@ repository, `repo@revision` for a revision; the default repository loads its pin
 `OPENJEV_MLX_MAX_PROMPT` (32768), `OPENJEV_MLX_PROMPT_CACHE` (12 prefills), `OPENJEV_MLX_CACHE_LIMIT_GB`
 (unset leaves MLX's buffer pool alone, `0` disables it; the settings line shows
 `mlx_cache_limit_gb=unset` or the number), `OPENJEV_CANVAS` and the others in upstream's table.
+Every variable, with its default and what it does here, is in the configuration reference, an
+article of the API documentation
+([Sources/OpenJevServer/Documentation.docc/Configuration.md](../Sources/OpenJevServer/Documentation.docc/Configuration.md));
+`ConfigurationReferenceTests` keeps that table, the one above and the code in agreement.
 
 `serve` takes six flags. The first five override their variable:
 

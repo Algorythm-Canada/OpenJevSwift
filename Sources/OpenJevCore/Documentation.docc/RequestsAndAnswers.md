@@ -162,6 +162,6 @@ errors included.
 ``DecisionEngine`` derives a request's seed as upstream does (``SeedDerivation``): the SHA-256 of
 the canonical JSON of the state and the questions, the image data URLs too when there are images,
 whose first four bytes seed Python's Mersenne Twister for the canvas noise. The same request
-therefore reads the same canvases, on this port and upstream alike. ``DecisionEngine/decide(_:seed:)``
-takes a seed to replay a recorded request. The encoder engines' reads are deterministic and use no
-seed.
+therefore reads the same canvases, on this port and upstream alike.
+``DecisionEngine/decide(_:seed:)`` takes a seed to replay a recorded request. The encoder engines'
+reads are deterministic and use no seed.

@@ -39,8 +39,8 @@ targets: [
 
 A version requirement cannot work yet: the package pins mlx-swift-lm by revision, and SwiftPM
 refuses a revision-pinned dependency inside a package that another package requires by version.
-Release 0.1.0 (issue #65) waits for an mlx-swift-lm release that holds the pinned commit. Add `OpenJevDiffusionGemma` instead of, or beside,
-`OpenJevEncoders` for DiffusionGemma.
+Release 0.1.0 (issue #65) waits for an mlx-swift-lm release that holds the pinned commit. Add
+`OpenJevDiffusionGemma` instead of, or beside, `OpenJevEncoders` for DiffusionGemma.
 
 ### Load a backend and its engine
 

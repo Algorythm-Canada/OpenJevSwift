@@ -15,9 +15,21 @@ Read in order the first time. Later, each document stands alone.
 
 [deployment.md](deployment.md) runs the server on a Mac: the build, the settings, a launchd job,
 the logs, the graceful shutdown and the exit statuses. [development.md](development.md) builds and
-tests the package. [quality.md](quality.md) compares the Swift server's answers with upstream's on
-JevBench and TypeSafe's public evaluations, and both with the published results, and measures how
-well DiffusionGemma's probabilities are calibrated.
+tests the package, and builds and previews the API documentation.
+[compatibility.md](compatibility.md) says what is identical to upstream, what agrees within a
+measured tolerance and what differs and why, with the matrix of what runs on macOS, iOS and Linux.
+[credits.md](credits.md) credits the models, their authors and licenses, and the upstream projects.
+[quality.md](quality.md) compares the Swift server's answers with upstream's on JevBench and
+TypeSafe's public evaluations, and both with the published results, and measures how well
+DiffusionGemma's probabilities are calibrated. [benchmarks.md](benchmarks.md) measures
+DiffusionGemma's reads: latency, throughput, memory and prefill.
+
+The API documentation lives beside the code, in a DocC catalog per library module
+(`Sources/<module>/Documentation.docc`): making decisions in an app, the request and answer types,
+implementing a backend, running the server and the configuration reference of every `OPENJEV_*`
+variable. `make docs` builds it ([development.md](development.md#api-documentation)), and the
+Documentation workflow publishes it to <https://algorythm-canada.github.io/OpenJevSwift/> once
+GitHub Pages is enabled for the repository.
 
 [spikes/](spikes/) holds the written outcome of each spike: what was measured, how, and the
 minimal reproductions of anything that differed. The decision each one feeds is in

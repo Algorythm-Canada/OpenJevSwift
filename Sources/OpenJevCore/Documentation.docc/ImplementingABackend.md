@@ -22,9 +22,10 @@ Both protocols require `Sendable`: an engine calls its backend from many tasks.
 
 ### What a canvas backend provides
 
-- ``DecisionBackend/tokenizer``, a ``DecisionTokenizer``. ``DecisionEngine/init(backend:configuration:)``
-  encodes the markers with it, discovers the single-token choice labels (``LabelDiscovery``) and
-  tokenizes every answer template through it, so its ids must be the model's own.
+- ``DecisionBackend/tokenizer``, a ``DecisionTokenizer``.
+  ``DecisionEngine/init(backend:configuration:)`` encodes the markers with it, discovers the
+  single-token choice labels (``LabelDiscovery``) and tokenizes every answer template through it,
+  so its ids must be the model's own.
 - ``DecisionBackend/maxPromptTokens``, the longest prompt one read or thought may carry;
   `Int.max` for no limit.
 - ``DecisionBackend/capabilities``, the ``BackendCapabilities`` the backend honours: `steps`,

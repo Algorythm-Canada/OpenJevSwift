@@ -1,11 +1,12 @@
 # Compatibility with upstream OpenJev
 
-OpenJevSwift is compatible with upstream OpenJev, [razorback16/openjev](https://github.com/razorback16/openjev)
-at `dcd2094` (0.5.0), which implements TypeSafe's published contract for `/v1/systemone`. This
-page says what is identical, what agrees within a measured tolerance, and what differs and why,
-as of 2026-10-02. Each difference names the decision in [06-decisions.md](06-decisions.md) that
-records it; [09-conformance-and-testing.md](09-conformance-and-testing.md) describes how each claim
-is tested. The last section is the matrix of what runs where.
+OpenJevSwift is compatible with upstream OpenJev,
+[razorback16/openjev](https://github.com/razorback16/openjev) at `dcd2094` (0.5.0), which implements
+TypeSafe's published contract for `/v1/systemone`. This page says what is identical, what agrees
+within a measured tolerance, and what differs and why, as of 2026-10-02. Each difference names the
+decision in [06-decisions.md](06-decisions.md) that records it;
+[09-conformance-and-testing.md](09-conformance-and-testing.md) describes how each claim is tested.
+The last section is the matrix of what runs where.
 
 ## Identical to upstream
 
@@ -87,7 +88,7 @@ recorded there yet.
 | `POST /v1/chat/completions` | Served by the `mlx` backend | A 404 until issue #53, though `/v1/models` still lists `diffusiongemma-26b` as upstream's does | D-012, D-043 |
 | `server-timing` `model` on `mlx` | `0.0`: the MLX engine does not time its reads | The time spent in reads, summed over reads that ran at once, so it can exceed `total` | D-038, D-044 |
 | Encoder arithmetic | PyTorch, on CUDA when present, else in float32 on the CPU | Core ML packages in float16 on the GPU or the Neural Engine, within the bounds above | D-011, D-034, D-037 |
-| Encoder weights | The checkpoint that `OPENJEV_VERDICT_MODEL` or `OPENJEV_LAYA_MODEL` names, on the device `OPENJEV_DEVICE` names | Converted packages from the `Algorythm-Canada/openjev-models` releases at pinned digests, or `OPENJEV_ENCODER_MODELS`' folder; those three variables are read but have no effect | D-033, D-046 |
+| Encoder weights | The checkpoint that `OPENJEV_VERDICT_MODEL` or `OPENJEV_LAYA_MODEL` names, on the device `OPENJEV_DEVICE` names | Converted packages from the `Algorythm-Canada/openjev-models` releases at pinned digests, or `OPENJEV_ENCODER_MODELS`' folder; those three variables are read but have no effect | D-033, D-047 |
 | Encoder padding | Rows padded to the longest row | Rows padded to the Core ML function's length; the billed tokens are the same | D-034, D-037 |
 | A model's malformed output | Raised from the read or broadcast silently | `EncoderModelError`, answered as the 503 | D-034, D-037 |
 | Encoder memory | One PyTorch model | Each Core ML function a read needs stays loaded with its own copy of the weights, up to 6 for Verdict and 8 for Laya, unless `OPENJEV_ENCODER_FUNCTIONS` caps them | D-042 |

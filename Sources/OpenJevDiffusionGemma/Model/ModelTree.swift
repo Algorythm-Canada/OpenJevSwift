@@ -106,7 +106,7 @@ public final class Backbone: Module {
 ///
 /// Not Sendable: it holds MLX arrays. Its caller serialises its use, as the read path will.
 public final class DiffusionGemmaModel: Module, BaseLanguageModel {
-    /// The tree under `model`, the prefix of every checkpoint tensor.
+    /// The tree under `model`, the prefix of every tensor that loads.
     @ModuleInfo public var model: Backbone
 
     /// The text configuration the tree was built from.
