@@ -386,10 +386,19 @@ def same_maps(want: list, got: list) -> bool:
     return True
 
 
+def paired(want: list, got: list, what: str) -> list:
+    """want and got side by side. Lists of different lengths are refused, never cut short: a
+    missing or extra item, read, slot or label means the runs do not match."""
+    if len(want) != len(got):
+        raise SystemExit(f"{what}: {len(got)} against upstream's {len(want)}; the runs do not "
+                         "match, so nothing is compared")
+    return list(zip(want, got))
+
+
 def label_probabilities(slot_distribution, read: dict, maps: list) -> list:
     """slot_distribution's label probabilities of each slot, as the engine averages them."""
     return [slot_distribution({int(t): v for t, v, *_ in m}, s["label_ids"])["probs"]
-            for m, s in zip(maps, read["slots"])]
+            for s, m in paired(read["slots"], maps, "the slots of a read")]
 
 
 def means(per_read: list) -> list:
@@ -402,32 +411,77 @@ def argmax(values: list) -> int:
     return max(range(len(values)), key=values.__getitem__)
 
 
+def tensor_type(digest: dict) -> tuple:
+    return digest["dtype"], tuple(digest["shape"])
+
+
+def layer_structure(want: dict | None, got: dict | None) -> list:
+    """How one layer of two prefill caches differs before any hash is compared: one side lacks
+    it, or its index, kind or offset, a tensor's dtype or shape, or the decoder view (on one side
+    only, another start, another dtype or shape) differ."""
+    if want is None or got is None:
+        return ["missing in " + ("upstream's run" if want is None else "the port's run")]
+    problems = [f"{key} {want.get(key)!r} against {got.get(key)!r}"
+                for key in ("layer", "kind", "offset") if want.get(key) != got.get(key)]
+    problems += [f"{part} {tensor_type(want[part])} against {tensor_type(got[part])}"
+                 for part in ("keys", "values")
+                 if tensor_type(want[part]) != tensor_type(got[part])]
+    view, other = want.get("decoder_view"), got.get("decoder_view")
+    if (view is None) != (other is None):
+        problems.append("a decoder view on one side only")
+    elif view is not None:
+        if view.get("start") != other.get("start"):
+            problems.append(f"decoder view start {view.get('start')} against {other.get('start')}")
+        problems += [f"decoder view {part} {tensor_type(view[part])} against "
+                     f"{tensor_type(other[part])}" for part in ("keys", "values")
+                     if tensor_type(view[part]) != tensor_type(other[part])]
+    return problems
+
+
 def compare_caches(want: list, got: list) -> dict:
-    """Layer by layer: keys and values by SHA-256, the sliding layers' decoder views too. The
-    equal layers are listed by index."""
-    keys = [w["keys"]["sha256"] == g["keys"]["sha256"] for w, g in zip(want, got)]
-    values = [w["values"]["sha256"] == g["values"]["sha256"] for w, g in zip(want, got)]
-    views = [all(w["decoder_view"][part]["sha256"] == g["decoder_view"][part]["sha256"]
-                 for part in ("keys", "values"))
-             for w, g in zip(want, got) if "decoder_view" in w and "decoder_view" in g]
-    first = next((i for i, (k, v) in enumerate(zip(keys, values)) if not (k and v)), None)
-    out = {"layers": len(want), "layers_compared": len(keys),
-           "layers_equal": sum(k and v for k, v in zip(keys, values)),
-           "keys_equal_layers": [i for i, k in enumerate(keys) if k],
-           "values_equal_layers": [i for i, v in enumerate(values) if v],
+    """Layer by layer, the structure first: a layer one side lacks, or whose index, kind, offset,
+    dtypes, shapes or decoder view differ, is unequal whatever its hashes, as ReadOracleTests
+    checks the offset, dtype and shape before the digests. Then the keys and values by SHA-256,
+    and the decoder view of each of upstream's sliding layers. Equal layers are listed by index."""
+    rows = []
+    for index in range(max(len(want), len(got))):
+        w = want[index] if index < len(want) else None
+        g = got[index] if index < len(got) else None
+        problems = layer_structure(w, g)
+        rows.append({
+            "problems": problems,
+            "keys": not problems and w["keys"]["sha256"] == g["keys"]["sha256"],
+            "values": not problems and w["values"]["sha256"] == g["values"]["sha256"],
+            # each sliding layer of upstream's has a view the port's must match
+            "view": None if w is None or "decoder_view" not in w else (
+                not problems and all(w["decoder_view"][part]["sha256"]
+                                     == g["decoder_view"][part]["sha256"]
+                                     for part in ("keys", "values")))})
+    views = [r["view"] for r in rows if r["view"] is not None]
+    first = next((i for i, r in enumerate(rows) if not (r["keys"] and r["values"])), None)
+    out = {"layers": len(want), "layers_in_port": len(got),
+           "layers_equal": sum(r["keys"] and r["values"] for r in rows),
+           "keys_equal_layers": [i for i, r in enumerate(rows) if r["keys"]],
+           "values_equal_layers": [i for i, r in enumerate(rows) if r["values"]],
            "sliding_views_equal": sum(views), "sliding_views": len(views),
+           "structure_differences": [{"layer": i, "problems": r["problems"]}
+                                     for i, r in enumerate(rows) if r["problems"]],
            "first_differing_layer": None}
     if first is not None:
-        w, g = want[first], got[first]
-        equal = {"keys": keys[first], "values": values[first]}
-        # how far a differing part is off; equal parts' sums still differ in the last bits, since
-        # numpy and the Swift digest add in different orders
-        out["first_differing_layer"] = {
-            "layer": first, "keys_equal": keys[first], "values_equal": values[first],
-            **{f"{part}_relative_sum_of_squares_difference":
-               abs(w[part]["sum_of_squares"] - g[part]["sum_of_squares"])
-               / max(abs(w[part]["sum_of_squares"]), 1e-300)
-               for part in ("keys", "values") if not equal[part]}}
+        r = rows[first]
+        out["first_differing_layer"] = {"layer": first, "keys_equal": r["keys"],
+                                        "values_equal": r["values"]}
+        if r["problems"]:
+            out["first_differing_layer"]["structure"] = r["problems"]
+        else:
+            # how far a differing part is off; equal parts' sums still differ in the last bits,
+            # since numpy and the Swift digest add in different orders
+            w, g = want[first], got[first]
+            for part in ("keys", "values"):
+                if not r[part]:
+                    out["first_differing_layer"][f"{part}_relative_sum_of_squares_difference"] = (
+                        abs(w[part]["sum_of_squares"] - g[part]["sum_of_squares"])
+                        / max(abs(w[part]["sum_of_squares"]), 1e-300))
     return out
 
 
@@ -464,6 +518,10 @@ def command_compare(args) -> int:
     for item in up["items"]:
         body = bodies[item["id"]]
         reads = item["reads"]  # in seed order
+        if not reads or len({read_key(r)[2] for r in reads}) != 1:
+            raise SystemExit(f"{item['id']}: {len(reads)} reads over more than one group or none; "
+                             "compare averages one group per item, as a JevBench or TypeSafe "
+                             "item asks one question")
         probs = [label_probabilities(slot_distribution, r, r["logprobs"]) for r in reads]
         reference[item["id"]] = {"reads": reads, "probs": probs, "item": item,
                                  "caches": {c["prompt_ids_sha256"]: c["layers"]
@@ -542,13 +600,14 @@ def dp_totals(per_item, reference) -> dict:
     diffs, flipped, identical, reads = [], 0, 0, 0
     for item_id, got in per_item.items():
         want = reference[item_id]["probs"]
-        for w, g in zip(want, got["label_probabilities"]):
-            for ws, gs in zip(w, g):
-                diffs += [abs(a - b) for a, b in zip(ws, gs)]
-        identical += sum(got["reads_identical"])
+        for w, g in paired(want, got["label_probabilities"], f"{item_id}: reads"):
+            for ws, gs in paired(w, g, f"{item_id}: the slots of a read"):
+                diffs += [abs(a - b) for a, b in paired(ws, gs, f"{item_id}: labels")]
+        identical += sum(x is True for x in got["reads_identical"])
         reads += len(got["reads_identical"])
         flipped += any(argmax(a) != argmax(b) for a, b in
-                       zip(means(want), means(got["label_probabilities"])))
+                       paired(means(want), means(got["label_probabilities"]),
+                              f"{item_id}: slots"))
     return {"reads": reads, "reads_identical": identical, "labels": len(diffs),
             "mean_abs_dp": sum(diffs) / len(diffs) if diffs else 0.0,
             "max_abs_dp": max(diffs, default=0.0), "items": len(per_item),
@@ -561,6 +620,12 @@ def compare_port(name, path, port, reference, files, slot_distribution) -> dict:
           f"{port.get('run_on')})")
     replays = {r["id"]: r for r in port.get("replays", [])}
     engine_items = {r["id"]: r for r in port.get("items", [])}
+    if not replays and not engine_items:
+        raise SystemExit(f"{shown(path)} holds no reads")
+    for part, ids in (("replays", replays), ("engine runs", engine_items)):
+        if ids and set(ids) != set(reference):
+            raise SystemExit(f"{shown(path)}: its {part} cover {sorted(ids)}, upstream.json's "
+                             f"{sorted(reference)}; rerun ItemReads on this work folder")
     per_item, out_items = {}, []
     engine_totals = {"items": 0, "items_with_upstream_reads": 0, "reads": 0,
                      "reads_identical": 0, "answers_equal_upstream": 0}
@@ -569,26 +634,29 @@ def compare_port(name, path, port, reference, files, slot_distribution) -> dict:
         row = {"id": item_id}
         replay = replays.get(item_id)
         if replay is not None:
-            got = replay["reads"]
-            identical = [same_maps(w["logprobs"], g["logprobs"]) for w, g in zip(want_reads, got)]
-            probs = [label_probabilities(slot_distribution, w, g["logprobs"])
-                     for w, g in zip(want_reads, got)]
+            pairs = paired(want_reads, replay["reads"], f"{shown(path)}: {item_id}'s replays")
+            identical = [same_maps(w["logprobs"], g["logprobs"]) for w, g in pairs]
+            probs = [label_probabilities(slot_distribution, w, g["logprobs"]) for w, g in pairs]
             row["replay"] = {
                 "reads_identical": identical,
                 "prompt_tokens_equal": all(w["prompt_tokens"] == g["prompt_tokens"]
-                                           for w, g in zip(want_reads, got)),
+                                           for w, g in pairs),
                 "label_probabilities": probs}
-            # upstream's prompts, prefilled by the port
-            row["prefill"] = [compare_caches(ref["caches"][c["prompt_ids_sha256"]], c["layers"])
-                              for c in replay["caches"]]
+            # upstream's prompts, prefilled by the port: every one of them
+            prompts = {c["prompt_ids_sha256"]: c["layers"] for c in replay["caches"]}
+            if set(prompts) != set(ref["caches"]):
+                raise SystemExit(f"{shown(path)}: {item_id}'s replay digests other prompts than "
+                                 "upstream's")
+            row["prefill"] = [compare_caches(ref["caches"][d], prompts[d]) for d in ref["caches"]]
             per_item[item_id] = {"reads_identical": identical, "label_probabilities": probs}
         engine = engine_items.get(item_id)
         if engine is not None:
             want = {read_key(r): r for r in want_reads}
             got = {read_key(r): r for r in engine["reads"]}
             same = set(want) == set(got) and len(engine["reads"]) == len(want_reads)
-            identical = [same_maps(want[k]["logprobs"], got[k]["logprobs"])
-                         for k in (read_key(r) for r in want_reads) if k in got]
+            # upstream's reads in seed order; None for one the engine did not make
+            identical = [same_maps(want[k]["logprobs"], got[k]["logprobs"]) if k in got else None
+                         for k in (read_key(r) for r in want_reads)]
             answer = engine["answers"]
             upstream_answer = ref["item"]["answers"]
             equals = {"upstream run": answer == upstream_answer}
@@ -606,15 +674,15 @@ def compare_port(name, path, port, reference, files, slot_distribution) -> dict:
                 "answers": answer, "answers_equal": equals,
                 "usage": engine["usage"]}
             if replay is None:
-                # the engine's prompts where they are upstream's
-                row["prefill"] = [compare_caches(ref["caches"][c["prompt_ids_sha256"]],
-                                                 c["layers"])
-                                  for c in engine["caches"]
-                                  if c["prompt_ids_sha256"] in ref["caches"]]
+                # upstream's prompts that the engine also read; the count says when one is not
+                prompts = {c["prompt_ids_sha256"]: c["layers"] for c in engine["caches"]}
+                row["prefill"] = [compare_caches(ref["caches"][d], prompts[d])
+                                  for d in ref["caches"] if d in prompts]
+                row["prefill_prompts"] = f"{len(row['prefill'])} of {len(ref['caches'])}"
             engine_totals["items"] += 1
             engine_totals["items_with_upstream_reads"] += same
             engine_totals["reads"] += len(want_reads)
-            engine_totals["reads_identical"] += sum(identical)
+            engine_totals["reads_identical"] += sum(x is True for x in identical)
             engine_totals["answers_equal_upstream"] += equals["upstream run"]
             if replay is None and same:
                 per_item[item_id] = {
@@ -642,15 +710,22 @@ def print_port_item(row: dict) -> None:
         answer = e["answers"].get("decision", {})
         equals = ", ".join(f"{'=' if v else '!='} {k}" for k, v in e["answers_equal"].items())
         parts.append(f"engine: same reads as upstream {e['same_reads_as_upstream']}, identical "
-                     f"{sum(e['reads_identical'])}/{len(e['reads_identical'])}, prompt tokens equal "
+                     f"{sum(x is True for x in e['reads_identical'])}/"
+                     f"{len(e['reads_identical'])}, prompt tokens equal "
                      f"{e['prompt_tokens_equal']}; answer {json.dumps(answer)[:110]} ({equals})")
     if "replay" in row:
         r = row["replay"]
         parts.append(f"replay of upstream's reads: identical {sum(r['reads_identical'])}/"
                      f"{len(r['reads_identical'])}, prompt tokens equal {r['prompt_tokens_equal']}")
+    if "prefill_prompts" in row:
+        parts.append(f"prefill: {row['prefill_prompts']} of upstream's prompts read by the engine")
     for cache in row.get("prefill", []):
+        if cache["structure_differences"]:
+            parts.append(f"prefill structure differs in {len(cache['structure_differences'])} "
+                         f"layers, first: {cache['structure_differences'][0]}")
         first = cache["first_differing_layer"]
-        where = "none" if first is None else (
+        where = "none" if first is None else f"layer {first['layer']} (structure)" if (
+            "structure" in first) else (
             f"layer {first['layer']} (keys {'equal' if first['keys_equal'] else 'differ'}, "
             f"values {'equal' if first['values_equal'] else 'differ'}"
             + "".join(f", {part}' sum of squares "
@@ -669,14 +744,18 @@ def compare_variant(variant, data, reference, slot_distribution) -> dict:
     name = variant
     print(f"\n== {name}: {DESCRIPTIONS.get(name, 'sensitivity.py variant ' + variant)}")
     per_item, out_items = {}, []
-    for row in data["items"]:
-        ref = reference[row["id"]]
+    rows = {row["id"]: row for row in data["items"]}
+    if set(rows) != set(reference):
+        raise SystemExit(f"upstream.json's {variant} variant covers {sorted(rows)}, its engine "
+                         f"run {sorted(reference)}")
+    for item_id, ref in reference.items():
+        row = rows[item_id]
         # the variant replayed upstream's reads in their order
-        identical = [same_maps(w["logprobs"], g["logprobs"])
-                     for w, g in zip(ref["reads"], row["reads"])]
-        probs = [label_probabilities(slot_distribution, w, g["logprobs"])
-                 for w, g in zip(ref["reads"], row["reads"])]
-        flipped = [argmax(a) != argmax(b) for a, b in zip(means(ref["probs"]), means(probs))]
+        pairs = paired(ref["reads"], row["reads"], f"{variant}: {item_id}'s reads")
+        identical = [same_maps(w["logprobs"], g["logprobs"]) for w, g in pairs]
+        probs = [label_probabilities(slot_distribution, w, g["logprobs"]) for w, g in pairs]
+        flipped = [argmax(a) != argmax(b)
+                   for a, b in paired(means(ref["probs"]), means(probs), f"{item_id}: slots")]
         per_item[row["id"]] = {"reads_identical": identical, "label_probabilities": probs}
         out_items.append({"id": row["id"], "reads_identical": identical,
                           "label_probabilities": probs, "means": means(probs),
@@ -721,7 +800,8 @@ def command_long_slots(args) -> int:
           f"{sum(len(d['probs']) for d in slots):,} labels; {len(slots) - len(few)} slots with "
           f"more than {args.max_labels} labels hold "
           f"{sum(len(d['probs']) for d in slots) - sum(len(d['probs']) for d in few):,} of them, "
-          f"{len(few)} slots with at most {args.max_labels} hold {sum(len(d['probs']) for d in few)}")
+          f"{len(few)} slots with at most {args.max_labels} hold "
+          f"{sum(len(d['probs']) for d in few)}")
     sizes = {}
     for d in slots:
         sizes[len(d["probs"])] = sizes.get(len(d["probs"]), 0) + 1
@@ -731,8 +811,10 @@ def command_long_slots(args) -> int:
     for name, run in runs.items():
         every, small = [], []
         for r in long_reads:
-            for got, want in zip(run[r["id"]], r["distributions"]):
-                d = [abs(a - b) for a, b in zip(got["probs"], want["probs"])]
+            if r["id"] not in run:
+                raise SystemExit(f"{name} has no read {r['id']}")
+            for want, got in paired(r["distributions"], run[r["id"]], f"{name}: {r['id']}"):
+                d = [abs(a - b) for a, b in paired(want["probs"], got["probs"], f"{r['id']}")]
                 every += d
                 if len(want["probs"]) <= args.max_labels:
                     small += d
