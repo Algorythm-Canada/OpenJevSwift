@@ -2538,8 +2538,11 @@ Decision.
    4 GB, which changes no read: restricted to the 27 old reads, the new runs reproduce spike #22's
    runs and every row of its `tolerance_stats.json` bit for bit, the planted bugs included.
    `sensitivity.py` gained `--cache-limit-gb` and `--out`, `tolerance_stats.py` `--oracle`,
-   `--sensitivity`, `--native` and `--out`, long prompts by token count and the new rows, the fork
-   probe `--maps`, and `item_reads.py long-slots` reads the widened fixture's runs.
+   `--sensitivity`, `--native` and `--out` (by default these files), long prompts by token count
+   and the new rows, the fork probe `--maps`, and `item_reads.py long-slots` reads the widened
+   fixture's runs. `tolerance_stats.py` refuses, before writing, a run that lacks any of the
+   oracle's reads, so spike #22's 27-read runs need `--oracle` set to the `reads.json` of commit
+   `00f71a6`.
 
 Alternatives rejected. (a) D-014's long-prompt label mean with another bound: it measures the
 fixture's mix of label counts as much as the reads (0.0113 for the port, whose few-label long slots

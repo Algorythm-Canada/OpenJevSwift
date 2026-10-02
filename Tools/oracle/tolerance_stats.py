@@ -8,18 +8,22 @@ top-two margin, the entropy differences, and the argmaxes written between steps.
 
 Inputs (all produced by the scripts in Tools/oracle and Tools/fixtures):
 - mlx-vlm with a 64-token chunked prefill, and with unsorted decoder expert gathers
-  (--sensitivity, by default Tools/oracle/results/sensitivity.json);
+  (--sensitivity, by default D-048's Tools/oracle/results/d048/sensitivity.json);
 - the Layr-Labs fork through the Swift probe (Probe --dump writes swift_reads.json, Probe --maps
   the same maps for every read; pass its path);
-- the Swift transliteration on mlx-swift's own kernels (--native, by default
-  Tools/oracle/results/transliteration_run.json). A run with a cache limit is accepted: a limit
-  leaves every read bit-identical (spike #22).
+- the Swift transliteration on mlx-swift's own kernels (--native, by default D-048's
+  Tools/oracle/results/d048/transliteration_run.json). A run with a cache limit is accepted: a
+  limit leaves every read bit-identical (spike #22).
 
     Tools/oracle/.venv/bin/python Tools/oracle/tolerance_stats.py [--oracle PATH] [--sensitivity PATH]
         [--native PATH] [--out PATH] [SWIFT_READS_JSON] [NAME=RUN_JSON ...]
 
 Each NAME=RUN_JSON adds a Transliteration run (for example one with TRANSLITERATION_BUG set) under
-that name. Rows are computed over every read; over the reads whose prompt passes 1,024 tokens;
+that name. Every run must hold every read of --oracle (Fixtures/oracle/reads.json by default), or
+nothing is written; reads the oracle lacks are left out, so a run on the 63-read fixture also gives
+spike #22's figures with --oracle set to its 27-read reads.json (commit 00f71a6), and spike #22's
+own runs need that --oracle. The table goes to --out, by default D-048's
+Tools/oracle/results/d048/tolerance_stats.json. Rows are computed over every read; over the reads whose prompt passes 1,024 tokens;
 over those reads' slots with at most 4 labels, where the 55- to 255-option choices cannot dilute
 the label mean (D-048); and over the JevBench reads alone.
 """
@@ -68,9 +72,9 @@ def compare(name, oracle, variant, reads=None, max_labels=None):
     buckets = {0.0: [0, 0], 0.1: [0, 0], 0.2: [0, 0], 0.3: [0, 0], 0.5: [0, 0]}
     written_total = written_equal = 0
     for read in oracle["reads"]:
-        got = variant.get(read["id"])
-        if got is None or (reads is not None and read["id"] not in reads):
+        if reads is not None and read["id"] not in reads:
             continue
+        got = variant[read["id"]]
         for mine, want, slot in zip(got["distributions"], read["distributions"], read["slots"]):
             if max_labels is not None and len(slot["label_ids"]) > max_labels:
                 continue
@@ -93,7 +97,7 @@ def compare(name, oracle, variant, reads=None, max_labels=None):
         if read["steps"] > 1 and "written" in got:
             written_total += 1
             written_equal += got["written"] == read["written"]
-    if not slots:  # a run made before the fixture had these reads
+    if not slots:  # an empty subset, such as the long prompts of an oracle that has none
         return None
     return {
         "name": name,
@@ -134,11 +138,11 @@ def transliteration_maps(by_id, path, native=False):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--oracle", default=str(ROOT / "Fixtures" / "oracle" / "reads.json"))
-    ap.add_argument("--sensitivity", default=str(RESULTS / "sensitivity.json"),
+    ap.add_argument("--sensitivity", default=str(RESULTS / "d048" / "sensitivity.json"),
                     help="Tools/oracle/sensitivity.py's output")
-    ap.add_argument("--native", default=str(RESULTS / "transliteration_run.json"),
+    ap.add_argument("--native", default=str(RESULTS / "d048" / "transliteration_run.json"),
                     help="a Transliteration run on mlx-swift's own kernels, with its per-read maps")
-    ap.add_argument("--out", default=str(RESULTS / "tolerance_stats.json"))
+    ap.add_argument("--out", default=str(RESULTS / "d048" / "tolerance_stats.json"))
     ap.add_argument("runs", nargs="*", help="the fork's maps (a path), then NAME=RUN_JSON runs")
     args = ap.parse_args()
 
@@ -168,6 +172,17 @@ def main():
     for spec in extra:
         name, path = spec.split("=", 1)
         variants.append((name, transliteration_maps(by_id, path)))
+
+    # A run that lacks some of the oracle's reads would give figures over fewer reads under the same
+    # names, so it stops the script before anything is written.
+    shown = Path(args.oracle).resolve()
+    shown = shown.relative_to(ROOT) if shown.is_relative_to(ROOT) else shown
+    for name, variant in variants:
+        missing = [r["id"] for r in oracle["reads"] if r["id"] not in variant]
+        if missing:
+            raise SystemExit(f"{name} has no read for {len(missing)} of the oracle's {len(oracle['reads'])} reads "
+                             f"(first {missing[0]}); run it on {shown}, or pass --oracle with the fixture it "
+                             f"was run on")
 
     subsets = [("", None, None), (f", prompts over {LONG_PROMPT:,} tokens", long_ids, None),
                (f", prompts over {LONG_PROMPT:,} tokens, slots with at most {FEW_LABELS} labels", long_ids,

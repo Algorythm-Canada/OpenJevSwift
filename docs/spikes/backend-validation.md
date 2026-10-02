@@ -431,11 +431,14 @@ The rest of the evidence comes from these runs:
 - `Transliteration` with `TRANSLITERATION_BUG` set to `skip_self_conditioning`, `rope_offset_zero`, `no_window` or `upstream_router`.
 - `Tools/oracle/tolerance_stats.py` and `Tools/oracle/summarize_runs.py`, which rebuild the tables.
 
-The D-014 table, planted bugs included:
+The D-014 table, planted bugs included. Since D-048 widened the fixture, the 27-read `reads.json`
+these runs used is the one at commit `00f71a6`, which every tool takes with `--oracle`
+(`tolerance_stats.py` refuses a run that lacks any of the oracle's reads):
 
 ```bash
-for bug in skip_self_conditioning rope_offset_zero no_window upstream_router; do TRANSLITERATION_BUG=$bug swift run --package-path Tools/oracle/UpstreamProbe -c release Transliteration; done
-Tools/oracle/.venv/bin/python Tools/oracle/tolerance_stats.py Tools/oracle/results/fork_reads.json "planted bug: skip self-conditioning=Tools/oracle/results/transliteration_run_planted_bug_skip_self_conditioning.json" "planted bug: RoPE offset 0=Tools/oracle/results/transliteration_run_planted_bug_rope_offset_zero.json" "planted bug: no sliding window=Tools/oracle/results/transliteration_run_planted_bug_no_window.json" "upstream Gemma4 router=Tools/oracle/results/transliteration_run_planted_bug_upstream_router.json"
+git show 00f71a6:Fixtures/oracle/reads.json > "$OUT/reads_27.json"
+for bug in skip_self_conditioning rope_offset_zero no_window upstream_router; do TRANSLITERATION_BUG=$bug swift run --package-path Tools/oracle/UpstreamProbe -c release Transliteration --oracle "$OUT/reads_27.json"; done
+Tools/oracle/.venv/bin/python Tools/oracle/tolerance_stats.py --oracle "$OUT/reads_27.json" --sensitivity Tools/oracle/results/sensitivity.json --native Tools/oracle/results/transliteration_run.json --out Tools/oracle/results/tolerance_stats.json Tools/oracle/results/fork_reads.json "planted bug: skip self-conditioning=Tools/oracle/results/transliteration_run_planted_bug_skip_self_conditioning.json" "planted bug: RoPE offset 0=Tools/oracle/results/transliteration_run_planted_bug_rope_offset_zero.json" "planted bug: no sliding window=Tools/oracle/results/transliteration_run_planted_bug_no_window.json" "upstream Gemma4 router=Tools/oracle/results/transliteration_run_planted_bug_upstream_router.json"
 ```
 
 Their outputs are in `Tools/oracle/results/`. Without `--out`, the probe and the transliteration
@@ -479,7 +482,8 @@ D-014's long-prompt rows. Every tool above, rerun on the widened fixture with ML
 4 GB, reproduces this report's runs on the 27 reads bit for bit, and with them every row of its
 `tolerance_stats.json`, planted bugs included. The widened runs, from the repository root after
 `python3 Tools/jevbench/harness.py fetch` (`$OUT` is any folder outside the repository; the
-planted-bug runs are kept only as rows of `tolerance_stats.json`, as here):
+planted-bug runs are kept only as rows of `tolerance_stats.json`, as here; `tolerance_stats.py`'s
+defaults are these files):
 
 ```bash
 D=Tools/oracle/results/d048
