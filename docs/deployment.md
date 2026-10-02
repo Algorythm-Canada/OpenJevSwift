@@ -109,8 +109,8 @@ The server reads upstream's `OPENJEV_*` variables, with upstream's defaults and 
 The DiffusionGemma settings are upstream's: `OPENJEV_MLX_MODEL` (a directory, or a Hub
 repository, `repo@revision` for a revision; the default repository loads its pinned revision),
 `OPENJEV_MLX_MAX_PROMPT` (32768), `OPENJEV_MLX_PROMPT_CACHE` (12 prefills), `OPENJEV_MLX_CACHE_LIMIT_GB`
-(unset leaves MLX's buffer pool alone, `0` disables it), `OPENJEV_CANVAS` and the others in
-upstream's table.
+(unset leaves MLX's buffer pool alone, `0` disables it; the settings line shows
+`mlx_cache_limit_gb=unset` or the number), `OPENJEV_CANVAS` and the others in upstream's table.
 
 `serve` takes six flags. The first five override their variable:
 
@@ -285,6 +285,13 @@ Everything goes to standard error, one line per event, as swift-log writes it:
 2026-10-01T11:51:56-0400 info openjev: [OpenJevServer] POST /v1/systemone 200 54.5ms req_176a5c837d4f88a26775a92c4cb7bbc1
 ```
 
+- **Settings.** The first line gives the settings for the backend's kind. An `mlx` server's line
+  has `max_inflight`, `canvas` and `mlx_model` where an encoder's has its `encoder_` fields, then
+  the other MLX settings and the re-read policy (`OPENJEV_AUTO_THRESHOLD`, `OPENJEV_AUTO_MAX`),
+  which read
+  `mlx_cache_limit_gb=unset mlx_prompt_cache=12 mlx_max_prompt=32768 auto_threshold=0.1 auto_max=4`
+  at their defaults. With `OPENJEV_MLX_CACHE_LIMIT_GB` set, `mlx_cache_limit_gb` gives its number
+  of GB, `0` included, so the log shows whether a server ran with a cap.
 - **Requests.** Each request gets one info line: the method, the path without its query string,
   the status, the milliseconds and the request id, which is also the response's `x-request-id`.
   A client that went away before its answer shows 499 (nginx's code); its decision was

@@ -433,6 +433,54 @@ struct CommandTests {
         #expect(!diffusion.contains("encoder_functions"))
     }
 
+    @Test("serve logs a diffusion backend's MLX settings and re-read policy, at their defaults")
+    func serveDiffusionSettingsLine() async throws {
+        let started = Handoff<@Sendable () async -> Void>()
+        async let ran = CommandHarness.run(
+            ["serve", "--backend", "stub", "--port", "0"], backends: CommandHarness.backends(),
+            onServing: { _, stop in started.resolve(stop) })
+        let stop = await started.value
+        await stop()
+        let outcome = await ran
+        #expect(outcome.status == 0, "\(outcome.errors)")
+        let expected: String =
+            "info settings: host=127.0.0.1 port=0 backend=stub log_level=info warmup=on "
+            + "max_queue=512 max_questions=256 max_body_bytes=67108864 max_inflight=64 "
+            + "canvas=64 mlx_model=mlx-community/diffusiongemma-26B-A4B-it-4bit "
+            + "mlx_cache_limit_gb=unset mlx_prompt_cache=12 mlx_max_prompt=32768 "
+            + "auto_threshold=0.1 auto_max=4 api_key=unset origin_secret=unset "
+            + "model_routes=none"
+        #expect(outcome.logLines.first == expected)
+    }
+
+    @Test(
+        "The settings line gives OPENJEV_MLX_CACHE_LIMIT_GB in GB, 0 included, and unset if empty",
+        arguments: [("4", "4"), ("0", "0"), ("2.5", "2.5"), ("16.0", "16"), ("", "unset")])
+    func settingsLineCacheLimit(_ value: String, _ shown: String) throws {
+        let settings = try ServerSettings(environment: ["OPENJEV_MLX_CACHE_LIMIT_GB": value])
+        let line = SettingsSummary.line(settings, environment: [:], kind: .diffusion)
+        #expect(line.contains(" mlx_cache_limit_gb=\(shown) mlx_prompt_cache=12 "))
+        #expect(!SettingsSummary.line(settings, environment: [:], kind: .encoder).contains("mlx_"))
+    }
+
+    @Test("The settings line gives the prompt settings and the re-read policy as they are set")
+    func settingsLinePromptsAndRereads() throws {
+        let settings = try ServerSettings(environment: [
+            "OPENJEV_MLX_PROMPT_CACHE": "0", "OPENJEV_MLX_MAX_PROMPT": "4096",
+            "OPENJEV_AUTO_THRESHOLD": "0.25", "OPENJEV_AUTO_MAX": "1",
+        ])
+        let line = SettingsSummary.line(settings, environment: [:], kind: .diffusion)
+        #expect(
+            line.contains(
+                " mlx_cache_limit_gb=unset mlx_prompt_cache=0 mlx_max_prompt=4096 "
+                    + "auto_threshold=0.25 auto_max=1 api_key=unset "))
+        let whole = try ServerSettings(environment: ["OPENJEV_AUTO_THRESHOLD": "2.0"])
+        #expect(
+            SettingsSummary.line(whole, environment: [:], kind: .diffusion)
+                .contains(" auto_threshold=2 auto_max=4 "))
+        #expect(!SettingsSummary.line(settings, environment: [:], kind: .encoder).contains("auto_"))
+    }
+
     @Test("serve --no-warmup says so and skips the read")
     func serveWithoutWarmUp() async throws {
         let encoder = StubQuestionReadBackend()
