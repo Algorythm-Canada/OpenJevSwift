@@ -31,6 +31,10 @@ var dependencies: [Package.Dependency] = [
     // for a routed model (OPENJEV_MODEL_ROUTES) to the server that serves it with this client,
     // which runs on swift-nio on macOS and Linux alike (decision D-040).
     .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.36.2"),
+    // The `swift package generate-documentation` and `preview-documentation` commands, which
+    // build the DocC catalogs of the library targets (issue #64, docs/development.md). A command
+    // plugin only: no target links it.
+    .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.5.0"),
 ]
 
 var targets: [Target] = [
