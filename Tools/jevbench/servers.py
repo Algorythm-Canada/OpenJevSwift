@@ -3,6 +3,8 @@
 
     python3 Tools/jevbench/servers.py --server swift --backend verdict
     python3 Tools/jevbench/servers.py --server upstream --backend laya
+    python3 Tools/jevbench/servers.py --server upstream --backend mlx --command \\
+        openjev-bench reads --url {url} --server upstream
 
 `swift` runs this repository's release build (`.build/release/openjev serve`). `upstream` runs
 razorback16/openjev at the commit the Makefile pins (`make upstream`) with `python -m openjev`,
@@ -263,11 +265,15 @@ def main(argv=None) -> int:
     parser.add_argument("--ids", help="only these comma-separated item ids (trial runs)")
     parser.add_argument("--output-dir", help="where the result files go (default results/)")
     parser.add_argument("--force", action="store_true", help="replace existing result files")
+    parser.add_argument("--command", nargs=argparse.REMAINDER,
+                        help="run this command against the server instead of the harness, with "
+                             "{url} replaced by the server's base URL; everything after it is "
+                             "the command (openjev-bench --url, docs/benchmarks.md)")
     args = parser.parse_args(argv)
 
     cache = Path(args.cache)
     names = ("jevbench", "typesafe102") if args.dataset == "all" else (args.dataset,)
-    datasets = [harness.load_dataset(name, cache) for name in names]
+    datasets = [] if args.command else [harness.load_dataset(name, cache) for name in names]
     model = MODELS[args.backend]
     outputs = []
     for dataset in datasets:
@@ -298,6 +304,11 @@ def main(argv=None) -> int:
         info["startup_s"] = round(time.monotonic() - started, 1)
         if args.server == "swift" and args.backend in SWIFT_RUNTIME:
             info["function_capacity"] = swift_function_capacity(log)
+        if args.command:
+            print(json.dumps({"server": info}, indent=1), flush=True)
+            command = [part.replace("{url}", base_url) for part in args.command]
+            print(f"running {' '.join(command)}", flush=True)
+            return subprocess.run(command, cwd=ROOT).returncode
         ids = set(args.ids.split(",")) if args.ids else None
         for dataset, path in zip(datasets, outputs):
             print(f"{dataset.name}: {len(dataset.tasks)} items", flush=True)

@@ -1,0 +1,1118 @@
+{
+  "machine": {
+    "chip": "Apple M3 Max",
+    "macOS": "Version 27.0.1 (Build 26A434)",
+    "memoryGB": 128,
+    "model": "Mac15,9"
+  },
+  "runs": [
+    {
+      "latency": [
+        {
+          "inputTokens": 112,
+          "label": "1 question",
+          "latency": {
+            "count": 50,
+            "max": 293.194291,
+            "mean": 214.72124481999998,
+            "min": 202.69175,
+            "p50": 209.7908535,
+            "p95": 245.07715639999992
+          },
+          "model": {
+            "count": 50,
+            "max": 291.958833,
+            "mean": 213.50606421999993,
+            "min": 201.879625,
+            "p50": 208.63602100000003,
+            "p95": 243.50767104999994
+          }
+        },
+        {
+          "inputTokens": 180,
+          "label": "3 questions",
+          "latency": {
+            "count": 50,
+            "max": 339.656583,
+            "mean": 304.56257082,
+            "min": 283.885208,
+            "p50": 301.567521,
+            "p95": 327.6628622
+          },
+          "model": {
+            "count": 50,
+            "max": 337.912792,
+            "mean": 303.0503450199999,
+            "min": 282.799417,
+            "p50": 299.5055835,
+            "p95": 325.7516186
+          }
+        },
+        {
+          "inputTokens": 354,
+          "label": "12 questions",
+          "latency": {
+            "count": 50,
+            "max": 578.493084,
+            "mean": 519.7314584200002,
+            "min": 490.722792,
+            "p50": 517.528354,
+            "p95": 550.5614625
+          },
+          "model": {
+            "count": 50,
+            "max": 576.194917,
+            "mean": 517.1827658799999,
+            "min": 488.585208,
+            "p50": 515.509063,
+            "p95": 548.4847791999999
+          }
+        }
+      ],
+      "mode": "reads",
+      "modelDirectory": "~/.cache/huggingface/hub/models--mlx-community--diffusiongemma-26B-A4B-it-4bit/snapshots/a7a81407613811e8ba63af92ac0d852b809e191f",
+      "server": "swift",
+      "settings": {
+        "metallib": "the package's",
+        "power at end": "AC power",
+        "power at start": "AC power",
+        "protocol": "queue: 2 min idle, thermal state nominal at start",
+        "runs": "50",
+        "samples": "1",
+        "states": "unique per request",
+        "thermal state at end": "nominal",
+        "thermal state at start": "nominal",
+        "warmup": "5"
+      },
+      "started": "2026-10-02T01:45:16Z",
+      "target": "engine"
+    },
+    {
+      "latency": [
+        {
+          "inputTokens": 180,
+          "label": "1 concurrent",
+          "latency": {
+            "count": 48,
+            "max": 330.436167,
+            "mean": 295.0453871874999,
+            "min": 280.8565,
+            "p50": 291.634125,
+            "p95": 325.28206885
+          },
+          "model": {
+            "count": 48,
+            "max": 327.606542,
+            "mean": 293.57010691666676,
+            "min": 279.735167,
+            "p50": 289.967646,
+            "p95": 323.12586875
+          },
+          "throughput": 3.3887122056860632
+        },
+        {
+          "inputTokens": 180,
+          "label": "4 concurrent",
+          "latency": {
+            "count": 48,
+            "max": 1358.20525,
+            "mean": 1237.9570260625003,
+            "min": 293.906875,
+            "p50": 1283.5189585,
+            "p95": 1337.5427766500002
+          },
+          "model": {
+            "count": 48,
+            "max": 1356.948625,
+            "mean": 1236.5027977291668,
+            "min": 292.751583,
+            "p50": 1282.076083,
+            "p95": 1336.16586065
+          },
+          "throughput": 3.1252361644933604
+        },
+        {
+          "inputTokens": 181,
+          "label": "16 concurrent",
+          "latency": {
+            "count": 48,
+            "max": 5408.554542,
+            "mean": 4458.0336127499995,
+            "min": 312.782459,
+            "p50": 5189.4371875,
+            "p95": 5386.3925296
+          },
+          "model": {
+            "count": 48,
+            "max": 5407.064916,
+            "mean": 4456.460108500001,
+            "min": 311.258833,
+            "p50": 5188.296292,
+            "p95": 5384.7240568
+          },
+          "throughput": 3.020557497490989
+        }
+      ],
+      "mode": "concurrency",
+      "modelDirectory": "~/.cache/huggingface/hub/models--mlx-community--diffusiongemma-26B-A4B-it-4bit/snapshots/a7a81407613811e8ba63af92ac0d852b809e191f",
+      "server": "swift",
+      "settings": {
+        "metallib": "the package's",
+        "power at end": "AC power",
+        "power at start": "AC power",
+        "protocol": "queue: 2 min idle, thermal state nominal at start",
+        "questions": "3",
+        "requests per level": "48",
+        "samples": "1",
+        "states": "unique per request",
+        "thermal state at end": "nominal",
+        "thermal state at start": "nominal",
+        "warmup": "5"
+      },
+      "started": "2026-10-02T01:48:25Z",
+      "target": "engine"
+    },
+    {
+      "memory": [
+        {
+          "activeGiB": 14.346126154065132,
+          "cacheGiB": 1.315255032852292,
+          "cachedPrefills": 0,
+          "label": "after load",
+          "peakGiB": 15.409649275243282,
+          "peakResidentGiB": 15.716705322265625,
+          "residentGiB": 15.716705322265625
+        },
+        {
+          "activeGiB": 14.829616166651249,
+          "cacheGiB": 2.194673476740718,
+          "cachedPrefills": 12,
+          "label": "after 20 reads",
+          "peakGiB": 15.409649275243282,
+          "peakResidentGiB": 15.72137451171875,
+          "residentGiB": 15.72137451171875
+        },
+        {
+          "activeGiB": 14.83193552494049,
+          "cacheGiB": 2.480674659833312,
+          "cachedPrefills": 12,
+          "label": "after 200 unique prompts",
+          "peakGiB": 15.409649275243282,
+          "peakResidentGiB": 15.725936889648438,
+          "residentGiB": 15.72589111328125
+        }
+      ],
+      "mode": "memory",
+      "modelDirectory": "~/.cache/huggingface/hub/models--mlx-community--diffusiongemma-26B-A4B-it-4bit/snapshots/a7a81407613811e8ba63af92ac0d852b809e191f",
+      "server": "swift",
+      "settings": {
+        "cacheLimitGB": "unset",
+        "metallib": "the package's",
+        "power at end": "AC power",
+        "power at start": "AC power",
+        "protocol": "queue: 2 min idle, thermal state nominal at start",
+        "questions": "3",
+        "states": "unique per request",
+        "thermal state at end": "fair",
+        "thermal state at start": "nominal"
+      },
+      "started": "2026-10-02T01:51:21Z",
+      "target": "engine"
+    },
+    {
+      "memory": [
+        {
+          "activeGiB": 14.346126154065132,
+          "cacheGiB": 1.3151482213288546,
+          "cachedPrefills": 0,
+          "label": "after load",
+          "peakGiB": 15.409649275243282,
+          "peakResidentGiB": 15.716842651367188,
+          "residentGiB": 15.716842651367188
+        },
+        {
+          "activeGiB": 14.829692482948303,
+          "cacheGiB": 2.194337761029601,
+          "cachedPrefills": 12,
+          "label": "after 20 reads",
+          "peakGiB": 15.409649275243282,
+          "peakResidentGiB": 15.7215576171875,
+          "residentGiB": 15.7215576171875
+        },
+        {
+          "activeGiB": 14.832027077674866,
+          "cacheGiB": 2.4816664811223745,
+          "cachedPrefills": 12,
+          "label": "after 200 unique prompts",
+          "peakGiB": 15.409649275243282,
+          "peakResidentGiB": 15.723770141601562,
+          "residentGiB": 15.723709106445312
+        }
+      ],
+      "mode": "memory",
+      "modelDirectory": "~/.cache/huggingface/hub/models--mlx-community--diffusiongemma-26B-A4B-it-4bit/snapshots/a7a81407613811e8ba63af92ac0d852b809e191f",
+      "server": "swift",
+      "settings": {
+        "cacheLimitGB": "4.0",
+        "metallib": "the package's",
+        "power at end": "AC power",
+        "power at start": "AC power",
+        "protocol": "queue: 2 min idle, thermal state nominal at start",
+        "questions": "3",
+        "states": "unique per request",
+        "thermal state at end": "nominal",
+        "thermal state at start": "nominal"
+      },
+      "started": "2026-10-02T01:54:36Z",
+      "target": "engine"
+    },
+    {
+      "mode": "prefill",
+      "modelDirectory": "~/.cache/huggingface/hub/models--mlx-community--diffusiongemma-26B-A4B-it-4bit/snapshots/a7a81407613811e8ba63af92ac0d852b809e191f",
+      "prefill": [
+        {
+          "cold": {
+            "count": 5,
+            "max": 934.315875,
+            "mean": 901.011608,
+            "min": 858.482208,
+            "p50": 896.993166,
+            "p95": 933.2488416
+          },
+          "label": "about 1000 tokens",
+          "prefillMilliseconds": 838.440249,
+          "promptTokens": 1091,
+          "tokensPerSecond": 1301.2257001035264,
+          "warm": {
+            "count": 5,
+            "max": 61.331042,
+            "mean": 59.21264180000001,
+            "min": 58.194,
+            "p50": 58.552917,
+            "p95": 60.9516752
+          }
+        },
+        {
+          "cold": {
+            "count": 5,
+            "max": 14299.310708,
+            "mean": 13624.613774799998,
+            "min": 13205.461916,
+            "p50": 13400.577541999999,
+            "p95": 14225.3290498
+          },
+          "label": "about 10000 tokens",
+          "prefillMilliseconds": 13330.83,
+          "promptTokens": 10091,
+          "tokensPerSecond": 756.9671205768883,
+          "warm": {
+            "count": 5,
+            "max": 73.705292,
+            "mean": 69.3523502,
+            "min": 66.155292,
+            "p50": 69.747542,
+            "p95": 73.105267
+          }
+        }
+      ],
+      "server": "swift",
+      "settings": {
+        "metallib": "the package's",
+        "power at end": "AC power",
+        "power at start": "AC power",
+        "protocol": "queue: 2 min idle, thermal state nominal at start",
+        "questions": "1",
+        "runs": "5",
+        "thermal state at end": "fair",
+        "thermal state at start": "nominal",
+        "warmup": "1"
+      },
+      "started": "2026-10-02T01:57:48Z",
+      "target": "engine"
+    },
+    {
+      "mode": "profile",
+      "modelDirectory": "~/.cache/huggingface/hub/models--mlx-community--diffusiongemma-26B-A4B-it-4bit/snapshots/a7a81407613811e8ba63af92ac0d852b809e191f",
+      "server": "swift",
+      "settings": {
+        "canvas": "32",
+        "metallib": "the package's",
+        "power at end": "AC power",
+        "power at start": "AC power",
+        "prompt tokens": "180",
+        "protocol": "queue: 2 min idle, thermal state nominal at start",
+        "questions": "3",
+        "runs": "20",
+        "staged read identical to unstaged": "yes",
+        "thermal state at end": "nominal",
+        "thermal state at start": "nominal",
+        "warmup": "3"
+      },
+      "stages": [
+        {
+          "correctedMilliseconds": 0.056171389010987616,
+          "marks": 1,
+          "meanMilliseconds": 0.63197495,
+          "phase": "prefill",
+          "share": 0.0002724102387193818,
+          "stage": "embedding"
+        },
+        {
+          "correctedMilliseconds": 57.174126270329594,
+          "marks": 30,
+          "meanMilliseconds": 74.44823309999997,
+          "phase": "prefill",
+          "share": 0.2772731395840326,
+          "stage": "attention"
+        },
+        {
+          "correctedMilliseconds": 21.40467047032965,
+          "marks": 30,
+          "meanMilliseconds": 38.67877730000002,
+          "phase": "prefill",
+          "share": 0.10380465028898674,
+          "stage": "dense MLP"
+        },
+        {
+          "correctedMilliseconds": 0,
+          "marks": 60,
+          "meanMilliseconds": 30.479828999999995,
+          "phase": "prefill",
+          "share": 0.0,
+          "stage": "router"
+        },
+        {
+          "correctedMilliseconds": 125.99216397032988,
+          "marks": 30,
+          "meanMilliseconds": 143.26627080000026,
+          "phase": "prefill",
+          "share": 0.6110148968759783,
+          "stage": "experts (gathered quantized matmuls)"
+        },
+        {
+          "correctedMilliseconds": 6.18455387032963,
+          "marks": 30,
+          "meanMilliseconds": 23.458660700000003,
+          "phase": "prefill",
+          "share": 0.02999277436169189,
+          "stage": "norms, residuals, layer scalar"
+        },
+        {
+          "correctedMilliseconds": 0,
+          "marks": 1,
+          "meanMilliseconds": 0.03396250000000001,
+          "phase": "prefill",
+          "share": 0.0,
+          "stage": "cache evaluation"
+        },
+        {
+          "marks": 182,
+          "meanMilliseconds": 310.99770835000027,
+          "phase": "prefill",
+          "stage": "staged total"
+        },
+        {
+          "meanMilliseconds": 206.20146025,
+          "phase": "prefill",
+          "stage": "unstaged, as the runtime runs it"
+        },
+        {
+          "correctedMilliseconds": 0.1083496686486482,
+          "marks": 1,
+          "meanMilliseconds": 0.5876686999999998,
+          "phase": "decoder pass",
+          "share": 0.0012425844948044458,
+          "stage": "embedding and self-conditioning"
+        },
+        {
+          "correctedMilliseconds": 15.574197459459482,
+          "marks": 30,
+          "meanMilliseconds": 29.95376840000003,
+          "phase": "decoder pass",
+          "share": 0.17860927978378813,
+          "stage": "attention"
+        },
+        {
+          "correctedMilliseconds": 5.536654259459455,
+          "marks": 30,
+          "meanMilliseconds": 19.916225200000003,
+          "phase": "decoder pass",
+          "share": 0.063495909324898,
+          "stage": "dense MLP"
+        },
+        {
+          "correctedMilliseconds": 0,
+          "marks": 60,
+          "meanMilliseconds": 28.10667700000001,
+          "phase": "decoder pass",
+          "share": 0.0,
+          "stage": "router"
+        },
+        {
+          "correctedMilliseconds": 53.933510859459474,
+          "marks": 30,
+          "meanMilliseconds": 68.31308180000002,
+          "phase": "decoder pass",
+          "share": 0.6185246819872731,
+          "stage": "experts (gathered quantized matmuls)"
+        },
+        {
+          "correctedMilliseconds": 5.290557959459454,
+          "marks": 30,
+          "meanMilliseconds": 19.6701289,
+          "phase": "decoder pass",
+          "share": 0.06067360769331327,
+          "stage": "norms, residuals, layer scalar"
+        },
+        {
+          "correctedMilliseconds": 0,
+          "marks": 1,
+          "meanMilliseconds": 0.32666029999999996,
+          "phase": "decoder pass",
+          "share": 0.0,
+          "stage": "final norm"
+        },
+        {
+          "correctedMilliseconds": 4.511866418648648,
+          "marks": 1,
+          "meanMilliseconds": 4.99118545,
+          "phase": "decoder pass",
+          "share": 0.051743353942519145,
+          "stage": "output projection (tied embedding)"
+        },
+        {
+          "correctedMilliseconds": 0.6526248186486483,
+          "marks": 1,
+          "meanMilliseconds": 1.1319438499999999,
+          "phase": "decoder pass",
+          "share": 0.007484485099876595,
+          "stage": "softcap"
+        },
+        {
+          "correctedMilliseconds": 2.3943850686486488,
+          "marks": 1,
+          "meanMilliseconds": 2.8737041000000003,
+          "phase": "decoder pass",
+          "share": 0.02745948186091854,
+          "stage": "slot log-softmax, top 20, host copies"
+        },
+        {
+          "marks": 185,
+          "meanMilliseconds": 175.87104370000006,
+          "phase": "decoder pass",
+          "stage": "staged total"
+        },
+        {
+          "meanMilliseconds": 87.19702290000001,
+          "phase": "decoder pass",
+          "stage": "unstaged, as the runtime runs it"
+        }
+      ],
+      "started": "2026-10-02T02:01:46Z",
+      "target": "engine"
+    },
+    {
+      "latency": [
+        {
+          "inputTokens": 111,
+          "label": "1 question",
+          "latency": {
+            "count": 50,
+            "max": 1274.024166,
+            "mean": 235.71457415999998,
+            "min": 205.57175,
+            "p50": 208.892292,
+            "p95": 242.8228522
+          },
+          "model": {
+            "count": 50,
+            "max": 322.8,
+            "mean": 212.25000000000003,
+            "min": 203.5,
+            "p50": 206.95,
+            "p95": 235.29
+          }
+        },
+        {
+          "inputTokens": 179,
+          "label": "3 questions",
+          "latency": {
+            "count": 50,
+            "max": 894.586542,
+            "mean": 304.4026816399999,
+            "min": 283.295,
+            "p50": 289.585417,
+            "p95": 318.82011265
+          },
+          "model": {
+            "count": 50,
+            "max": 324,
+            "mean": 289.55199999999996,
+            "min": 281.3,
+            "p50": 286.95,
+            "p95": 310.88
+          }
+        },
+        {
+          "inputTokens": 353,
+          "label": "12 questions",
+          "latency": {
+            "count": 50,
+            "max": 2285.4165,
+            "mean": 556.6552391,
+            "min": 461.276459,
+            "p50": 482.12087499999996,
+            "p95": 552.40979635
+          },
+          "model": {
+            "count": 50,
+            "max": 546.3,
+            "mean": 481.1239999999998,
+            "min": 456.3,
+            "p50": 476.6,
+            "p95": 533.475
+          }
+        }
+      ],
+      "mode": "reads",
+      "server": "swift",
+      "settings": {
+        "power at end": "AC power",
+        "power at start": "AC power",
+        "protocol": "queue: 2 min idle, thermal state nominal at start",
+        "runs": "50",
+        "samples": "1",
+        "states": "unique per request",
+        "thermal state at end": "fair",
+        "thermal state at start": "nominal",
+        "warmup": "5"
+      },
+      "started": "2026-10-02T02:08:06Z",
+      "target": "http",
+      "url": "http://127.0.0.1:55485"
+    },
+    {
+      "latency": [
+        {
+          "inputTokens": 113,
+          "label": "1 question",
+          "latency": {
+            "count": 50,
+            "max": 1787.241708,
+            "mean": 252.69075504,
+            "min": 206.658292,
+            "p50": 210.0107495,
+            "p95": 248.42573124999996
+          },
+          "model": {
+            "count": 50,
+            "max": 0,
+            "mean": 0,
+            "min": 0,
+            "p50": 0,
+            "p95": 0
+          }
+        },
+        {
+          "inputTokens": 181,
+          "label": "3 questions",
+          "latency": {
+            "count": 50,
+            "max": 2673.297875,
+            "mean": 425.56181584000007,
+            "min": 285.425458,
+            "p50": 302.0648125,
+            "p95": 1216.7648937499996
+          },
+          "model": {
+            "count": 50,
+            "max": 0,
+            "mean": 0,
+            "min": 0,
+            "p50": 0,
+            "p95": 0
+          }
+        },
+        {
+          "inputTokens": 355,
+          "label": "12 questions",
+          "latency": {
+            "count": 50,
+            "max": 1898.3029999999999,
+            "mean": 544.1606158,
+            "min": 465.994333,
+            "p50": 495.5933745,
+            "p95": 708.4493312499993
+          },
+          "model": {
+            "count": 50,
+            "max": 0,
+            "mean": 0,
+            "min": 0,
+            "p50": 0,
+            "p95": 0
+          }
+        }
+      ],
+      "mode": "reads",
+      "server": "upstream",
+      "settings": {
+        "power at end": "AC power",
+        "power at start": "AC power",
+        "protocol": "queue: 2 min idle, thermal state nominal at start",
+        "runs": "50",
+        "samples": "1",
+        "states": "unique per request",
+        "thermal state at end": "nominal",
+        "thermal state at start": "nominal",
+        "warmup": "5"
+      },
+      "started": "2026-10-02T02:11:23Z",
+      "target": "http",
+      "url": "http://127.0.0.1:57339"
+    },
+    {
+      "latency": [
+        {
+          "inputTokens": 112,
+          "label": "1 question",
+          "latency": {
+            "count": 50,
+            "max": 475.430916,
+            "mean": 220.06898496000002,
+            "min": 205.998333,
+            "p50": 210.638625,
+            "p95": 238.60251875
+          },
+          "model": {
+            "count": 50,
+            "max": 307.5,
+            "mean": 212.44199999999998,
+            "min": 203.2,
+            "p50": 208.55,
+            "p95": 233.505
+          }
+        },
+        {
+          "inputTokens": 180,
+          "label": "3 questions",
+          "latency": {
+            "count": 50,
+            "max": 1995.87075,
+            "mean": 370.9504749400001,
+            "min": 287.284875,
+            "p50": 311.8175215,
+            "p95": 391.05544579999986
+          },
+          "model": {
+            "count": 50,
+            "max": 403.7,
+            "mean": 313.6780000000001,
+            "min": 285.2,
+            "p50": 307,
+            "p95": 354.34000000000003
+          }
+        },
+        {
+          "inputTokens": 354,
+          "label": "12 questions",
+          "latency": {
+            "count": 50,
+            "max": 2864.466834,
+            "mean": 663.4432375199999,
+            "min": 454.205,
+            "p50": 492.8240005,
+            "p95": 1969.1822918499981
+          },
+          "model": {
+            "count": 50,
+            "max": 595.1,
+            "mean": 491.406,
+            "min": 445.5,
+            "p50": 484.8,
+            "p95": 538.295
+          }
+        }
+      ],
+      "mode": "reads",
+      "server": "swift",
+      "settings": {
+        "power at end": "AC power",
+        "power at start": "AC power",
+        "protocol": "queue: 2 min idle, thermal state nominal at start",
+        "runs": "50",
+        "samples": "1",
+        "states": "unique per request",
+        "thermal state at end": "fair",
+        "thermal state at start": "nominal",
+        "warmup": "5"
+      },
+      "started": "2026-10-02T02:14:49Z",
+      "target": "http",
+      "url": "http://127.0.0.1:59612"
+    },
+    {
+      "mode": "profile",
+      "modelDirectory": "~/.cache/huggingface/hub/models--mlx-community--diffusiongemma-26B-A4B-it-4bit/snapshots/a7a81407613811e8ba63af92ac0d852b809e191f",
+      "server": "swift",
+      "settings": {
+        "canvas": "32",
+        "metallib": "the package's",
+        "power at end": "AC power",
+        "power at start": "AC power",
+        "prompt tokens": "180",
+        "protocol": "metallib comparison, back to back",
+        "questions": "3",
+        "runs": "20",
+        "staged read identical to unstaged": "yes",
+        "thermal state at end": "nominal",
+        "thermal state at start": "nominal",
+        "warmup": "3"
+      },
+      "stages": [
+        {
+          "correctedMilliseconds": 0,
+          "marks": 1,
+          "meanMilliseconds": 0.2501937500000001,
+          "phase": "prefill",
+          "share": 0.0,
+          "stage": "embedding"
+        },
+        {
+          "correctedMilliseconds": 52.492313946153836,
+          "marks": 30,
+          "meanMilliseconds": 64.74193309999998,
+          "phase": "prefill",
+          "share": 0.28350837807535734,
+          "stage": "attention"
+        },
+        {
+          "correctedMilliseconds": 23.558484546153885,
+          "marks": 30,
+          "meanMilliseconds": 35.80810370000003,
+          "phase": "prefill",
+          "share": 0.12723820387199444,
+          "stage": "dense MLP"
+        },
+        {
+          "correctedMilliseconds": 0,
+          "marks": 60,
+          "meanMilliseconds": 24.105127750000015,
+          "phase": "prefill",
+          "share": 0.0,
+          "stage": "router"
+        },
+        {
+          "correctedMilliseconds": 108.70441164615374,
+          "marks": 30,
+          "meanMilliseconds": 120.9540307999999,
+          "phase": "prefill",
+          "share": 0.5871071232838107,
+          "stage": "experts (gathered quantized matmuls)"
+        },
+        {
+          "correctedMilliseconds": 1.3183499961538523,
+          "marks": 30,
+          "meanMilliseconds": 13.56796915,
+          "phase": "prefill",
+          "share": 0.007120342790158486,
+          "stage": "norms, residuals, layer scalar"
+        },
+        {
+          "correctedMilliseconds": 0,
+          "marks": 1,
+          "meanMilliseconds": 0.039600149999999994,
+          "phase": "prefill",
+          "share": 0.0,
+          "stage": "cache evaluation"
+        },
+        {
+          "marks": 182,
+          "meanMilliseconds": 259.46695839999995,
+          "phase": "prefill",
+          "stage": "staged total"
+        },
+        {
+          "meanMilliseconds": 185.1526022,
+          "phase": "prefill",
+          "stage": "unstaged, as the runtime runs it"
+        },
+        {
+          "correctedMilliseconds": 0.2781331472972975,
+          "marks": 1,
+          "meanMilliseconds": 0.59326665,
+          "phase": "decoder pass",
+          "share": 0.0037244227394007236,
+          "stage": "embedding and self-conditioning"
+        },
+        {
+          "correctedMilliseconds": 14.498801468918924,
+          "marks": 30,
+          "meanMilliseconds": 23.95280655,
+          "phase": "decoder pass",
+          "share": 0.1941504146831439,
+          "stage": "attention"
+        },
+        {
+          "correctedMilliseconds": 6.403909168918915,
+          "marks": 30,
+          "meanMilliseconds": 15.85791424999999,
+          "phase": "decoder pass",
+          "share": 0.085753406818081,
+          "stage": "dense MLP"
+        },
+        {
+          "correctedMilliseconds": 0,
+          "marks": 60,
+          "meanMilliseconds": 18.30395199999998,
+          "phase": "decoder pass",
+          "share": 0.0,
+          "stage": "router"
+        },
+        {
+          "correctedMilliseconds": 46.43494736891893,
+          "marks": 30,
+          "meanMilliseconds": 55.88895245,
+          "phase": "decoder pass",
+          "share": 0.621800657577925,
+          "stage": "experts (gathered quantized matmuls)"
+        },
+        {
+          "correctedMilliseconds": 1.4957946689189274,
+          "marks": 30,
+          "meanMilliseconds": 10.949799750000002,
+          "phase": "decoder pass",
+          "share": 0.020029873219106816,
+          "stage": "norms, residuals, layer scalar"
+        },
+        {
+          "correctedMilliseconds": 0,
+          "marks": 1,
+          "meanMilliseconds": 0.20928750000000002,
+          "phase": "decoder pass",
+          "share": 0.0,
+          "stage": "final norm"
+        },
+        {
+          "correctedMilliseconds": 4.311603947297298,
+          "marks": 1,
+          "meanMilliseconds": 4.626737450000001,
+          "phase": "decoder pass",
+          "share": 0.057735785686268,
+          "stage": "output projection (tied embedding)"
+        },
+        {
+          "correctedMilliseconds": 0.14486444729729747,
+          "marks": 1,
+          "meanMilliseconds": 0.45999795,
+          "phase": "decoder pass",
+          "share": 0.0019398494817593965,
+          "stage": "softcap"
+        },
+        {
+          "correctedMilliseconds": 1.820039497297297,
+          "marks": 1,
+          "meanMilliseconds": 2.1351729999999995,
+          "phase": "decoder pass",
+          "share": 0.02437176782491103,
+          "stage": "slot log-softmax, top 20, host copies"
+        },
+        {
+          "marks": 185,
+          "meanMilliseconds": 132.97788754999996,
+          "phase": "decoder pass",
+          "stage": "staged total"
+        },
+        {
+          "meanMilliseconds": 74.67818955,
+          "phase": "decoder pass",
+          "stage": "unstaged, as the runtime runs it"
+        }
+      ],
+      "started": "2026-10-02T01:30:28Z",
+      "target": "engine"
+    },
+    {
+      "mode": "profile",
+      "modelDirectory": "~/.cache/huggingface/hub/models--mlx-community--diffusiongemma-26B-A4B-it-4bit/snapshots/a7a81407613811e8ba63af92ac0d852b809e191f",
+      "server": "swift",
+      "settings": {
+        "canvas": "32",
+        "metallib": "Tools/jevbench/.venv/lib/python3.12/site-packages/mlx/lib/mlx.metallib",
+        "power at end": "AC power",
+        "power at start": "AC power",
+        "prompt tokens": "180",
+        "protocol": "metallib comparison, back to back",
+        "questions": "3",
+        "runs": "20",
+        "staged read identical to unstaged": "yes",
+        "thermal state at end": "nominal",
+        "thermal state at start": "nominal",
+        "warmup": "3"
+      },
+      "stages": [
+        {
+          "correctedMilliseconds": 0,
+          "marks": 1,
+          "meanMilliseconds": 0.3084459,
+          "phase": "prefill",
+          "share": 0.0,
+          "stage": "embedding"
+        },
+        {
+          "correctedMilliseconds": 52.90444646373628,
+          "marks": 30,
+          "meanMilliseconds": 65.67449520000002,
+          "phase": "prefill",
+          "share": 0.2854460649227103,
+          "stage": "attention"
+        },
+        {
+          "correctedMilliseconds": 21.197228913736197,
+          "marks": 30,
+          "meanMilliseconds": 33.96727764999994,
+          "phase": "prefill",
+          "share": 0.11436969829822083,
+          "stage": "dense MLP"
+        },
+        {
+          "correctedMilliseconds": 0,
+          "marks": 60,
+          "meanMilliseconds": 23.556251899999992,
+          "phase": "prefill",
+          "share": 0.0,
+          "stage": "router"
+        },
+        {
+          "correctedMilliseconds": 112.46815321373633,
+          "marks": 30,
+          "meanMilliseconds": 125.23820195000008,
+          "phase": "prefill",
+          "share": 0.6068221843317299,
+          "stage": "experts (gathered quantized matmuls)"
+        },
+        {
+          "correctedMilliseconds": 1.2614119637362435,
+          "marks": 30,
+          "meanMilliseconds": 14.031460699999991,
+          "phase": "prefill",
+          "share": 0.006805951207555841,
+          "stage": "norms, residuals, layer scalar"
+        },
+        {
+          "correctedMilliseconds": 0,
+          "marks": 1,
+          "meanMilliseconds": 0.03505005,
+          "phase": "prefill",
+          "share": 0.0,
+          "stage": "cache evaluation"
+        },
+        {
+          "marks": 182,
+          "meanMilliseconds": 262.81118335,
+          "phase": "prefill",
+          "stage": "staged total"
+        },
+        {
+          "meanMilliseconds": 185.33955434999996,
+          "phase": "prefill",
+          "stage": "unstaged, as the runtime runs it"
+        },
+        {
+          "correctedMilliseconds": 0.2716295594594594,
+          "marks": 1,
+          "meanMilliseconds": 0.5777959,
+          "phase": "decoder pass",
+          "share": 0.0034449387579398873,
+          "stage": "embedding and self-conditioning"
+        },
+        {
+          "correctedMilliseconds": 14.860786333783777,
+          "marks": 30,
+          "meanMilliseconds": 24.045776549999996,
+          "phase": "decoder pass",
+          "share": 0.18847175144189673,
+          "stage": "attention"
+        },
+        {
+          "correctedMilliseconds": 6.870647533783762,
+          "marks": 30,
+          "meanMilliseconds": 16.05563774999998,
+          "phase": "decoder pass",
+          "share": 0.08713690817883304,
+          "stage": "dense MLP"
+        },
+        {
+          "correctedMilliseconds": 1.6579199175675647,
+          "marks": 60,
+          "meanMilliseconds": 20.027900350000003,
+          "phase": "decoder pass",
+          "share": 0.021026550250844243,
+          "stage": "router"
+        },
+        {
+          "correctedMilliseconds": 47.68151158378384,
+          "marks": 30,
+          "meanMilliseconds": 56.86650180000006,
+          "phase": "decoder pass",
+          "share": 0.6047202212417989,
+          "stage": "experts (gathered quantized matmuls)"
+        },
+        {
+          "correctedMilliseconds": 1.153026583783772,
+          "marks": 30,
+          "meanMilliseconds": 10.338016799999991,
+          "phase": "decoder pass",
+          "share": 0.014623246362863445,
+          "stage": "norms, residuals, layer scalar"
+        },
+        {
+          "correctedMilliseconds": 0,
+          "marks": 1,
+          "meanMilliseconds": 0.18950415000000004,
+          "phase": "decoder pass",
+          "share": 0.0,
+          "stage": "final norm"
+        },
+        {
+          "correctedMilliseconds": 4.258979509459458,
+          "marks": 1,
+          "meanMilliseconds": 4.565145849999999,
+          "phase": "decoder pass",
+          "share": 0.05401445855379548,
+          "stage": "output projection (tied embedding)"
+        },
+        {
+          "correctedMilliseconds": 0.17710880945945934,
+          "marks": 1,
+          "meanMilliseconds": 0.48327515,
+          "phase": "decoder pass",
+          "share": 0.0022461804351987086,
+          "stage": "softcap"
+        },
+        {
+          "correctedMilliseconds": 2.0339314094594587,
+          "marks": 1,
+          "meanMilliseconds": 2.3400977499999995,
+          "phase": "decoder pass",
+          "share": 0.025795311664097258,
+          "stage": "slot log-softmax, top 20, host copies"
+        },
+        {
+          "marks": 185,
+          "meanMilliseconds": 135.48965205000002,
+          "phase": "decoder pass",
+          "stage": "staged total"
+        },
+        {
+          "meanMilliseconds": 78.84887905,
+          "phase": "decoder pass",
+          "stage": "unstaged, as the runtime runs it"
+        }
+      ],
+      "started": "2026-10-02T01:30:56Z",
+      "target": "engine"
+    }
+  ],
+  "schema": "openjevswift-bench/1"
+}

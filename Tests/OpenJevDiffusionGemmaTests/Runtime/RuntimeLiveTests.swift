@@ -6,76 +6,6 @@ import Testing
 
 @testable import OpenJevDiffusionGemma
 
-/// The oracle's prompts and reads, the parts the runtime tests use.
-private struct OracleFixture: Decodable {
-    struct Prompt: Decodable {
-        let system: String
-        let user: String
-        let ids: [Int]
-    }
-    struct Slot: Decodable {
-        let pos: Int
-        let labelIDs: [Int]
-        enum CodingKeys: String, CodingKey {
-            case pos
-            case labelIDs = "label_ids"
-        }
-    }
-    struct Distribution: Decodable {
-        let probs: [Double]
-        let entropy: Double
-    }
-    struct Read: Decodable {
-        let id: String
-        let prompt: String
-        let canvas: [Int]
-        let slots: [Slot]
-        let steps: Int
-        let promptTokens: Int
-        let distributions: [Distribution]
-        enum CodingKeys: String, CodingKey {
-            case id, prompt, canvas, slots, steps, distributions
-            case promptTokens = "prompt_tokens"
-        }
-    }
-    let prompts: [String: Prompt]
-    let reads: [Read]
-
-    static func load() throws -> OracleFixture {
-        let url = TokenizerFixtures.fixturesDirectory.appendingPathComponent("oracle/reads.json")
-        return try JSONDecoder().decode(OracleFixture.self, from: Data(contentsOf: url))
-    }
-}
-
-/// A request body as JSON text.
-private func request(_ text: String) throws -> SystemOneRequest {
-    try SystemOneRequest(json: JSONParser().parse(text))
-}
-
-/// Upstream's tests/test_live.py `QUESTIONS`, the README example.
-private let readmeQuestions = """
-    {"urgent": {"type": "noul", "instructions": "Does the customer need a reply within the hour?"},
-     "team": {"type": "choice", "instructions": "Which team should handle it?",
-              "criteria": {"outage": "service down", "billing": "charges, refunds",
-                           "feature": "requests, how-to"}},
-     "tone": {"type": "score", "instructions": "How upset is the customer?",
-              "criteria": ["calm", "annoyed", "furious"]}}
-    """
-
-/// The README example over `state`.
-private func readmeRequest(state: String) throws -> SystemOneRequest {
-    let quoted = String(decoding: try JSONEncoder().encode(state), as: UTF8.self)
-    return try request(
-        #"{"model": "openjev-latest", "state": \#(quoted), "questions": \#(readmeQuestions)}"#)
-}
-
-/// The README quickstart request of Fixtures/wire/cases.json.
-private func quickstartRequest() throws -> SystemOneRequest {
-    let recorded = try WireFixtures.recordedCase(named: "quickstart")
-    let body = try #require(recorded["request"]?["body_text"]?.stringValue)
-    return try request(body)
-}
-
 private func mean(_ values: [Double]) -> Double {
     values.isEmpty ? 0 : values.reduce(0, +) / Double(values.count)
 }
@@ -157,7 +87,10 @@ extension MLXTests {
             var confident = 0
             var confidentAgree = 0
             var quickstart: [String] = []
-            let top = { (p: [Double]) in p.indices.max { p[$0] < p[$1] } ?? 0 }
+            var moved: [String] = []
+            var latencies: [String] = []
+            let top = ReadDivergence.firstLargest
+            let clock = ContinuousClock()
             for read in oracle.reads {
                 let prompt = try #require(oracle.prompts[read.prompt])
                 let canvasRead = CanvasRead(
@@ -166,7 +99,14 @@ extension MLXTests {
                     slots: read.slots.map { .init(position: $0.pos, labelIDs: $0.labelIDs) },
                     canvas: SeededCanvas(tokens: read.canvas, noise: []), steps: read.steps,
                     seed: 0)
+                let before = await live.runtime.statistics()
+                let started = clock.now
                 let result = try await live.runtime.read(canvasRead)
+                let elapsed = clock.now - started
+                let hit = await live.runtime.statistics().prefillHits > before.prefillHits
+                latencies.append(
+                    "\(read.id): \(seconds(elapsed)) (\(read.promptTokens) tokens, "
+                        + "\(hit ? "cached prefill" : "prefilled"))")
                 #expect(result.promptTokens == read.promptTokens)
                 let long = read.promptTokens > 1024
                 var readDifferences: [Double] = []
@@ -187,6 +127,14 @@ extension MLXTests {
                         confident += 1
                         if agree { confidentAgree += 1 }
                     }
+                }
+                if let report = ReadDivergence.report(
+                    id: read.id, prompt: read.prompt, width: read.width, steps: read.steps,
+                    slots: zip(result.slots, zip(read.slots, read.distributions)).map {
+                        .init(labelIDs: $1.0.labelIDs, ours: $0.probabilities, oracle: $1.1.probs)
+                    })
+                {
+                    moved.append(report)
                 }
                 if read.prompt == "quickstart/g0" {
                     let ours = result.slots.map {
@@ -217,6 +165,10 @@ extension MLXTests {
                   top label, margin >= 0.5: \(confidentAgree)/\(confident) \(String(format: "%.1f%%", confidentShare * 100)) (bound 97%)
                 quickstart/g0, reported, not bounded:
                   \(quickstart.joined(separator: "\n  "))
+                per-read latency through the runtime:
+                  \(latencies.joined(separator: "\n  "))
+                reads with a slot whose top label moved or whose max |dp| exceeds \(ReadDivergence.threshold): \(moved.count)
+                \(moved.joined(separator: "\n"))
                 """)
             #expect(oracle.reads.count == 27 && slots == 156)
             #expect(meanP <= 0.02)

@@ -2054,3 +2054,113 @@ skipping because the Swift listing names `diffusiongemma-26b`, as upstream's doe
 stays upstream's (`Fixtures/wire/models.json`), so that difference lasts until #53.
 
 Status. Proposed with issue #41.
+
+## D-044 Read parity tests and the performance baseline: where the port goes beyond or differs from the issue text
+
+Context. Issue #31 asks for the live tests that prove the DiffusionGemma port upstream-compatible on
+real weights: oracle parity with failures that print both distributions, the read cases of
+upstream's `tests/test_mlx_model.py` through `DecisionEngine`, and a regression file of the port's
+own answers. Issue #32 asks for `openjev-bench` and a documented baseline: read latency, throughput,
+memory, prefill, a profile of where the time goes, and upstream's Python MLX backend on the same
+machine. Both close milestone 2. ReadOracleTests, RuntimeLiveTests and CheckpointTests already ran
+the oracle reads (D-036, D-039); this work extends them.
+
+Decision.
+
+1. **Per-read figures are reported, the bounds stay aggregate.** Both oracle tests
+   (`ReadOracleTests` through the model, `RuntimeLiveTests` through the runtime) print, for each read
+   with a slot whose top label differs from the oracle's or whose largest |dp| exceeds 0.05, the
+   read's id, prompt key, width and steps and both distributions with their label ids, to four
+   decimals (`ReadDivergence`). 17 of the 27 reads have such a slot under native kernels; D-014's
+   six aggregate bounds remain the only assertions, as D-014 decided. `RuntimeLiveTests` also prints
+   each read's latency and whether it prefilled.
+2. **Upstream's remaining read cases, under upstream's names.** `UpstreamReadCaseTests` ports
+   `test_many_questions_chunk_and_run_in_sequence`, `test_more_steps_still_answer_and_cost_no_more_prompt`,
+   `test_steps_hold_the_template_and_reuse_one_prefill` and `test_the_prompt_cache_is_bounded_in_tokens`
+   with upstream's thresholds; where upstream counts `len(rt.prefills)` or reads the cache's token
+   total, the port asserts on `ReadStatistics` (prefill misses and hits, cached prefills and tokens).
+   The "old single pass" of the steps case is rebuilt from the model's public decoder pass and must
+   be bit-identical to a one-step read. The determinism check compares answers and usage, not the
+   whole `Decision`, whose model time differs between calls (upstream compares response bodies,
+   which carry no time). `test_readme_example_and_friends` is not duplicated: `RuntimeLiveTests`
+   keeps the README example with `test_live.py`'s bounds, and the steps case asserts upstream's
+   thresholds on all three of its states at `steps` 4. The image cases (#48), `think` (#52) and chat
+   (#53) are disabled tests under upstream's names; their comments name the issue and
+   `OPENJEV_TEST_MODEL`, which `check-test-log.sh` requires of every skip.
+3. **The regression file is the port's own output, compared exactly.** `Fixtures/regression/reads.json`
+   holds, for the 27 oracle reads (through `DiffusionGemmaRuntime.read`) and the wire quickstart
+   and upstream's README example (through `DecisionEngine`, every read recorded by a pass-through
+   backend and sorted by seed, steps and canvas), each slot's probabilities, entropy and top label,
+   the prompt tokens, and for the engine requests the billed tokens and answers. Its pins are a
+   `generator` object, as every fixture file has (`FixturePinTests` checks `regression/` for the
+   test that wrote it, the checkpoint repository and revision, the mlx-swift version from
+   Package.resolved, macOS, the GPU's name and the date). The tolerance is 0: seven runs in separate
+   processes on the M3 Max reproduced all 180 slots bit for bit, as D-014's exact-tier
+   determinism and the cached-against-cold tests lead one to expect, and any change in the last
+   bit is a change in what the port computes, which is what the file guards. When the pins do not
+   match, the kernels round differently, so the test applies D-014's aggregate bounds instead
+   (mean |dp| at most 0.02, the top label on at least 90% of slots) and says to record that
+   machine's own file. `OPENJEV_RECORD_REGRESSION=1` records it.
+4. **`openjev-bench` is an executable target without a product.** It sits in the MLX block of
+   Package.swift beside `OpenJevDiffusionGemma`, on ArgumentParser, with `OpenJevBenchTests`
+   testing its model-free code (percentiles, `server-timing`, the request sets, the tables, the
+   result file, the model directory, the command lines) through `@testable import`. Its modes are
+   the issue's (`reads`, `concurrency`, `memory`, `prefill`, `--url` for `reads` and `concurrency`)
+   and one more, `profile`, which times each stage of a read through the model's public stage
+   observer and reports a correction for the round trip each evaluation point costs (about 0.5 ms;
+   the corrected stages add up to the unstaged pass within 2%). `memory` measures one cache-limit
+   setting per process (`--cache-limit-gb`), so the two runs do not share a pool. `--metallib`
+   points MLX at another Metal library, to time the port on the kernels upstream runs. p50 and p95
+   are NumPy's linear percentiles. `--json` appends to `Tools/bench/results/<date>-<machine>.json`;
+   the machine and macOS are in the file, and each run records the power source and the thermal
+   state at its start and end.
+5. **Upstream is measured the same way.** `openjev-bench --url` times any `/v1/systemone` server;
+   `Tools/jevbench/servers.py` gained `--command`, which starts either server as the JevBench runs
+   do and runs a command against it with `{url}` replaced. `Tools/jevbench/requirements-upstream.txt`
+   gained upstream's `mlx` extra (mlx-vlm 0.6.15, MLX 0.32.2 and their dependencies at the versions
+   `Tools/oracle/requirements.txt` locks), which the encoder runs had not needed. Upstream's MLX
+   engine writes `model;dur=0.0`, so only its HTTP time compares. `Tools/bench/upstream_stages.py`
+   times upstream's own runtime prefill and read the way `prefill` and `profile` time the port's.
+6. **A measurement protocol, because the laptop's heat dominated.** The first runs, taken back to
+   back, disagreed by up to 80% (a three-question read 302 ms cool, 380 to 539 ms after
+   10,000-token prefills) and swapped the order of the two servers. Every reported run therefore
+   started on AC power after two minutes idle at the nominal thermal state, with no other build,
+   test, Docker job or model server running (another Claude Code worktree was serving the model on
+   and off during the day); a watcher discarded and repeated any run during which one appeared or
+   the Mac went on battery. The discarded runs are not reported.
+7. **Instruments could not record.** `xctrace record` 27.0 (27A266a) on macOS 27.0.1 stops with an
+   assertion in `XRAugmentationManager` for every template and target, `/bin/sleep` included,
+   inside and outside the sandbox. The issue's "profile the read with Instruments" is answered by
+   the stage profile on the GPU side; a host-side call tree with macOS's `sample` was queued but
+   not taken, because the Mac ran on battery for the rest of the session ([benchmarks.md](benchmarks.md),
+   "Not measured").
+8. **Not measured: a 32 GB or 48 GB Mac.** None was available. benchmarks.md has the row, marked
+   not measured, and R4 says so; the issue's acceptance criterion for that machine is not met.
+9. **Measured on 2026-10-01 (M3 Max, 128 GB, macOS 27.0.1).** Parity, from the live tests, native
+   tier: the top label on 150 of 156 slots and 120 of 120 where the oracle's margin is at least 0.5,
+   mean label probability difference 0.0084 (0.0054 past 1,024 tokens), mean entropy difference
+   0.086 (0.131), the largest single difference 0.374 (quickstart's `is_urgent`, as D-039 found).
+   The rest from the release build: reads in process 210, 302 and 518 ms p50 for 1, 3 and 12
+   questions; over HTTP the Swift server and upstream's within 4% at every size (three questions:
+   Swift 290 and 312 ms in two rounds, upstream 302 ms); 3.4 to 3.0 requests/s from 1 to 16
+   concurrent callers; prefill 873, 1,301 and 757 tokens/s at 180, about 1,000 and about 10,000
+   tokens against upstream's 905, 1,281 and 708; MLX active 14.83 GiB and pool 2.48 GiB after 200
+   unique prompts with or without a 4 GB limit, resident 15.7 GiB. The expert matmuls are about 61%
+   of both passes; the output projection 5% of a decoder pass. The wheel's `mlx.metallib` runs at
+   the package library's speed.
+
+Alternatives rejected. (a) Per-read bounds: D-014 rejected them, and the quickstart's `is_urgent`
+slot alone (the oracle near 0.5) would fail any useful one. (b) A tolerance above 0 for the
+regression file: nothing measured needs one, and a loose one would let a refactor's last-bit
+change through unseen. (c) Recording the regression file from upstream: that is the oracle's job;
+this file guards the port against itself. (d) Running both cache-limit settings in one process:
+the second would inherit the first's pool. (e) Reporting the stage profile uncorrected: the round
+trips double the decoder pass and inflate every small stage, the router most.
+
+Consequences. Milestone 2's parity is shown on the reference machine and recorded in docs/09
+layer 2, and the baseline in [benchmarks.md](benchmarks.md) answers R5: the port reads as fast as
+upstream's Python MLX backend on the same Mac. The follow-ups with more than 10% headroom are filed
+for milestone 7 (#100, #101, #102); the 32 or 48 GB measurement waits for such a Mac. The DiffusionGemma JevBench runs
+that D-041 left for after #31 can now be recorded.
+
+Status. Proposed with issues #31 and #32.

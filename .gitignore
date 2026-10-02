@@ -43,3 +43,6 @@ __pycache__/
 
 # Stage dumps written by Tools/oracle/stage_dump.py (hundreds of MB each); never committed.
 Tools/oracle/results/*.safetensors
+
+# Instruments traces from profiling openjev-bench (docs/development.md)
+*.trace

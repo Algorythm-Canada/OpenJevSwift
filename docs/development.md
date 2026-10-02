@@ -46,6 +46,7 @@ The package declares macOS 14 and iOS 17 as minimum deployment targets.
 | `OpenJevServer` (internal target) | yes | no | yes |
 | `openjev` (executable) | yes, with the encoder backends | no | yes, without the encoder backends |
 | `openjev-stub-server` (executable, not a product) | yes | no | yes |
+| `openjev-bench` (executable, not a product) | yes, Apple silicon | no | not declared |
 
 - **Apple-only code.** `Package.swift` declares the MLX packages, swift-transformers and the
   `OpenJevDiffusionGemma` and `OpenJevEncoders` targets inside `#if os(macOS)`. SwiftPM evaluates
@@ -67,6 +68,9 @@ The package declares macOS 14 and iOS 17 as minimum deployment targets.
   the real application, for the SDK compatibility suite. It is an executable target without a
   product, so `swift build` builds it, `swift build --product openjev-stub-server` builds it alone,
   and nothing ships it.
+- **The bench.** `openjev-bench` measures DiffusionGemma reads (issue #32, below). It needs MLX,
+  so it is declared inside `#if os(macOS)` beside `OpenJevDiffusionGemma`; it has no product and
+  nothing ships it. `OpenJevBenchTests` tests its model-free code through `@testable import`.
 - **The iOS scheme.** `.swiftpm/xcode/xcshareddata/xcschemes/OpenJevCore-iOS.xcscheme` is a
   committed Xcode scheme that builds `OpenJevCore`, `OpenJevEncoders` and their test targets and
   runs `OpenJevCoreTests` and `OpenJevEncodersTests`. The CI iOS job builds and tests it on a
@@ -356,6 +360,51 @@ Tools/jevbench/.venv/bin/python -m pip install -r Tools/jevbench/requirements-up
 
 The datasets are downloaded into `~/Library/Caches/OpenJevSwift/jevbench`, outside the
 repository, by `python3 Tools/jevbench/harness.py fetch`.
+
+## The read benchmark
+
+`openjev-bench` (issue #32) measures DiffusionGemma reads; [benchmarks.md](benchmarks.md) holds the
+tables it produced and what they mean. Time a release build: a debug build compiles MLX's C++
+without optimisation. From the repository root:
+
+```bash
+swift build -c release
+.build/release/openjev-bench reads
+.build/release/openjev-bench concurrency
+.build/release/openjev-bench memory
+.build/release/openjev-bench memory --cache-limit-gb 4
+.build/release/openjev-bench prefill
+```
+
+From Xcode, give a scheme of your own a Release run configuration that builds `openjev-bench` and
+`openjev`, and run the binaries from `Build/Products/Release` under its derived data. Each mode
+loads the checkpoint from `--model`, else `OPENJEV_TEST_MODEL`, else the Hugging Face cache snapshot
+of the pinned 4-bit revision, as the live tests do, and prints markdown tables headed by the
+machine, its memory, the macOS version and whether it is on AC power. `--json` also appends the
+run to `Tools/bench/results/<date>-<machine>.json` (`--output-dir` to change it). `--runs` (50) and
+`--warmup` (5) set the timed and untimed requests per row; every request has a state no earlier one
+sent, so each prefills.
+
+`reads` and `concurrency` also take `--url` and time any `/v1/systemone` server over HTTP,
+recording its `server-timing` `model` figure beside the HTTP latency, so the Swift and upstream
+servers are measured the same way. `Tools/jevbench/servers.py --command` starts either server
+(release `openjev serve`, or upstream's `python -m openjev` from `Tools/jevbench/.venv`, above)
+on a free port and runs a command against it with `{url}` replaced:
+
+```bash
+python3 Tools/jevbench/servers.py --server upstream --backend mlx --command \
+    .build/release/openjev-bench reads --url {url} --server upstream --json
+python3 Tools/jevbench/servers.py --server swift --backend mlx --binary .build/release/openjev \
+    --command .build/release/openjev-bench reads --url {url} --server swift --json
+```
+
+Before a timing run, check that nothing else is building or serving a model
+(`pgrep -fl 'swift-build|xcodebuild|openjev|python'`), and keep the Mac on AC power. `openjev-bench
+profile` splits a read into its stages on the GPU (`--state-tokens` for a long state, `--metallib` for
+another Metal library). For the host side, `xctrace record --template 'Time Profiler' --launch --
+.build/release/openjev-bench reads --runs 20` would be the tool, but xctrace 27.0 (27A266a) stops
+on an assertion for every template on macOS 27.0.1 (D-044); `sample <pid> 30` on a running bench
+gives a call tree meanwhile. Traces stay out of git.
 
 ## Continuous integration
 
