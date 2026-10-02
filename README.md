@@ -71,8 +71,8 @@ Milestones 0 to 3 are complete, every work issue in them closed: the foundations
 engine core, DiffusionGemma reads on MLX, and the Jev-compatible HTTP server with the `openjev`
 tool. Milestone 4, the read extensions and images, is in progress: `steps`, `samples` and
 `sequential` are verified end to end on the DiffusionGemma checkpoint (#43, #44 and #45), and images
-remain. Verdict and Laya, from milestone 6, and the JevBench comparison with upstream, from
-milestone 7, are done too.
+remain. Verdict and Laya, from milestone 6, and from milestone 7 the JevBench comparison with
+upstream and DiffusionGemma's calibration report (#61 and #62), are done too.
 
 Not there yet:
 
@@ -92,11 +92,11 @@ for byte: the prompts, the answer templates, the canvases and seeds, the request
 error bodies, the headers and the `/v1/models` listing, all checked against fixtures upstream's own
 code writes. The probabilities agree within measured bounds: DiffusionGemma's within decision
 D-014's on the oracle reads (the top label on 96.2% of slots, and on all 120 where mlx-vlm's top two
-are at least 0.5 apart), Verdict's and Laya's with upstream's top answer on all 666 JevBench and
-TypeSafe items. The differences, among them a stricter JSON parser, the 503 for any backend failure
-and the features not built yet, each have a decision record.
-[docs/compatibility.md](docs/compatibility.md) has the three tables and the matrix of what runs on
-macOS, iOS and Linux.
+are at least 0.5 apart), and between the two servers on 333 JevBench and TypeSafe items, but for
+JevBench's prompts past 1,024 tokens; Verdict's and Laya's with upstream's top answer on all 666
+items. The differences, among them a stricter JSON parser, the 503 for any backend failure and the
+features not built yet, each have a decision record. [docs/compatibility.md](docs/compatibility.md)
+has the three tables and the matrix of what runs on macOS, iOS and Linux.
 
 ## Documentation
 

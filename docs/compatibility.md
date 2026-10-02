@@ -40,7 +40,7 @@ and Laya, and the Swift port of it passes unchanged against both servers on all 
 
 The model's probabilities, and the confidences, scores and argmaxes computed from them, agree
 within measured bounds rather than bit for bit, because this port runs other kernels on other
-hardware.
+hardware. One bound is exceeded, on one dataset's long prompts, and the table says so.
 
 | Backend | Figure | Bound | Measured |
 |---|---|---|---|
@@ -52,6 +52,10 @@ hardware.
 | | Top label agreement where mlx-vlm's top two are at least 0.5 apart | 97% | 100%, 120 of 120 |
 | | Largest label probability difference | reported, not bounded | 0.374, on the quickstart's `is_urgent` slot |
 | `mlx`, mlx-vlm's Metal library and RoPE table | Reads identical to mlx-vlm's | every read | 27 of 27, bit for bit (D-036) |
+| `mlx`, the Swift server against upstream's on JevBench and TypeSafe | Mean probability difference | 0.02 (D-014) | 0.0135 over JevBench's 231 items, 0.0069 over TypeSafe's 102 |
+| | The same, prompts past 1,024 tokens | 0.01 | 0.0075 over TypeSafe's 76; 0.0396 over JevBench's 41, four times the bound |
+| | Top answer agreement, all items | 90% | 97.9%, 326 of 333 |
+| | Top answer agreement where upstream's top two are at least 0.5 apart | 97% | 100%, 299 of 299 |
 | `verdict`, Core ML float16 against upstream's PyTorch float32 | Largest probability difference | 0.02 (D-034) | 0.0022 over 333 JevBench and TypeSafe items; 0.0014 over spike #56's 200 questions |
 | | Mean probability difference | 0.003 | 2.8e-4 on JevBench and 2.9e-4 on TypeSafe |
 | | Top answer, wherever upstream's top two are at least 0.01 apart | unchanged | unchanged on all 333 items |
@@ -59,13 +63,18 @@ hardware.
 | | Mean probability difference | 0.003, before rounding | 2.1e-4 on JevBench and 1.6e-4 on TypeSafe, between the rounded answers |
 | | Top answer, wherever upstream's top two are at least 0.01 apart | unchanged | unchanged on all 333 items |
 
-The `mlx` figures are D-014's bounds over `Fixtures/oracle`, measured on 2026-10-01 on an M3 Max
-with the pinned 4-bit checkpoint ([09-conformance-and-testing.md](09-conformance-and-testing.md),
-layer 2). The encoder figures are from [quality.md](quality.md): on JevBench's 231 public items and
-SemIf's 102 TypeSafe rows, the Swift server gave upstream's top answer on every item for both
-models, including the 36 whose upstream top two were less than 0.01 apart; accuracies are the same
-and Brier scores and ECEs differ by at most 0.0003. The DiffusionGemma JevBench comparison is not
-recorded there yet.
+The first `mlx` figures are D-014's bounds over `Fixtures/oracle`, measured on 2026-10-01 on an M3
+Max with the pinned 4-bit checkpoint
+([09-conformance-and-testing.md](09-conformance-and-testing.md), layer 2). The encoder figures are
+from [quality.md](quality.md): on JevBench's 231 public items and SemIf's 102 TypeSafe rows, the
+Swift server gave upstream's top answer on every item for both models, including the 36 whose
+upstream top two were less than 0.01 apart; accuracies are the same and Brier scores and ECEs differ
+by at most 0.0003. The server-against-server `mlx` rows are quality.md's too, from the same 333
+items on both servers with MLX's buffer pool capped at 4 GB: they meet D-014's bounds but the
+long-prompt one on JevBench, whose 41 prompts past 1,024 tokens are mostly the hard tier's uncertain
+answers. Its section [A disagreement on DiffusionGemma](quality.md#a-disagreement-on-diffusiongemma)
+says why that looks like the kernels rather than the port's arithmetic, why it is not settled, and
+what would settle it.
 
 ## Different, and why
 
