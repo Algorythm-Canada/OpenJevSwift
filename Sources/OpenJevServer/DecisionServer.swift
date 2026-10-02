@@ -18,7 +18,9 @@
     /// group does when the shutdown takes longer than its `maximumGracefulShutdownDuration`, the
     /// requests still in flight are cancelled and ``run()`` throws ``ShutdownInterrupted``
     /// after releasing the model; cancelled with no request in flight, it stops as cleanly as
-    /// after a graceful shutdown. The model is released however the server ends.
+    /// after a graceful shutdown. A request is in flight until the connection has taken its whole
+    /// answer; the routes hand each answer over in one write, so a request whose client has read
+    /// all of its answer is not. The model is released however the server ends.
     ///
     /// ```swift
     /// var configuration = ServiceGroupConfiguration(
@@ -64,29 +66,23 @@
                 onServerRunning: onServerRunning)
             let logger = logger
             do {
-                try await withTaskCancellationHandler {
-                    try await withGracefulShutdownHandler {
-                        try await application.run()
-                    } onGracefulShutdown: {
-                        logger.info(
-                            "shutting down: no new connections, finishing the requests in flight")
-                    }
-                } onCancel: {
-                    requests.serverCancelled()
+                try await withGracefulShutdownHandler {
+                    try await application.run()
+                } onGracefulShutdown: {
+                    logger.info(
+                        "shutting down: no new connections, finishing the requests in flight")
                 }
             } catch {
                 await release()
+                guard Task.isCancelled else { throw error }
                 if requests.cutShort {
                     throw ShutdownInterrupted()
                 }
                 // Cancelled with nothing in flight: nothing was cut short.
-                if Task.isCancelled {
-                    return
-                }
-                throw error
+                return
             }
             await release()
-            if requests.cutShort {
+            if Task.isCancelled, requests.cutShort {
                 throw ShutdownInterrupted()
             }
         }

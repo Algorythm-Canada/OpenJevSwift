@@ -1525,7 +1525,8 @@ DiffusionGemma backend registers with one entry in `BackendRegistry.standard` an
 placeholder, as Laya's did.
 
 Status. Proposed with issues #40 and #37. Item 7's forwarded request reports the routed server's
-time as model time since D-040 (issue #38).
+time as model time since D-040 (issue #38). Item 9's requests in flight are those whose answer the
+connection has not taken whole, since D-049.
 
 ## D-039 DiffusionGemma runtime and model download: where the port goes beyond or differs from the issue text
 
@@ -2563,3 +2564,92 @@ arithmetic stays detectable in the exact tier only. A later widening of the fixt
 these bounds with `Tools/oracle/tolerance_stats.py`.
 
 Status. Proposed; revises D-014's long-prompt rows. Follows PR #105 and #110.
+
+## D-049 A shutdown's cut-short requests: each request notes the cancellation on its own task
+
+Context. D-038 item 9 makes `DecisionServer.run()` throw `ShutdownInterrupted`, exit 1, when its
+service group cancels it while it is answering requests, and stop cleanly when nothing is in
+flight, so a `--shutdown-timeout` of 0 exits 0 when no request is running. The server counted a
+request from when Hummingbird handed it to the responder until the responder returned, and read
+the count in its own task's cancellation handler. That instant is ordered with nothing the requests
+do, and two races followed, traced on 2026-10-02 with no issue:
+
+1. Hummingbird 2.27's responder returns once SwiftNIO's outbound writer has taken the answer
+   (`ResponseWriter.write(response:body:)`), before the event loop has written the bytes and before
+   the request counts out. A client can read the whole answer, shut down and trigger a shutdown
+   first; with a zero timeout the group cancels at once, the handler finds the request in flight,
+   and `run()` throws: `LiveServerTests.zeroTimeout()` fails.
+2. Swift's runtime cancels the server's child tasks before it runs the server task's handler, as the
+   scratch change below shows, so a request the cancellation cut short can end, with the shutdown's
+   503, and count out before the handler reads the count. `run()` then stops cleanly although it
+   cut the request short: `LiveServerTests.shutdownTimeout()` fails.
+
+On an M3 Max (16 cores), each race failed its test once a scratch change held its window open, and
+beside heavy load (six loops of `OpenJevServerTests`, each repeating the suite 20 times, and 16 busy
+loops; load average 10 to 32) unmodified:
+
+| Race | Scratch change | Failed | Unmodified, quiet | Unmodified, heavy load |
+|---|---|---|---|---|
+| 1, `zeroTimeout()` | 50 ms before the count-out | 5 of 5 | 0 failures in 500 repetitions | failed at repetition 65 |
+| 2, `shutdownTimeout()` | 50 ms in the handler, before it reads the count | 5 of 5 | not measured | failed at repetition 36, and in 2 of the loaders' 120 |
+
+Decision.
+
+1. **Each request notes the cancellation on its own task.** `RequestsInFlight.noting(_:)` wraps
+   Hummingbird's responder, and a request is cut short when its responder ends by throwing while its
+   task is cancelled. A cancellation marks a task before it stops anything the task runs, and
+   SwiftNIO sends no write that a cancelled task makes or is still waiting to make
+   (`NIOAsyncWriter.yield(contentsOf:)` documents it, and throws `CancellationError`). So every
+   request the cancellation reaches before the connection has taken its whole answer ends that way,
+   and no request whose answer the connection took first does, however late its task ends. Nothing
+   depends any more on when the server's own task learns of the cancellation: in race 1 the
+   connection took the answer before the client could read it, and in race 2 the 503 is made on a
+   cancelled task, so its write throws.
+2. **In flight means not yet taken.** A request is in flight, for D-038 item 9, until the connection
+   has taken its whole answer. The shutdown's 503, D-038 item 8's `CancellationError` mapping, is
+   still what the routes return and the request log writes, but it is not sent: its client sees the
+   connection close. This change sends nothing it did not send before: the wrapper writes nothing.
+3. **`run()`** throws `ShutdownInterrupted` when its own task was cancelled and a request noted it,
+   and stops cleanly when it was cancelled and none did; an error that stopped the server without a
+   cancellation is thrown as before. The count, `serverCancelled()` and the cancellation handler
+   are gone.
+4. **Tests.** `ConnectionTests` holds the rule without timing: an answer the route makes once the
+   server is cancelled, as the decision route makes its 503, is cut short and not sent; a
+   cancellation in the middle of an answer's write, after the route has returned, cuts the request
+   short; an answer written before the cancellation is not cut short though the request's task ends
+   after it, race 1 held open on purpose; and an answer that fails with no cancellation does not
+   count, so a client gone earlier never makes a later shutdown an interruption. Each test fails
+   under the wrong rule it guards against: never noting, noting a normal return on a cancelled
+   task, and noting every throw. With this change, race 1's scratch change leaves `zeroTimeout()`
+   passing 5 of 5 (race 2's has no handler left to delay), and beside heavier load still (the same
+   loops, load average 12 to 97) both tests pass 500 repetitions, while the loaders' 480
+   repetitions of the server suite fail only `CapacityTests`' and `ModelRouteTests`' timing checks,
+   which fail beside load on main too.
+
+Alternatives rejected. (a) Let `zeroTimeout()` wait until the count is 0 before it shuts the server
+down, with `DecisionServer` taking or exposing the count: the test would pass, but the server would
+keep race 1, where a SIGTERM microseconds after an answer exits 1, and race 2, where a shutdown that
+cut a request short exits 0. (b) Count a request out once its answer has been flushed: the client
+can read the bytes as soon as they are on the socket, before any callback of the flush runs, so race
+1 would only move, and race 2 would stay. (c) Count from the request's head to the response's end in
+a channel handler, as Hummingbird's `HTTPConnectionStateHandler` counts the requests in progress for
+its own graceful shutdown: the end passes the handler before the bytes are written, which closes
+race 1, but it needs swift-nio-extras' `NIOHTTPTypes` as a direct dependency, and race 2 would
+still need the server to note its cancellation before the requests see it, which only an
+unstructured task could order. (d) Read the count in a handler that runs before the requests are
+cancelled: Swift does not specify in which order a cancellation runs a task's handlers and cancels
+its children.
+
+Consequences. A `--shutdown-timeout` of 0 exits 0 once every client has its whole answer, and the
+exit status is 1 whenever the timeout reached a request before the connection had taken its answer.
+A request whose answer could not be written because its client went away at the moment of the
+cancellation counts as cut short too. The routes hand every answer over in one write, which is
+what makes an answer its client has read whole one the connection took: a body written in parts
+with a `content-length`, as Hummingbird's metrics and tracing middleware make one, would let a
+client read every byte before the last part is handed over, and a cancellation then would count
+the request as cut short. An answer the connection took but had not sent when the cancellation
+closed it, which needs an answer larger than the socket's send buffer and a client that is not
+reading, is lost without counting, as before. The rule rests on SwiftNIO's documented `yield`
+semantics; a change there would fail `ConnectionTests`' first test.
+
+Status. Proposed with this change, which has no issue; refines D-038 item 9.
