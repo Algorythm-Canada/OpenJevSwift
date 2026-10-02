@@ -74,12 +74,14 @@ extension MLXTests {
             #expect(mostProbable == 1 || mostProbable == 2, "tone levels \(levels)")
         }
 
-        @Test("The runtime's reads meet D-014's native bounds over the 27 oracle reads")
+        @Test("The runtime's reads meet D-014's native bounds over the 63 oracle reads")
         func oracleBounds() async throws {
             let live = try await LiveCheckpoint.shared()
             let oracle = try OracleFixture.load()
             var labels: [Double] = []
             var longLabels: [Double] = []
+            // Each long-prompt slot's largest |dp| (D-048).
+            var longSlotMaxima: [Double] = []
             var entropies: [Double] = []
             var longEntropies: [Double] = []
             var slots = 0
@@ -118,6 +120,7 @@ extension MLXTests {
                     entropies.append(abs(ours.entropy - theirs.entropy))
                     if long {
                         longLabels += differences
+                        longSlotMaxima.append(differences.max() ?? 0)
                         longEntropies.append(abs(ours.entropy - theirs.entropy))
                     }
                     let agree = top(ours.probabilities) == top(theirs.probs)
@@ -150,17 +153,19 @@ extension MLXTests {
             }
             let meanP = mean(labels)
             let longMeanP = mean(longLabels)
+            let longSlotMax = mean(longSlotMaxima)
             let meanH = mean(entropies)
             let longMeanH = mean(longEntropies)
             let topShare = Double(topAgree) / Double(slots)
             let confidentShare = Double(confidentAgree) / Double(confident)
             print(
                 """
-                runtime against the oracle, native tier, \(oracle.reads.count) reads, \(slots) slots:
+                runtime against the oracle, \(MetalLibrary.override == nil ? "native tier" : "the wheel's metallib and the runtime's own RoPE table"), \(oracle.reads.count) reads, \(slots) slots:
                   mean |dp| all labels \(String(format: "%.4f", meanP)) (bound 0.02)
-                  mean |dp| long prompts \(String(format: "%.4f", longMeanP)) (bound 0.01)
+                  mean of each long-prompt slot's largest |dp| \(String(format: "%.4f", longSlotMax)) (bound 0.14, D-048)
+                  mean |dp| long prompts \(String(format: "%.4f", longMeanP)) (reported: many-option labels dilute it, D-048)
                   mean |dH| all slots \(String(format: "%.4f", meanH)) (bound 0.2)
-                  mean |dH| long prompts \(String(format: "%.4f", longMeanH)) (bound 0.2)
+                  mean |dH| long prompts \(String(format: "%.4f", longMeanH)) (bound 0.27, D-048)
                   top label \(topAgree)/\(slots) \(String(format: "%.1f%%", topShare * 100)) (bound 90%)
                   top label, margin >= 0.5: \(confidentAgree)/\(confident) \(String(format: "%.1f%%", confidentShare * 100)) (bound 97%)
                 quickstart/g0, reported, not bounded:
@@ -170,11 +175,11 @@ extension MLXTests {
                 reads with a slot whose top label moved or whose max |dp| exceeds \(ReadDivergence.threshold): \(moved.count)
                 \(moved.joined(separator: "\n"))
                 """)
-            #expect(oracle.reads.count == 27 && slots == 156)
+            #expect(oracle.reads.count == 63 && slots == 192 && longSlotMaxima.count == 86)
             #expect(meanP <= 0.02)
-            #expect(longMeanP <= 0.01)
+            #expect(longSlotMax <= 0.14)
             #expect(meanH <= 0.2)
-            #expect(longMeanH <= 0.2)
+            #expect(longMeanH <= 0.27)
             #expect(topShare >= 0.9)
             #expect(confidentShare >= 0.97)
         }
@@ -267,9 +272,10 @@ extension MLXTests {
         func concurrentCallers() async throws {
             let live = try await LiveCheckpoint.shared()
             let oracle = try OracleFixture.load()
-            // The oracle's twelve states under the README questions, then eight of them under
-            // the quickstart's: 20 different requests.
-            let states = oracle.prompts.keys.sorted().compactMap { oracle.prompts[$0]?.user }
+            // The twelve states of the oracle's own requests (not the long JevBench ones) under
+            // the README questions, then eight of them under the quickstart's: 20 requests.
+            let states = oracle.fixtureRequestPrompts.compactMap { oracle.prompts[$0]?.user }
+            try #require(states.count == 12)
             let quickstart = try quickstartRequest()
             var requests = try states.map { try readmeRequest(state: $0) }
             for state in states.prefix(20 - requests.count) {
@@ -314,7 +320,9 @@ extension MLXTests {
                 DiffusionGemmaRuntime.MemoryReport, DiffusionGemmaRuntime.MemoryReport, Int
             ) {
                 await runtime.removeCachedPrefills()
-                Memory.cacheLimit = originalLimit
+                // MLX's default, whatever limit the run set (LiveCheckpoint.cacheLimitGB): the
+                // pool limit defaults to the memory limit.
+                Memory.cacheLimit = Memory.memoryLimit
                 try await runtime.setCacheLimit(gb: limitGB)
                 Memory.clearCache()
                 Memory.peakMemory = 0

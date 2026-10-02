@@ -471,8 +471,25 @@ $PY Tools/oracle/item_reads.py long-slots
 
 `compare` writes `item_reads_long_flips.json`, a summary without TypeSafe's text or prompt ids; the
 full runs stay in `~/Library/Caches/OpenJevSwift/item-reads`. `long-slots` recomputes, from
-`Fixtures/oracle/reads.json`, `sensitivity.json` and `transliteration_run.json`, the long-prompt
-row of the D-014 table over the slots with at most four labels.
+`Fixtures/oracle/reads.json` and the runs in `Tools/oracle/results/d048`, the long-prompt figures
+over the slots with at most four labels.
+
+D-048 later widened the fixture to 63 reads with 36 of nine long JevBench items and replaced
+D-014's long-prompt rows. Every tool above, rerun on the widened fixture with MLX's pool capped at
+4 GB, reproduces this report's runs on the 27 reads bit for bit, and with them every row of its
+`tolerance_stats.json`, planted bugs included. The widened runs, from the repository root after
+`python3 Tools/jevbench/harness.py fetch` (`$OUT` is any folder outside the repository; the
+planted-bug runs are kept only as rows of `tolerance_stats.json`, as here):
+
+```bash
+D=Tools/oracle/results/d048
+PYTHONHASHSEED=0 Tools/oracle/.venv/bin/python Tools/fixtures/mlx_vlm_oracle.py --cache-limit-gb 4 --run-out $D/oracle_run.json
+PYTHONHASHSEED=0 Tools/oracle/.venv/bin/python Tools/oracle/sensitivity.py --cache-limit-gb 4 --out $D/sensitivity.json
+swift run --package-path Tools/oracle/UpstreamProbe -c release Transliteration --cache-limit-gb 4 --out $D/transliteration_run.json
+for bug in skip_self_conditioning rope_offset_zero no_window upstream_router; do TRANSLITERATION_BUG=$bug swift run --package-path Tools/oracle/UpstreamProbe -c release Transliteration --cache-limit-gb 4 --out "$OUT/transliteration_$bug.json"; done
+swift run --package-path Tools/oracle/Probe -c release Probe --cache-limit-gb 4 --maps $D/fork_reads.json --out "$OUT/probe_run.json"
+Tools/oracle/.venv/bin/python Tools/oracle/tolerance_stats.py --sensitivity $D/sensitivity.json --native $D/transliteration_run.json --out $D/tolerance_stats.json $D/fork_reads.json "planted bug: skip self-conditioning=$OUT/transliteration_skip_self_conditioning.json" "planted bug: RoPE offset 0=$OUT/transliteration_rope_offset_zero.json" "planted bug: no sliding window=$OUT/transliteration_no_window.json" "planted bug: upstream Gemma 4 router=$OUT/transliteration_upstream_router.json"
+```
 
 ## Deviations from the brief
 

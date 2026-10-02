@@ -13,6 +13,7 @@
 //
 //     swift run --package-path Tools/oracle/Probe -c release Probe
 //     swift run --package-path Tools/oracle/Probe -c release Probe --cache-limit-gb 4
+//     swift run --package-path Tools/oracle/Probe -c release Probe --cache-limit-gb 4 --maps FILE
 
 import Foundation
 import MLX
@@ -33,6 +34,9 @@ struct Options {
     /// Tools/oracle/crossfeed.py to run mlx-vlm's decoder on the fork's encoder output.
     var dumpDirectory: String?
     var dumpReads: [String] = []
+    /// With --maps FILE, every read's slot maps and written argmaxes from the first pass go to
+    /// FILE, as swift_reads.json holds them, for Tools/oracle/tolerance_stats.py; no cache is dumped.
+    var maps: String?
 
     static func defaultModel() -> String {
         let environment = ProcessInfo.processInfo.environment
@@ -62,6 +66,7 @@ struct Options {
             case "--passes": options.passes = Int(value()) ?? 2
             case "--dump": options.dumpDirectory = value()
             case "--dump-reads": options.dumpReads = value().split(separator: ",").map(String.init)
+            case "--maps": options.maps = value()
             default: fatalError("unknown argument \(arguments[index])")
             }
             index += 1
@@ -488,6 +493,13 @@ if let directory = options.dumpDirectory {
     let data = try JSONSerialization.data(withJSONObject: dumped, options: [.sortedKeys])
     try data.write(to: URL(fileURLWithPath: directory).appendingPathComponent("swift_reads.json"))
     print("dumped \(dumped.count) reads to \(directory)")
+}
+if let path = options.maps {
+    let maps = Dictionary(uniqueKeysWithValues: passes[0].map { id, read in
+        (id, ["logprobs": read.slots.map { $0.map { [Double($0.tokenID), $0.logprob] } }, "written": read.written] as [String: Any])
+    })
+    try JSONSerialization.data(withJSONObject: maps, options: [.sortedKeys]).write(to: URL(fileURLWithPath: path))
+    print("wrote the maps of \(maps.count) reads to \(path)")
 }
 
 /// The default result file names the configuration, so that no run overwrites another's: only

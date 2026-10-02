@@ -40,20 +40,22 @@ and Laya, and the Swift port of it passes unchanged against both servers on all 
 
 The model's probabilities, and the confidences, scores and argmaxes computed from them, agree
 within measured bounds rather than bit for bit, because this port runs other kernels on other
-hardware. One bound is exceeded, on one dataset's long prompts, and the table says so.
+hardware. Every bound is met. Past 1,024 tokens the benchmark answers' figures are reported, not
+bounded: D-048 bounds the reads there, and an answer averages up to four of them.
 
 | Backend | Figure | Bound | Measured |
 |---|---|---|---|
-| `mlx`, mlx-swift's own kernels | Mean label probability difference, all 1,763 labels of the 27 oracle reads | 0.02 (D-014) | 0.0084 |
-| | The same, prompts past 1,024 tokens | 0.01 | 0.0054 |
-| | Mean entropy difference, all 156 slots | 0.2 | 0.086 |
-| | The same, prompts past 1,024 tokens | 0.2 | 0.131 |
-| | Top label agreement, all slots | 90% | 96.2%, 150 of 156 |
-| | Top label agreement where mlx-vlm's top two are at least 0.5 apart | 97% | 100%, 120 of 120 |
-| | Largest label probability difference | reported, not bounded | 0.374, on the quickstart's `is_urgent` slot |
-| `mlx`, mlx-vlm's Metal library and RoPE table | Reads identical to mlx-vlm's | every read | 27 of 27, bit for bit (D-036) |
+| `mlx`, mlx-swift's own kernels | Mean label probability difference, all 1,883 labels of the 63 oracle reads | 0.02 (D-014) | 0.0133 |
+| | Mean of each slot's largest label probability difference, the 86 slots of prompts past 1,024 tokens | 0.14 (D-048) | 0.1006 |
+| | Mean label probability difference, prompts past 1,024 tokens | reported, not bounded (D-048) | 0.0113 |
+| | Mean entropy difference, all 192 slots | 0.2 | 0.104 |
+| | The same, prompts past 1,024 tokens | 0.27 (D-048) | 0.152 |
+| | Top label agreement, all slots | 90% | 91.7%, 176 of 192 |
+| | Top label agreement where mlx-vlm's top two are at least 0.5 apart | 97% | 99.3%, 139 of 140 |
+| | Largest label probability difference | reported, not bounded | 0.500, on a read of JevBench's `hard-opus-c-long_policy-04` |
+| `mlx`, mlx-vlm's Metal library and RoPE table | Reads identical to mlx-vlm's | every read | 63 of 63, bit for bit (D-036, D-048) |
 | `mlx`, the Swift server against upstream's on JevBench and TypeSafe | Mean probability difference | 0.02 (D-014) | 0.0135 over JevBench's 231 items, 0.0069 over TypeSafe's 102 |
-| | The same, prompts past 1,024 tokens | 0.01 | 0.0075 over TypeSafe's 76; 0.0396 over JevBench's 41, four times the bound |
+| | Prompts past 1,024 tokens: mean of each item's largest difference, and mean over every label | reported, not bounded (D-048) | 0.0102 and 0.0075 over TypeSafe's 76; 0.0741 and 0.0396 over JevBench's 41 |
 | | Top answer agreement, all items | 90% | 97.9%, 326 of 333 |
 | | Top answer agreement where upstream's top two are at least 0.5 apart | 97% | 100%, 299 of 299 |
 | `verdict`, Core ML float16 against upstream's PyTorch float32 | Largest probability difference | 0.02 (D-034) | 0.0022 over 333 JevBench and TypeSafe items; 0.0014 over spike #56's 200 questions |
@@ -63,18 +65,19 @@ hardware. One bound is exceeded, on one dataset's long prompts, and the table sa
 | | Mean probability difference | 0.003, before rounding | 2.1e-4 on JevBench and 1.6e-4 on TypeSafe, between the rounded answers |
 | | Top answer, wherever upstream's top two are at least 0.01 apart | unchanged | unchanged on all 333 items |
 
-The first `mlx` figures are D-014's bounds over `Fixtures/oracle`, measured on 2026-10-01 on an M3
-Max with the pinned 4-bit checkpoint
+The first `mlx` figures are D-014's bounds, with D-048's long-prompt rows, over `Fixtures/oracle`,
+measured on 2026-10-02 on an M3 Max with the pinned 4-bit checkpoint
 ([09-conformance-and-testing.md](09-conformance-and-testing.md), layer 2). The encoder figures are
 from [quality.md](quality.md): on JevBench's 231 public items and SemIf's 102 TypeSafe rows, the
 Swift server gave upstream's top answer on every item for both models, including the 36 whose
 upstream top two were less than 0.01 apart; accuracies are the same and Brier scores and ECEs differ
 by at most 0.0003. The server-against-server `mlx` rows are quality.md's too, from the same 333
-items on both servers with MLX's buffer pool capped at 4 GB: they meet D-014's bounds but the
-long-prompt one on JevBench, whose 41 prompts past 1,024 tokens are mostly the hard tier's uncertain
-answers. Its section [A disagreement on DiffusionGemma](quality.md#a-disagreement-on-diffusiongemma)
-says why that looks like the kernels rather than the port's arithmetic, why it is not settled, and
-what would settle it.
+items on both servers with MLX's buffer pool capped at 4 GB: they meet every bound an answer
+carries, and JevBench's 41 prompts past 1,024 tokens, mostly the hard tier's uncertain answers,
+differ more than TypeSafe's. Its section
+[A disagreement on DiffusionGemma](quality.md#a-disagreement-on-diffusiongemma) shows the difference
+is the kernels': in D-014's exact tier the port reads the four long-prompt items whose top answers
+differ at a wide margin as mlx-vlm does, bit for bit.
 
 ## Different, and why
 

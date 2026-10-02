@@ -99,7 +99,7 @@ private actor RecordingBackend: DecisionBackend {
 }
 
 extension MLXTests {
-    /// The regression file of issue #31: the port's answers for the 27 oracle reads, the wire
+    /// The regression file of issue #31: the port's answers for the 63 oracle reads, the wire
     /// quickstart and upstream's README example through the engine, against the recorded ones.
     @Suite(
         "DiffusionGemma regression file",
@@ -219,7 +219,13 @@ extension MLXTests {
             let pins = try Self.currentPins()
             let entries = try await Self.produce(live)
 
+            // The file is the port's output on mlx-swift's own kernels; D-014's exact tier
+            // (`OPENJEV_MLX_METALLIB`) loads other kernels, which round differently.
+            let wheelKernels = MetalLibrary.override != nil
             if ProcessInfo.processInfo.environment[Self.recordVariable] == "1" {
+                try #require(
+                    !wheelKernels,
+                    "record on mlx-swift's own kernels: unset \(MetalLibrary.overrideVariable)")
                 let encoder = JSONEncoder()
                 encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
                 var data = try encoder.encode(RegressionFile(generator: pins, entries: entries))
@@ -232,7 +238,7 @@ extension MLXTests {
             let recorded = try JSONDecoder().decode(
                 RegressionFile.self, from: Data(contentsOf: Self.fileURL))
             #expect(recorded.entries.map(\.id) == entries.map(\.id))
-            let exact = recorded.generator.sameMachine(as: pins)
+            let exact = recorded.generator.sameMachine(as: pins) && !wheelKernels
             var largest = 0.0
             var differences: [Double] = []
             var slots = 0
@@ -277,13 +283,18 @@ extension MLXTests {
             print(
                 """
                 regression file: \(entries.count) entries, \(slots) slots, recorded under \(recorded.generator), \
-                now \(pins); \(exact ? "same machine, tolerance \(Self.tolerance)" : "another machine, D-014's bounds"): \
+                now \(pins); \(exact ? "same machine, tolerance \(Self.tolerance)" : wheelKernels ? "the exact tier's kernels, D-014's bounds" : "another machine, D-014's bounds"): \
                 largest change \(largest), mean |dp| \(mean), top label \(topAgree)/\(slots)
                 """)
             if !exact {
-                // Another GPU, macOS or MLX rounds differently; hold the port to D-014's
-                // aggregate bounds there and say how to record this machine's own file.
-                #expect(mean <= 0.02, "re-record with \(Self.recordVariable)=1 on this machine")
+                // Another GPU, macOS or MLX, or the exact tier's kernels, round differently; hold
+                // the port to D-014's aggregate bounds there and say how to record this machine's
+                // own file.
+                #expect(
+                    mean <= 0.02,
+                    wheelKernels
+                        ? "the exact tier's kernels move the port's answers too far"
+                        : "re-record with \(Self.recordVariable)=1 on this machine")
                 #expect(Double(topAgree) >= 0.9 * Double(slots))
             }
         }

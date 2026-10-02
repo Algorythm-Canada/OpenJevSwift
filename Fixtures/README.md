@@ -58,8 +58,8 @@ THIRD_PARTY.md, the scripts and that test together, then regenerate.
 | [errors/](errors/README.md) | Error responses that `wire/cases.json` does not hold, and an index of every error row in the wire contract | `upstream_tables.py` | #35, #38 |
 | [encoders/](encoders/README.md) | PyTorch reference reads of Verdict and Laya through upstream's own code (float32, with float16 and bfloat16 passes), and the question corpus they cover | `Tools/encoders/reference.py` | #56, #57, #58 |
 | [model/](model/README.md) | The checkpoint's `config.json` and `generation_config.json` verbatim, and its safetensors weight map | `checkpoint_tables.py` | #23, #27 |
-| [regression/](regression/README.md) | The Swift port's own answers for the 27 oracle reads, the wire quickstart and upstream's README example; not upstream's output | `RegressionTests` (`OPENJEV_RECORD_REGRESSION=1`) | #31 |
-| [oracle/](oracle/README.md) | mlx-vlm 0.6.15 reads of the 4-bit checkpoint through upstream's `MlxRuntime.read`: slot logprobs, distributions, written argmaxes, prompt ids, prefill cache digests and the full-attention RoPE table | `mlx_vlm_oracle.py` | #22, #31 |
+| [regression/](regression/README.md) | The Swift port's own answers for the 63 oracle reads, the wire quickstart and upstream's README example; not upstream's output | `RegressionTests` (`OPENJEV_RECORD_REGRESSION=1`) | #31 |
+| [oracle/](oracle/README.md) | mlx-vlm 0.6.15 reads of the 4-bit checkpoint through upstream's `MlxRuntime.read`, nine long JevBench items among them (D-048): slot logprobs, distributions, written argmaxes, prompt ids, prefill cache digests and the full-attention RoPE table | `mlx_vlm_oracle.py` | #22, #31 |
 | [wire/](wire/README.md) | HTTP exchanges, answer bodies, request renderings and `/v1/models` listings, recorded with a stand-in tokenizer | `wire_tables.py` | #5, #35 |
 | [python-json/](python-json/README.md) | CPython `json.dumps` and float `repr` tables, and how `json.loads` ends on valid and malformed documents. These record the Python version, not the upstream commit. | `python_json_tables.py` | #3, #35 |
 

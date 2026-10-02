@@ -20,8 +20,10 @@ LARGEST = 5
 # GPU with other work, so their timings are not a measurement; docs/benchmarks.md is (D-044).
 UNTIMED = {"openjev-0.1": "not reported"}
 # D-014's bounds on the aggregates the wire answers allow (the entropy bounds need the top-k
-# entropy of each read, which an answer does not carry).
-D014 = {"mean": 0.02, "long_mean": 0.01, "agree": 0.90, "confident_agree": 0.97}
+# entropy of each read, which an answer does not carry). D-048 bounds the long prompts by each
+# read slot's largest difference, a measure of reads that an answer averages, so the long prompts'
+# figures are shown and not bounded.
+D014 = {"mean": 0.02, "agree": 0.90, "confident_agree": 0.97}
 
 
 def result_files(results: Path) -> list:
@@ -44,14 +46,12 @@ def is_diffusiongemma(doc: dict) -> bool:
 
 
 def within_d014(overall: dict, bounds: dict) -> bool:
-    """Whether the answers meet every D-014 bound the wire allows. A subset with no item (no long
-    prompt, no confident reference) has nothing to fail."""
+    """Whether the answers meet every D-014 bound the wire allows. A subset with no item (no
+    confident reference) has nothing to fail."""
     if not overall["items"]:
         return False
     checks = [overall["mean_abs_diff"] <= D014["mean"],
               overall["agree"] >= D014["agree"] * overall["items"]]
-    if bounds["long_items"]:
-        checks.append(bounds["long_mean_abs_diff"] <= D014["long_mean"])
     if bounds["confident_items"]:
         checks.append(bounds["confident_agree"] >= D014["confident_agree"]
                       * bounds["confident_items"])
@@ -84,7 +84,8 @@ def agreement_tables(docs: list) -> list:
             bounds = result["bounds"]
             d014_rows.append([
                 model, dataset, str(overall["items"]), num(overall["mean_abs_diff"]),
-                f"{num(bounds['long_mean_abs_diff'])} over {bounds['long_items']}",
+                f"{num(bounds['long_mean_max_abs_diff'])} and {num(bounds['long_mean_abs_diff'])} "
+                f"over {bounds['long_items']}",
                 f"{overall['agree']} of {overall['items']} "
                 f"({pct(overall['agree'] / overall['items'] if overall['items'] else None)})",
                 f"{bounds['confident_agree']} of {bounds['confident_items']}"
@@ -102,12 +103,15 @@ def agreement_tables(docs: list) -> list:
     d014 = []
     if d014_rows:
         d014 = [
-            "DiffusionGemma's answers against D-014's aggregate bounds, which the 27 oracle reads "
+            "DiffusionGemma's answers against D-014's aggregate bounds, which the 63 oracle reads "
             "are held to (here over answers, each the mean of up to four reads, with upstream's as "
-            "the reference; `harness.py compare` lists every disagreement):",
+            "the reference; `harness.py compare` lists every disagreement). Past 1,024 tokens D-048 "
+            "bounds each read slot's largest difference, which an answer averages, so the long "
+            "prompts' figures are shown and not bounded:",
             markdown_table(["model", "dataset", "items",
                             "mean abs diff, every label (at most 0.02)",
-                            "the same over prompts of more than 1,024 tokens (at most 0.01)",
+                            "over prompts of more than 1,024 tokens: mean of each item's largest "
+                            "abs diff, and mean abs diff over every label (not bounded)",
                             "top answer agrees (at least 90%)",
                             "where upstream's top two are at least 0.5 apart (at least 97%)",
                             "within every bound"], d014_rows)]

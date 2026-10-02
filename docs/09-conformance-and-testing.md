@@ -41,9 +41,10 @@ reporting a higher entropy.
 
 Oracle: mlx-vlm 0.6.15 on the same `mlx-community` 4-bit checkpoint, driven by
 `Tools/fixtures/mlx_vlm_oracle.py`, which reuses upstream's `MlxRuntime.read`.
-[Fixtures/oracle](../Fixtures/oracle/README.md) holds what it records: 27 reads with their slot
-logprobs (top 20 plus labels), slot distributions, the argmaxes written by steps 2 and 3, the
-prompt ids, the prefill cache digests of layers 0 and 29, and the full-attention RoPE table.
+[Fixtures/oracle](../Fixtures/oracle/README.md) holds what it records: 63 reads, 36 of them of nine
+long JevBench items (D-048), with their slot logprobs (top 20 plus labels), slot distributions, the
+argmaxes written by steps 2 and 3, the prompt ids, the prefill cache digests of layers 0 and 29,
+and the full-attention RoPE table.
 
 Swift live tests (opt-in via `OPENJEV_TEST_MODEL=<path>`, else the Hugging Face cache snapshot;
 skipped naming that variable otherwise) load the same checkpoint and compare in the two tiers of
@@ -54,43 +55,50 @@ D-014:
   RoPE table installed in the full-attention layers, every read must be identical to the oracle:
   every logprob, distribution, written argmax, prompt token count and cache digest.
 - **Native tier, the production check.** With mlx-swift's own kernels, the reads must meet
-  D-014's aggregate bounds: mean label probability and entropy differences overall and over the
-  prompts past 1,024 tokens, and top label agreement overall and where the oracle's margin is at
-  least 0.5. Per-label maxima are reported, never bounded.
+  D-014's aggregate bounds with D-048's long-prompt rows: the mean label probability and entropy
+  differences over all slots, the mean of each long-prompt slot's largest label probability
+  difference and the mean entropy difference over the prompts past 1,024 tokens, and top label
+  agreement overall and where the oracle's margin is at least 0.5. Per-label maxima are reported,
+  never bounded.
 
 Below the reads, the text blocks (#24) are compared stage by stage with dumps of mlx-vlm's own
 prefill written by `Tools/oracle/stage_dump.py` (attention, MLP, router, experts and layer output
 of layers 0 to 5): bit-identical in the exact tier, within bounds measured at twice the native
-differences otherwise. Above them, the read-level cases are covered (issue #31): the 27 oracle
-reads span canvas widths 16 to 64, prompts of 78 to 2,939 tokens (four past the 1,024-token
-window) and `steps` 1 to 3; `ReadOracleTests` compares a cached and a cold prefill bit for bit;
+differences otherwise. Above them, the read-level cases are covered (issue #31): the 63 oracle
+reads span canvas widths 16 to 64, prompts of 78 to 3,643 tokens (13 past the 1,024-token window,
+nine of them JevBench's) and `steps` 1 to 3; `ReadOracleTests` compares a cached and a cold prefill bit for bit;
 `RuntimeLiveTests` checks the same request twice and a cold against a cached read through the
 runtime; and the regression file (below) checks determinism across runs. Image reads wait for the
 vision path (#48, upstream's `tests/data/hotdog.jpg` case).
 
-Measured on 2026-10-01 on the reference machine (M3 Max, 128 GB, macOS 27.0.1, the pinned 4-bit
+Measured on 2026-10-02 on the reference machine (M3 Max, 128 GB, macOS 27.0.1, the pinned 4-bit
 checkpoint, mlx-swift 0.32.2), native tier, through the model (`ReadOracleTests`) and through the
 runtime (`RuntimeLiveTests`), which agree bit for bit:
 
-| Figure | Measured | D-014 bound |
+| Figure | Measured | Bound |
 |---|---|---|
-| Top label agreement, all slots | 150 of 156 (96.2%) | 90% |
-| Top label agreement, oracle margin at least 0.5 | 120 of 120 (100%) | 97% |
-| Mean label probability difference, all labels (1,763) | 0.0084 | 0.02 |
-| Mean label probability difference, prompts past 1,024 tokens (1,496) | 0.0054 | 0.01 |
-| Mean entropy difference, all slots | 0.086 | 0.2 |
-| Mean entropy difference, prompts past 1,024 tokens (50 slots) | 0.131 | 0.2 |
-| Largest label probability difference (reported) | 0.374, quickstart/g0/c1, slot 2 (`is_urgent`) | none |
+| Top label agreement, all slots | 176 of 192 (91.7%) | 90% (D-014) |
+| Top label agreement, oracle margin at least 0.5 | 139 of 140 (99.3%) | 97% (D-014) |
+| Mean label probability difference, all labels (1,883) | 0.0133 | 0.02 (D-014) |
+| Mean of each long-prompt slot's largest label probability difference (86 slots) | 0.1006 | 0.14 (D-048) |
+| Mean label probability difference, prompts past 1,024 tokens (1,616 labels) | 0.0113 | reported (D-048; was 0.01) |
+| Mean entropy difference, all slots | 0.104 | 0.2 (D-014) |
+| Mean entropy difference, prompts past 1,024 tokens (86 slots) | 0.152 | 0.27 (D-048) |
+| Largest label probability difference (reported) | 0.500, hard-opus-c-long_policy-04/g0/c2, slot 0 | none |
 | Largest entropy difference (reported) | 0.591, non_ascii/g0/c0 | none |
-| Reads bit-identical to the oracle (exact tier only) | 0 of 27 natively; 27 of 27 in the exact tier | |
+| Reads bit-identical to the oracle (exact tier only) | 0 of 63 natively; 63 of 63 in the exact tier | |
 | Written argmaxes equal on multi-step reads | 4 of 6 | |
 
-The six slots whose top label moved are quickstart/g0 c0 and c2 slot 2 (`is_urgent`, the oracle at
-0.57 and 0.52), indexed_12_mixed/g0 c0 slots 0 and 11 and c1 slot 3, and many_choices/g0 c0
-slot 3; every one has an oracle margin under 0.5. When a slot's top label moves or its largest
-|dp| exceeds 0.05, both oracle tests print the read's id, prompt key, width and steps and both
-distributions with their label ids: 17 of the 27 reads have such a slot. The per-read figures are
-reported; the assertions stay D-014's aggregates.
+16 slots' top labels moved. Six are on the fixture's own requests: quickstart/g0 c0 and c2 slot 2
+(`is_urgent`, the oracle at 0.57 and 0.52), indexed_12_mixed/g0 c0 slots 0 and 11 and c1 slot 3,
+and many_choices/g0 c0 slot 3. Ten are on the JevBench reads, all four of `hard-sol-b-long_policy-06`,
+two each of `hard-opus-c-long_policy-04` and `hard-opus-a-long_policy-19` and two of the near tie
+`hard-opus-b-multi_hop-03`. Every one has an oracle margin under 0.5 but
+hard-opus-c-long_policy-04/g0/c2, at 0.62. When a slot's top label moves or its largest |dp|
+exceeds 0.05, both oracle tests print the read's id, prompt key, width and steps and both
+distributions with their label ids: 40 of the 63 reads have such a slot, 17 of the 27 on the
+fixture's own requests and 23 of the 36 on JevBench's. The per-read figures are reported; the
+assertions stay aggregates.
 
 Per-read latency in the same run, a debug test build (Xcode's Test action), the model called
 directly: prefill 160 ms for 78 tokens, 233 ms for 182, 498 ms for 329, 1.94 s for 1,572,
@@ -100,13 +108,14 @@ prefills took 0.39 s (78 tokens) to 5.30 s (2,939 tokens) and one over a cached 
 0.27 s. The release build is faster; its figures are in [benchmarks.md](benchmarks.md).
 
 The regression file, [Fixtures/regression](../Fixtures/regression/README.md), records the port's own
-answers (not upstream's) for the 27 oracle reads, the wire quickstart and upstream's README example
+answers (not upstream's) for the 63 oracle reads, the wire quickstart and upstream's README example
 through the engine: per slot the probabilities, entropy and top label, the prompt tokens, and for
 the engine requests the billed tokens and answers, with the checkpoint, mlx-swift, macOS and GPU
 it was recorded under. `RegressionTests` fails when any value moves while those pins match: seven
 runs in separate processes on the reference machine reproduced all 180 slots bit for bit, so the
-tolerance is 0 (D-044). On another machine it holds the port to D-014's aggregate bounds and says
-to record that machine's own file (`OPENJEV_RECORD_REGRESSION=1`).
+tolerance is 0 (D-044). On another machine, or with the exact tier's `OPENJEV_MLX_METALLIB`, it
+holds the port to D-014's aggregate bounds, and on another machine it says to record that machine's
+own file (`OPENJEV_RECORD_REGRESSION=1`, which refuses the exact tier's kernels; D-048).
 
 The encoder backends (`OpenJevEncodersTests`, issues #57 and #58) take their oracle from
 `Fixtures/encoders`, PyTorch float32 reads through upstream's own code. Without any model they

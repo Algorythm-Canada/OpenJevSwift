@@ -25,11 +25,17 @@ final class LiveCheckpoint: @unchecked Sendable {
         self.report = report
     }
 
+    /// MLX's buffer pool limit for the run, `OPENJEV_MLX_CACHE_LIMIT_GB` as the server reads it;
+    /// unset leaves MLX alone. A limit leaves every read bit-identical (spike #22) and keeps a long
+    /// run's pool, which otherwise grows to the peak working set, from swapping (D-048).
+    static let cacheLimitGB = ProcessInfo.processInfo.environment["OPENJEV_MLX_CACHE_LIMIT_GB"]
+        .flatMap(Double.init)
+
     private static let loading = Task { () throws -> LiveCheckpoint in
         MetalLibrary.configure()
         let runtime = try await DiffusionGemmaRuntime.load(
             .directory(ModelFixtures.checkpointDirectory),
-            configuration: .init(cacheLimitGB: nil, warmUp: true))
+            configuration: .init(cacheLimitGB: cacheLimitGB, warmUp: true))
         guard let loaded = runtime.sharedLoadedModel, let report = await runtime.loadReport
         else { throw CocoaError(.featureUnsupported) }
         return LiveCheckpoint(runtime: runtime, loaded: loaded, report: report)

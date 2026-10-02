@@ -36,8 +36,20 @@ struct OracleFixture: Decodable {
             case promptTokens = "prompt_tokens"
         }
     }
+    /// A JevBench item among the requests (D-048); the tests need only its id.
+    struct JevBenchItem: Decodable {}
     let prompts: [String: Prompt]
     let reads: [Read]
+    /// The JevBench items, by id, which is also their request name.
+    let jevbench: [String: JevBenchItem]
+
+    /// The prompt keys (`request/gGROUP`) of the fixture's own requests, without the JevBench
+    /// items', sorted.
+    var fixtureRequestPrompts: [String] {
+        prompts.keys.filter { key in
+            !jevbench.keys.contains(String(key.prefix { $0 != "/" }))
+        }.sorted()
+    }
 
     static func load() throws -> OracleFixture {
         let url = TokenizerFixtures.fixturesDirectory.appendingPathComponent("oracle/reads.json")
