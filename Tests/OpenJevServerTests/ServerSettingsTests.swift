@@ -1,4 +1,5 @@
 import OpenJevCore
+import OpenJevTestSupport
 import Testing
 
 @testable import OpenJevServer
@@ -369,5 +370,21 @@ struct ServerSettingsTests {
         #expect(encoder.maxQueue == 7)
         #expect(encoder.maxInflight == 1)
         #expect(encoder.warmUp == false)
+    }
+
+    @Test("OPENJEV_AUTO_MAX reaches the engine: 1 never re-reads an uncertain read (#44)")
+    func autoMaxReachesTheEngine() async throws {
+        let recorded = try WireFixtures.recordedCase(named: "quickstart")
+        let body = try #require(recorded["request"]?["body_text"]?.stringValue)
+        let request = try SystemOneRequest(json: JSONParser().parse(body))
+        // Every stub read has entropy 0.5, above the 0.1 threshold.
+        for (environment, reads) in [([:], 4), (["OPENJEV_AUTO_MAX": "1"], 1)] {
+            let stub = StubBackend(tokenizer: AnyPromptTokenizer(), entropy: 0.5)
+            let service = try await DecisionBackendProvider { _ in stub }
+                .makeService(settings: try ServerSettings(environment: environment))
+            let decision = try await service.decide(request)
+            #expect(stub.reads.count == reads, "\(environment)")
+            #expect(decision.inputTokens == stub.readPromptTokens, "\(environment)")
+        }
     }
 }

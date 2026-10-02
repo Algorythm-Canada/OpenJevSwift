@@ -289,6 +289,10 @@ issue #29), upstream's `MlxRuntime` and `MlxEngine.one_read` in one actor:
   `setCacheLimit(gb:)`), the prefill cache budgets and the prompt cap. `memoryReport()` gives
   MLX's active, cache and peak bytes and the process's resident bytes; `statistics()` the reads,
   the prefill hits and misses and the model time.
+- Test seam: the internal `init(tokenizer:configuration:calls:setCacheLimit:)` takes the model's
+  `prefill` and `read` as closures (`ModelCalls`). The model-free tests bind them to a stub; the
+  live read-policy tests bind them to the shared checkpoint's model and record every prompt's
+  token ids, with their own prefill cache and statistics and no second load.
 - Warm-up: `warmUp()` runs one small read directly on the model (one noul question over upstream's
   warm-up state, its prompt from the chat template, its canvas from `CanvasBuilder` with seed 0),
   so the first user does not pay kernel compilation; loading runs it when

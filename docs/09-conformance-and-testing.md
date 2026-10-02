@@ -143,6 +143,53 @@ and `steps` 1 bit-identical to the single decoder pass as it was before the step
 tokens of the 16,384 budget). The image cases (#48), `think` (#52) and chat (#53) are disabled
 tests under upstream's names whose comments name the issue and `OPENJEV_TEST_MODEL`.
 
+The read extensions of milestone 4 (#43 to #45) are proven on the checkpoint the same way, through
+`DecisionEngine` with `EngineConfiguration`'s defaults (autoThreshold 0.1, autoMax 4), measured on
+2026-10-02 on the reference machine:
+
+- **steps** (`UpstreamReadCaseTests`). `steps 1` gives the same answers and usage as a request
+  without the field, for the README example and the quickstart. At `steps 8` each of upstream's
+  three README states and the quickstart is one prefill on a fresh cache (1 miss, and a hit for
+  every further read), billed once (165, 172, 166 and 182 input tokens, the prompt lengths), and
+  the three states still meet upstream's `STATES` thresholds. The template holds: the eight-step
+  loop replayed with the model's own decoder passes changes no template position (only the 3
+  slots change), and the runtime's eight-step read equals that replay bit for bit. On the
+  quickstart, `steps 8` reads `is_urgent` at 0.0006 in one read where `steps 1` averages 0.444 over
+  four. The 422 for `steps` 0 and 9 is upstream's recorded body, byte for byte, in
+  `ApplicationTests` (the `steps_0` and `steps_9` rows of Fixtures/wire).
+- **The oracle by steps value** (`ReadOracleTests`, native tier):
+
+  | steps | Reads | Labels | Mean label probability difference | Top label agreement | Written argmaxes equal |
+  |---|---|---|---|---|---|
+  | 1 | 21 | 1,673 | 0.0086 | 118 of 124 | |
+  | 2 | 3 | 45 | 0.0089 | 16 of 16 | 2 of 3 |
+  | 3 | 3 | 45 | 0.0003 | 16 of 16 | 2 of 3 |
+
+  The multi-step reads are `quickstart`, `lines_10_mixed` and `long_state` at 2 and 3 steps. The
+  two whose written argmaxes differ natively are the quickstart's, whose `is_urgent` slot is near
+  0.5 in the oracle. In the exact tier all six wrote the oracle's argmaxes on 2026-10-01 (D-044);
+  that tier was not re-run for this table.
+- **The automatic re-read policy and samples** (`ReadPolicyLiveTests`, over a runtime whose model
+  calls are recorded). The quickstart's first read has top-k entropies 0.103, 0.334 and 0.755
+  (`department`, `frustration`, `is_urgent`), so the policy reads it 4 times on one prefill (1
+  miss, 3 hits, 4 distinct canvases) and bills 182 tokens, one read. `samples 1` reads once and
+  bills 182 despite that entropy; `samples 4` reads 4 times and bills 728; `samples 8` on a fresh
+  cache is 1 miss and 7 hits and bills 1,456. On the 24 nouls both groups are re-read 4 times,
+  each re-read covering every question of its group: in the group of 17, two questions are above
+  the threshold, in the group of 7, five. 657 tokens are billed, the sum of the two groups' prompts.
+  `OPENJEV_AUTO_MAX=1` reaches the engine through `DecisionBackendProvider`, and no read is then
+  repeated (`ServerSettingsTests`).
+- **sequential** (`ReadPolicyLiveTests`). 40 nouls with `samples 1` chunk into 3 groups (17, 14
+  and 9 questions) and make 3 reads, one per group. Group 0 reads the chat prompt under the full
+  question list (862 tokens). Group k reads the base prompt (that chat prompt and the scaffold,
+  866 tokens) followed by the encoded answer lines of groups 0 to k-1, the argmax label of every
+  earlier question (925 and 981 tokens). 2,768 tokens are billed, the sum. Each extended prefix is
+  its own cache key, so a fresh cache sees 3 misses and the same request again 3 hits with the same
+  answers. The 24 nouls bill 657 tokens plainly and 1,147 sequentially, the figures above. With
+  one group, `sequential` reads the same prompt and gives the same answers and usage as the plain
+  request. Images with `sequential` or `think` are refused before any read
+  (`DecisionEngineTests`, "Images cannot be combined with think or sequential").
+
 ## Layer 3: end to end, behavioural
 
 - **SDK compatibility.** The oracle is the official clients themselves: "TypeSafe's SDKs work
@@ -181,7 +228,10 @@ tests under upstream's names whose comments name the issue and `OPENJEV_TEST_MOD
   must carry `server-timing` (unless `OPENJEV_LIVE_GATEWAY=1`) and the same `req_` id in
   `x-request-id` and `x-typesafe-request-id`, and every answer must have Jev's shape for its
   question. The image,
-  `think`, chat and stream tests skip, naming #48, #52 and #53. Like the model tests, the runs are
+  `think`, chat and stream tests skip, naming #48, #52 and #53. The suite's `test_read_options` (`steps
+  4`, `samples 4`, `sequential true`) checks the shapes over HTTP; what those options do on the
+  model (one prefill per prompt, the billing, the re-reads and the earlier answers in the prompt)
+  is shown in process in layer 2 (#43 to #45). Like the model tests, the runs are
   recorded in the pull request: the suite passes against the Swift server on Verdict, Laya and the
   DiffusionGemma 4-bit checkpoint and, unchanged, against upstream's Python server on the same
   three, which shows that the suite itself is neutral.

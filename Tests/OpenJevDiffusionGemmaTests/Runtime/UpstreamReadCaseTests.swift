@@ -64,6 +64,9 @@ extension MLXTests {
                     "24 questions\(extra.isEmpty ? "" : ", sequential"): \(after.reads - before.reads) reads, "
                         + "\(decision.inputTokens) input tokens")
                 #expect(decision.answers.count == 24)
+                // The billed figures measured on 2026-10-01 (docs/09): two groups, the second
+                // one's prompt longer by the first group's answers when sequential.
+                #expect(decision.inputTokens == (extra.isEmpty ? 657 : 1_147))
                 for (key, answer) in decision.answers {
                     guard case .noul(let p) = answer else {
                         Issue.record("\(key): \(answer)")
@@ -175,6 +178,162 @@ extension MLXTests {
                 }, written: [], promptTokens: cache.promptTokens)
             #expect(identical(single, one.0))
             #expect(single.promptTokens == one.0.promptTokens)
+        }
+
+        @Test("steps 1 answers and bills as a request without the field (#43)")
+        func stepsOneIsTheDefault() async throws {
+            let live = try await LiveCheckpoint.shared()
+            let engine = try DecisionEngine(backend: live.runtime, configuration: .default)
+            let requests = [
+                try readmeRequest(state: upstreamStates[0].state), try quickstartRequest(),
+            ]
+            for request in requests {
+                var explicit = request
+                explicit.steps = 1
+                let plain = try await engine.decide(request)
+                let one = try await engine.decide(explicit)
+                // Answers and usage; the model time differs from run to run.
+                #expect(one.answers == plain.answers)
+                #expect(one.inputTokens == plain.inputTokens)
+                #expect(one.outputTokens == plain.outputTokens)
+            }
+        }
+
+        @Test("steps 8 reads on one prefill, bills it once and holds the template (#43)")
+        func eightSteps() async throws {
+            let live = try await LiveCheckpoint.shared()
+            let runtime = live.runtime
+            let engine = try DecisionEngine(backend: runtime, configuration: .default)
+
+            /// The request at `steps`, on a fresh prefill cache: its decision, its reads, its
+            /// prefill misses and hits, and its prompt length.
+            func decide(_ request: SystemOneRequest, steps: Int) async throws
+                -> (decision: Decision, reads: Int, misses: Int, hits: Int, promptTokens: Int)
+            {
+                var request = request
+                request.steps = steps
+                let schema = try engine.schemaBuilder.build(request.questions)
+                let system = SystemText.render(
+                    schema.questions, format: schema.format, chunked: false)
+                let prompt = try runtime.tokenizer.chatPromptIDs(
+                    system: system, user: StateText.render(request.state), thinking: false)
+                await runtime.removeCachedPrefills()
+                let before = await runtime.statistics()
+                let decision = try await engine.decide(request)
+                let after = await runtime.statistics()
+                return (
+                    decision, after.reads - before.reads,
+                    after.prefillMisses - before.prefillMisses,
+                    after.prefillHits - before.prefillHits, prompt.count
+                )
+            }
+
+            for expected in upstreamStates {
+                let request = try ask(expected.state)
+                let one = try await decide(request, steps: 1)
+                let eight = try await decide(request, steps: 8)
+                print(
+                    "\(expected.state) steps 8: \(eight.reads) reads, \(eight.misses) prefills, "
+                        + "\(eight.hits) hits, \(eight.decision.inputTokens) input tokens; "
+                        + "\(eight.decision.answers)")
+                // One prefill for all steps and every read; the prompt billed once.
+                #expect(eight.misses == 1, "\(expected.state)")
+                #expect(eight.hits == eight.reads - 1, "\(expected.state)")
+                #expect(eight.decision.inputTokens == eight.promptTokens)
+                #expect(eight.decision.inputTokens == one.decision.inputTokens)
+                #expect(eight.decision.outputTokens == 0)
+                guard case .noul(let urgent)? = eight.decision.answers["urgent"],
+                    case .choice(let team, _, let confidence)? = eight.decision.answers["team"],
+                    case .score(let tone, _, _, _)? = eight.decision.answers["tone"]
+                else {
+                    Issue.record("unexpected answer types: \(eight.decision.answers)")
+                    continue
+                }
+                // upstream's thresholds for these states (test_mlx_model.py STATES).
+                #expect((urgent > 0.9) == expected.urgent, "\(expected.state) urgent \(urgent)")
+                #expect(team == expected.team && confidence > 0.9, "\(expected.state) \(team)")
+                #expect(abs(tone - Double(expected.tone)) < 0.25, "\(expected.state) tone \(tone)")
+            }
+
+            let quickstart = try quickstartRequest()
+            let one = try await decide(quickstart, steps: 1)
+            let eight = try await decide(quickstart, steps: 8)
+            print(
+                "quickstart steps 1: \(one.reads) reads, \(one.decision.answers); steps 8: "
+                    + "\(eight.reads) reads, \(eight.misses) prefills, \(eight.hits) hits, "
+                    + "\(eight.decision.inputTokens) input tokens, \(eight.decision.answers)")
+            #expect(eight.misses == 1)
+            #expect(eight.hits == eight.reads - 1)
+            #expect(eight.decision.inputTokens == eight.promptTokens)
+            #expect(eight.decision.inputTokens == one.decision.inputTokens)
+            #expect(eight.decision.answers.keys == quickstart.questions.keys)
+
+            // The template holds: the step loop replayed with the model's own decoder passes
+            // changes only slot positions, and the runtime's eight-step read is that replay, bit
+            // for bit.
+            let schema = try engine.schemaBuilder.build(readmeRequest(state: "").questions)
+            let resolved = try engine.resolver.resolve(schema.questions, format: schema.format)
+            let system = SystemText.render(schema.questions, format: schema.format, chunked: false)
+            let state = upstreamStates[0].state
+            let prompt = try runtime.tokenizer.chatPromptIDs(
+                system: system, user: state, thinking: false)
+            let canvas = CanvasBuilder.build(
+                template: resolved.template, slots: resolved.slots, seed: 11,
+                geometry: engine.configuration.geometry)
+            let read = try await runtime.modelRead(
+                CanvasRead(
+                    prompt: .tokens(prompt), systemText: system, stateText: state,
+                    template: resolved.template, slots: resolved.slots, canvas: canvas, steps: 8,
+                    seed: 11)
+            ).output
+            #expect(read.written.count == 7)
+
+            let model = live.loaded.model
+            let cache = try model.prefill(promptIDs: prompt)
+            let length = canvas.tokens.count
+            let ids = MLXArray(canvas.tokens.map(Int32.init)).reshaped(1, length)
+            let masks = model.decoderMasks(canvasLength: length, cache: cache)
+            let slotPositions = resolved.slots.map(\.position)
+            let positions = MLXArray(slotPositions.map(Int32.init))
+            let isSlot = Set(slotPositions)
+            var conditioning: MLXArray?
+            var written: [[Int]] = []
+            var changedTemplatePositions = 0
+            var changedSlotPositions = 0
+            var previous = canvas.tokens
+            for _ in 1..<8 {
+                let logits = model.decoderLogits(
+                    canvas: ids, cache: cache, conditioning: conditioning, masks: masks)
+                ids[0, positions] = argMax(logits[0, positions], axis: -1).asType(ids.dtype)
+                conditioning = logits
+                eval(ids, logits)
+                let now = ids[0].asArray(Int32.self).map(Int.init)
+                for index in now.indices where now[index] != previous[index] {
+                    if isSlot.contains(index) {
+                        changedSlotPositions += 1
+                    } else {
+                        changedTemplatePositions += 1
+                    }
+                }
+                #expect(
+                    now.indices.allSatisfy { isSlot.contains($0) || now[$0] == canvas.tokens[$0] })
+                written.append(slotPositions.map { now[$0] })
+                previous = now
+            }
+            let logits = model.decoderLogits(
+                canvas: ids, cache: cache, conditioning: conditioning, masks: masks)
+            let replay = ReadOutput(
+                slots: resolved.slots.map {
+                    DiffusionGemmaModel.slotLogprobs(
+                        row: logits[0, $0.position], labelIDs: $0.labelIDs,
+                        topK: DiffusionGemmaRuntime.topK)
+                }, written: written, promptTokens: cache.promptTokens)
+            print(
+                "steps 8 template replay: \(changedSlotPositions) slot writes changed a token, "
+                    + "\(changedTemplatePositions) template positions changed, written \(written)")
+            #expect(changedTemplatePositions == 0)
+            #expect(replay.written == read.written)
+            #expect(identical(replay, read))
         }
 
         @Test("test_the_prompt_cache_is_bounded_in_tokens")
