@@ -11,8 +11,8 @@
     /// body's shape, the model name, the questions cap, then the service.
     ///
     /// The route and `openjev decide` both answer through it, so the command prints the bytes the
-    /// server sends. Each refusal upstream logs is logged as ``RefusalLog`` describes. Only the
-    /// route forwards a routed model's request (``ModelRouter``); `openjev decide` answers with the
+    /// server sends. Each refusal upstream logs is logged as `RefusalLog` describes. Only the
+    /// route forwards a routed model's request (`ModelRouter`); `openjev decide` answers with the
     /// loaded model alone, so a model it does not serve is the unknown-model 400 there.
     public struct SystemOneHandler: Sendable {
         /// The settings: the questions cap and the body cap.
@@ -31,10 +31,10 @@
         /// `json.loads` gives a JSON body, then the shape, the model name, the questions cap and
         /// the service. Nothing is logged.
         ///
-        /// - Throws: The ``WireError`` the server answers with: the 413 of a body over
+        /// - Throws: The ``/OpenJevCore/WireError`` the server answers with: the 413 of a body over
         ///   `OPENJEV_MAX_BODY_BYTES`, the 400 and 422s of a body that is not JSON, the shape's
-        ///   refusals and every error of the service; and ``JSONWriteError`` for an answer the
-        ///   server could not write either, its plain-text 500.
+        ///   refusals and every error of the service; and ``/OpenJevCore/JSONWriteError`` for an
+        ///   answer the server could not write either, its plain-text 500.
         public func respond(toJSONBody body: [UInt8]) async throws -> [UInt8] {
             let log = RefusalLog(logger: Self.silent, requestID: "")
             guard body.count <= settings.maxBodyBytes else {

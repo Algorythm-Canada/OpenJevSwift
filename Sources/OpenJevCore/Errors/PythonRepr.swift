@@ -4,6 +4,7 @@
 // `float` (`float_repr` in Objects/floatobject.c), which its f-strings write. Written from the
 // documented behaviour.
 
+/// Python's `repr` of a float, which upstream's f-strings write for one.
 extension Double {
     /// The float as Python's `repr` writes it, which is also what `str` and an f-string
     /// replacement field without a format spec write: `0.0`, `1.0`, `0.1`, `1e+16`, `1e-05`.
@@ -22,6 +23,7 @@ extension Double {
     }
 }
 
+/// Python's `repr` of a string, for messages that upstream formats with `!r`.
 extension String {
     /// The string as Python's `repr` writes it, for messages that upstream formats with `!r`.
     ///
@@ -88,6 +90,7 @@ extension String {
     }
 }
 
+/// Python's `repr` of bytes, for the 422 of a body FastAPI did not parse.
 extension String {
     /// Python's `repr` of a `bytes` object, `b'...'`, cut to its first `maxLength` characters when
     /// one is given, as `str(value)[:maxLength]` cuts it.

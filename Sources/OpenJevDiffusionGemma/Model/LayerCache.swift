@@ -23,6 +23,7 @@ public final class LayerCache {
     /// The number of positions written, the RoPE offset of what follows.
     public private(set) var offset = 0
 
+    /// An empty cache for a full-attention layer, or for a sliding one.
     public init(isFullAttention: Bool) {
         self.isFullAttention = isFullAttention
     }

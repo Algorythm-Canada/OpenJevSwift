@@ -32,6 +32,7 @@ public enum ReadInputError: Error, Equatable, Sendable, CustomStringConvertible 
     /// The cache was made by a model with another layer count.
     case cacheLayerMismatch(cacheLayers: Int, modelLayers: Int)
 
+    /// What was refused, with the index, the id and the bounds involved.
     public var description: String {
         switch self {
         case .emptyPrompt:
@@ -149,6 +150,7 @@ public struct TensorDigest: Equatable, Sendable, CustomStringConvertible {
         sumOfSquares = squares
     }
 
+    /// The dtype and shape, the first 16 hex digits of the SHA-256, the sum and the sum of squares.
     public var description: String {
         "\(dtype)\(shape) sha256 \(sha256.prefix(16)), sum \(sum), sum of squares \(sumOfSquares)"
     }

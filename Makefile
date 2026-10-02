@@ -12,7 +12,7 @@ FIXTURES_PYTHON := Tools/fixtures/.venv/bin/python
 SDK_COMPAT_PYTHON ?= python3.12
 SDK_COMPAT_VENV_PYTHON := Tools/sdk-compat/.venv/bin/python
 
-.PHONY: format lint test upstream fixtures fixtures-venv sdk-compat sdk-compat-venv
+.PHONY: format lint test upstream fixtures fixtures-venv sdk-compat sdk-compat-venv docs docs-preview
 
 # Rewrite the Swift sources in place according to .swift-format.
 format:
@@ -63,3 +63,12 @@ sdk-compat:
 	@test -x $(SDK_COMPAT_VENV_PYTHON) || { echo "$(SDK_COMPAT_VENV_PYTHON) is missing; run make sdk-compat-venv"; exit 1; }
 	$(SWIFT) build --product openjev-stub-server
 	$(SDK_COMPAT_VENV_PYTHON) Tools/sdk-compat/run.py --server "$$($(SWIFT) build --show-bin-path)/openjev-stub-server" $(SDK_COMPAT_ARGS)
+
+# Build the DocC documentation of the four library modules into one static site at
+# .build/docs-site, as the Documentation workflow publishes it (macOS only). Any DocC warning fails.
+docs:
+	Tools/docs/build-site.sh
+
+# Serve the site make docs built at http://localhost:8000/OpenJevSwift/, its path on GitHub Pages.
+docs-preview:
+	Tools/docs/serve-site.sh

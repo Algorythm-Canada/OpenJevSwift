@@ -72,6 +72,9 @@ public struct DiffusionGemmaConfiguration: Codable, Equatable, Sendable {
         case vision = "vision_config"
     }
 
+    /// Decodes config.json: the top level with mlx-vlm's `ModelConfig` defaults, the required
+    /// `text_config`, and `quantization`, `generation_config` and `vision_config` when present.
+    /// Another `model_type` is refused (D-032).
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         modelType =
@@ -108,6 +111,7 @@ public struct DiffusionGemmaConfiguration: Codable, Equatable, Sendable {
             .map(VisionStorage.init)
     }
 
+    /// Encodes the configuration under config.json's keys.
     public func encode(to encoder: any Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(modelType, forKey: .modelType)
@@ -217,6 +221,7 @@ public struct DiffusionGemmaTextConfiguration: Codable, Equatable, Sendable {
         /// `partial_rotary_factor`, the fraction of each head that rotates, when not all of it.
         public let partialRotaryFactor: Float?
 
+        /// Creates one layer type's RoPE settings.
         public init(ropeType: String, ropeTheta: Float, partialRotaryFactor: Float? = nil) {
             self.ropeType = ropeType
             self.ropeTheta = ropeTheta
@@ -233,6 +238,8 @@ public struct DiffusionGemmaTextConfiguration: Codable, Equatable, Sendable {
             case partialRotaryFactor = "partial_rotary_factor"
         }
 
+        /// Decodes an entry of `rope_parameters`; a missing `rope_type` is `default` and a missing
+        /// `rope_theta` is 10,000.
         public init(from decoder: any Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             ropeType = try c.decodeIfPresent(String.self, forKey: .ropeType) ?? "default"
@@ -330,6 +337,8 @@ public struct DiffusionGemmaTextConfiguration: Codable, Equatable, Sendable {
         case topKExperts = "top_k_experts"
     }
 
+    /// Decodes `text_config` with mlx-vlm's `TextConfig` defaults for absent keys, deriving
+    /// `layer_types` and `rope_parameters` as config.py does when they are absent (D-032).
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let path = decoder.codingPath
@@ -477,6 +486,7 @@ public struct DiffusionGemmaQuantization: Codable, Equatable, Sendable {
         /// `mode`, `affine` when absent.
         public let mode: QuantizationMode
 
+        /// Creates one module's quantization.
         public init(groupSize: Int, bits: Int, mode: QuantizationMode = .affine) {
             self.groupSize = groupSize
             self.bits = bits
@@ -489,6 +499,7 @@ public struct DiffusionGemmaQuantization: Codable, Equatable, Sendable {
             case mode
         }
 
+        /// Decodes `group_size` and `bits`, and `mode`, which is `affine` when absent.
         public init(from decoder: any Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             groupSize = try c.decode(Int.self, forKey: .groupSize)
@@ -516,6 +527,8 @@ public struct DiffusionGemmaQuantization: Codable, Equatable, Sendable {
     /// Module paths the file sets to `false`: kept unquantized.
     public let unquantizedModules: Set<String>
 
+    /// Creates a quantization map from a default, the per-module overrides and the modules kept
+    /// unquantized.
     public init(
         defaultQuantization: Quantization, overrides: [String: Quantization] = [:],
         unquantizedModules: Set<String> = []
@@ -545,6 +558,8 @@ public struct DiffusionGemmaQuantization: Codable, Equatable, Sendable {
             quantization: defaultQuantization.baseQuantization, perLayerQuantization: perLayer)
     }
 
+    /// Decodes the `quantization` object as the type describes: the default's scalar keys, an
+    /// object for each overridden module and `false` for each module kept unquantized.
     public init(from decoder: any Decoder) throws {
         defaultQuantization = try Quantization(from: decoder)
         let c = try decoder.container(keyedBy: AnyCodingKey.self)
@@ -566,6 +581,7 @@ public struct DiffusionGemmaQuantization: Codable, Equatable, Sendable {
         unquantizedModules = unquantized
     }
 
+    /// Encodes the map in the `quantization` object's form.
     public func encode(to encoder: any Encoder) throws {
         try defaultQuantization.encode(to: encoder)
         var c = encoder.container(keyedBy: AnyCodingKey.self)
@@ -627,6 +643,7 @@ public struct DiffusionGemmaGenerationConfiguration: Codable, Equatable, Sendabl
         case padTokenID = "pad_token_id"
     }
 
+    /// Decodes `generation_config`. Every field is optional, as mlx-vlm keeps the object untyped.
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         maxDenoisingSteps = try c.decodeIfPresent(Int.self, forKey: .maxDenoisingSteps)

@@ -129,7 +129,13 @@ extension DiffusionGemmaModel {
     /// and the softcap. Everything before the head is the full pass. Close to the full rows but
     /// not bit-identical (``SlotProjection/slotsOnly``), so reads do not use it.
     ///
-    /// - Parameter positions: the slot positions in the canvas.
+    /// - Parameters:
+    ///   - canvas: the canvas ids, `[1, canvas]` int32.
+    ///   - cache: the prompt's prefill.
+    ///   - conditioning: nil on a read's first step, where the module runs on a zero signal; the
+    ///     previous step's full logits afterwards.
+    ///   - masks: ``decoderMasks(canvasLength:cache:)`` for this canvas length.
+    ///   - positions: the slot positions in the canvas.
     /// - Returns: `[1, positions.count, vocab]` float32, in `positions` order.
     public func decoderSlotLogits(
         canvas: MLXArray, cache: PromptCache, conditioning: MLXArray?, masks: DecoderMasks,

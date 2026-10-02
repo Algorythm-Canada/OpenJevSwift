@@ -80,7 +80,8 @@ public struct VerdictCalibration: Sendable, Hashable, Codable {
     ///   - logits: The model's output row. Only the first `k` entries are read.
     ///   - k: The question's label count, its options plus the abstention.
     /// - Returns: `k - 1` probabilities in the question's option order; empty for a question
-    ///   without options, which ``EncoderDecisionEngine`` then refuses as a broken contract.
+    ///   without options, which ``/OpenJevCore/EncoderDecisionEngine`` then refuses as a broken
+    ///   contract.
     /// - Precondition: `logits` has at least `k` entries.
     public func probabilities(logits: [Float], k: Int) -> [Double] {
         Self.probabilities(logits: logits.prefix(k), temperature: temperature(k: k))

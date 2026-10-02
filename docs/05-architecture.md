@@ -85,6 +85,8 @@ OpenJevSwift/                          Swift package, tools 6.2, strict concurre
                                        the Core ML converters and the package manifest
     sdk-compat/                        Python: TypeSafe's Python and TypeScript SDKs, and
                                        JevSwiftSDK, against openjev-stub-server
+    docs/                              Shell: the DocC site of the four library modules, whose
+                                       catalogs are Sources/<module>/Documentation.docc
   Fixtures/                            Checked-in JSON fixtures (small)
 ```
 

@@ -12,9 +12,12 @@ public enum WeightLoadingError: Error, Equatable, Sendable, CustomStringConverti
     /// One tensor and the shard it is in, or for a missing tensor the shard the index places it
     /// in (nil when the index does not name it).
     public struct Tensor: Equatable, Sendable {
+        /// The tensor's name after sanitize.
         public var name: String
+        /// The shard's file name, or nil when neither a shard nor the index names it.
         public var shard: String?
 
+        /// Creates a tensor reference.
         public init(name: String, shard: String?) {
             self.name = name
             self.shard = shard
@@ -23,9 +26,13 @@ public enum WeightLoadingError: Error, Equatable, Sendable, CustomStringConverti
 
     /// A tensor whose shape in the checkpoint differs from the module tree's.
     public struct ShapeMismatch: Equatable, Sendable {
+        /// The tensor's name after sanitize.
         public var name: String
+        /// The shard that holds it.
         public var shard: String
+        /// The shape the module tree has.
         public var expected: [Int]
+        /// The shape the checkpoint has.
         public var found: [Int]
     }
 
@@ -37,6 +44,8 @@ public enum WeightLoadingError: Error, Equatable, Sendable, CustomStringConverti
     /// is sorted by name; the first entry is the one the description names.
     case coverage(missing: [Tensor], unexpected: [Tensor], mismatched: [ShapeMismatch])
 
+    /// What failed: for a coverage error the counts, and the first missing, unexpected and
+    /// mismatched tensor with its shard.
     public var description: String {
         switch self {
         case .noWeightFiles(let directory):
@@ -114,8 +123,11 @@ extension DiffusionGemmaModel {
     /// A loaded model with its configuration and what loading cost. Not Sendable, as the model
     /// is not.
     public struct LoadedModel {
+        /// The module tree with the checkpoint's weights, evaluated.
         public let model: DiffusionGemmaModel
+        /// The checkpoint's configuration.
         public let configuration: DiffusionGemmaConfiguration
+        /// What loading took.
         public let metrics: LoadMetrics
     }
 

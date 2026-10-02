@@ -144,7 +144,7 @@ public actor LayaBackend: QuestionReadBackend {
         }
     }
 
-    /// ``KnownEncoderModels/laya``: `laya-1.0` with upstream's description.
+    /// ``/OpenJevCore/KnownEncoderModels/laya``: `laya-1.0` with upstream's description.
     public nonisolated let modelInfo = KnownEncoderModels.laya
     /// 255, upstream's `EncoderEngine.max_choices`. The head's budget refuses fewer in practice:
     /// about 20 options of a few tokens each fit in 256 tokens.
@@ -182,11 +182,12 @@ public actor LayaBackend: QuestionReadBackend {
     /// The state is rendered from its raw value, laya's `serialize_state`
     /// (``LayaPrompt/stateText(_:)``), and tokenized once for every question.
     ///
-    /// - Throws: ``SchemaError`` (`"Too many choices for laya-1.0: a question's options must fit
-    ///   in 256 tokens."`) when a question's options overflow the head's budget, before anything
-    ///   is read; ``EncoderModelError`` when the model returns the wrong number of rows or a row
-    ///   too short for a question's markers; ``EncoderLoadError/noPackage(length:package:held:)``
-    ///   when no package the device holds takes a sequence; and the model's own errors.
+    /// - Throws: ``/OpenJevCore/SchemaError`` (`"Too many choices for laya-1.0: a question's
+    ///   options must fit in 256 tokens."`) when a question's options overflow the head's budget,
+    ///   before anything is read; ``EncoderModelError`` when the model returns the wrong number of
+    ///   rows or a row too short for a question's markers;
+    ///   ``EncoderLoadError/noPackage(length:package:held:)`` when no package the device holds
+    ///   takes a sequence; and the model's own errors.
     public func readBatch(
         state: JSONValue, stateText: String, questions: [EncoderQuestion]
     ) async throws -> BatchReadResult {
@@ -268,8 +269,9 @@ public actor LayaBackend: QuestionReadBackend {
 }
 
 extension LayaBackend: ModelReleasing {
-    /// Releases the model's loaded Core ML packages, when the runner adopts ``ModelReleasing``
-    /// as ``CoreMLEncoderModel`` and ``CoreMLPackagesByLength`` do. A later read loads them again.
+    /// Releases the model's loaded Core ML packages, when the runner adopts
+    /// ``/OpenJevCore/ModelReleasing`` as ``CoreMLEncoderModel`` and ``CoreMLPackagesByLength`` do.
+    /// A later read loads them again.
     public nonisolated func close() async {
         await (model as? any ModelReleasing)?.close()
     }
@@ -282,8 +284,8 @@ extension LayaBackend: ModelReleasing {
         /// kept beside it (``CompiledEncoderModel``).
         ///
         /// The multifunction package's functions load when a read first needs them, and each
-        /// per-length package loads when a read first needs its length; ``EncoderDecisionEngine``'s
-        /// warm-up read loads the first.
+        /// per-length package loads when a read first needs its length;
+        /// ``/OpenJevCore/EncoderDecisionEngine``'s warm-up read loads the first.
         ///
         /// It can be called from code built for the package's macOS 14 and iOS 17 floors: the
         /// packages need macOS 15 or iOS 18, and an older OS gets

@@ -16,7 +16,7 @@
         /// Hummingbird's per-request storage.
         public var coreContext: CoreRequestContextStorage
         /// `req_` and 32 lowercase hex characters, upstream's `request.state.request_id`. Empty
-        /// until ``ResponseHeadersMiddleware`` runs.
+        /// until `ResponseHeadersMiddleware` runs.
         public var requestID: String
         /// The connection's channel, through which the route learns that a client has gone away.
         public let channel: any Channel

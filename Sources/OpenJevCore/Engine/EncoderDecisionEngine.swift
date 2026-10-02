@@ -11,8 +11,8 @@
 ///
 /// Errors: a ``SchemaError`` is a request the model cannot answer as asked (a 400), an
 /// ``OverloadedError`` is the queue bound (a 529), a ``BackendContractError`` is a distribution
-/// the backend should never have returned (a 500), and the backend's own errors pass through
-/// unchanged.
+/// the backend should never have returned (the server's 503, as for any backend failure), and the
+/// backend's own errors pass through unchanged.
 public actor EncoderDecisionEngine {
     /// Upstream's `WARMUP_QUESTIONS`: a two-option choice, a two-level score and a noul, each
     /// with the instructions `x`, read against the state `warmup` before the first user.

@@ -66,8 +66,8 @@ public struct LayaCalibration: Sendable, Hashable {
 
     /// Reads an rl_agent_config.json file.
     ///
-    /// - Throws: The file's read error, ``JSONParseError`` for a file that is not JSON, and
-    ///   ``EncoderLoadError/invalidConfiguration(_:)`` for one laya could not run with.
+    /// - Throws: The file's read error, ``/OpenJevCore/JSONParseError`` for a file that is not
+    ///   JSON, and ``EncoderLoadError/invalidConfiguration(_:)`` for one laya could not run with.
     public init(contentsOf file: URL) throws {
         try self.init(json: JSONParser().parse(Data(contentsOf: file)))
     }
@@ -163,7 +163,10 @@ public struct LayaCalibration: Sendable, Hashable {
     /// The probabilities laya computes from a question's scores at its markers, before it rounds
     /// them: in float32, the scores divided by the temperature, and their softmax.
     ///
-    /// - Parameter logits: The scores at the markers, in laya's option order; one per option.
+    /// - Parameters:
+    ///   - logits: The scores at the markers, in laya's option order; one per option.
+    ///   - kind: The question's type, which with the option count picks the temperature
+    ///     (``temperature(kind:optionCount:)``).
     /// - Returns: One probability per score, in the same order; empty for no scores.
     public func probabilities(logits: [Float], kind: QuestionKind) -> [Float] {
         guard !logits.isEmpty else {
@@ -179,12 +182,12 @@ public struct LayaCalibration: Sendable, Hashable {
     }
 
     /// The distribution upstream publishes for a question, in the engine's option order
-    /// (``EncoderQuestion/choices``), from its scores at the markers in laya's order.
+    /// (``/OpenJevCore/EncoderQuestion/choices``), from its scores at the markers in laya's order.
     ///
     /// A choice's and a score's probabilities are rounded to 4 decimal places, as laya answers
-    /// them, then divided by their sum, which Python's `sum` computes (``pythonSum(_:)``). A noul
-    /// is `[P(true), 1 - P(true)]` with `P(true)` rounded: laya's markers are false then true, the
-    /// engine's options true then false.
+    /// them, then divided by their sum, which Python's `sum` computes
+    /// (``/OpenJevCore/pythonSum(_:)``). A noul is `[P(true), 1 - P(true)]` with `P(true)` rounded:
+    /// laya's markers are false then true, the engine's options true then false.
     ///
     /// - Returns: One probability per option; empty for a question without options.
     public func distribution(logits: [Float], kind: QuestionKind) -> [Double] {

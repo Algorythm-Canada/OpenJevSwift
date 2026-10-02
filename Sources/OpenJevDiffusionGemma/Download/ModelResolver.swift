@@ -5,8 +5,8 @@
 import CryptoKit
 import Foundation
 
-/// Why a model source could not be resolved. Every case names the repository, the revision and,
-/// where there is one, the file.
+/// Why a model source could not be resolved. Each case names the directory or the repository
+/// and, where it holds them, the revision and the file.
 public enum ModelResolverError: Error, Sendable, Hashable, CustomStringConvertible {
     /// A local directory lacks files a checkpoint needs.
     case incompleteDirectory(URL, missing: [String])
@@ -38,6 +38,8 @@ public enum ModelResolverError: Error, Sendable, Hashable, CustomStringConvertib
     /// The network failed and retrying did not help.
     case transport(repository: String, revision: String, file: String?, reason: String)
 
+    /// What failed, naming the case's directory or repository and, where the case holds them, the
+    /// revision and the file.
     public var description: String {
         switch self {
         case .incompleteDirectory(let url, let missing):
@@ -161,9 +163,12 @@ public struct ModelResolver: Sendable {
     /// without it.
     ///
     /// - Parameters:
+    ///   - source: the directory, or the Hub repository and revision.
+    ///   - cache: the Hugging Face cache a Hub source is looked for and downloaded into.
     ///   - token: the access token, sent as `Authorization: Bearer`; nil or empty sends none.
     ///   - files: the tree paths to fetch, nil for all of them. When it is set the snapshot is
     ///     not required to be a complete checkpoint.
+    ///   - progress: called as the files are checked and downloaded.
     /// - Throws: ``ModelResolverError``, or the file system's errors.
     public func resolution(
         of source: ModelSource, cache: HubCacheLocation = .standard, token: String? = nil,

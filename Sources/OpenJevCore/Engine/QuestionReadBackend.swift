@@ -34,7 +34,8 @@ public protocol QuestionReadBackend: Sendable {
     var maxChoices: Int { get }
     /// The most tokens one question's sequence may carry, when the backend refuses a longer one
     /// as CLM and JevK5 do. `nil` when it truncates instead, as Verdict and Laya do. The engine
-    /// does not count tokens; the backend applies its own limit inside ``readBatch``.
+    /// does not count tokens; the backend applies its own limit inside
+    /// ``readBatch(state:stateText:questions:)``.
     var maxPromptTokens: Int? { get }
 
     /// Reads one batch of questions against the state, upstream's `read_batch`.

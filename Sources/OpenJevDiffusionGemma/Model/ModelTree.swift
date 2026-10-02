@@ -11,15 +11,21 @@ import MLXNN
 /// `model.decoder`: the embedding, the layers, the final norm and self-conditioning. The encoder
 /// runs these same layers with its own scalars.
 public final class DecoderModel: Module {
+    /// The token embedding, `embed_tokens`, which is also the tied output head.
     @ModuleInfo(key: "embed_tokens") public var embedTokens: Embedding
+    /// The layers, which the encoder runs too, with its own scalars.
     @ModuleInfo public var layers: [DecoderLayer]
+    /// The final norm, `norm`.
     @ModuleInfo public var norm: RMSNorm
+    /// The self-conditioning module, `self_conditioning`.
     @ModuleInfo(key: "self_conditioning") public var selfConditioning: SelfConditioning
 
     /// `sqrt(hidden_size)`, a Float that MLX rounds to the embedding's dtype when it multiplies,
     /// as Python's weak scalar typing does (√2816 rounds to bfloat16).
     public let embedScale: Float
 
+    /// Builds the decoder from the text configuration, with MLXNN's initial values until the
+    /// weights load.
     public init(_ config: DiffusionGemmaTextConfiguration) {
         embedScale = Float(pow(Double(config.hiddenSize), 0.5))
         _embedTokens.wrappedValue = Embedding(
@@ -41,8 +47,10 @@ public final class DecoderModel: Module {
 /// `model.encoder.language_model.layers.N`: one encoder layer's scalar. mlx-vlm's encoder reaches
 /// the decoder's modules through a weak reference; only its scalars are its own.
 public final class EncoderLayerScalar: Module {
+    /// The encoder's scalar for this layer, `layer_scalar`.
     @ParameterInfo(key: "layer_scalar") public var layerScalar: MLXArray
 
+    /// A scalar of 1 until the weights load.
     public override init() {
         _layerScalar.wrappedValue = MLXArray.ones([1])
         super.init()
@@ -51,8 +59,10 @@ public final class EncoderLayerScalar: Module {
 
 /// `model.encoder.language_model`.
 public final class EncoderLanguageModel: Module {
+    /// One scalar per layer, in layer order.
     @ModuleInfo public var layers: [EncoderLayerScalar]
 
+    /// One scalar for each of `layerCount` layers.
     public init(layerCount: Int) {
         _layers.wrappedValue = (0..<layerCount).map { _ in EncoderLayerScalar() }
         super.init()
@@ -62,8 +72,10 @@ public final class EncoderLanguageModel: Module {
 /// `model.encoder`: the encoder's layer scalars, one per layer. A text-only tree has no vision
 /// tower and no `embed_vision`.
 public final class EncoderModel: Module {
+    /// The encoder's layer scalars, `language_model`.
     @ModuleInfo(key: "language_model") public var languageModel: EncoderLanguageModel
 
+    /// Builds one scalar for each layer of the configuration.
     public init(_ config: DiffusionGemmaTextConfiguration) {
         _languageModel.wrappedValue = EncoderLanguageModel(layerCount: config.layerTypes.count)
         super.init()
@@ -77,9 +89,12 @@ public final class EncoderModel: Module {
 
 /// `model`: the decoder and the encoder.
 public final class Backbone: Module {
+    /// `model.decoder`, which holds every weight but the encoder's scalars.
     @ModuleInfo public var decoder: DecoderModel
+    /// `model.encoder`, the encoder's layer scalars.
     @ModuleInfo public var encoder: EncoderModel
 
+    /// Builds the decoder and the encoder from the text configuration.
     public init(_ config: DiffusionGemmaTextConfiguration) {
         _decoder.wrappedValue = DecoderModel(config)
         _encoder.wrappedValue = EncoderModel(config)
@@ -91,6 +106,7 @@ public final class Backbone: Module {
 ///
 /// Not Sendable: it holds MLX arrays. Its caller serialises its use, as the read path will.
 public final class DiffusionGemmaModel: Module, BaseLanguageModel {
+    /// The tree under `model`, the prefix of every tensor that loads.
     @ModuleInfo public var model: Backbone
 
     /// The text configuration the tree was built from.
@@ -141,6 +157,9 @@ public final class DiffusionGemmaModel: Module, BaseLanguageModel {
         return key
     }
 
+    /// The checkpoint's tensors under the names they load as: ``sanitizedName(_:)`` of each key,
+    /// without the tensors it drops. `loadWeights` calls it through MLXLMCommon's
+    /// `BaseLanguageModel`.
     public func sanitize(weights: [String: MLXArray]) -> [String: MLXArray] {
         var out = [String: MLXArray]()
         for (key, value) in weights {
@@ -198,7 +217,10 @@ public final class DiffusionGemmaModel: Module, BaseLanguageModel {
     /// offset 0 with the encoder's scalar, filling one cache per layer. The read path calls
     /// ``prefill(promptIDs:)``, which validates the ids and wraps the caches.
     ///
-    /// - Parameter ids: `[1, length]` token ids.
+    /// - Parameters:
+    ///   - ids: `[1, length]` token ids.
+    ///   - stages: receives the embeddings and each layer's intermediate outputs, for the parity
+    ///     tests.
     /// - Returns: the caches, one per layer.
     public func prefill(_ ids: MLXArray, stages: StageObserver? = nil) -> [LayerCache] {
         let embeddings = decoder.embed(ids)

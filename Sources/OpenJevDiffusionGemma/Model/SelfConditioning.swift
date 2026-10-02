@@ -13,12 +13,17 @@ import MLXNN
 /// `post_norm` tensor. On a read's first step the signal is zeros and the module still runs, as
 /// mlx-vlm runs it.
 public final class SelfConditioning: Module {
+    /// The weighted input norm, `pre_norm`.
     @ModuleInfo(key: "pre_norm") public var preNorm: RMSNorm
+    /// The gate projection, `gate_proj`.
     @ModuleInfo(key: "gate_proj") public var gateProj: Linear
+    /// The up projection, `up_proj`.
     @ModuleInfo(key: "up_proj") public var upProj: Linear
+    /// The down projection back to the hidden size, `down_proj`.
     @ModuleInfo(key: "down_proj") public var downProj: Linear
     let eps: Float
 
+    /// Builds the module with the configuration's hidden and intermediate sizes, without biases.
     public init(_ config: DiffusionGemmaTextConfiguration) {
         eps = config.rmsNormEps
         _preNorm.wrappedValue = rmsNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps)

@@ -98,14 +98,17 @@ The package declares macOS 14 and iOS 17 as minimum deployment targets.
 | [swift-nio](https://github.com/apple/swift-nio) | 2.103.0 or later | 2.103.0 | `NIOCore` (server and server tests), `NIOPosix` and `NIOHTTP1` (server), `NIOEmbedded` (server tests) | all hosts |
 | [swift-service-lifecycle](https://github.com/swift-server/swift-service-lifecycle) | 2.12.0 or later | 2.12.0 | `ServiceLifecycle` (server, CLI, stub server, server tests), `UnixSignals` (CLI, stub server) | all hosts |
 | [async-http-client](https://github.com/swift-server/async-http-client) | 1.36.2 or later | 1.36.2 | `AsyncHTTPClient` (server and server tests) | all hosts |
+| [swift-docc-plugin](https://github.com/swiftlang/swift-docc-plugin) | 1.5.0 or later | 1.5.0 | none: its `generate-documentation` and `preview-documentation` commands build the DocC catalogs | all hosts |
 
-`Package.resolved` is committed. It pins these eleven packages and their 22 transitive
+`Package.resolved` is committed. It pins these twelve packages and their 23 transitive
 dependencies. swift-http-types, swift-log, swift-nio, swift-service-lifecycle and
 async-http-client are Hummingbird's own dependencies, declared at the versions it already
 resolved, so declaring them changed no pin. AsyncHTTPClient forwards a routed model's request
 (D-040); it brings swift-nio-ssl and its BoringSSL into the `openjev` binary.
 `swift-collections` is not a direct dependency. Issue #3 adds it if the JSON model adopts
-`OrderedDictionary`. The product names match [05-architecture.md](05-architecture.md).
+`OrderedDictionary`. swift-docc-plugin is a command plugin, with swift-docc-symbolkit as its one
+dependency; no target links either ([API documentation](#api-documentation)). The product names
+match [05-architecture.md](05-architecture.md).
 
 - **swift-transformers lags the researched commit.** [THIRD_PARTY.md](../THIRD_PARTY.md) records
   `af520cf` from `main`. The 1.3.x requirement resolves to the 1.3.4 tag, which lacks three later
@@ -123,7 +126,7 @@ resolved, so declaring them changed no pin. AsyncHTTPClient forwards a routed mo
 - **Changing a dependency URL.** SwiftPM keeps the old location in `.build`. Run
   `swift package reset` before `swift package resolve` so the committed file records the new one.
 
-The first resolution on a clean machine clones 33 packages, including swift-syntax, and takes
+The first resolution on a clean machine clones 35 packages, including swift-syntax, and takes
 about a minute.
 
 ## Building
@@ -300,6 +303,72 @@ MLX runs on the default device, the GPU, unless a test chooses the CPU with
 tests compare within tolerances (D-014). A synthetic test must fit the hosted runner: 7 GB of
 memory, of which Metal recommends at most 4.7 GB, and three CPU cores.
 
+## API documentation
+
+Each library module has a DocC catalog, `Sources/<module>/Documentation.docc`, whose root page
+curates the module's symbols, with these articles:
+
+| Module | Articles |
+|---|---|
+| `OpenJevCore` | Making decisions in an app; Requests and answers; Implementing a backend |
+| `OpenJevServer` | Running the server; Configuration reference |
+| `OpenJevDiffusionGemma` | Reading with DiffusionGemma |
+| `OpenJevEncoders` | Reading Verdict and Laya |
+
+The swift-docc-plugin dependency adds `swift package generate-documentation` and
+`swift package preview-documentation`. Build the published site, on a Mac:
+
+```bash
+make docs
+```
+
+`make docs` runs [Tools/docs/build-site.sh](../Tools/docs/build-site.sh): one
+`generate-documentation` call over the four targets with
+`--enable-experimental-combined-documentation`, which builds each archive with
+`--transform-for-static-hosting --hosting-base-path OpenJevSwift` and merges them into one site
+with a shared sidebar, then [Tools/docs/index.html](../Tools/docs/index.html) as the front page. It
+passes `--exclude-extended-types` too (see Links below), and every DocC warning is an error. The
+site, about 27 MB, is in `.build/docs-site`; the script takes another folder as its argument.
+Serve it at the path GitHub Pages serves it under, <http://localhost:8000/OpenJevSwift/>:
+
+```bash
+make docs-preview
+```
+
+While writing one module's pages, the plugin's live preview rebuilds on every save and serves
+<http://localhost:8080/documentation/openjevcore>:
+
+```bash
+swift package --disable-sandbox preview-documentation --target OpenJevCore
+```
+
+- **Links.** A link inside a module is ``` ``Symbol`` ```. A link to another module's symbol or
+  article is absolute, with the module first, ``` ``/OpenJevCore/DecisionEngine`` ``` or
+  `<doc:/OpenJevCore/GettingStarted>`, and resolves only when the module's archive is built with
+  its dependencies', as the combined build does; a single-target build or preview warns about it.
+  `OpenJevServer` extends two core types, and the page DocC makes for those extensions is named
+  `OpenJevCore` too: Swift 6.2's DocC resolved every such link against that page and failed, so the
+  build leaves extended types out, and the two `init(_:)` the server adds to
+  `EngineConfiguration` and `EncoderEngineConfiguration` are documented in the source alone.
+  `OpenJevCore` depends on no other module, so it names the backends' types in code voice.
+- **Coverage.** Every public symbol declared in the four modules has a doc comment, and a new one
+  needs one too. `generate-documentation` with `--experimental-documentation-coverage
+  --coverage-summary-level detailed` reports coverage per symbol, though it also counts the
+  members the compiler synthesizes, which no comment can document.
+- **The configuration reference.** `ConfigurationReferenceTests` in `OpenJevServerTests` reads the
+  reference's table: its variables must be exactly the ones `ServerSettings(environment:)` reads,
+  found in its source, plus `OPENJEV_ENCODER_MODELS`; each documented default must be the code's;
+  and the settings table of [deployment.md](deployment.md) must agree with it. A new setting
+  changes the three together. A change to either Markdown file alone still runs CI, which reads
+  them.
+- **Linux.** `OpenJevDiffusionGemma` and `OpenJevEncoders` do not exist there, so the site needs a
+  Mac. The other two build on Linux too, as they did with Swift 6.2 in the `swift:6.2-noble`
+  container:
+
+  ```bash
+  swift package generate-documentation --target OpenJevCore --target OpenJevServer --enable-experimental-combined-documentation --exclude-extended-types
+  ```
+
 ## Upstream reference source
 
 The issues cite upstream OpenJev by file and line (for example `api.py:128-146`). Check the pinned
@@ -408,16 +477,19 @@ gives a call tree meanwhile. Traces stay out of git.
 
 ## Continuous integration
 
-Three workflows run on GitHub-hosted runners. The repository is public, so the standard runners
+Four workflows run on GitHub-hosted runners. The repository is public, so the standard runners
 cost nothing. No workflow uses the billed `-xlarge` runners unless asked to.
 
 | Workflow | When it runs | Job | Runner | What it runs |
 |---|---|---|---|---|
-| [ci.yml](../.github/workflows/ci.yml) | Every pull request and every push to `main`, except changes that touch only Markdown files | `Linux` | `ubuntu-24.04` with the `swift:6.2-noble` container | `swift build --build-tests` and `swift test`, both with `--scratch-path .build/linux`, then the test log check |
+| [ci.yml](../.github/workflows/ci.yml) | Every pull request and every push to `main`, except changes that touch only Markdown files no test reads | `Linux` | `ubuntu-24.04` with the `swift:6.2-noble` container | `swift build --build-tests` and `swift test`, both with `--scratch-path .build/linux`, then the test log check |
 | | | `macOS` | `macos-26` with Xcode 26.6, selected with `DEVELOPER_DIR` | `swift build --build-tests` and `swift test`, both with `--build-system swiftbuild`, the test log check, `make lint`, then the JevBench harness's smoke test with the image's `python3` |
 | | | `iOS` | `macos-26` with Xcode 26.6, selected with `DEVELOPER_DIR` | `xcodebuild test` of the `OpenJevCore-iOS` scheme on an iPhone 17 Pro simulator, the test log check, then a build of `OpenJevDiffusionGemma` for the iOS Simulator |
 | | | `SDK compatibility` | `ubuntu-24.04` with the `swift:6.2-noble` container | `swift build --product openjev-stub-server` with `--scratch-path .build/linux`, Ubuntu's CPython 3.12 and Node.js 20 from `actions/setup-node`, the pinned SDKs, then `Tools/sdk-compat/run.py --swift-sdk`; the exchanges are uploaded when it fails |
 | [fixtures.yml](../.github/workflows/fixtures.yml) | Pull requests that change `Fixtures/`, `Tools/fixtures/`, `THIRD_PARTY.md`, the `Makefile` or the workflow; manual runs; Mondays at 06:23 UTC | `Regenerate the fixtures` | `macos-26` with CPython 3.14.7 from `actions/setup-python` | `make upstream`, `make fixtures-venv` and `make fixtures`, then fails if `git status --porcelain Fixtures/` lists a file, and prints and uploads the diff |
+| [docs.yml](../.github/workflows/docs.yml) | Pull requests and pushes to `main` that change `Sources/`, `Package.swift`, `Package.resolved`, `Tools/docs/` or the workflow; manual runs | `Build the documentation` | `macos-26` with Xcode 26.6, selected with `DEVELOPER_DIR` | `Tools/docs/build-site.sh`, then the upload of the site as the Pages artifact |
+| | Pushes to `main` and manual runs on `main` | `Check GitHub Pages` | `ubuntu-24.04` | Whether Pages publishes from GitHub Actions, through the Pages API with the workflow's token |
+| | The same, when it does | `Deploy to GitHub Pages` | `ubuntu-24.04` | `actions/deploy-pages`, to <https://algorythm-canada.github.io/OpenJevSwift/> |
 | [mlx-probe.yml](../.github/workflows/mlx-probe.yml) | Manual runs only | `Probe <label>` | `macos-15`, `macos-26` and `xcode-27`, plus `macos-26-xlarge` when asked | The MLX runner probe of issue #8. Its findings are under R13 in [07-risks-and-unknowns.md](07-risks-and-unknowns.md). |
 
 The runs of 2026-09-30 reported these images and toolchains:
@@ -470,6 +542,17 @@ And took this long:
   3.12 is Ubuntu 24.04's own `python3`, installed with apt inside the Swift container and checked
   by version. A failure prints every HTTP exchange of the failed checks in the log, and the
   artifact `sdk-compat-exchanges` holds every exchange and the three servers' logs for 14 days.
+- **The documentation job.** It builds the four modules' DocC catalogs into one site with
+  `Tools/docs/build-site.sh`, every DocC warning an error, so a link that does not resolve or a
+  parameter documented under the wrong name fails the pull request
+  ([API documentation](#api-documentation)). It keeps Xcode 26.6's default build system, the
+  native one, since symbol graphs need no Metal library, and it has no cache, so each run
+  compiles the dependencies. The site is uploaded with `actions/upload-pages-artifact`, so a pull
+  request's run also offers it for download. On `main`, `Check GitHub Pages` asks the Pages API
+  whether Pages publishes from GitHub Actions, and `Deploy to GitHub Pages` runs only when it does;
+  until then that job is skipped and the run carries a notice. Enabling Pages is a repository
+  setting (Settings, Pages, Build and deployment, Source: GitHub Actions), which no workflow
+  changes.
 - **The test log check.** [check-test-log.sh](../.github/scripts/check-test-log.sh) reads the
   saved output of `swift test`. It fails when the log holds no Swift Testing run or a run failed,
   and when a test or suite was skipped or cancelled for any reason other than an unset
@@ -495,12 +578,16 @@ And took this long:
   fetched and installed.
 - **Superseded runs.** A newer push to a pull request cancels the run it replaces. Every commit on
   `main` runs in a concurrency group of its own, so no merged commit's run is cancelled.
-- **Documentation-only changes.** Both triggers carry `paths-ignore: ["**.md"]`, so a pull request
-  or push that changes only Markdown files starts no run; one that changes a Markdown file and
-  anything else runs as usual. The `Protect main` ruleset requires a review, not a status check,
-  so such a pull request is still mergeable. If a required status check is ever added, replace
-  `paths-ignore` with a job that detects the documentation-only case and reports success, or
-  GitHub will wait for a check that never runs.
+- **Documentation-only changes.** Both triggers list every path, then `!**.md`, then the three
+  Markdown files tests read: `THIRD_PARTY.md` (`FixturePinTests` and the JevBench smoke test), the
+  configuration reference and `docs/deployment.md` (`ConfigurationReferenceTests`). A pull request
+  or push that changes only other Markdown files starts no run; one that changes one of the three,
+  or anything else, runs as usual. The `Protect main` ruleset requires a review, not a status check,
+  so such a pull request is still mergeable. If a required status check is ever added, replace the
+  path filters with a job that detects the documentation-only case and reports success, or GitHub
+  will wait for a check that never runs. The DocC catalogs are Markdown under `Sources/`, so a pull
+  request that changes only them starts no CI run unless it changes the configuration reference, but
+  it starts the Documentation workflow, which builds them.
 - **Fixture regeneration.** The job runs on Apple silicon because the committed files were written
   there: CPython takes its math functions from the platform's C library, and another library could
   change the last digit of a float. It reproduced every committed file byte for byte.
@@ -541,6 +628,12 @@ python3 Tools/jevbench/smoke_test.py
 With Xcode 27, the reference toolchain, leave out `DEVELOPER_DIR` and `--build-system swiftbuild`:
 Swift Build is already the default.
 
+The documentation job, with Xcode 26.6 or 27:
+
+```bash
+make docs
+```
+
 The iOS job, from the repository root:
 
 ```bash
@@ -573,4 +666,5 @@ bullet above says. The checks worth requiring then are `Linux`, `macOS`, `iOS` a
 `SDK compatibility`, all four from the CI workflow. Their names carry no toolchain version, so a
 toolchain upgrade does not rename them. Do not require `Regenerate the fixtures`: it runs only when
 a pull request changes the fixture inputs, and a required check that never reports keeps the pull
-request waiting. The probe is manual and is never a required check.
+request waiting. `Build the documentation` runs only when a pull request changes the sources or the
+site's files, so the same holds for it. The probe is manual and is never a required check.

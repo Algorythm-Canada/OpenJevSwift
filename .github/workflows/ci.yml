@@ -1,19 +1,30 @@
 # Builds and tests the package on every pull request and on main, except when the change touches
-# only Markdown files: nothing here reads them, and a macOS run costs eight minutes on an empty
-# cache. The repository's ruleset requires no status check, so a documentation-only pull request
-# stays mergeable without a run; if a required check is ever added, replace paths-ignore with a
-# job that reports success. docs/development.md describes the jobs, the toolchains they pin and how
-# to run the same commands locally.
+# only Markdown files that no test reads: a macOS run costs eight minutes on an empty cache. The
+# tests read three: FixturePinTests and the JevBench smoke test read THIRD_PARTY.md, and
+# ConfigurationReferenceTests checks the configuration reference and docs/deployment.md against the
+# settings code, so a change to any of them runs CI. The repository's ruleset requires no status
+# check, so a documentation-only pull request stays mergeable without a run; if a required check is
+# ever added, replace the path filters with a job that reports success. docs/development.md
+# describes the jobs, the toolchains they pin and how to run the same commands locally.
 name: CI
 
+# A later pattern overrides an earlier one: every path, then no Markdown, then the three back.
 on:
   pull_request:
-    paths-ignore:
-      - "**.md"
+    paths:
+      - "**"
+      - "!**.md"
+      - "THIRD_PARTY.md"
+      - "Sources/OpenJevServer/Documentation.docc/Configuration.md"
+      - "docs/deployment.md"
   push:
     branches: [main]
-    paths-ignore:
-      - "**.md"
+    paths:
+      - "**"
+      - "!**.md"
+      - "THIRD_PARTY.md"
+      - "Sources/OpenJevServer/Documentation.docc/Configuration.md"
+      - "docs/deployment.md"
 
 permissions:
   contents: read

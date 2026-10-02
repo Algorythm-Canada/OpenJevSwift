@@ -18,9 +18,13 @@ public typealias StageObserver = (_ name: String, _ value: MLXArray) -> Void
 /// residual add; then the product with a layer scalar, the decoder's own `layer_scalar` or the
 /// encoder's passed in.
 public final class DecoderLayer: Module {
+    /// The self-attention, the checkpoint's `self_attn`.
     @ModuleInfo(key: "self_attn") public var selfAttention: Attention
+    /// The dense GeGLU branch, `mlp`.
     @ModuleInfo public var mlp: DenseMLP
+    /// The router that picks each token's experts, `router`.
     @ModuleInfo public var router: Router
+    /// The mixture of experts, `experts`.
     @ModuleInfo public var experts: Experts
     @ModuleInfo(key: "input_layernorm") var inputLayerNorm: RMSNorm
     @ModuleInfo(key: "post_attention_layernorm") var postAttentionLayerNorm: RMSNorm
@@ -29,6 +33,8 @@ public final class DecoderLayer: Module {
     @ModuleInfo(key: "post_feedforward_layernorm_1") var postFeedforwardLayerNorm1: RMSNorm
     @ModuleInfo(key: "post_feedforward_layernorm_2") var postFeedforwardLayerNorm2: RMSNorm
     @ModuleInfo(key: "pre_feedforward_layernorm_2") var preFeedforwardLayerNorm2: RMSNorm
+    /// The decoder's scalar for this layer, `layer_scalar`. In encoder mode the caller passes the
+    /// encoder's scalar instead.
     @ParameterInfo(key: "layer_scalar") public var layerScalar: MLXArray
 
     /// The layer's type.
@@ -36,6 +42,8 @@ public final class DecoderLayer: Module {
     /// The layer's index in the decoder.
     public let index: Int
 
+    /// Builds layer `layerIndex` from the text configuration, with MLXNN's initial values until
+    /// the weights load.
     public init(_ config: DiffusionGemmaTextConfiguration, layerIndex: Int) {
         layerType = config.layerTypes[layerIndex]
         index = layerIndex
@@ -59,9 +67,14 @@ public final class DecoderLayer: Module {
     ///
     /// - Parameters:
     ///   - x: `[batch, length, hidden]`.
-    ///   - mask, cache, decoder, offset: as ``Attention/callAsFunction(_:mask:cache:decoder:offset:)``.
-    ///   - layerScalar: the encoder's scalar for this layer in encoder mode; nil uses the
-    ///     decoder's own.
+    ///   - mask: the encoder mask in encoder mode; the decoder mask in decoder mode, as
+    ///     ``Attention/callAsFunction(_:mask:cache:decoder:offset:)`` takes them.
+    ///   - cache: the layer's encoder cache: written in encoder mode, read in decoder mode.
+    ///   - decoder: the mode.
+    ///   - offset: the RoPE position of `x`'s first token: 0 for a one-piece prefill, the cache
+    ///     offset (the prompt length) for the canvas.
+    ///   - scalar: the encoder's scalar for this layer in encoder mode; nil uses the decoder's
+    ///     own.
     ///   - stages: receives the intermediate outputs, for the parity tests.
     /// - Returns: `[batch, length, hidden]`.
     public func callAsFunction(

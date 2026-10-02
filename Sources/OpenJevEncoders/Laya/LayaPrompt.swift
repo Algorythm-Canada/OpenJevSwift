@@ -9,12 +9,12 @@ import OpenJevCore
 /// One question as Laya reads it: laya's internal question and the texts its `build_sequence`
 /// tokenizes.
 ///
-/// Upstream's `LayaEngine.read_batch` hands laya each question as `{type, instructions,
-/// criteria}`, with the instructions as ``EncoderQuestion/instructions`` (upstream's `text_of`)
+/// Upstream's `LayaEngine.read_batch` hands laya each question as `{type, instructions, criteria}`,
+/// with the instructions as ``/OpenJevCore/EncoderQuestion/instructions`` (upstream's `text_of`)
 /// and the criteria as sent, and laya's `Agent._to_internal` turns that into `{t, ins, crit}`:
 /// ``kind``, ``instructions`` and ``criteria``. Unlike Verdict's prompt, the criteria are not
-/// `text_of` renderings: a description keeps its leading and trailing whitespace, and anything
-/// but a string is written as compact JSON.
+/// `text_of` renderings: a description keeps its leading and trailing whitespace, and anything but
+/// a string is written as compact JSON.
 ///
 /// - A choice renders each option as its name when the description is `null` or the empty
 ///   string, else as `{name}: {description}`.
@@ -25,8 +25,9 @@ import OpenJevCore
 ///
 /// A description is the string as sent, or for anything else laya's `render_criterion`:
 /// `json.dumps(value, ensure_ascii=False, separators=(", ", ": "))`, which is
-/// ``PythonJSONWriter/modelText(_:)``. Every "[MASK]" in the instructions, the options and the
-/// state is replaced by a space before tokenizing, so that only laya's own markers are masks.
+/// ``/OpenJevCore/PythonJSONWriter/modelText(_:)``. Every "[MASK]" in the instructions, the options
+/// and the state is replaced by a space before tokenizing, so that only laya's own markers are
+/// masks.
 public struct LayaPrompt: Sendable, Hashable {
     /// laya's `crit`: the criteria of the question as sent.
     public enum Criteria: Sendable, Hashable {
@@ -127,7 +128,7 @@ public struct LayaPrompt: Sendable, Hashable {
     }
 
     /// The state text `build_sequence` tokenizes after the options: laya's `serialize_state`,
-    /// which is ``StateText/render(_:)`` (a string as sent, anything else as
+    /// which is ``/OpenJevCore/StateText/render(_:)`` (a string as sent, anything else as
     /// `json.dumps(state, ensure_ascii=False)`), with every "[MASK]" replaced by a space.
     public static func stateText(_ state: JSONValue) -> String {
         replacingMasks(in: StateText.render(state))
@@ -137,8 +138,8 @@ public struct LayaPrompt: Sendable, Hashable {
     /// separators `", "` and `": "` and non-ASCII text kept.
     ///
     /// - Precondition: The value holds no infinite or NaN float and no malformed integer text.
-    ///   ``JSONParser`` never produces either, and the schema builder has already rendered every
-    ///   description with ``TextOf``, which has the same precondition.
+    ///   ``/OpenJevCore/JSONParser`` never produces either, and the schema builder has already
+    ///   rendered every description with ``/OpenJevCore/TextOf``, which has the same precondition.
     public static func renderCriterion(_ value: JSONValue) -> String {
         if case .string(let text) = value {
             return text

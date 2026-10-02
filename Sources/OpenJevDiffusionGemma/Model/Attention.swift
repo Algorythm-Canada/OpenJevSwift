@@ -26,11 +26,18 @@ final class Constant {
 /// at least its length, and an array mask is cut to its last `sliding_window − 1 + canvas`
 /// columns to match (language.py lines 225 to 246).
 public final class Attention: Module {
+    /// The query projection, the checkpoint's `q_proj`.
     @ModuleInfo(key: "q_proj") public var qProj: Linear
+    /// The key projection, `k_proj`.
     @ModuleInfo(key: "k_proj") public var kProj: Linear
+    /// The value projection, `v_proj`: sliding layers only, since a full layer's values are its
+    /// keys.
     @ModuleInfo(key: "v_proj") public var vProj: Linear?
+    /// The output projection, `o_proj`.
     @ModuleInfo(key: "o_proj") public var oProj: Linear
+    /// The query norm, `q_norm`, an RMSNorm with a weight.
     @ModuleInfo(key: "q_norm") public var qNorm: RMSNorm
+    /// The key norm, `k_norm`, an RMSNorm with a weight.
     @ModuleInfo(key: "k_norm") public var kNorm: RMSNorm
 
     /// The layer's type.
@@ -49,6 +56,8 @@ public final class Attention: Module {
     /// The proportional RoPE frequencies, nil for the default RoPE.
     private let frequencies: Constant?
 
+    /// Builds layer `layerIndex`'s attention from the text configuration: the head size, the
+    /// key-value heads, the `v_proj` and the RoPE follow the layer's type.
     public init(_ config: DiffusionGemmaTextConfiguration, layerIndex: Int) {
         let layerType = config.layerTypes[layerIndex]
         self.layerType = layerType
