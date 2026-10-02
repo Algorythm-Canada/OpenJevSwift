@@ -1970,14 +1970,15 @@ needed choices the issue does not spell out.
 
 Decision.
 
-1. **A Swift Testing target over URLSession.** `OpenJevLiveTests` depends on `OpenJevCore` alone,
-   for `JSONValue`, `JSONParser` and `PythonJSONWriter`, which keep key order: the order of the
-   questions and of a choice's options is part of the contract. It sends its requests with
-   Foundation's URLSession (FoundationNetworking on Linux), so it builds and runs on macOS and
-   Linux and links no server and no backend. It stays out of the iOS scheme, although it would
-   compile there: it tests a server, not the iOS build.
-2. **The variables.** `OPENJEV_LIVE_URL` names the server; unset or empty, every test skips with a
-   comment naming it, which CI's test log check accepts, and a value that is not an `http` or
+1. **A Swift Testing target over URLSession.** `OpenJevLiveTests` depends on `OpenJevCore`, for
+   `JSONValue`, `JSONParser` and `PythonJSONWriter`, which keep key order (the order of the
+   questions and of a choice's options is part of the contract), and `ModelsResponse`; and on
+   `OpenJevTestSupport`, for the listings `Fixtures/wire` recorded from upstream. It sends its
+   requests with Foundation's URLSession (FoundationNetworking on Linux), so it builds and runs on
+   macOS and Linux and links no server and no backend. It stays out of the iOS scheme, although it
+   would compile there: it tests a server, not the iOS build.
+2. **The variables.** `OPENJEV_LIVE_URL` names the server; unset or empty, every live test skips
+   with a comment naming it, which CI's test log check accepts, and a value that is not an `http` or
    `https` URL with a host fails the tests instead. The bearer key is `OPENJEV_LIVE_KEY`, the
    issue's name, else `OPENJEV_API_KEY`, upstream's, so a shell that configured a server with its
    key runs either suite unchanged. `OPENJEV_ORIGIN_SECRET` goes as `X-Origin-Secret`, and
@@ -1991,8 +1992,10 @@ Decision.
    test, and Swift 6.2, the Linux job's toolchain, has no `Test.cancel` to skip one argument.
 4. **What decides a skip.** As upstream's fixtures do, the server's `/v1/models`, asked once per
    process, decides: the DiffusionGemma tests run when it lists `openjev-latest`, an encoder's test
-   when it lists that model, and `test_unknown_model` always. A listing that cannot be read fails
-   those tests rather than skipping them, as a failed fixture errors them in pytest. `test_image`,
+   when it lists that model, and `test_unknown_model` always. A listing that cannot be read, or
+   that is not Jev's (`ModelsResponse`: `{"models": [...]}` whose entries are exactly `name`,
+   `description` and `release_date`), fails those tests rather than skipping them, as a failed
+   fixture errors them in pytest. `test_image`,
    `test_think`, `test_chat` and `test_chat_stream` are disabled with comments naming #48, #52 and
    #53. Their bodies are upstream's checks, ready to enable once the features land, and they passed
    against upstream's server (Consequences); `test_image` reads `hotdog.jpg` from the pinned
@@ -2015,15 +2018,21 @@ Decision.
 6. **The concurrency is upstream's, not the issue's.** The issue says 16 concurrent reads; upstream
    sends 64 requests with at most 32 in flight, and so does this suite. URLSession opens at most 6
    connections to one host by default, which would cap the requests in flight, so the client allows
-   32.
+   32. Cancelling a request's task cancels its exchange, so when one of the 64 fails, the group
+   cancels the requests still waiting instead of waiting for their answers.
 7. **httpx's timeouts.** Upstream's client sets `timeout=300`: 300 s to connect and for each read
    and write, with no deadline for the whole exchange. URLSession's request timeout is that kind of
    limit and is set to 300 s; its resource timeout keeps its default. One difference remains:
    URLSession follows a redirect, which httpx does not by default. Neither server redirects.
-8. **The runs are recorded in the pull request.** Like the model tests, the suite never runs on
-   hosted CI. The pull request records each run (server, backend, model, tests passed and skipped,
-   wall time) and the runs of upstream's own file, with pytest and httpx, against the Swift
-   servers.
+8. **The runs are recorded in the pull request.** Like the model tests, the live tests never run
+   on hosted CI. The pull request records each run (server, backend, model, tests passed and
+   skipped, wall time) and the runs of upstream's own file, with pytest and httpx, against the
+   Swift servers.
+9. **What runs in CI.** Without a server, the suite's own machinery is tested on every platform:
+   its settings (the URLs accepted and refused, the key's precedence, empty values, the gateway
+   flag), the decoding of every listing `Fixtures/wire/models.json` recorded from upstream and of
+   malformed ones, the cancellation of requests to a socket that never answers, alone and in a
+   task group, and the header parsers.
 
 Alternatives rejected. (a) AsyncHTTPClient, which the server already links: the suite would share
 the server's HTTP stack instead of a plain client, and URLSession needs no package. (b) Upstream's

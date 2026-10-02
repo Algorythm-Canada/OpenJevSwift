@@ -204,10 +204,12 @@ var targets: [Target] = [
     // The live end-to-end suite (issue #41), a port of upstream's tests/test_live.py: plain HTTP
     // through Foundation's URLSession (FoundationNetworking on Linux) to whatever server
     // OPENJEV_LIVE_URL names, so it links no server and no backend and runs on macOS and Linux
-    // alike. Without OPENJEV_LIVE_URL every test skips. It is not in the iOS scheme.
+    // alike. Without OPENJEV_LIVE_URL the live tests skip; the tests of its settings and client,
+    // which read upstream's recorded listings through OpenJevTestSupport, run everywhere. It is
+    // not in the iOS scheme.
     .testTarget(
         name: "OpenJevLiveTests",
-        dependencies: ["OpenJevCore"],
+        dependencies: ["OpenJevCore", "OpenJevTestSupport"],
         swiftSettings: swiftSettings
     ),
 ]

@@ -118,7 +118,8 @@ sanity, thought channel never leaking.
 - **Live server tests.** `OpenJevLiveTests` (issue #41, D-043) ports upstream's
   `tests/test_live.py` case by case and under its test names: plain HTTP through URLSession to
   whatever server `OPENJEV_LIVE_URL` names, Swift or Python, any backend, from macOS or Linux.
-  Without the variable every test skips. The DiffusionGemma tests
+  Without the variable the live tests skip, while the tests of the suite's own settings, listing
+  decoding and cancellation run in CI. The DiffusionGemma tests
   run when the server lists `openjev-latest`: the README example (urgent, `outage`, a tone above
   1), `steps 4`, `samples 4` and `sequential true`, a 255-option choice, 30 questions answered in
   chunks and in order, and 64 requests with 32 in flight. `test_encoder` runs for each of

@@ -196,7 +196,8 @@ are written to `Tools/sdk-compat/exchanges/`.
 `OpenJevLiveTests` (issue #41, D-043) is upstream's `tests/test_live.py` in Swift: it sends HTTP
 requests to a running server and checks the answers, the headers and Jev's shapes. It links no
 server and no backend, so it runs on macOS and Linux against any implementation. Without
-`OPENJEV_LIVE_URL` every test skips naming it, which is how `swift test` and CI run it.
+`OPENJEV_LIVE_URL` the live tests skip naming it, which is how `swift test` and CI run them; the
+tests of the suite's own settings, listing decoding and cancellation run everywhere.
 
 | Variable | Meaning |
 |---|---|

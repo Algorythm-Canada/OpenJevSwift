@@ -55,6 +55,8 @@ final class LiveClient: Sendable {
 
     /// The settings the client was made from.
     let settings: LiveSettings
+    /// The request timeout, ``timeout`` unless a test shortens it.
+    let requestTimeout: TimeInterval
     private let session: URLSession
 
     /// The suite's client, made once from the environment.
@@ -67,11 +69,12 @@ final class LiveClient: Sendable {
         try shared.get()
     }
 
-    /// A client for the server `settings` name.
-    init(settings: LiveSettings) {
+    /// A client for the server `settings` name, with upstream's timeout unless `timeout` is given.
+    init(settings: LiveSettings, timeout: TimeInterval = LiveClient.timeout) {
         self.settings = settings
+        requestTimeout = timeout
         let configuration = URLSessionConfiguration.ephemeral
-        configuration.timeoutIntervalForRequest = Self.timeout
+        configuration.timeoutIntervalForRequest = timeout
         configuration.httpMaximumConnectionsPerHost = Self.maximumConnections
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         configuration.urlCache = nil
@@ -98,7 +101,7 @@ final class LiveClient: Sendable {
             throw LiveFailure("\(settings.baseURL + path) is not a URL")
         }
         var request = URLRequest(
-            url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: Self.timeout)
+            url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: requestTimeout)
         request.httpMethod = method
         if let key = settings.apiKey {
             request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
@@ -109,29 +112,81 @@ final class LiveClient: Sendable {
         return request
     }
 
-    /// Sends `request` and waits for the whole answer.
+    /// Sends `request` and waits for the whole answer. Cancelling the calling task cancels the
+    /// exchange, which then throws `CancellationError`: when one of `test_concurrent_reads`'
+    /// requests fails, the task group cancels the others rather than waiting for their answers.
     private func send(_ request: URLRequest) async throws -> LiveResponse {
         let label = "\(request.httpMethod ?? "GET") \(request.url?.absoluteString ?? "")"
-        return try await withCheckedThrowingContinuation { continuation in
-            let task = session.dataTask(with: request) { data, response, error in
-                if let error {
-                    continuation.resume(throwing: LiveFailure("\(label) failed: \(error)"))
-                    return
+        let handle = DataTaskHandle()
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let task = session.dataTask(with: request) { data, response, error in
+                    Self.finish(
+                        continuation, label: label, data: data, response: response, error: error)
                 }
-                guard let http = response as? HTTPURLResponse else {
-                    continuation.resume(throwing: LiveFailure("\(label) got no HTTP response"))
-                    return
-                }
-                var headers: [String: String] = [:]
-                for (name, value) in http.allHeaderFields {
-                    headers["\(name)".lowercased()] = "\(value)"
-                }
-                continuation.resume(
-                    returning: LiveResponse(
-                        status: http.statusCode, headers: headers, body: data ?? Data()))
+                handle.start(task)
             }
-            task.resume()
+        } onCancel: {
+            handle.cancel()
         }
+    }
+
+    /// Resumes an exchange's continuation with its answer, its failure or `CancellationError`.
+    private static func finish(
+        _ continuation: CheckedContinuation<LiveResponse, any Error>, label: String, data: Data?,
+        response: URLResponse?, error: (any Error)?
+    ) {
+        if let error {
+            if (error as? URLError)?.code == .cancelled {
+                continuation.resume(throwing: CancellationError())
+            } else {
+                continuation.resume(throwing: LiveFailure("\(label) failed: \(error)"))
+            }
+            return
+        }
+        guard let http = response as? HTTPURLResponse else {
+            continuation.resume(throwing: LiveFailure("\(label) got no HTTP response"))
+            return
+        }
+        var headers: [String: String] = [:]
+        for (name, value) in http.allHeaderFields {
+            headers["\(name)".lowercased()] = "\(value)"
+        }
+        continuation.resume(
+            returning: LiveResponse(status: http.statusCode, headers: headers, body: data ?? Data())
+        )
+    }
+}
+
+/// One exchange's data task, which the cancellation handler can cancel whether it runs before the
+/// task is made, while it runs, or after it ended.
+private final class DataTaskHandle: @unchecked Sendable {
+    // Guards `task` and `cancelled`, which the exchange and the cancellation handler both touch.
+    private let lock = NSLock()
+    private var task: URLSessionDataTask?
+    private var cancelled = false
+
+    /// Resumes `task`, and cancels it at once when the exchange was cancelled before it existed.
+    func start(_ task: URLSessionDataTask) {
+        lock.lock()
+        self.task = task
+        let cancelNow = cancelled
+        lock.unlock()
+        // A resumed task always ends in its completion handler, a cancelled one with
+        // `URLError.cancelled`, so the exchange's continuation is resumed exactly once.
+        task.resume()
+        if cancelNow {
+            task.cancel()
+        }
+    }
+
+    /// Cancels the task, or the one `start` is about to resume.
+    func cancel() {
+        lock.lock()
+        cancelled = true
+        let task = self.task
+        lock.unlock()
+        task?.cancel()
     }
 }
 
@@ -165,9 +220,21 @@ actor ModelListing {
         guard response.status == 200 else {
             throw LiveFailure("GET /v1/models answered \(response.status): \(response.text)")
         }
-        guard let models = try response.json()["models"]?.arrayValue else {
-            throw LiveFailure("GET /v1/models has no models array: \(response.text)")
+        return try names(inListing: response.body)
+    }
+
+    /// The names a `GET /v1/models` body lists, decoded with Jev's contract (``ModelsResponse``):
+    /// `{"models": [...]}` whose entries are exactly `{name, description, release_date}`. A body
+    /// that is not that throws, so the tests that depend on the listing fail instead of skipping
+    /// because no model is listed.
+    static func names(inListing body: Data) throws -> Set<String> {
+        do {
+            let listing = try ModelsResponse(json: JSONParser().parse(body))
+            return Set(listing.models.map(\.name))
+        } catch {
+            throw LiveFailure(
+                "GET /v1/models is not Jev's listing (\(error)): \(String(decoding: body, as: UTF8.self))"
+            )
         }
-        return Set(models.compactMap { $0["name"]?.stringValue })
     }
 }
