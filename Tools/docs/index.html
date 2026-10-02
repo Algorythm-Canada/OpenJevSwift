@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenJevSwift documentation</title>
+<meta name="description" content="API documentation of OpenJevSwift, a native Swift implementation of the OpenJev decision server.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<style>
+  :root {
+    color-scheme: light dark;
+    --background: #ffffff;
+    --text: #1d1d1f;
+    --muted: #57575c;
+    --rule: #d2d2d7;
+    --link: #0b63c4;
+    --card: #f5f5f7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --background: #111113;
+      --text: #f5f5f7;
+      --muted: #a1a1a6;
+      --rule: #3a3a3e;
+      --link: #6cb2ff;
+      --card: #1c1c1f;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--background);
+    color: var(--text);
+    font: 17px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  main { max-width: 760px; margin: 0 auto; padding: 48px 16px 64px; }
+  h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 12px; }
+  h2 { font-size: 1.25rem; margin: 40px 0 12px; }
+  p { margin: 0 0 16px; }
+  .lead { color: var(--muted); font-size: 1.1rem; }
+  a { color: var(--link); }
+  ul.modules { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+  ul.modules li { background: var(--card); border: 1px solid var(--rule); border-radius: 8px; padding: 16px 20px; }
+  ul.modules a { font-weight: 600; font-size: 1.05rem; text-decoration: none; }
+  ul.modules a:hover, ul.modules a:focus { text-decoration: underline; }
+  ul.modules p { margin: 4px 0 0; color: var(--muted); }
+  ul.links { padding-left: 20px; }
+  ul.links li { margin-bottom: 6px; }
+  footer { border-top: 1px solid var(--rule); margin-top: 48px; padding-top: 16px; color: var(--muted); font-size: 0.9rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>OpenJevSwift documentation</h1>
+  <p class="lead">A native Swift implementation of OpenJev, the open, Jev-compatible "System One"
+  decision server. Send a state and typed questions; get a probability distribution and a
+  confidence for every answer, read from a model rather than generated as text.</p>
+
+  <h2>Modules</h2>
+  <ul class="modules">
+    <li>
+      <a href="documentation/openjevcore/">OpenJevCore</a>
+      <p>The decision engine: Jev's request and answer types, the prompts and canvases, and the
+      engines that answer a request through a model backend. macOS, iOS and Linux.</p>
+    </li>
+    <li>
+      <a href="documentation/openjevencoders/">OpenJevEncoders</a>
+      <p>Verdict and Laya on Core ML, in an app on an iPhone or a Mac, or behind the server.</p>
+    </li>
+    <li>
+      <a href="documentation/openjevdiffusiongemma/">OpenJevDiffusionGemma</a>
+      <p>DiffusionGemma 26B-A4B on MLX for Apple silicon Macs: the model, its download and its
+      runtime.</p>
+    </li>
+    <li>
+      <a href="documentation/openjevserver/">OpenJevServer</a>
+      <p>The Jev-compatible HTTP server behind <code>openjev serve</code>, with every
+      <code>OPENJEV_*</code> setting.</p>
+    </li>
+  </ul>
+
+  <h2>Start here</h2>
+  <ul class="links">
+    <li><a href="documentation/openjevcore/gettingstarted">Making decisions in an app</a></li>
+    <li><a href="documentation/openjevserver/runningtheserver">Running the server</a></li>
+    <li><a href="documentation/openjevserver/configuration">Configuration reference</a></li>
+    <li><a href="documentation/">All four modules in one index</a></li>
+  </ul>
+
+  <h2>In the repository</h2>
+  <ul class="links">
+    <li><a href="https://github.com/Algorythm-Canada/OpenJevSwift">Algorythm-Canada/OpenJevSwift</a>, with the README and the design documents</li>
+    <li><a href="https://github.com/Algorythm-Canada/OpenJevSwift/blob/main/docs/compatibility.md">What is compatible with upstream OpenJev</a></li>
+    <li><a href="https://github.com/Algorythm-Canada/OpenJevSwift/blob/main/docs/credits.md">Models, authors and licenses</a></li>
+  </ul>
+
+  <footer>
+    OpenJevSwift is an independent project, not affiliated with or endorsed by TypeSafe AI, Google
+    DeepMind, NVIDIA or the authors of the models it serves. Apache-2.0.
+  </footer>
+</main>
+</body>
+</html>

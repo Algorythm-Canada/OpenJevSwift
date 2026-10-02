@@ -1,0 +1,126 @@
+# Builds the DocC documentation of OpenJevCore, OpenJevServer, OpenJevDiffusionGemma and
+# OpenJevEncoders into one static site and publishes it to GitHub Pages from main (issue #64).
+# A pull request that changes the sources or the site's files builds it, so a link that does not
+# resolve fails there; a push to main or a manual run also deploys it. The deploy job runs only
+# when GitHub Pages is enabled with "GitHub Actions" as its source (Settings, Pages, Build and
+# deployment); until then it is skipped, and the run says so. docs/development.md describes the
+# site and the commands that build and preview it locally.
+name: Documentation
+
+on:
+  pull_request:
+    paths:
+      - "Sources/**"
+      - "Package.swift"
+      - "Package.resolved"
+      - "Tools/docs/**"
+      - ".github/workflows/docs.yml"
+  push:
+    branches: [main]
+    paths:
+      - "Sources/**"
+      - "Package.swift"
+      - "Package.resolved"
+      - "Tools/docs/**"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A pull request's runs share one group, so a newer push cancels the run it supersedes. Runs on
+# main are never cancelled midway, so a deployment that has started finishes and the next one
+# waits for it.
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: Build the documentation
+    # The macOS job's runner and Xcode in ci.yml. OpenJevDiffusionGemma and OpenJevEncoders exist
+    # only on a macOS host, so the site cannot be built on Linux.
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Show the toolchain
+        run: |
+          sw_vers
+          # Read the version once: piped into head, xcodebuild aborts when head closes the pipe
+          # before the second line is written.
+          version=$(xcodebuild -version)
+          printf '%s\n' "$version"
+          swift --version
+          case "${version%%$'\n'*}" in
+            "Xcode 26.6"*) ;;
+            *)
+              echo "::error::Expected Xcode 26.6 at $DEVELOPER_DIR"
+              exit 1
+              ;;
+          esac
+
+      # The four archives, each transformed for static hosting under /OpenJevSwift/, merged into
+      # one site with Tools/docs/index.html as its front page. Any DocC warning fails the step.
+      - name: Build the site
+        run: Tools/docs/build-site.sh "$RUNNER_TEMP/site"
+
+      - name: Upload the site
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: ${{ runner.temp }}/site
+
+  pages:
+    name: Check GitHub Pages
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      pages: read
+    outputs:
+      enabled: ${{ steps.check.outputs.enabled }}
+    steps:
+      # The Pages API answers 404 while Pages is off. deploy-pages would fail then, so the deploy
+      # job is skipped instead, and the run carries a notice.
+      - name: Check that Pages publishes from GitHub Actions
+        id: check
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          status=$(curl -sS -o "$RUNNER_TEMP/pages.json" -w '%{http_code}' \
+            -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/pages")
+          build_type=""
+          if [ "$status" = "200" ]; then
+            build_type=$(jq -r '.build_type // ""' "$RUNNER_TEMP/pages.json")
+          fi
+          if [ "$build_type" = "workflow" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::GitHub Pages is not enabled with GitHub Actions as its source (HTTP $status, build type '$build_type'), so the documentation was built but not deployed. Enable it under Settings, Pages, Build and deployment."
+          fi
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: [build, pages]
+    if: needs.pages.outputs.enabled == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy the site
+        id: deployment
+        uses: actions/deploy-pages@v5
