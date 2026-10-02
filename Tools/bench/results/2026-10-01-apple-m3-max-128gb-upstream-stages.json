@@ -1,0 +1,34 @@
+{
+  "machine": "Apple M3 Max (Mac15,9), 128 GB, macOS 27.0.1 (26A434), on AC power",
+  "protocol": "queue: 2 min idle, thermal state nominal at start",
+  "schema": "openjevswift-upstream-stages/1",
+  "script": "Tools/bench/upstream_stages.py",
+  "sizes": [
+    {
+      "prefill_p50_ms": 201.1,
+      "prefill_tokens_per_s": 905,
+      "prompt_tokens": 182,
+      "read_p50_ms": 82.3,
+      "runs": 20,
+      "size": 0
+    },
+    {
+      "prefill_p50_ms": 782.0,
+      "prefill_tokens_per_s": 1281,
+      "prompt_tokens": 1002,
+      "read_p50_ms": 88.3,
+      "runs": 5,
+      "size": 1000
+    },
+    {
+      "prefill_p50_ms": 14118.2,
+      "prefill_tokens_per_s": 708,
+      "prompt_tokens": 10002,
+      "read_p50_ms": 231.7,
+      "runs": 5,
+      "size": 10000
+    }
+  ],
+  "started": "2026-10-01T22:04",
+  "upstream": "razorback16/openjev at dcd2094, mlx-vlm 0.6.15, MLX 0.32.2, CPython 3.12 (Tools/jevbench/.venv)"
+}

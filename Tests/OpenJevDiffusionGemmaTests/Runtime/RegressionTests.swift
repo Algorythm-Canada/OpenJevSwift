@@ -106,8 +106,8 @@ extension MLXTests {
         .enabled(if: ModelFixtures.checkpointAvailable, ModelFixtures.missingCheckpointMessage))
     struct RegressionTests {
         /// The largest change allowed in any recorded probability or entropy when the pins match.
-        /// Five runs of the suite on the M3 Max reproduced every value bit for bit (D-043), so
-        /// any change is a change in what the port computes.
+        /// Six runs in separate processes on the M3 Max reproduced every value bit for bit
+        /// (D-044), so any change is a change in what the port computes.
         static let tolerance = 0.0
 
         static let fileURL = TokenizerFixtures.fixturesDirectory.appendingPathComponent(

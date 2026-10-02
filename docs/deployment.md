@@ -10,7 +10,7 @@ your own", where it applies to a Mac.
 | Backend | Model | In this build | Mac | Memory |
 |---|---|---|---|---|
 | `verdict` | `verdict-1.4`, 151M parameters, Core ML | yes | Apple silicon, macOS 15 or later | 1.6 GB with the functions one-question reads load, 2.8 GB with all six (D-042) |
-| `mlx` | `openjev-0.1`, DiffusionGemma 26B-A4B, 4-bit, MLX | yes | Apple silicon | about 16 GB to load (MLX holds 14.35 GiB) and more in service (R4); 32 GB or more recommended |
+| `mlx` | `openjev-0.1`, DiffusionGemma 26B-A4B, 4-bit, MLX | yes | Apple silicon | about 16 GB to load (MLX holds 14.35 GiB), 17.3 GiB of MLX memory in service with short prompts and up to about 3.6 GB more for cached long prompts ([benchmarks.md](benchmarks.md), R4); 32 GB or more recommended, not yet measured on a 32 or 48 GB Mac |
 | `laya` | `laya-1.0`, 421M parameters, Core ML | yes | Apple silicon, macOS 15 or later | 4.7 GB with the functions one-question reads load, 8.9 GB with all eight and up to 9.7 GB at peak (D-042); with `OPENJEV_ENCODER_FUNCTIONS=2`, 2.1 GB for one-question reads and up to 4.4 GB at peak |
 
 On an M3 Max, Verdict reads one question in 7.5 to 20.3 ms depending on its length, and a batch
@@ -368,4 +368,8 @@ Hugging Face cache in huggingface_hub's layout (13 files, 16.58 GB), resumed aft
 and checked file by file, so a cache upstream or mlx-vlm filled is used as is. Loading the 4-bit
 weights takes about 16 GB of memory; `OPENJEV_MLX_CACHE_LIMIT_GB` bounds MLX's buffer pool
 (upstream's README, "MLX memory"; the figures are in docs/07 R4). Reads run one at a time on the
-GPU, so a Mac serves a few requests per second, not a fleet.
+GPU, so a Mac serves a few requests per second, not a fleet: on an M3 Max a three-question read
+takes about 0.3 s, and 1 to 16 concurrent callers share 3.0 to 3.4 requests per second
+([benchmarks.md](benchmarks.md)). A state of 10,000 tokens takes about 13 s to prefill before its
+first read. Those figures were taken at the nominal thermal state; on the M3 Max laptop, sustained
+load raised the same read's latency by up to about 80% once the thermal state reached fair.

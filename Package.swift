@@ -287,6 +287,27 @@ var targets: [Target] = [
             dependencies: ["OpenJevEncoders", "OpenJevCore", "OpenJevTestSupport"],
             swiftSettings: swiftSettings
         ),
+        // The performance and memory baseline of DiffusionGemma reads (issue #32,
+        // docs/benchmarks.md): the engine in process, or any /v1/systemone server over HTTP. Not
+        // a product; it never ships. Its tests cover the model-free statistics through
+        // `@testable import`, as OpenJevCLITests does for `openjev`.
+        .executableTarget(
+            name: "openjev-bench",
+            dependencies: [
+                "OpenJevCore",
+                "OpenJevDiffusionGemma",
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            ],
+            swiftSettings: swiftSettings
+        ),
+        .testTarget(
+            name: "OpenJevBenchTests",
+            dependencies: [
+                "openjev-bench",
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            ],
+            swiftSettings: swiftSettings
+        ),
     ]
     // `openjev serve` with OPENJEV_BACKEND=verdict, laya or mlx, and its opt-in smoke test, which
     // finds the converted package the way the store does.
