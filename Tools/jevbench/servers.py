@@ -67,6 +67,13 @@ COMMON_SETTINGS = {"OPENJEV_HOST": "127.0.0.1", "OPENJEV_LOG_LEVEL": "info"}
 # What --setting may not replace: the settings this script chooses itself.
 RESERVED_SETTINGS = ({"OPENJEV_PORT", "OPENJEV_BACKEND", "OPENJEV_ENCODER_MODELS"}
                      | set(COMMON_SETTINGS) | {entry[3] for entry in CHECKPOINTS.values()})
+# What --setting refuses because it can hold a credential, which a result file would record: the
+# API key and origin secret, the model routes and upstream's vLLM URL (either URL can carry a user
+# and password), and any name that says it is a key, secret, token, password or credential. The
+# harness sends neither a key nor an origin secret, so a server given one would refuse its requests.
+SECRET_SETTINGS = {"OPENJEV_API_KEY", "OPENJEV_ORIGIN_SECRET", "OPENJEV_MODEL_ROUTES",
+                   "OPENJEV_UPSTREAM"}
+SECRET_WORDS = ("KEY", "SECRET", "TOKEN", "PASSWORD", "CREDENTIAL")
 
 
 def extra_settings(pairs: list) -> dict:
@@ -78,7 +85,10 @@ def extra_settings(pairs: list) -> dict:
         name, separator, value = pair.partition("=")
         if not separator or not name.startswith("OPENJEV_") or name in RESERVED_SETTINGS:
             sys.exit(f"--setting takes OPENJEV_NAME=VALUE for a setting this script does not set "
-                     f"itself, not {pair!r}")
+                     f"itself, not {name!r}")
+        if name in SECRET_SETTINGS or any(word in name for word in SECRET_WORDS):
+            sys.exit(f"--setting refuses {name}: it can hold a credential, which the result file "
+                     "would record")
         settings[name] = value
     return settings
 

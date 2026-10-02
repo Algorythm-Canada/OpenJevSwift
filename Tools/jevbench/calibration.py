@@ -58,7 +58,6 @@ import textwrap
 from pathlib import Path
 
 import harness
-import report
 from harness import markdown_table, num, pct
 from jevbench import metrics as jb_metrics  # noqa: E402  (harness puts vendor/jevbench on the path)
 from jevbench import scoring as jb_scoring  # noqa: E402
@@ -548,9 +547,16 @@ def control_table(runs: list) -> str:
                            "one minus own, 95%"], rows)
 
 
+def result_files(results: Path) -> list:
+    """Every result file under `results`: the JevBench runs at its root and each dataset's in its
+    folder, `typesafe102/` and the `items/` that `harness.py run --items` writes by default, so a
+    deployment's own labelled items are calibrated with the rest."""
+    return sorted(results.glob("*.json")) + sorted(results.glob("*/*.json"))
+
+
 def render(results: Path, cache: Path, model: str = "openjev-0.1") -> str:
     """The calibration tables of docs/quality.md for `model`'s runs."""
-    docs = harness.load_docs(report.result_files(results), cache)
+    docs = harness.load_docs(result_files(results), cache)
     datasets = {}
     runs = []
     for dataset, server, doc in runs_of(docs, model):

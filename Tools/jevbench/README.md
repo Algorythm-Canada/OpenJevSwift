@@ -100,7 +100,9 @@ towards the three (the runner exempts only a 422; D-041).
   out of fold under group-disjoint 5-fold cross-validation with 95% bootstrap intervals over the
   groups, the paired intervals of the changes, a T per question type against one T, and
   JevBench's T applied to the TypeSafe rows. The module's docstring gives every formula and its
-  source. A deployment's own labelled items, run with `run --items`, are fitted the same way.
+  source. A deployment's own labelled items, run with `run --items`, are fitted the same way:
+  `calibration` reads every folder under `results/`, `items/` included, where such a run is
+  written by default.
 
 ## Running it
 
@@ -150,7 +152,10 @@ python3 Tools/jevbench/harness.py calibration
 ```
 
 `--setting OPENJEV_NAME=VALUE` (repeatable) gives the server one setting beyond its defaults, which
-the result file records with the others; `servers.py` refuses the settings it chooses itself. The
+the result file records with the others. `servers.py` refuses the settings it chooses itself, and
+any that can hold a credential the file would then record: the API key, the origin secret, the
+model routes, upstream's vLLM URL and any name with KEY, SECRET, TOKEN, PASSWORD or CREDENTIAL in
+it (the harness sends no key, so such a server would refuse its requests anyway). The
 MLX runs cap MLX's buffer pool at 4 GB: without a cap the pool grows to the peak working set, as
 upstream's README says ("MLX memory"), and on JevBench's long hard-tier states the Swift server's
 footprint reached 102 GB of a 128 GB Mac. The cap changes no answer

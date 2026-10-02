@@ -105,7 +105,8 @@ def agreement_tables(docs: list) -> list:
             "DiffusionGemma's answers against D-014's aggregate bounds, which the 27 oracle reads "
             "are held to (here over answers, each the mean of up to four reads, with upstream's as "
             "the reference; `harness.py compare` lists every disagreement):",
-            markdown_table(["model", "dataset", "items", "mean abs diff, every label (at most 0.02)",
+            markdown_table(["model", "dataset", "items",
+                            "mean abs diff, every label (at most 0.02)",
                             "the same over prompts of more than 1,024 tokens (at most 0.01)",
                             "top answer agrees (at least 90%)",
                             "where upstream's top two are at least 0.5 apart (at least 97%)",
@@ -157,12 +158,18 @@ def published_tables(docs: list, cache: Path) -> list:
                 differ.append([model, server, kind, str(len(ids)), listed])
     if not rows:
         return []
-    same = [model for model, by_server in lists.items()
-            if len({str(entries) for entries in by_server.values()}) == 1]
-    note = ("upstream's run; the Swift run's list is the same" if len(same) == len(lists) else
+    # the two lists are compared only where both runs exist; an unpaired model says which it has
+    status = {}
+    for model, by_server in lists.items():
+        if "swift" in by_server and "upstream" in by_server:
+            status[model] = "the same" if by_server["swift"] == by_server["upstream"] else "differs"
+        else:
+            status[model] = "only " + " and ".join(f"{server}'s run"
+                                                   for server in sorted(by_server))
+    note = ("upstream's run; the Swift run's list is the same"
+            if all(value == "the same" for value in status.values()) else
             "upstream's run, and the Swift run's where it is not the same: "
-            + ", ".join(f"{model} {'the same' if model in same else 'differs'}"
-                        for model in lists))
+            + ", ".join(f"{model} {status[model]}" for model in lists))
     return [
         markdown_table(["model", "server", "published row", "public items", "ours", "published",
                         "same outcome", "right only here", "right only there", "McNemar p",

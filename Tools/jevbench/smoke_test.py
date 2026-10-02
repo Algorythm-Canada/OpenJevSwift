@@ -542,6 +542,13 @@ class HarnessSmokeTest(unittest.TestCase):
         same = report.published_tables([swift, run_doc("upstream", "mlx", "cwwcccw")], self.tmp)
         self.assertIn("the Swift run's list is the same", same[2])
         self.assertNotIn("| swift |", same[3])
+        # with one server's run only, nothing is claimed about the other
+        alone = report.published_tables([upstream], self.tmp)
+        self.assertIn("openjev-0.1 only upstream's run", alone[2])
+        self.assertNotIn("is the same", alone[2])
+        alone = report.published_tables([swift], self.tmp)
+        self.assertIn("openjev-0.1 only swift's run", alone[2])
+        self.assertIn("| openjev-0.1 | swift | noul | 1 | t-noul-1 |", alone[3])
         # DiffusionGemma gets D-014's table instead of the encoders' near-tie rule: the same
         # answers are within every bound, doc_b's against doc_a's are not
         compared = harness.compare_docs(swift, upstream)
@@ -681,6 +688,16 @@ class HarnessSmokeTest(unittest.TestCase):
         self.assertIn("### Temperature scaling fitted offline", text)
         self.assertEqual(calibration.render(results, self.tmp, model="laya-1.0"),
                          f"no result files for laya-1.0 under {results}\n")
+        # a deployment's own items, where `run --items` writes them by default, are fitted too
+        own = json.loads(json.dumps(self.doc_a))
+        own["model"], own["server"]["name"] = "laya-1.0", "mine"
+        path = results / harness.default_output("items", "laya-1.0", "mine").relative_to(
+            harness.RESULTS)
+        self.assertEqual(path.parent.name, "items")
+        harness.write_result(path, own)
+        custom = calibration.render(results, self.tmp, model="laya-1.0")
+        self.assertIn("| items | mine | 5 | 80.0% |", custom)
+        self.assertIn("| items | mine | 5 | 4 |", custom, "a T is fitted on the items")
         printed = io.StringIO()
         with contextlib.redirect_stdout(printed):
             harness.main(["--cache", str(self.tmp), "calibration", "--results", str(results),
@@ -699,6 +716,14 @@ class HarnessSmokeTest(unittest.TestCase):
                      "OPENJEV_HOST=0.0.0.0", "HF_TOKEN=x", "OPENJEV_MLX_CACHE_LIMIT_GB"):
             with self.assertRaises(SystemExit, msg=pair):
                 servers.extra_settings([pair])
+        # a setting that can hold a credential is refused, and its value is never printed
+        for pair in ("OPENJEV_API_KEY=sk-secret", "OPENJEV_ORIGIN_SECRET=sk-secret",
+                     "OPENJEV_MODEL_ROUTES=m=https://user:sk-secret@host/v1",
+                     "OPENJEV_UPSTREAM=https://user:sk-secret@host", "OPENJEV_HUB_TOKEN=sk-secret",
+                     "OPENJEV_PROXY_PASSWORD=sk-secret"):
+            with self.assertRaises(SystemExit, msg=pair) as refused:
+                servers.extra_settings([pair])
+            self.assertNotIn("sk-secret", str(refused.exception))
 
     def test_helpers(self):
         self.assertEqual(harness.parse_server_timing("model;dur=41.2, server;dur=2.8, total;dur=44"),
