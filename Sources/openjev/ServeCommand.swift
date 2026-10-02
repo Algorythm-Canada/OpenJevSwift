@@ -62,7 +62,7 @@ struct ServeCommand: AsyncParsableCommand {
         guard shutdownTimeout >= 0, shutdownTimeout <= Self.longestShutdownTimeout else {
             throw ValidationError(
                 "--shutdown-timeout must be between 0 and "
-                    + "\(SettingsSummary.seconds(Self.longestShutdownTimeout)) seconds")
+                    + "\(SettingsSummary.number(Self.longestShutdownTimeout)) seconds")
         }
     }
 
@@ -121,7 +121,7 @@ struct ServeCommand: AsyncParsableCommand {
             throw CommandFailure(
                 .failure,
                 message: "the requests in flight did not finish within the shutdown timeout "
-                    + "(\(SettingsSummary.seconds(shutdownTimeout)) s) and were cancelled")
+                    + "(\(SettingsSummary.number(shutdownTimeout)) s) and were cancelled")
         } catch {
             throw CommandFailure(.failure, message: "the server stopped: \(error)")
         }
@@ -168,6 +168,10 @@ enum SettingsSummary {
             parts += [
                 "max_inflight=\(settings.maxInflight)", "canvas=\(settings.canvas)",
                 "mlx_model=\(settings.mlxModel)",
+                "mlx_cache_limit_gb=\(settings.mlxCacheLimitGB.map(number) ?? "unset")",
+                "mlx_prompt_cache=\(settings.mlxPromptCache)",
+                "mlx_max_prompt=\(settings.mlxMaxPrompt)",
+                "auto_threshold=\(number(settings.autoThreshold))", "auto_max=\(settings.autoMax)",
             ]
         case .encoder:
             parts.append("encoder_batch=\(settings.encoderBatch)")
@@ -185,8 +189,8 @@ enum SettingsSummary {
         return "settings: " + parts.joined(separator: " ")
     }
 
-    /// Seconds without a trailing `.0`: `30`, `2.5`.
-    static func seconds(_ value: Double) -> String {
+    /// A number without a trailing `.0`: `30`, `2.5`.
+    static func number(_ value: Double) -> String {
         value.rounded() == value && abs(value) < 1e15 ? String(Int(value)) : String(value)
     }
 }
