@@ -64,6 +64,23 @@ PACKAGE_PATHS = ("Sources", "Package.swift", "Package.resolved")
 # Settings each child gets on top of the environment, which loses every other OPENJEV_ variable so
 # that the servers' defaults apply (and no API key is required).
 COMMON_SETTINGS = {"OPENJEV_HOST": "127.0.0.1", "OPENJEV_LOG_LEVEL": "info"}
+# What --setting may not replace: the settings this script chooses itself.
+RESERVED_SETTINGS = ({"OPENJEV_PORT", "OPENJEV_BACKEND", "OPENJEV_ENCODER_MODELS"}
+                     | set(COMMON_SETTINGS) | {entry[3] for entry in CHECKPOINTS.values()})
+
+
+def extra_settings(pairs: list) -> dict:
+    """--setting OPENJEV_NAME=VALUE, repeated: server settings beyond the defaults, which a result
+    file records with the others. A run made with one says so; the JevBench runs of D-041 used
+    none, and the DiffusionGemma runs cap MLX's buffer pool (docs/quality.md)."""
+    settings = {}
+    for pair in pairs:
+        name, separator, value = pair.partition("=")
+        if not separator or not name.startswith("OPENJEV_") or name in RESERVED_SETTINGS:
+            sys.exit(f"--setting takes OPENJEV_NAME=VALUE for a setting this script does not set "
+                     f"itself, not {pair!r}")
+        settings[name] = value
+    return settings
 
 
 def output(command: list, env: dict | None = None, cwd: Path | None = None) -> str | None:
@@ -265,6 +282,9 @@ def main(argv=None) -> int:
     parser.add_argument("--ids", help="only these comma-separated item ids (trial runs)")
     parser.add_argument("--output-dir", help="where the result files go (default results/)")
     parser.add_argument("--force", action="store_true", help="replace existing result files")
+    parser.add_argument("--setting", action="append", default=[], metavar="OPENJEV_NAME=VALUE",
+                        help="a server setting beyond the defaults, recorded in the result file "
+                             "(repeatable), such as OPENJEV_MLX_CACHE_LIMIT_GB=4")
     parser.add_argument("--command", nargs=argparse.REMAINDER,
                         help="run this command against the server instead of the harness, with "
                              "{url} replaced by the server's base URL; everything after it is "
@@ -272,6 +292,7 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
 
     cache = Path(args.cache)
+    extra = extra_settings(args.setting)
     names = ("jevbench", "typesafe102") if args.dataset == "all" else (args.dataset,)
     datasets = [] if args.command else [harness.load_dataset(name, cache) for name in names]
     model = MODELS[args.backend]
@@ -289,6 +310,8 @@ def main(argv=None) -> int:
                                                args.encoder_models)
     else:
         command, settings, info = upstream_server(args.backend, Path(args.python))
+    settings.update(extra)
+    info["settings"].update(extra)
     port = free_port()
     base_url = f"http://127.0.0.1:{port}"
     log = cache / "logs" / f"{model}-{args.server}.log"

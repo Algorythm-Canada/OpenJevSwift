@@ -15,7 +15,7 @@ vendored unchanged under vendor/ (vendor/README.md). The TypeSafe rows also get 
 (``evaluate_external.type_safe``). Standard library only; README.md gives the commands that wrote
 results/.
 
-Commands: fetch, run, summary, compare, published, report.
+Commands: fetch, run, summary, compare, published, report, calibration.
 """
 
 from __future__ import annotations
@@ -918,6 +918,11 @@ def mcnemar_exact(b: int, c: int) -> float:
 # spike #56, D-034 and D-037: the top answer must hold wherever the reference's top two are at
 # least 0.01 apart.
 NEAR_TIE = 0.01
+# Two of D-014's aggregate bounds for DiffusionGemma take a subset: the slots where the reference's
+# top two are at least 0.5 apart (the top label must hold on 97% of them) and the prompts over
+# 1,024 tokens (mean label probability difference at most 0.01, against 0.02 over every label).
+CONFIDENT_MARGIN = 0.5
+LONG_PROMPT = 1024
 
 
 def top_two(probabilities: dict) -> tuple:
@@ -950,6 +955,8 @@ def compare_docs(a: dict, b: dict, top: int = 10) -> dict:
                 if usable(items_a.get(item_id)) != usable(items_b.get(item_id))]
     groups, disagreements, deviations, near_ties = {}, [], [], []
     flips = {"both_correct": 0, "both_wrong": 0, "a_only": 0, "b_only": 0}
+    bounds = {"confident_items": 0, "confident_agree": 0, "long_items": 0, "long_sum": 0.0,
+              "long_entries": 0}
     for item_id in both:
         x, y = items_a[item_id], items_b[item_id]
         kind = x["type"]
@@ -970,6 +977,13 @@ def compare_docs(a: dict, b: dict, top: int = 10) -> dict:
                            "a": float(px[label]), "b": float(py[label]), "diff": largest,
                            "agree": x["predicted"] == y["predicted"]})
         _, top_b, margin_b = top_two(py)
+        if margin_b >= CONFIDENT_MARGIN:
+            bounds["confident_items"] += 1
+            bounds["confident_agree"] += x["predicted"] == y["predicted"]
+        if ((y.get("usage") or {}).get("input_tokens") or 0) > LONG_PROMPT:
+            bounds["long_items"] += 1
+            bounds["long_sum"] += sum(diffs.values())
+            bounds["long_entries"] += len(diffs)
         if margin_b < NEAR_TIE:
             near_ties.append({"id": item_id, "type": kind, "a": x["predicted"],
                               "b": y["predicted"], "a_margin": top_two(px)[2],
@@ -1007,6 +1021,12 @@ def compare_docs(a: dict, b: dict, top: int = 10) -> dict:
         "correctness": {**flips, "mcnemar_p": mcnemar_exact(flips["a_only"], flips["b_only"])},
         "disagreements": disagreements, "largest": deviations[:top],
         "near_ties": near_ties,
+        # over the items both answered, by the reference's margin and prompt length (D-014)
+        "bounds": {"confident_items": bounds["confident_items"],
+                   "confident_agree": bounds["confident_agree"],
+                   "long_items": bounds["long_items"],
+                   "long_mean_abs_diff": (bounds["long_sum"] / bounds["long_entries"]
+                                          if bounds["long_entries"] else None)},
         "answered_by_one_only": one_side,
     }
 
@@ -1137,6 +1157,11 @@ def compare_text(result: dict, items: int = 10) -> str:
                  num(overall["max_abs_diff"]), ""])
     out.append(markdown_table(["type", "items", "top answer agrees", "identical",
                                "mean abs diff", "largest abs diff", "largest at"], rows))
+    bounds = result["bounds"]
+    out.append(f"where {result['b']['server']}'s top two are at least {CONFIDENT_MARGIN} apart the "
+               f"top answer agrees on {bounds['confident_agree']} of {bounds['confident_items']}; "
+               f"over the {bounds['long_items']} prompts longer than {LONG_PROMPT} tokens the mean "
+               f"abs diff is {num(bounds['long_mean_abs_diff'])}")
     flips = result["correctness"]
     out.append(f"correct in both {flips['both_correct']}, wrong in both {flips['both_wrong']}, "
                f"only {result['a']['server']} {flips['a_only']}, only {result['b']['server']} "
@@ -1292,6 +1317,13 @@ def command_report(args) -> int:
     return 0
 
 
+def command_calibration(args) -> int:
+    from calibration import render  # the calibration tables of docs/quality.md
+
+    print(render(Path(args.results), Path(args.cache), model=args.model))
+    return 0
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--cache", default=str(default_cache()),
@@ -1337,6 +1369,13 @@ def main(argv=None) -> int:
     report = commands.add_parser("report", help="the tables of docs/quality.md")
     report.add_argument("--results", default=str(RESULTS))
     report.set_defaults(func=command_report)
+
+    calibration = commands.add_parser("calibration",
+                                      help="the calibration tables of docs/quality.md")
+    calibration.add_argument("--results", default=str(RESULTS))
+    calibration.add_argument("--model", default="openjev-0.1",
+                             help="the model whose runs to calibrate (default %(default)s)")
+    calibration.set_defaults(func=command_calibration)
 
     args = parser.parse_args(argv)
     return args.func(args)

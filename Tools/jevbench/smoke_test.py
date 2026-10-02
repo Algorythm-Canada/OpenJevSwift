@@ -16,6 +16,7 @@ import contextlib
 import hashlib
 import io
 import json
+import math
 import shutil
 import sys
 import tempfile
@@ -478,6 +479,226 @@ class HarnessSmokeTest(unittest.TestCase):
             log = self.tmp / "server.log"
             log.write_text(f"info openjev: [openjev] settings: backend=laya {line}\n")
             self.assertEqual(servers.swift_function_capacity(log), kept)
+
+    def test_compare_reports_d014_subsets(self):
+        result = harness.compare_docs(self.doc_a, self.doc_b)
+        # the reference's top two are at least 0.5 apart only on t-noul-1 (0.75 against 0.25),
+        # where both runs answer yes; every fake prompt is 10 tokens, so none is long
+        self.assertEqual(result["bounds"], {"confident_items": 1, "confident_agree": 1,
+                                            "long_items": 0, "long_mean_abs_diff": None})
+        long_a = json.loads(json.dumps(self.doc_a))
+        long_b = json.loads(json.dumps(self.doc_b))
+        for doc in (long_a, long_b):
+            for item in doc["items"]:
+                if item["id"] == "t-noul-2":
+                    item["usage"] = {"input_tokens": 2000, "output_tokens": 0}
+        bounds = harness.compare_docs(long_a, long_b)["bounds"]
+        # t-noul-2: yes 0.625 against 0.375 and no 0.375 against 0.625, over two labels
+        self.assertEqual((bounds["long_items"], bounds["long_mean_abs_diff"]), (1, 0.25))
+
+    def test_report_handles_diffusiongemma_runs(self):
+        import report
+
+        def run_doc(server, backend, outcomes, base=None):
+            doc = json.loads(json.dumps(base or self.doc_a))
+            doc["model"] = "openjev-0.1"
+            doc["dataset"]["name"] = "jevbench"
+            doc["server"] = {"name": server, "backend": backend,
+                             "implementation": ("OpenJevSwift" if server == "swift"
+                                                else "razorback16/openjev"),
+                             "version": "0.5.0", "commit": "dcd20947", "python": "3.12.2",
+                             "packages": {"mlx": "0.32.2", "mlx-vlm": "0.6.15"},
+                             "device": "mlx, the GPU", "dtype": "the checkpoint's",
+                             "runtime": "MLX on the GPU (D-039)"}
+            doc["published_row"] = {"key": "row", "display": "Row", "setup": "elsewhere"}
+            for item, code in zip(doc["items"], outcomes):
+                item["published"] = {"outcome": code, "latency_s": 0.1}
+            doc["summary"] = harness.summarize_doc(doc)
+            return doc
+
+        # the published outcomes differ from the Swift run's on t-noul-1 and from upstream's on
+        # t-choice-1 (both runs here answer as doc_a: c c w c . c w)
+        swift = run_doc("swift", "mlx", "cwwcccw")
+        upstream = run_doc("upstream", "mlx", "wcwcccw")
+        # the runs table leaves out the timings of a model that shared the GPU
+        rows = report.runs_rows([swift])
+        self.assertEqual(rows[0][-3:], ["not reported"] * 3)
+        self.assertNotEqual(report.runs_rows([self.doc_a])[0][-1], "not reported")
+        # upstream's MLX server is not described as PyTorch
+        environment = report.environment_rows([upstream])
+        self.assertEqual(environment[0][4], "MLX 0.32.2 and mlx-vlm 0.6.15 on the GPU, the "
+                                            "checkpoint's weights")
+        # a setting beyond the defaults is shown with the runtime
+        capped = json.loads(json.dumps(swift))
+        capped["server"]["settings"] = {"OPENJEV_BACKEND": "mlx",
+                                        "OPENJEV_MLX_CACHE_LIMIT_GB": "4"}
+        self.assertEqual(report.environment_rows([capped])[0][4],
+                         "MLX on the GPU (D-039), OPENJEV_MLX_CACHE_LIMIT_GB=4")
+        # a Swift list of differing outcomes that is not upstream's is shown, and said to differ
+        tables = report.published_tables([swift, upstream], self.tmp)
+        self.assertIn("openjev-0.1 differs", tables[2])
+        self.assertIn("| openjev-0.1 | swift | noul | 1 | t-noul-1 |", tables[3])
+        self.assertIn("| openjev-0.1 | upstream | choice | 1 | t-choice-1 |", tables[3])
+        same = report.published_tables([swift, run_doc("upstream", "mlx", "cwwcccw")], self.tmp)
+        self.assertIn("the Swift run's list is the same", same[2])
+        self.assertNotIn("| swift |", same[3])
+        # DiffusionGemma gets D-014's table instead of the encoders' near-tie rule: the same
+        # answers are within every bound, doc_b's against doc_a's are not
+        compared = harness.compare_docs(swift, upstream)
+        self.assertTrue(report.within_d014(compared["overall"], compared["bounds"]))
+        upstream = run_doc("upstream", "mlx", "wcwcccw", base=self.doc_b)
+        compared = harness.compare_docs(swift, upstream)
+        self.assertFalse(report.within_d014(compared["overall"], compared["bounds"]))
+        tables = report.agreement_tables([swift, upstream])
+        self.assertIn("D-014", tables[-2])
+        self.assertIn("| openjev-0.1 | jevbench | 5 | 0.1042 | n/a over 0 | 3 of 5 (60.0%) | "
+                      "1 of 1 (100.0%) | no |", tables[-1])
+        self.assertNotIn("openjev-0.1", tables[-3], "no near-tie row for DiffusionGemma")
+        # a pair with no item both runs answered renders, and meets no bound
+        for doc in (swift, upstream):
+            for item in doc["items"]:
+                item["status"] = "failed"
+        compared = harness.compare_docs(swift, upstream)
+        self.assertFalse(report.within_d014(compared["overall"], compared["bounds"]))
+        self.assertIn("| openjev-0.1 | jevbench | 0 | n/a | n/a over 0 | 0 of 0 (n/a) |",
+                      report.agreement_tables([swift, upstream])[-1])
+
+    def test_upstream_confidence(self):
+        import calibration
+
+        self.assertEqual(calibration.upstream_confidence([0.5, 0.5]), 0.0)
+        self.assertEqual(calibration.upstream_confidence([1.0, 0.0]), 1.0)
+        self.assertEqual(calibration.upstream_confidence([1.0]), 1.0)
+        entropy = -(0.75 * math.log(0.75) + 0.25 * math.log(0.25))
+        self.assertAlmostEqual(calibration.upstream_confidence([0.75, 0.25]),
+                               1 - entropy / math.log(2))
+        self.assertAlmostEqual(calibration.upstream_confidence([1 / 3] * 3), 0.0)
+        # Every choice and score answer the committed DiffusionGemma runs hold carries the value
+        # the formula gives for its probabilities, on both servers, so a noul's computed value is
+        # the one upstream would have sent.
+        for server in ("swift", "upstream"):
+            path = harness.RESULTS / f"openjev-0.1-{server}.json"
+            if not path.exists():
+                continue
+            answers = [item["answer"] for item in harness.read_result(path)["items"]
+                       if item["status"] == "answered" and item["type"] in ("choice", "score")]
+            self.assertGreater(len(answers), 100)
+            for answer in answers:
+                self.assertAlmostEqual(
+                    calibration.upstream_confidence(list(answer["probabilities"].values())),
+                    answer["confidence"], places=12)
+
+    def test_calibration_rows_and_metrics(self):
+        import calibration
+
+        rows = calibration.rows_of(self.doc_a)
+        # the refusal has no distribution and the wide choice was skipped
+        self.assertEqual([row["id"] for row in rows],
+                         ["t-choice-1", "t-noul-1", "t-noul-2", "t-score-1", "t-dict-state"])
+        by_id = {row["id"]: row for row in rows}
+        self.assertEqual(by_id["t-noul-1"]["group"], "g1")
+        self.assertEqual(by_id["t-choice-1"]["group"], "t-choice-1")
+        self.assertEqual((by_id["t-choice-1"]["confidence"],
+                          by_id["t-choice-1"]["confidence_source"]), (0.5, "answer"))
+        self.assertEqual(by_id["t-noul-1"]["confidence_source"], "computed")
+        self.assertTrue(by_id["t-dict-state"]["correct"], "a tie goes to the smallest label")
+        found = calibration.metrics(rows)
+        overall = self.doc_a["summary"]["overall"]
+        # JevBench's own ECE and Brier score over the same five distributions
+        self.assertAlmostEqual(found["ece"], overall["ece"]["ece"])
+        self.assertAlmostEqual(found["brier"], overall["brier_mean"])
+        self.assertAlmostEqual(found["accuracy"], 4 / 5)
+        self.assertAlmostEqual(found["nll"], -(2 * math.log(0.625) + math.log(0.75)
+                                               + math.log(0.375) + math.log(0.5)) / 5)
+        # right answers' tops 0.625, 0.75, 0.625, 0.5 against the wrong one's 0.625
+        self.assertAlmostEqual(found["auroc_top"], (0.5 + 1 + 0.5 + 0) / 4)
+        # confidence: 0.5, 0.19, 0.3 and 0.0 right against 0.05 wrong (the computed noul's)
+        self.assertAlmostEqual(found["auroc_confidence"], 3 / 4)
+        bins = calibration.ece(rows)["bins"]
+        self.assertEqual([entry["n"] for entry in bins], [0, 0, 0, 0, 0, 1, 3, 1, 0, 0])
+        self.assertAlmostEqual(bins[6]["accuracy"], 2 / 3)
+
+    def test_temperature_scaling(self):
+        import calibration
+
+        probs = {"no": 0.2, "yes": 0.8}
+        self.assertEqual(calibration.tempered(probs, 1.0), probs)
+        halved = calibration.tempered(probs, 2.0)  # p^(1/2), renormalised
+        self.assertAlmostEqual(halved["yes"], 2 / 3)
+        self.assertEqual(calibration.tempered({"a": 0.0, "b": 1.0}, 0.5), {"a": 0.0, "b": 1.0})
+        for value in (0.0, -1.0, float("nan"), float("inf")):
+            with self.assertRaises(ValueError):
+                calibration.tempered(probs, value)
+        # Three answers of yes at 0.8, two right: the NLL is least where q(yes) = 2/3, so at
+        # T = logit(0.8) / logit(2/3) = ln 4 / ln 2 = 2.
+        rows = [{"id": f"r{i}", "group": f"g{i}", "type": "noul", "probs": probs,
+                 "expected": expected, "predicted": "yes", "correct": expected == "yes",
+                 "top": 0.8, "confidence": 0.0} for i, expected in enumerate(["yes", "yes", "no"])]
+        self.assertAlmostEqual(calibration.fit_temperature(rows), 2.0, places=6)
+        scaled = calibration.at_temperature(rows[0], 2.0)
+        self.assertAlmostEqual(scaled["top"], 2 / 3)
+        self.assertEqual(harness.jb_scoring.argmax_label(scaled["probs"]), "yes")
+        # every row is held out once, by the T fitted without its group
+        held, temperatures = calibration.out_of_fold(rows)
+        self.assertEqual([row["id"] for row in held], ["r0", "r1", "r2"])
+        self.assertEqual(len(temperatures), 3, "three groups fill three of the five folds")
+        # r2 is the only wrong answer: without it the fit sharpens to the lower bound (within
+        # 1e-5: so close to it the NLLs differ by less than a float's resolution)
+        self.assertAlmostEqual(held[2]["temperature"], calibration.BOUNDS[0], places=5)
+
+    def test_folds_and_bootstrap(self):
+        import calibration
+
+        rows = [{"id": f"r{i}", "group": f"g{i // 2}", "correct": i % 3 == 0, "top": 0.5 + i / 40}
+                for i in range(20)]
+        folds = calibration.fold_map(rows)
+        self.assertEqual(folds, calibration.fold_map(rows), "the assignment is deterministic")
+        self.assertEqual(sorted(folds), [f"g{i}" for i in range(10)])
+        self.assertEqual(sorted(folds.values()), [0, 0, 1, 1, 2, 2, 3, 3, 4, 4])
+        low, high = calibration.bootstrap(rows, calibration.ece_value)
+        self.assertLessEqual(low, high)
+        self.assertEqual(calibration.bootstrap(rows, calibration.ece_value), [low, high])
+        self.assertEqual(calibration.bootstrap(rows, lambda draw: 1.0), [1.0, 1.0])
+        with self.assertRaises(ValueError):
+            calibration.out_of_fold([{**rows[0], "probs": {"a": 1.0}, "expected": "a"}])
+
+    def test_calibration_tables_from_result_files(self):
+        import calibration
+
+        results = self.tmp / "calibration-results"
+        for doc, server in ((self.doc_a, "swift"), (self.doc_b, "upstream")):
+            copy = json.loads(json.dumps(doc))
+            copy["dataset"]["name"] = "jevbench"
+            copy["server"]["name"] = server
+            harness.write_result(results / f"verdict-1.4-{server}.json", copy)
+        text = calibration.render(results, self.tmp, model="verdict-1.4")
+        self.assertIn("| jevbench | swift | 5 | 80.0% |", text)
+        # the fake items have two tiers: easy (three, two right) and hard (two, both right)
+        self.assertIn("| jevbench | easy | swift | 3 | 66.7% |", text)
+        self.assertIn("| jevbench | hard | swift | 2 | 100.0% |", text)
+        self.assertIn("none: every answer is right |", text)
+        self.assertIn("| 0.6 to 0.7 | 3 | 0.625 | 66.7% |", text)
+        self.assertIn("### Temperature scaling fitted offline", text)
+        self.assertEqual(calibration.render(results, self.tmp, model="laya-1.0"),
+                         f"no result files for laya-1.0 under {results}\n")
+        printed = io.StringIO()
+        with contextlib.redirect_stdout(printed):
+            harness.main(["--cache", str(self.tmp), "calibration", "--results", str(results),
+                          "--model", "verdict-1.4"])
+        self.assertEqual(printed.getvalue(), text + "\n")
+
+    def test_extra_settings_are_checked(self):
+        import servers
+
+        self.assertEqual(servers.extra_settings(["OPENJEV_MLX_CACHE_LIMIT_GB=4",
+                                                 "OPENJEV_AUTO_MAX=1"]),
+                         {"OPENJEV_MLX_CACHE_LIMIT_GB": "4", "OPENJEV_AUTO_MAX": "1"})
+        self.assertEqual(servers.extra_settings([]), {})
+        # what servers.py sets itself, a name outside OPENJEV_ and a pair without a value
+        for pair in ("OPENJEV_PORT=1", "OPENJEV_BACKEND=laya", "OPENJEV_MLX_MODEL=/tmp/x",
+                     "OPENJEV_HOST=0.0.0.0", "HF_TOKEN=x", "OPENJEV_MLX_CACHE_LIMIT_GB"):
+            with self.assertRaises(SystemExit, msg=pair):
+                servers.extra_settings([pair])
 
     def test_helpers(self):
         self.assertEqual(harness.parse_server_timing("model;dur=41.2, server;dur=2.8, total;dur=44"),

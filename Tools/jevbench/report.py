@@ -16,6 +16,12 @@ import harness
 from harness import markdown_table, num, pct
 
 LARGEST = 5
+# Models whose runs' timings the tables leave out, and why. The DiffusionGemma runs shared the Mac's
+# GPU with other work, so their timings are not a measurement; docs/benchmarks.md is (D-044).
+UNTIMED = {"openjev-0.1": "not reported"}
+# D-014's bounds on the aggregates the wire answers allow (the entropy bounds need the top-k
+# entropy of each read, which an answer does not carry).
+D014 = {"mean": 0.02, "long_mean": 0.01, "agree": 0.90, "confident_agree": 0.97}
 
 
 def result_files(results: Path) -> list:
@@ -33,10 +39,30 @@ def pairs(docs: list) -> list:
             if "swift" in runs and "upstream" in runs]
 
 
+def is_diffusiongemma(doc: dict) -> bool:
+    return doc["server"].get("backend") == "mlx"
+
+
+def within_d014(overall: dict, bounds: dict) -> bool:
+    """Whether the answers meet every D-014 bound the wire allows. A subset with no item (no long
+    prompt, no confident reference) has nothing to fail."""
+    if not overall["items"]:
+        return False
+    checks = [overall["mean_abs_diff"] <= D014["mean"],
+              overall["agree"] >= D014["agree"] * overall["items"]]
+    if bounds["long_items"]:
+        checks.append(bounds["long_mean_abs_diff"] <= D014["long_mean"])
+    if bounds["confident_items"]:
+        checks.append(bounds["confident_agree"] >= D014["confident_agree"]
+                      * bounds["confident_items"])
+    return all(checks)
+
+
 def agreement_tables(docs: list) -> list:
     """Swift against upstream: one row per model and dataset, one per question type, the largest
-    deviations, and the near ties and disagreements."""
-    overall_rows, type_rows, largest_rows, tie_rows = [], [], [], []
+    deviations, the encoders' near ties and disagreements (D-034, D-037) and DiffusionGemma's
+    aggregates against D-014."""
+    overall_rows, type_rows, largest_rows, tie_rows, d014_rows = [], [], [], [], []
     for dataset, model, swift, upstream in pairs(docs):
         result = harness.compare_docs(swift, upstream, top=LARGEST)
         overall, flips = result["overall"], result["correctness"]
@@ -53,13 +79,37 @@ def agreement_tables(docs: list) -> list:
         for entry in result["largest"]:
             largest_rows.append([model, dataset, entry["id"], entry["type"], entry["label"],
                                  f"{entry['a']:.4f}", f"{entry['b']:.4f}", num(entry["diff"])])
+        disagreements = ", ".join(entry["id"] for entry in result["disagreements"]) or "none"
+        if is_diffusiongemma(upstream):
+            bounds = result["bounds"]
+            d014_rows.append([
+                model, dataset, str(overall["items"]), num(overall["mean_abs_diff"]),
+                f"{num(bounds['long_mean_abs_diff'])} over {bounds['long_items']}",
+                f"{overall['agree']} of {overall['items']} "
+                f"({pct(overall['agree'] / overall['items'] if overall['items'] else None)})",
+                f"{bounds['confident_agree']} of {bounds['confident_items']}"
+                + (f" ({pct(bounds['confident_agree'] / bounds['confident_items'])})"
+                   if bounds["confident_items"] else ""),
+                "yes" if within_d014(overall, bounds) else "no"])
+            continue
         ties = result["near_ties"]
         closest = min(ties, key=lambda entry: entry["b_margin"], default=None)
         tie_rows.append([
             model, dataset, str(len(ties)), f"{sum(entry['agree'] for entry in ties)} of {len(ties)}",
             f"{closest['id']} ({num(closest['b_margin'])} upstream, {num(closest['a_margin'])} Swift)"
             if closest else "",
-            ", ".join(entry["id"] for entry in result["disagreements"]) or "none"])
+            disagreements])
+    d014 = []
+    if d014_rows:
+        d014 = [
+            "DiffusionGemma's answers against D-014's aggregate bounds, which the 27 oracle reads "
+            "are held to (here over answers, each the mean of up to four reads, with upstream's as "
+            "the reference; `harness.py compare` lists every disagreement):",
+            markdown_table(["model", "dataset", "items", "mean abs diff, every label (at most 0.02)",
+                            "the same over prompts of more than 1,024 tokens (at most 0.01)",
+                            "top answer agrees (at least 90%)",
+                            "where upstream's top two are at least 0.5 apart (at least 97%)",
+                            "within every bound"], d014_rows)]
     return [
         markdown_table(["model", "dataset", "items", "top answer agrees", "identical answers",
                         "mean abs diff", "largest abs diff",
@@ -73,15 +123,16 @@ def agreement_tables(docs: list) -> list:
         "D-034 and D-037 allows a changed top answer (`harness.py compare` lists each):",
         markdown_table(["model", "dataset", "near ties", "top answer kept", "closest (top-two margin)",
                         "disagreements"], tie_rows),
-    ]
+    ] + d014
 
 
 def published_tables(docs: list, cache: Path) -> list:
-    rows, tiers, differ = [], [], []
+    rows, tiers, differ, lists = [], [], [], {}
     for doc in docs:
         result = harness.against_published(doc, cache)
         if not result:
             continue
+        lists.setdefault(result["model"], {})[result["server"]] = result["differ"]
         outcomes, board = result["outcomes"], result["board"] or {}
         rows.append([result["model"], result["server"], result["row"]["key"],
                      str(result["items"]), pct(result["ours_accuracy"]),
@@ -92,22 +143,33 @@ def published_tables(docs: list, cache: Path) -> list:
             tiers.append([result["model"], result["server"], tier, str(counts["items"]),
                           pct(counts["ours"] / counts["items"]),
                           pct(counts["published"] / counts["items"])])
-        if result["server"] == "upstream":
+    for model, by_server in lists.items():
+        upstream = by_server.get("upstream")
+        for server, entries in sorted(by_server.items(), key=lambda pair: pair[0] != "upstream"):
+            # Swift's list is shown only where it is not upstream's
+            if server != "upstream" and upstream is not None and entries == upstream:
+                continue
             by_type = {}
-            for entry in result["differ"]:
+            for entry in entries:
                 by_type.setdefault(entry["type"], []).append(entry["id"])
             for kind, ids in sorted(by_type.items()):
                 listed = ", ".join(ids) if len(ids) <= 6 else f"{len(ids)} items"
-                differ.append([result["model"], kind, str(len(ids)), listed])
+                differ.append([model, server, kind, str(len(ids)), listed])
     if not rows:
         return []
+    same = [model for model, by_server in lists.items()
+            if len({str(entries) for entries in by_server.values()}) == 1]
+    note = ("upstream's run; the Swift run's list is the same" if len(same) == len(lists) else
+            "upstream's run, and the Swift run's where it is not the same: "
+            + ", ".join(f"{model} {'the same' if model in same else 'differs'}"
+                        for model in lists))
     return [
         markdown_table(["model", "server", "published row", "public items", "ours", "published",
                         "same outcome", "right only here", "right only there", "McNemar p",
                         "published sealed"], rows),
         markdown_table(["model", "server", "tier", "items", "ours", "published"], tiers),
-        "Items whose outcome differs from the published row's (upstream's run; Swift's is the same):",
-        markdown_table(["model", "type", "items", "which"], differ),
+        f"Items whose outcome differs from the published row's ({note}):",
+        markdown_table(["model", "server", "type", "items", "which"], differ),
     ]
 
 
@@ -200,6 +262,10 @@ def function_load_rows(docs: list) -> list:
     return rows
 
 
+# The settings servers.py gives every server of a backend; a result file records them too.
+DEFAULT_SETTINGS = {"OPENJEV_BACKEND", "OPENJEV_ENCODER_MODELS"}
+
+
 def environment_rows(docs: list) -> list:
     """One row per model and server: both datasets ran on one server process."""
     rows, seen = [], {}
@@ -212,8 +278,17 @@ def environment_rows(docs: list) -> list:
             packages = server.get("packages") or {}
             code = (f"openjev {server.get('version')} at {str(server.get('commit'))[:7]}, "
                     f"Python {server.get('python')}")
-            runtime = (f"PyTorch {packages.get('torch')} on the {server.get('device')}, "
-                       f"{server.get('dtype')}, {server.get('torch_threads')} threads")
+            if server.get("backend") == "mlx":
+                runtime = (f"MLX {packages.get('mlx')} and mlx-vlm {packages.get('mlx-vlm')} on "
+                           f"the GPU, {server.get('dtype')} weights")
+            else:
+                runtime = (f"PyTorch {packages.get('torch')} on the {server.get('device')}, "
+                           f"{server.get('dtype')}, {server.get('torch_threads')} threads")
+        # the settings a run gave its server beyond the defaults (servers.py --setting)
+        extra = [f"{name}={value}" for name, value in (server.get("settings") or {}).items()
+                 if name.startswith("OPENJEV_") and name not in DEFAULT_SETTINGS]
+        if extra:
+            runtime += ", " + ", ".join(extra)
         key = (doc["model"], server["name"])
         if key in seen:
             seen[key][0] += f", {doc['dataset']['name']}"
@@ -225,9 +300,18 @@ def environment_rows(docs: list) -> list:
     return rows
 
 
+def runs_rows(docs: list) -> list:
+    """The summary rows, without the timings of an UNTIMED model's runs."""
+    rows = harness.summary_rows(docs)
+    for doc, row in zip(docs, rows):
+        if doc["model"] in UNTIMED:
+            row[-3:] = [UNTIMED[doc["model"]]] * 3
+    return rows
+
+
 def render(results: Path, cache: Path) -> str:
     docs = harness.load_docs(result_files(results), cache)
-    out = ["### The runs", markdown_table(harness.SUMMARY_HEADER, harness.summary_rows(docs))]
+    out = ["### The runs", markdown_table(harness.SUMMARY_HEADER, runs_rows(docs))]
     out += ["### Swift against upstream"] + agreement_tables(docs)
     published = published_tables(docs, cache)
     if published:
