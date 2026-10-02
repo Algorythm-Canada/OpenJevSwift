@@ -1,61 +1,45 @@
-// How a shutdown tells whether it cut requests short (issue #37). Apache-2.0. See THIRD_PARTY.md.
+// How a shutdown tells whether it cut requests short (issue #37, D-049). Apache-2.0. See
+// THIRD_PARTY.md.
 
 #if canImport(Hummingbird)
     import Foundation
     import HummingbirdCore
 
-    /// The requests one server is answering, so that a shutdown that has to cancel the server can
-    /// tell whether it cut any of them short.
+    /// Whether the cancellation of one server found it answering requests, which it then cut
+    /// short.
     ///
-    /// A request counts from when Hummingbird hands it to the responder until its response has
-    /// been written to the connection (``counting(_:)``), so a response still being written to a
-    /// slow client counts too.
+    /// Each request tells on its own task, which the cancellation marks before it stops anything
+    /// the task runs: a request is cut short when its responder ends by throwing on a cancelled
+    /// task (``noting(_:)``). SwiftNIO sends no write that a cancelled task makes or is still
+    /// waiting to make, and throws instead, so that is every request the cancellation reaches
+    /// before the connection has taken its whole answer, and no other. A request whose answer the
+    /// connection took first is not cut short, however late its task ends: its client may have
+    /// read all of it already.
     final class RequestsInFlight: @unchecked Sendable {
         // Guarded by `lock`.
         private let lock = NSLock()
-        private var active = 0
         private var cut = false
 
-        /// The requests being answered now.
-        var count: Int {
-            lock.withLock { active }
-        }
-
-        /// Whether the server was cancelled while it was answering a request.
+        /// Whether the cancellation cut a request short.
         var cutShort: Bool {
             lock.withLock { cut }
         }
 
-        /// Counts a request in.
-        func enter() {
-            lock.withLock { active += 1 }
-        }
-
-        /// Counts a request out.
-        func leave() {
-            lock.withLock { active -= 1 }
-        }
-
-        /// Notes that the server is being cancelled, which cuts short the requests it is
-        /// answering, if there are any.
-        func serverCancelled() {
-            lock.withLock {
-                if active > 0 {
-                    cut = true
-                }
-            }
-        }
-
-        /// `responder`, with each request counted while it runs: Hummingbird's responder routes
-        /// the request and then writes the response, and returns once the connection has taken
-        /// the last part.
-        func counting(
+        /// `responder`, noting a request cut short when it throws on a cancelled task:
+        /// Hummingbird's responder routes the request and then writes the answer, and returns once
+        /// the connection has taken the last part.
+        func noting(
             _ responder: @escaping HTTPChannelHandler.Responder
         ) -> HTTPChannelHandler.Responder {
             { request, writer, channel in
-                self.enter()
-                defer { self.leave() }
-                try await responder(request, writer, channel)
+                do {
+                    try await responder(request, writer, channel)
+                } catch {
+                    if Task.isCancelled {
+                        self.lock.withLock { self.cut = true }
+                    }
+                    throw error
+                }
             }
         }
     }

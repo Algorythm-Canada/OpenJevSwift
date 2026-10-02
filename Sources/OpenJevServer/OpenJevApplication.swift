@@ -64,7 +64,7 @@
         }
 
         /// ``application(settings:service:logger:onServerRunning:)`` with the registry its
-        /// connections join and the count of its requests in flight.
+        /// connections join and the record of the requests a cancellation cuts short.
         static func application(
             settings: ServerSettings, service: any SystemOneService, logger: Logger,
             connections: ConnectionRegistry, inFlight: RequestsInFlight,
@@ -82,13 +82,14 @@
         }
 
         /// The HTTP/1 server: every connection is watched for its client going away and joins
-        /// `connections`, and every request counts in `inFlight` until its response is written.
+        /// `connections`, and a request that a cancellation reaches before the connection has
+        /// taken its whole answer is noted in `inFlight`.
         static func server(
             connections: ConnectionRegistry, inFlight: RequestsInFlight
         ) -> HTTPServerBuilder {
             HTTPServerBuilder { responder in
                 HTTP1Channel(
-                    responder: inFlight.counting(responder),
+                    responder: inFlight.noting(responder),
                     configuration: HTTP1Channel.Configuration(
                         additionalChannelHandlers: [
                             ClientDisconnectHandler(registry: connections)
