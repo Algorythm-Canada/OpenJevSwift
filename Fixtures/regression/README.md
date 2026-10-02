@@ -31,10 +31,10 @@ on the pinned 4-bit checkpoint, under mlx-swift's own kernels (D-014's native ti
 
 When the pins match (the same checkpoint revision, mlx-swift version, macOS version and GPU), every
 probability, entropy and answer probability must equal the recorded one exactly, the top labels and
-prompt tokens too: five runs of the suite on the M3 Max reproduced every value bit for bit, so the
-tolerance is 0 (D-044). On another machine the kernels round differently, so the test holds the
-port to D-014's aggregate bounds instead (mean label probability difference at most 0.02, top label
-on at least 90% of slots) and says to record that machine's own file.
+prompt tokens too: seven runs in separate processes on the M3 Max reproduced every value bit for
+bit, so the tolerance is 0 (D-044). On another machine the kernels round differently, so the test
+holds the port to D-014's aggregate bounds instead (mean label probability difference at most 0.02,
+top label on at least 90% of slots) and says to record that machine's own file.
 
 ## Recording
 

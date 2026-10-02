@@ -3,8 +3,7 @@
     "chip": "Apple M3 Max",
     "macOS": "Version 27.0.1 (Build 26A434)",
     "memoryGB": 128,
-    "model": "Mac15,9",
-    "onACPower": true
+    "model": "Mac15,9"
   },
   "runs": [
     {
@@ -75,6 +74,8 @@
       "server": "swift",
       "settings": {
         "metallib": "the package's",
+        "power at end": "AC power",
+        "power at start": "AC power",
         "protocol": "queue: 2 min idle, thermal state nominal at start",
         "runs": "50",
         "samples": "1",
@@ -157,6 +158,8 @@
       "server": "swift",
       "settings": {
         "metallib": "the package's",
+        "power at end": "AC power",
+        "power at start": "AC power",
         "protocol": "queue: 2 min idle, thermal state nominal at start",
         "questions": "3",
         "requests per level": "48",
@@ -205,6 +208,8 @@
       "settings": {
         "cacheLimitGB": "unset",
         "metallib": "the package's",
+        "power at end": "AC power",
+        "power at start": "AC power",
         "protocol": "queue: 2 min idle, thermal state nominal at start",
         "questions": "3",
         "states": "unique per request",
@@ -250,6 +255,8 @@
       "settings": {
         "cacheLimitGB": "4.0",
         "metallib": "the package's",
+        "power at end": "AC power",
+        "power at start": "AC power",
         "protocol": "queue: 2 min idle, thermal state nominal at start",
         "questions": "3",
         "states": "unique per request",
@@ -311,6 +318,8 @@
       "server": "swift",
       "settings": {
         "metallib": "the package's",
+        "power at end": "AC power",
+        "power at start": "AC power",
         "protocol": "queue: 2 min idle, thermal state nominal at start",
         "questions": "1",
         "runs": "5",
@@ -328,6 +337,8 @@
       "settings": {
         "canvas": "32",
         "metallib": "the package's",
+        "power at end": "AC power",
+        "power at start": "AC power",
         "prompt tokens": "180",
         "protocol": "queue: 2 min idle, thermal state nominal at start",
         "questions": "3",
@@ -339,51 +350,65 @@
       },
       "stages": [
         {
+          "correctedMilliseconds": 0.056171389010987616,
+          "marks": 1,
           "meanMilliseconds": 0.63197495,
           "phase": "prefill",
-          "share": 0.002032088767962137,
+          "share": 0.0002724102387193818,
           "stage": "embedding"
         },
         {
+          "correctedMilliseconds": 57.174126270329594,
+          "marks": 30,
           "meanMilliseconds": 74.44823309999997,
           "phase": "prefill",
-          "share": 0.2393851501189041,
+          "share": 0.2772731395840326,
           "stage": "attention"
         },
         {
+          "correctedMilliseconds": 21.40467047032965,
+          "marks": 30,
           "meanMilliseconds": 38.67877730000002,
           "phase": "prefill",
-          "share": 0.12436997528120207,
+          "share": 0.10380465028898674,
           "stage": "dense MLP"
         },
         {
+          "correctedMilliseconds": 0,
+          "marks": 60,
           "meanMilliseconds": 30.479828999999995,
           "phase": "prefill",
-          "share": 0.09800660320524825,
+          "share": 0.0,
           "stage": "router"
         },
         {
+          "correctedMilliseconds": 125.99216397032988,
+          "marks": 30,
           "meanMilliseconds": 143.26627080000026,
           "phase": "prefill",
-          "share": 0.46066664465182106,
+          "share": 0.6110148968759783,
           "stage": "experts (gathered quantized matmuls)"
         },
         {
+          "correctedMilliseconds": 6.18455387032963,
+          "marks": 30,
           "meanMilliseconds": 23.458660700000003,
           "phase": "prefill",
-          "share": 0.07543033299010475,
+          "share": 0.02999277436169189,
           "stage": "norms, residuals, layer scalar"
         },
         {
+          "correctedMilliseconds": 0,
+          "marks": 1,
           "meanMilliseconds": 0.03396250000000001,
           "phase": "prefill",
-          "share": 0.00010920498475756687,
+          "share": 0.0,
           "stage": "cache evaluation"
         },
         {
+          "marks": 182,
           "meanMilliseconds": 310.99770835000027,
           "phase": "prefill",
-          "share": 1,
           "stage": "staged total"
         },
         {
@@ -392,69 +417,89 @@
           "stage": "unstaged, as the runtime runs it"
         },
         {
+          "correctedMilliseconds": 0.1083496686486482,
+          "marks": 1,
           "meanMilliseconds": 0.5876686999999998,
           "phase": "decoder pass",
-          "share": 0.0033414750241798873,
+          "share": 0.0012425844948044458,
           "stage": "embedding and self-conditioning"
         },
         {
+          "correctedMilliseconds": 15.574197459459482,
+          "marks": 30,
           "meanMilliseconds": 29.95376840000003,
           "phase": "decoder pass",
-          "share": 0.17031665798887854,
+          "share": 0.17860927978378813,
           "stage": "attention"
         },
         {
+          "correctedMilliseconds": 5.536654259459455,
+          "marks": 30,
           "meanMilliseconds": 19.916225200000003,
           "phase": "decoder pass",
-          "share": 0.11324334456087608,
+          "share": 0.063495909324898,
           "stage": "dense MLP"
         },
         {
+          "correctedMilliseconds": 0,
+          "marks": 60,
           "meanMilliseconds": 28.10667700000001,
           "phase": "decoder pass",
-          "share": 0.159814125217476,
+          "share": 0.0,
           "stage": "router"
         },
         {
+          "correctedMilliseconds": 53.933510859459474,
+          "marks": 30,
           "meanMilliseconds": 68.31308180000002,
           "phase": "decoder pass",
-          "share": 0.3884271132007843,
+          "share": 0.6185246819872731,
           "stage": "experts (gathered quantized matmuls)"
         },
         {
+          "correctedMilliseconds": 5.290557959459454,
+          "marks": 30,
           "meanMilliseconds": 19.6701289,
           "phase": "decoder pass",
-          "share": 0.1118440448534166,
+          "share": 0.06067360769331327,
           "stage": "norms, residuals, layer scalar"
         },
         {
+          "correctedMilliseconds": 0,
+          "marks": 1,
           "meanMilliseconds": 0.32666029999999996,
           "phase": "decoder pass",
-          "share": 0.0018573853496725442,
+          "share": 0.0,
           "stage": "final norm"
         },
         {
+          "correctedMilliseconds": 4.511866418648648,
+          "marks": 1,
           "meanMilliseconds": 4.99118545,
           "phase": "decoder pass",
-          "share": 0.028379802297153235,
+          "share": 0.051743353942519145,
           "stage": "output projection (tied embedding)"
         },
         {
+          "correctedMilliseconds": 0.6526248186486483,
+          "marks": 1,
           "meanMilliseconds": 1.1319438499999999,
           "phase": "decoder pass",
-          "share": 0.006436215002686081,
+          "share": 0.007484485099876595,
           "stage": "softcap"
         },
         {
+          "correctedMilliseconds": 2.3943850686486488,
+          "marks": 1,
           "meanMilliseconds": 2.8737041000000003,
           "phase": "decoder pass",
-          "share": 0.01633983650487655,
+          "share": 0.02745948186091854,
           "stage": "slot log-softmax, top 20, host copies"
         },
         {
-          "meanMilliseconds": 175.8710437000001,
+          "marks": 185,
+          "meanMilliseconds": 175.87104370000006,
           "phase": "decoder pass",
-          "share": 1,
           "stage": "staged total"
         },
         {
@@ -532,6 +577,8 @@
       "mode": "reads",
       "server": "swift",
       "settings": {
+        "power at end": "AC power",
+        "power at start": "AC power",
         "protocol": "queue: 2 min idle, thermal state nominal at start",
         "runs": "50",
         "samples": "1",
@@ -610,6 +657,8 @@
       "mode": "reads",
       "server": "upstream",
       "settings": {
+        "power at end": "AC power",
+        "power at start": "AC power",
         "protocol": "queue: 2 min idle, thermal state nominal at start",
         "runs": "50",
         "samples": "1",
@@ -688,6 +737,8 @@
       "mode": "reads",
       "server": "swift",
       "settings": {
+        "power at end": "AC power",
+        "power at start": "AC power",
         "protocol": "queue: 2 min idle, thermal state nominal at start",
         "runs": "50",
         "samples": "1",
@@ -707,6 +758,8 @@
       "settings": {
         "canvas": "32",
         "metallib": "the package's",
+        "power at end": "AC power",
+        "power at start": "AC power",
         "prompt tokens": "180",
         "protocol": "metallib comparison, back to back",
         "questions": "3",
@@ -718,51 +771,65 @@
       },
       "stages": [
         {
+          "correctedMilliseconds": 0,
+          "marks": 1,
           "meanMilliseconds": 0.2501937500000001,
           "phase": "prefill",
-          "share": 0.000964260542239432,
+          "share": 0.0,
           "stage": "embedding"
         },
         {
+          "correctedMilliseconds": 52.492313946153836,
+          "marks": 30,
           "meanMilliseconds": 64.74193309999998,
           "phase": "prefill",
-          "share": 0.24951898885018106,
+          "share": 0.28350837807535734,
           "stage": "attention"
         },
         {
+          "correctedMilliseconds": 23.558484546153885,
+          "marks": 30,
           "meanMilliseconds": 35.80810370000003,
           "phase": "prefill",
-          "share": 0.1380064109927919,
+          "share": 0.12723820387199444,
           "stage": "dense MLP"
         },
         {
+          "correctedMilliseconds": 0,
+          "marks": 60,
           "meanMilliseconds": 24.105127750000015,
           "phase": "prefill",
-          "share": 0.09290249478640368,
+          "share": 0.0,
           "stage": "router"
         },
         {
+          "correctedMilliseconds": 108.70441164615374,
+          "marks": 30,
           "meanMilliseconds": 120.9540307999999,
           "phase": "prefill",
-          "share": 0.4661635205725675,
+          "share": 0.5871071232838107,
           "stage": "experts (gathered quantized matmuls)"
         },
         {
+          "correctedMilliseconds": 1.3183499961538523,
+          "marks": 30,
           "meanMilliseconds": 13.56796915,
           "phase": "prefill",
-          "share": 0.05229170308877372,
+          "share": 0.007120342790158486,
           "stage": "norms, residuals, layer scalar"
         },
         {
+          "correctedMilliseconds": 0,
+          "marks": 1,
           "meanMilliseconds": 0.039600149999999994,
           "phase": "prefill",
-          "share": 0.00015262116704259327,
+          "share": 0.0,
           "stage": "cache evaluation"
         },
         {
+          "marks": 182,
           "meanMilliseconds": 259.46695839999995,
           "phase": "prefill",
-          "share": 1,
           "stage": "staged total"
         },
         {
@@ -771,69 +838,89 @@
           "stage": "unstaged, as the runtime runs it"
         },
         {
+          "correctedMilliseconds": 0.2781331472972975,
+          "marks": 1,
           "meanMilliseconds": 0.59326665,
           "phase": "decoder pass",
-          "share": 0.00446139325064049,
+          "share": 0.0037244227394007236,
           "stage": "embedding and self-conditioning"
         },
         {
+          "correctedMilliseconds": 14.498801468918924,
+          "marks": 30,
           "meanMilliseconds": 23.95280655,
           "phase": "decoder pass",
-          "share": 0.18012623746180123,
+          "share": 0.1941504146831439,
           "stage": "attention"
         },
         {
+          "correctedMilliseconds": 6.403909168918915,
+          "marks": 30,
           "meanMilliseconds": 15.85791424999999,
           "phase": "decoder pass",
-          "share": 0.1192522647348972,
+          "share": 0.085753406818081,
           "stage": "dense MLP"
         },
         {
+          "correctedMilliseconds": 0,
+          "marks": 60,
           "meanMilliseconds": 18.30395199999998,
           "phase": "decoder pass",
-          "share": 0.13764658423467324,
+          "share": 0.0,
           "stage": "router"
         },
         {
+          "correctedMilliseconds": 46.43494736891893,
+          "marks": 30,
           "meanMilliseconds": 55.88895245,
           "phase": "decoder pass",
-          "share": 0.4202875641936004,
+          "share": 0.621800657577925,
           "stage": "experts (gathered quantized matmuls)"
         },
         {
+          "correctedMilliseconds": 1.4957946689189274,
+          "marks": 30,
           "meanMilliseconds": 10.949799750000002,
           "phase": "decoder pass",
-          "share": 0.08234301169721057,
+          "share": 0.020029873219106816,
           "stage": "norms, residuals, layer scalar"
         },
         {
+          "correctedMilliseconds": 0,
+          "marks": 1,
           "meanMilliseconds": 0.20928750000000002,
           "phase": "decoder pass",
-          "share": 0.001573851892641229,
+          "share": 0.0,
           "stage": "final norm"
         },
         {
+          "correctedMilliseconds": 4.311603947297298,
+          "marks": 1,
           "meanMilliseconds": 4.626737450000001,
           "phase": "decoder pass",
-          "share": 0.03479328432150298,
+          "share": 0.057735785686268,
           "stage": "output projection (tied embedding)"
         },
         {
+          "correctedMilliseconds": 0.14486444729729747,
+          "marks": 1,
           "meanMilliseconds": 0.45999795,
           "phase": "decoder pass",
-          "share": 0.003459206327270312,
+          "share": 0.0019398494817593965,
           "stage": "softcap"
         },
         {
+          "correctedMilliseconds": 1.820039497297297,
+          "marks": 1,
           "meanMilliseconds": 2.1351729999999995,
           "phase": "decoder pass",
-          "share": 0.01605660188576217,
+          "share": 0.02437176782491103,
           "stage": "slot log-softmax, top 20, host copies"
         },
         {
-          "meanMilliseconds": 132.97788755,
+          "marks": 185,
+          "meanMilliseconds": 132.97788754999996,
           "phase": "decoder pass",
-          "share": 1,
           "stage": "staged total"
         },
         {
@@ -852,6 +939,8 @@
       "settings": {
         "canvas": "32",
         "metallib": "Tools/jevbench/.venv/lib/python3.12/site-packages/mlx/lib/mlx.metallib",
+        "power at end": "AC power",
+        "power at start": "AC power",
         "prompt tokens": "180",
         "protocol": "metallib comparison, back to back",
         "questions": "3",
@@ -863,51 +952,65 @@
       },
       "stages": [
         {
+          "correctedMilliseconds": 0,
+          "marks": 1,
           "meanMilliseconds": 0.3084459,
           "phase": "prefill",
-          "share": 0.0011736406954540655,
+          "share": 0.0,
           "stage": "embedding"
         },
         {
+          "correctedMilliseconds": 52.90444646373628,
+          "marks": 30,
           "meanMilliseconds": 65.67449520000002,
           "phase": "prefill",
-          "share": 0.2498923157030867,
+          "share": 0.2854460649227103,
           "stage": "attention"
         },
         {
+          "correctedMilliseconds": 21.197228913736197,
+          "marks": 30,
           "meanMilliseconds": 33.96727764999994,
           "phase": "prefill",
-          "share": 0.12924593701465076,
+          "share": 0.11436969829822083,
           "stage": "dense MLP"
         },
         {
+          "correctedMilliseconds": 0,
+          "marks": 60,
           "meanMilliseconds": 23.556251899999992,
           "phase": "prefill",
-          "share": 0.08963184747214063,
+          "share": 0.0,
           "stage": "router"
         },
         {
+          "correctedMilliseconds": 112.46815321373633,
+          "marks": 30,
           "meanMilliseconds": 125.23820195000008,
           "phase": "prefill",
-          "share": 0.47653300119734054,
+          "share": 0.6068221843317299,
           "stage": "experts (gathered quantized matmuls)"
         },
         {
+          "correctedMilliseconds": 1.2614119637362435,
+          "marks": 30,
           "meanMilliseconds": 14.031460699999991,
           "phase": "prefill",
-          "share": 0.05338989201731771,
+          "share": 0.006805951207555841,
           "stage": "norms, residuals, layer scalar"
         },
         {
+          "correctedMilliseconds": 0,
+          "marks": 1,
           "meanMilliseconds": 0.03505005,
           "phase": "prefill",
-          "share": 0.0001333659000093688,
+          "share": 0.0,
           "stage": "cache evaluation"
         },
         {
-          "meanMilliseconds": 262.8111833500001,
+          "marks": 182,
+          "meanMilliseconds": 262.81118335,
           "phase": "prefill",
-          "share": 1,
           "stage": "staged total"
         },
         {
@@ -916,69 +1019,89 @@
           "stage": "unstaged, as the runtime runs it"
         },
         {
+          "correctedMilliseconds": 0.2716295594594594,
+          "marks": 1,
           "meanMilliseconds": 0.5777959,
           "phase": "decoder pass",
-          "share": 0.00426450205796362,
+          "share": 0.0034449387579398873,
           "stage": "embedding and self-conditioning"
         },
         {
+          "correctedMilliseconds": 14.860786333783777,
+          "marks": 30,
           "meanMilliseconds": 24.045776549999996,
           "phase": "decoder pass",
-          "share": 0.17747315891789528,
+          "share": 0.18847175144189673,
           "stage": "attention"
         },
         {
+          "correctedMilliseconds": 6.870647533783762,
+          "marks": 30,
           "meanMilliseconds": 16.05563774999998,
           "phase": "decoder pass",
-          "share": 0.11850084126037119,
+          "share": 0.08713690817883304,
           "stage": "dense MLP"
         },
         {
+          "correctedMilliseconds": 1.6579199175675647,
+          "marks": 60,
           "meanMilliseconds": 20.027900350000003,
           "phase": "decoder pass",
-          "share": 0.14781867136694,
+          "share": 0.021026550250844243,
           "stage": "router"
         },
         {
+          "correctedMilliseconds": 47.68151158378384,
+          "marks": 30,
           "meanMilliseconds": 56.86650180000006,
           "phase": "decoder pass",
-          "share": 0.41971103283234124,
+          "share": 0.6047202212417989,
           "stage": "experts (gathered quantized matmuls)"
         },
         {
+          "correctedMilliseconds": 1.153026583783772,
+          "marks": 30,
           "meanMilliseconds": 10.338016799999991,
           "phase": "decoder pass",
-          "share": 0.0763011539522216,
+          "share": 0.014623246362863445,
           "stage": "norms, residuals, layer scalar"
         },
         {
+          "correctedMilliseconds": 0,
+          "marks": 1,
           "meanMilliseconds": 0.18950415000000004,
           "phase": "decoder pass",
-          "share": 0.0013986614264096485,
+          "share": 0.0,
           "stage": "final norm"
         },
         {
+          "correctedMilliseconds": 4.258979509459458,
+          "marks": 1,
           "meanMilliseconds": 4.565145849999999,
           "phase": "decoder pass",
-          "share": 0.03369368642496264,
+          "share": 0.05401445855379548,
           "stage": "output projection (tied embedding)"
         },
         {
+          "correctedMilliseconds": 0.17710880945945934,
+          "marks": 1,
           "meanMilliseconds": 0.48327515,
           "phase": "decoder pass",
-          "share": 0.0035668786707169038,
+          "share": 0.0022461804351987086,
           "stage": "softcap"
         },
         {
+          "correctedMilliseconds": 2.0339314094594587,
+          "marks": 1,
           "meanMilliseconds": 2.3400977499999995,
           "phase": "decoder pass",
-          "share": 0.01727141309017775,
+          "share": 0.025795311664097258,
           "stage": "slot log-softmax, top 20, host copies"
         },
         {
-          "meanMilliseconds": 135.48965205000005,
+          "marks": 185,
+          "meanMilliseconds": 135.48965205000002,
           "phase": "decoder pass",
-          "share": 1,
           "stage": "staged total"
         },
         {

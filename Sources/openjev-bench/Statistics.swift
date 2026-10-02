@@ -73,14 +73,11 @@ struct Machine: Codable, Equatable, Sendable {
     var memoryGB: Int
     /// `ProcessInfo.operatingSystemVersionString`.
     var macOS: String
-    /// Whether the Mac ran on AC power when the run started, from `pmset -g batt`; nil when
-    /// unknown.
-    var onACPower: Bool?
 
-    /// One line for a table's caption.
+    /// One line for a table's caption. The power source and the thermal state are each run's
+    /// own, in its settings.
     var caption: String {
-        let power = onACPower.map { $0 ? ", on AC power" : ", on battery" } ?? ""
-        return "\(chip) (\(model)), \(memoryGB) GB, macOS \(macOS)\(power)"
+        "\(chip) (\(model)), \(memoryGB) GB, macOS \(macOS)"
     }
 
     /// The machine part of a result file's name: the chip and memory, lower case, letters and
@@ -133,10 +130,51 @@ struct StageRow: Codable, Equatable, Sendable {
     /// `prefill` or `decoder pass`.
     var phase: String
     var stage: String
-    /// The stage's mean time per read.
+    /// The stage's mean time per read, staged: each evaluation point is a GPU round trip.
     var meanMilliseconds: Double
-    /// Its share of the phase's staged total; nil for the unstaged total.
+    /// The stage's evaluation points per read; nil for the totals.
+    var marks: Int?
+    /// ``meanMilliseconds`` less the round trips of its evaluation points, at least 0; nil for
+    /// the totals.
+    var correctedMilliseconds: Double?
+    /// ``correctedMilliseconds`` over the unstaged pass; nil for the totals.
     var share: Double?
+
+    /// One stage's measurement before the correction.
+    struct Measured: Equatable, Sendable {
+        var stage: String
+        var meanMilliseconds: Double
+        var marks: Int
+    }
+
+    /// The rows of one phase: each stage corrected for the round trip its evaluation points cost,
+    /// then the staged and unstaged totals.
+    ///
+    /// The cost of one evaluation point is the staged total minus the unstaged pass, over every
+    /// point of the phase. Each stage loses its points' share of that, clamped at 0: a stage
+    /// whose time is no more than its round trips (the router, with two points a layer) is below
+    /// the method's resolution.
+    static func phase(_ phase: String, _ stages: [Measured], unstagedMilliseconds unstaged: Double)
+        -> [StageRow]
+    {
+        let staged = stages.reduce(0) { $0 + $1.meanMilliseconds }
+        let marks = stages.reduce(0) { $0 + $1.marks }
+        let perMark = marks > 0 ? Swift.max(0, staged - unstaged) / Double(marks) : 0
+        var rows = stages.map { stage in
+            let corrected = Swift.max(0, stage.meanMilliseconds - Double(stage.marks) * perMark)
+            return StageRow(
+                phase: phase, stage: stage.stage, meanMilliseconds: stage.meanMilliseconds,
+                marks: stage.marks, correctedMilliseconds: corrected,
+                share: unstaged > 0 ? corrected / unstaged : nil)
+        }
+        rows.append(
+            StageRow(phase: phase, stage: "staged total", meanMilliseconds: staged, marks: marks))
+        rows.append(
+            StageRow(
+                phase: phase, stage: "unstaged, as the runtime runs it",
+                meanMilliseconds: unstaged))
+        return rows
+    }
 }
 
 /// One invocation of a mode.
@@ -277,10 +315,14 @@ enum Markdown {
         if let rows = run.stages {
             parts.append(
                 table(
-                    ["Phase", "Stage", "mean ms", "share"],
+                    [
+                        "Phase", "Stage", "evaluation points", "staged ms", "corrected ms",
+                        "share of unstaged",
+                    ],
                     rows.map {
                         [
-                            $0.phase, $0.stage, ms($0.meanMilliseconds),
+                            $0.phase, $0.stage, $0.marks.map(String.init) ?? "",
+                            ms($0.meanMilliseconds), $0.correctedMilliseconds.map(ms) ?? "",
                             $0.share.map { String(format: "%.1f%%", $0 * 100) } ?? "",
                         ]
                     }))

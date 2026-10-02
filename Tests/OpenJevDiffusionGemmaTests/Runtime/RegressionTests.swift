@@ -106,7 +106,7 @@ extension MLXTests {
         .enabled(if: ModelFixtures.checkpointAvailable, ModelFixtures.missingCheckpointMessage))
     struct RegressionTests {
         /// The largest change allowed in any recorded probability or entropy when the pins match.
-        /// Six runs in separate processes on the M3 Max reproduced every value bit for bit
+        /// Seven runs in separate processes on the M3 Max reproduced every value bit for bit
         /// (D-044), so any change is a change in what the port computes.
         static let tolerance = 0.0
 
@@ -245,7 +245,9 @@ extension MLXTests {
                     #expect(gotRead.steps == wantRead.steps, "\(want.id)")
                     for (index, (a, b)) in zip(wantRead.slots, gotRead.slots).enumerated() {
                         slots += 1
-topAgree += a.topLabelID == b.topLabelID ? 1 : 0
+                        // The label's token id, not only its index: a changed label mapping can keep the index.
+                        let sameTop = a.topLabel == b.topLabel && a.topLabelID == b.topLabelID
+                        topAgree += sameTop ? 1 : 0
                         let moved =
                             zip(a.probabilities, b.probabilities).map { abs($0 - $1) } + [
                                 abs(a.entropy - b.entropy)
@@ -254,8 +256,7 @@ topAgree += a.topLabelID == b.topLabelID ? 1 : 0
                         largest = max(largest, moved.max() ?? 0)
                         if exact {
                             #expect(
-                                (moved.max() ?? 0) <= Self.tolerance && a.topLabel == b.topLabel
-                                    && a.topLabelID == b.topLabelID,
+                                (moved.max() ?? 0) <= Self.tolerance && sameTop,
                                 "\(want.id) slot \(index): recorded \(a), now \(b)")
                         }
                     }

@@ -103,7 +103,7 @@ The regression file, [Fixtures/regression](../Fixtures/regression/README.md), re
 answers (not upstream's) for the 27 oracle reads, the wire quickstart and upstream's README example
 through the engine: per slot the probabilities, entropy and top label, the prompt tokens, and for
 the engine requests the billed tokens and answers, with the checkpoint, mlx-swift, macOS and GPU
-it was recorded under. `RegressionTests` fails when any value moves while those pins match: six
+it was recorded under. `RegressionTests` fails when any value moves while those pins match: seven
 runs in separate processes on the reference machine reproduced all 180 slots bit for bit, so the
 tolerance is 0 (D-044). On another machine it holds the port to D-014's aggregate bounds and says
 to record that machine's own file (`OPENJEV_RECORD_REGRESSION=1`).

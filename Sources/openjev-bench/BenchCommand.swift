@@ -59,10 +59,20 @@ struct CommonOptions: ParsableArguments {
         }
     }
 
-    /// What every run records beside its own settings: the Metal library and the thermal state
-    /// when it starts.
+    /// What every run records beside its own settings: the Metal library, and the power source
+    /// and thermal state when it starts. ``Bench/finish(_:_:)`` adds both again at the end.
     var recordedSettings: [String: String] {
-        ["metallib": metallib ?? "the package's", "thermal state at start": Bench.thermalState()]
+        [
+            "metallib": metallib ?? "the package's", "thermal state at start": Bench.thermalState(),
+            "power at start": Bench.powerSource(),
+        ]
+    }
+
+    func validate() throws {
+        guard runs > 0 else { throw ValidationError("--runs must be at least 1, got \(runs)") }
+        guard warmup >= 0 else {
+            throw ValidationError("--warmup must be 0 or more, got \(warmup)")
+        }
     }
 
     /// The checkpoint directory, found as the live tests find it.
@@ -135,13 +145,17 @@ enum Bench {
         return nil
     }
 
+    /// `AC power`, `battery` or `unknown`, from ``onACPower()``.
+    static func powerSource() -> String {
+        onACPower().map { $0 ? "AC power" : "battery" } ?? "unknown"
+    }
+
     static func machine() -> Machine {
         Machine(
             model: sysctl("hw.model") ?? "unknown",
             chip: sysctl("machdep.cpu.brand_string") ?? MTLCreateSystemDefaultDevice()?.name
                 ?? "unknown",
-            memoryGB: memoryGB(), macOS: ProcessInfo.processInfo.operatingSystemVersionString,
-            onACPower: onACPower())
+            memoryGB: memoryGB(), macOS: ProcessInfo.processInfo.operatingSystemVersionString)
     }
 
     /// `ProcessInfo.thermalState`: nominal, fair, serious or critical.
@@ -211,6 +225,7 @@ enum Bench {
     static func finish(_ run: BenchRun, _ common: CommonOptions) throws {
         var run = run
         run.settings["thermal state at end"] = thermalState()
+        run.settings["power at end"] = powerSource()
         if run.target == "http" {
             // The server's kernels are its own; this process runs none.
             run.settings["metallib"] = nil
@@ -316,6 +331,15 @@ struct Concurrency: AsyncParsableCommand {
     @Option(parsing: .upToNextOption, help: "The concurrency levels.")
     var levels: [Int] = [1, 4, 16]
 
+    func validate() throws {
+        guard requests > 0 else {
+            throw ValidationError("--requests must be at least 1, got \(requests)")
+        }
+        guard !levels.isEmpty, levels.allSatisfy({ $0 > 0 }) else {
+            throw ValidationError("--levels must be one or more counts of at least 1")
+        }
+    }
+
     func run() async throws {
         let (target, started) = try await Bench.target(common, http)
         var run = started
@@ -377,6 +401,12 @@ struct MemoryMode: AsyncParsableCommand {
     @Option(help: "cacheLimitGB, MLX's buffer pool limit; unset leaves MLX alone.")
     var cacheLimitGB: Double?
 
+    func validate() throws {
+        if let cacheLimitGB, !(cacheLimitGB.isFinite && cacheLimitGB >= 0) {
+            throw ValidationError("--cache-limit-gb must be a finite number of GB, 0 or more")
+        }
+    }
+
     func run() async throws {
         let directory = common.modelDirectory()
         common.applyMetallib()
@@ -427,6 +457,15 @@ struct Prefill: AsyncParsableCommand {
 
     @Option(help: "Cold and cached reads per size, after one warm-up.")
     var prefillRuns = 5
+
+    func validate() throws {
+        guard prefillRuns > 0 else {
+            throw ValidationError("--prefill-runs must be at least 1, got \(prefillRuns)")
+        }
+        guard !tokens.isEmpty, tokens.allSatisfy({ $0 > 0 }) else {
+            throw ValidationError("--tokens must be one or more sizes of at least 1")
+        }
+    }
 
     func run() async throws {
         let directory = common.modelDirectory()

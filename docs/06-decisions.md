@@ -2094,7 +2094,7 @@ Decision.
    the prompt tokens, and for the engine requests the billed tokens and answers. Its pins are a
    `generator` object, as every fixture file has (`FixturePinTests` checks `regression/` for the
    test that wrote it, the checkpoint repository and revision, the mlx-swift version from
-   Package.resolved, macOS, the GPU's name and the date). The tolerance is 0: six runs in separate
+   Package.resolved, macOS, the GPU's name and the date). The tolerance is 0: seven runs in separate
    processes on the M3 Max reproduced all 180 slots bit for bit, as D-014's exact-tier
    determinism and the cached-against-cold tests lead one to expect, and any change in the last
    bit is a change in what the port computes, which is what the file guards. When the pins do not
@@ -2112,7 +2112,8 @@ Decision.
    setting per process (`--cache-limit-gb`), so the two runs do not share a pool. `--metallib`
    points MLX at another Metal library, to time the port on the kernels upstream runs. p50 and p95
    are NumPy's linear percentiles. `--json` appends to `Tools/bench/results/<date>-<machine>.json`;
-   the machine, macOS, AC power and the thermal state at the start and end are in every run.
+   the machine and macOS are in the file, and each run records the power source and the thermal
+   state at its start and end.
 5. **Upstream is measured the same way.** `openjev-bench --url` times any `/v1/systemone` server;
    `Tools/jevbench/servers.py` gained `--command`, which starts either server as the JevBench runs
    do and runs a command against it with `{url}` replaced. `Tools/jevbench/requirements-upstream.txt`

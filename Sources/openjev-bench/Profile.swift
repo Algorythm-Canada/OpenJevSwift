@@ -24,6 +24,8 @@ final class StageClock {
     private let clock = ContinuousClock()
     private var last: ContinuousClock.Instant
     private(set) var buckets: [String: Double] = [:]
+    /// The evaluation points of each bucket, summed over every read timed.
+    private(set) var marks: [String: Int] = [:]
     private(set) var order: [String] = []
 
     init() {
@@ -42,6 +44,7 @@ final class StageClock {
             order.append(stage)
         }
         buckets[stage, default: 0] += milliseconds(now - last)
+        marks[stage, default: 0] += 1
         last = now
     }
 
@@ -59,6 +62,12 @@ struct Profile: AsyncParsableCommand {
 
     @Option(help: "Profile a state of about this many tokens instead of the README state.")
     var stateTokens: Int?
+
+    func validate() throws {
+        if let stateTokens, stateTokens < 1 {
+            throw ValidationError("--state-tokens must be at least 1, got \(stateTokens)")
+        }
+    }
 
     func run() async throws {
         let directory = common.modelDirectory()
@@ -161,21 +170,14 @@ struct Profile: AsyncParsableCommand {
         }
 
         func rows(_ phase: String, _ stageClock: StageClock, total: [Double]) -> [StageRow] {
-            let staged = stageClock.buckets.values.reduce(0, +) / Double(common.runs)
-            var out = stageClock.order.map { stage in
-                let mean = stageClock.buckets[stage, default: 0] / Double(common.runs)
-                return StageRow(
-                    phase: phase, stage: stage, meanMilliseconds: mean, share: mean / staged)
-            }
-            out.append(
-                StageRow(
-                    phase: phase, stage: "staged total", meanMilliseconds: staged, share: 1))
-            out.append(
-                StageRow(
-                    phase: phase, stage: "unstaged, as the runtime runs it",
-                    meanMilliseconds: total.reduce(0, +) / Double(total.count),
-                    share: nil))
-            return out
+            let runs = Double(common.runs)
+            return StageRow.phase(
+                phase,
+                stageClock.order.map {
+                    StageRow.Measured(
+                        stage: $0, meanMilliseconds: stageClock.buckets[$0, default: 0] / runs,
+                        marks: stageClock.marks[$0, default: 0] / common.runs)
+                }, unstagedMilliseconds: total.reduce(0, +) / Double(total.count))
         }
         var run = BenchRun(
             mode: "profile", target: "engine", url: nil, server: "swift",

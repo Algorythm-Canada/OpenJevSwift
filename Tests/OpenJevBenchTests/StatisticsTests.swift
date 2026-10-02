@@ -60,14 +60,13 @@ struct StatisticsTests {
     func machine() {
         let machine = Machine(
             model: "Mac15,8", chip: "Apple M3 Max", memoryGB: 128,
-            macOS: "Version 27.0.1 (Build 26A434)", onACPower: true)
+            macOS: "Version 27.0.1 (Build 26A434)")
         #expect(machine.slug == "apple-m3-max-128gb")
         #expect(
             BenchResultFile.fileName(date: "2026-10-01", machine: machine)
                 == "2026-10-01-apple-m3-max-128gb.json")
         #expect(
-            machine.caption
-                == "Apple M3 Max (Mac15,8), 128 GB, macOS Version 27.0.1 (Build 26A434), on AC power"
+            machine.caption == "Apple M3 Max (Mac15,8), 128 GB, macOS Version 27.0.1 (Build 26A434)"
         )
     }
 
@@ -85,7 +84,7 @@ struct StatisticsTests {
                     inputTokens: 120)
             ])
         let machine = Machine(
-            model: "Mac15,8", chip: "Apple M3 Max", memoryGB: 128, macOS: "27", onACPower: nil)
+            model: "Mac15,8", chip: "Apple M3 Max", memoryGB: 128, macOS: "27")
         let text = Markdown.render(run, machine: machine)
         #expect(text.contains("| 1 question | 2 | 150.0 | 195.0 | 150.0 | 135.0 | 175.5 | 120 |"))
         #expect(text.contains("Apple M3 Max (Mac15,8), 128 GB, macOS 27"))
@@ -102,18 +101,26 @@ struct StatisticsTests {
         #expect(profileStage("experts.12") == "experts (gathered quantized matmuls)")
         #expect(profileStage("layer.5") == "norms, residuals, layer scalar")
         #expect(profileStage("final norm") == "final norm")
+        let rows = StageRow.phase(
+            "decoder pass",
+            [
+                .init(stage: "attention", meanMilliseconds: 30, marks: 30),
+                .init(stage: "router", meanMilliseconds: 10, marks: 60),
+                .init(stage: "experts", meanMilliseconds: 70, marks: 30),
+            ], unstagedMilliseconds: 50)
+        // 110 ms staged, 50 unstaged: 60 ms over 120 points, 0.5 ms a point.
+        #expect(rows.map(\.correctedMilliseconds) == [15, 0, 55, nil, nil])
+        #expect(rows.map(\.share) == [0.3, 0, 1.1, nil, nil])
+        #expect(rows[3].meanMilliseconds == 110 && rows[3].marks == 120)
+        #expect(rows[4].meanMilliseconds == 50 && rows[4].marks == nil)
         let run = BenchRun(
             mode: "profile", target: "engine", url: nil, server: nil, modelDirectory: nil,
-            started: "s", settings: [:],
-            stages: [
-                StageRow(
-                    phase: "prefill", stage: "attention", meanMilliseconds: 12.34, share: 0.25),
-                StageRow(phase: "prefill", stage: "unstaged", meanMilliseconds: 40, share: nil),
-            ])
+            started: "s", settings: [:], stages: rows)
         let text = Markdown.render(
-            run, machine: Machine(model: "m", chip: "c", memoryGB: 1, macOS: "x", onACPower: nil))
-        #expect(text.contains("| prefill | attention | 12.3 | 25.0% |"))
-        #expect(text.contains("| prefill | unstaged | 40.0 |  |"))
+            run, machine: Machine(model: "m", chip: "c", memoryGB: 1, macOS: "x"))
+        #expect(text.contains("| decoder pass | attention | 30 | 30.0 | 15.0 | 30.0% |"))
+        #expect(
+            text.contains("| decoder pass | unstaged, as the runtime runs it |  | 50.0 |  |  |"))
     }
 
     @Test("Runs are appended to the day's result file")
@@ -123,7 +130,7 @@ struct StatisticsTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         let url = directory.appendingPathComponent("results/day.json")
         let machine = Machine(
-            model: "m", chip: "c", memoryGB: 1, macOS: "x", onACPower: true)
+            model: "m", chip: "c", memoryGB: 1, macOS: "x")
         let run = BenchRun(
             mode: "prefill", target: "engine", url: nil, server: nil, modelDirectory: "/m",
             started: "s", settings: [:],
@@ -174,6 +181,16 @@ struct StatisticsTests {
         #expect((profile as? Profile)?.stateTokens == nil)
         let long = try BenchCommand.parseAsRoot(["profile", "--state-tokens", "10000"])
         #expect((long as? Profile)?.stateTokens == 10_000)
+        for invalid in [
+            ["reads", "--runs", "0"], ["reads", "--warmup", "-1"], ["profile", "--runs", "0"],
+            ["concurrency", "--requests", "0"], ["concurrency", "--levels", "4", "0"],
+            ["prefill", "--prefill-runs", "0"], ["prefill", "--tokens", "0"],
+            ["profile", "--state-tokens", "0"], ["memory", "--cache-limit-gb", "-1"],
+        ] {
+            #expect(throws: (any Error).self, "\(invalid)") {
+                try BenchCommand.parseAsRoot(invalid)
+            }
+        }
         let wheel = try BenchCommand.parseAsRoot(["reads", "--metallib", "/tmp/mlx.metallib"])
         #expect((wheel as? Reads)?.common.metallib == "/tmp/mlx.metallib")
     }

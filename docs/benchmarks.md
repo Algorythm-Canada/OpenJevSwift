@@ -34,8 +34,8 @@ mlx-vlm 0.6.15 and MLX 0.32.2 from `Tools/jevbench/.venv`.
 - **Hygiene.** Each run started only when `pgrep -fl 'swift-build|xcodebuild|openjev|python'` and
   a few more patterns (Xcode's test runners, Docker, another worktree's servers) showed nothing but
   the run itself, on AC power, after two minutes idle and with the thermal state
-  (`ProcessInfo.thermalState`) at nominal; every run records the thermal state at its start and
-  end. A watcher discarded any run during which another build, test or server appeared, or the Mac
+  (`ProcessInfo.thermalState`) at nominal; every run records the thermal state and the power
+  source at its start and end. A watcher discarded any run during which another build, test or server appeared, or the Mac
   went on battery, and ran it again.
 - **Why the protocol.** The first runs of the day were taken right after one another and
   disagreed by up to 80%: the same three-question read took 302 ms at nominal and 380 to 539 ms
