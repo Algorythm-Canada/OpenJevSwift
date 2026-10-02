@@ -11,8 +11,10 @@ import Testing
 /// The table must list exactly the variables ``ServerSettings/init(environment:)`` reads, found in
 /// its source, and `OPENJEV_ENCODER_MODELS`, which the encoder store reads. Each documented
 /// default must be the code's: setting a variable to it, or to the empty string when the table
-/// says unset, must give the same settings as leaving it out. And every variable the settings
-/// table of `docs/deployment.md` lists must be in the reference with the same default.
+/// says unset, must give the same settings as leaving it out, and for the three numbers an empty
+/// value leaves at their default, the setting itself must hold the documented value or nothing.
+/// And every variable the settings table of `docs/deployment.md` lists must be in the reference
+/// with the same default.
 @Suite("Configuration reference")
 struct ConfigurationReferenceTests {
     /// The repository root, found relative to this source file.
@@ -32,6 +34,16 @@ struct ConfigurationReferenceTests {
     /// The one variable the server reads outside ``ServerSettings``: the encoder store's local
     /// packages folder, read on macOS only.
     static let storeVariable = "OPENJEV_ENCODER_MODELS"
+
+    /// The variables read with `env.optionalInteger` and `env.optionalDouble`, as upstream's
+    /// `_env_num` reads, for which an empty value means the default as a missing one does, so
+    /// setting one to the empty string cannot tell an unset default from any other. Each maps to
+    /// its setting, nil when the settings hold none.
+    static let numberSettings: [String: @Sendable (ServerSettings) -> Double?] = [
+        "OPENJEV_MLX_CACHE_LIMIT_GB": { $0.mlxCacheLimitGB },
+        "OPENJEV_MLX_PROMPT_CACHE": { Double($0.mlxPromptCache) },
+        "OPENJEV_ENCODER_FUNCTIONS": { $0.encoderFunctions.map(Double.init) },
+    ]
 
     /// One row of a settings table: the variable and its documented default, nil for unset.
     struct Row: Hashable, CustomStringConvertible {
@@ -75,10 +87,10 @@ struct ConfigurationReferenceTests {
     }
 
     /// The variables `ServerSettings(environment:)` reads: the name in every
-    /// `env.<reader>("OPENJEV_...")` call of its source.
-    static func serverSettingsReads() throws -> Set<String> {
+    /// `env.<reader>("OPENJEV_...")` call of its source whose reader's name starts with `prefix`.
+    static func serverSettingsReads(prefix: String = "") throws -> Set<String> {
         let source = try text(settingsSourcePath)
-        let read = try Regex(#"env\.[a-zA-Z]+\(\s*"(OPENJEV_[A-Z0-9_]+)""#)
+        let read = try Regex(#"env\.\#(prefix)[a-zA-Z]+\(\s*"(OPENJEV_[A-Z0-9_]+)""#)
         return Set(
             source.matches(of: read).compactMap { $0.output[1].substring.map(String.init) })
     }
@@ -113,7 +125,18 @@ struct ConfigurationReferenceTests {
             let value = row.defaultValue ?? ""
             let settings = try ServerSettings(environment: [row.name: value])
             #expect(settings == defaults, "\(row.name)=\(value.pythonRepr) is not the default")
+            // An empty value cannot show these defaults, so read the setting itself.
+            if let setting = Self.numberSettings[row.name] {
+                let held = setting(defaults)
+                #expect(
+                    held == row.defaultValue.flatMap(Double.init),
+                    "\(row) but the settings hold \(held.map { "\($0)" } ?? "nothing")")
+            }
         }
+        let numberReads = try Self.serverSettingsReads(prefix: "optional")
+        #expect(
+            Set(Self.numberSettings.keys) == numberReads,
+            "numberSettings must list the optional reads: \(numberReads.sorted())")
     }
 
     @Test("docs/deployment.md's settings table agrees with the reference")

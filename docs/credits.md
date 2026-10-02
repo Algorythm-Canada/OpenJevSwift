@@ -27,7 +27,7 @@ follow (D-010).
   [8-bit](https://huggingface.co/mlx-community/diffusiongemma-26B-A4B-it-8bit) at `7b95e388` and
   [bfloat16](https://huggingface.co/mlx-community/diffusiongemma-26B-A4B-it-bf16) at `2cd36f95`.
   Upstream's vLLM backend serves NVIDIA's NVFP4 conversion, which this port does not use. The
-  model card's license links the Gemma terms.
+  4-bit model card declares Apache-2.0 and links Google's Gemma 4 license.
 - **Verdict** is a GLiClass model over ModernBERT-base (its base model is
   `knowledgator/gliclass-modern-base-v2.0`, 151M parameters), calibrated with RLCD, with the v1.4
   inference engine. This port runs upstream's Verdict prompt contract, read path and calibrator.
@@ -59,7 +59,7 @@ refuses a file that does not match (D-033).
 
 | Model | Served as | Authors | License | Checkpoint | Upstream's pin | Issue |
 |---|---|---|---|---|---|---|
-| JevK5 0.2 | `jevk5-0.2` | Alibi Serikbay ([jevk5](https://github.com/allebee/jevk5)) | Apache-2.0 | [alibiserikbay/JevK5](https://huggingface.co/alibiserikbay/JevK5) | `f26426d` | #55 |
+| JevK5 0.2 | `jevk5-0.2` | Alibi Serikbay ([jevk5](https://github.com/allebee/jevk5)) | Apache-2.0 | [alibiserikbay/JevK5](https://huggingface.co/alibiserikbay/JevK5) | package 0.2.2 (`0571ef3`) | #55 |
 | CLM 0.1 | `clm-v0.1` | Contrastive-LM ([CLM](https://github.com/Contrastive-LM/CLM)) | Apache-2.0 | [Contrastive-LM/CLM-v0.1-8B](https://huggingface.co/Contrastive-LM/CLM-v0.1-8B) | package 0.1.0 | #59 |
 
 A server lists them, with upstream's descriptions, when `OPENJEV_MODEL_ROUTES` forwards them to a
@@ -71,7 +71,7 @@ server that serves them.
 |---|---|---|---|
 | [razorback16/openjev](https://github.com/razorback16/openjev) | The compatibility target: the wire API, the engine, the MLX backend, the encoder backends and their tests, ported throughout | `dcd2094` (0.5.0) | Apache-2.0 |
 | [ml-explore/mlx-swift](https://github.com/ml-explore/mlx-swift) | The array framework DiffusionGemma runs on | 0.32.2 | MIT |
-| [ml-explore/mlx-swift-lm](https://github.com/ml-explore/mlx-swift-lm) | Model primitives: the switch layers, quantized layers, RoPE, weight loading and the Gemma 4 vision configuration | `c043fb3` | MIT |
+| [ml-explore/mlx-swift-lm](https://github.com/ml-explore/mlx-swift-lm) | Model primitives: the switch layers and their quantized form, the experts' gather and scatter, weight loading with per-layer quantization, and the Gemma 4 vision configuration | `c043fb3` | MIT |
 | [Blaizzy/mlx-vlm](https://github.com/Blaizzy/mlx-vlm) | The DiffusionGemma implementation the Swift model follows, operation for operation, and the oracle its parity tests compare with | 0.6.15 | MIT |
 | [huggingface/swift-transformers](https://github.com/huggingface/swift-transformers) | The tokenizers and chat templates | 1.3.4 (researched at `af520cf`) | Apache-2.0 |
 

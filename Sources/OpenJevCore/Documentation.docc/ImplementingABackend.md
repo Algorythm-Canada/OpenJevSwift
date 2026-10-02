@@ -4,10 +4,13 @@ Put a model behind one of the two backend protocols and let an engine do everyth
 
 ## Overview
 
-The engines own everything upstream's engines own apart from the model: the option checks, the
-question schema, the prompts, the batching or the canvases, the seeds, the read policies, the
-queue bound and the answers. A backend owns the model, and which protocol it adopts depends on how
-the model answers a question:
+The engines own everything upstream's engines own apart from the model. ``DecisionEngine`` owns
+the option checks, the question schema, the prompts, the canvases, the seeds, the read policies,
+the queue bound and the answers, so a canvas backend owns the model alone.
+``EncoderDecisionEngine`` owns the option checks, the question schema, the queue bound, the
+batching and the answers; a question backend owns its prompt format and its calibration as well
+as the model, as upstream's encoder engines do. Which protocol a backend adopts depends on how the
+model answers a question:
 
 - ``DecisionBackend``: the model fills a canvas. Given a prompt and a canvas of answer slots, it
   returns the log-probabilities of the labels at each slot. DiffusionGemma reads this way, as do

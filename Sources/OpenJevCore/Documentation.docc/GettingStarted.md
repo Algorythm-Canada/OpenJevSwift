@@ -178,7 +178,9 @@ Both engines are actors and take requests from many tasks at once. ``DecisionEng
 ``EngineConfiguration/maxInflight`` reads at once, 64 by default, and the DiffusionGemma runtime
 runs them on the GPU one at a time. ``EncoderDecisionEngine`` makes one backend call at a time, in
 batches of ``EncoderEngineConfiguration/batchSize`` questions, 16 by default. Cancelling the task
-that waits for a decision stops the reads that have not started; a read already running finishes.
+that waits for a decision stops its reads that are still waiting for their turn under those
+limits; a read that has its turn runs to its end, and with DiffusionGemma that includes a read
+queued for the GPU behind another.
 
 Keep one engine per model: loading is the expensive part. When the app is done with an encoder,
 ``ModelReleasing/close()`` on its engine releases the Core ML functions Verdict or Laya loaded; a

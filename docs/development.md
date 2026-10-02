@@ -359,7 +359,8 @@ swift package --disable-sandbox preview-documentation --target OpenJevCore
   reference's table: its variables must be exactly the ones `ServerSettings(environment:)` reads,
   found in its source, plus `OPENJEV_ENCODER_MODELS`; each documented default must be the code's;
   and the settings table of [deployment.md](deployment.md) must agree with it. A new setting
-  changes the three together.
+  changes the three together. A change to either Markdown file alone still runs CI, which reads
+  them.
 - **Linux.** `OpenJevDiffusionGemma` and `OpenJevEncoders` do not exist there, so the site needs a
   Mac. The other two build on Linux too, as they did with Swift 6.2 in the `swift:6.2-noble`
   container:
@@ -481,7 +482,7 @@ cost nothing. No workflow uses the billed `-xlarge` runners unless asked to.
 
 | Workflow | When it runs | Job | Runner | What it runs |
 |---|---|---|---|---|
-| [ci.yml](../.github/workflows/ci.yml) | Every pull request and every push to `main`, except changes that touch only Markdown files | `Linux` | `ubuntu-24.04` with the `swift:6.2-noble` container | `swift build --build-tests` and `swift test`, both with `--scratch-path .build/linux`, then the test log check |
+| [ci.yml](../.github/workflows/ci.yml) | Every pull request and every push to `main`, except changes that touch only Markdown files no test reads | `Linux` | `ubuntu-24.04` with the `swift:6.2-noble` container | `swift build --build-tests` and `swift test`, both with `--scratch-path .build/linux`, then the test log check |
 | | | `macOS` | `macos-26` with Xcode 26.6, selected with `DEVELOPER_DIR` | `swift build --build-tests` and `swift test`, both with `--build-system swiftbuild`, the test log check, `make lint`, then the JevBench harness's smoke test with the image's `python3` |
 | | | `iOS` | `macos-26` with Xcode 26.6, selected with `DEVELOPER_DIR` | `xcodebuild test` of the `OpenJevCore-iOS` scheme on an iPhone 17 Pro simulator, the test log check, then a build of `OpenJevDiffusionGemma` for the iOS Simulator |
 | | | `SDK compatibility` | `ubuntu-24.04` with the `swift:6.2-noble` container | `swift build --product openjev-stub-server` with `--scratch-path .build/linux`, Ubuntu's CPython 3.12 and Node.js 20 from `actions/setup-node`, the pinned SDKs, then `Tools/sdk-compat/run.py --swift-sdk`; the exchanges are uploaded when it fails |
@@ -577,14 +578,16 @@ And took this long:
   fetched and installed.
 - **Superseded runs.** A newer push to a pull request cancels the run it replaces. Every commit on
   `main` runs in a concurrency group of its own, so no merged commit's run is cancelled.
-- **Documentation-only changes.** Both triggers carry `paths-ignore: ["**.md"]`, so a pull request
-  or push that changes only Markdown files starts no run; one that changes a Markdown file and
-  anything else runs as usual. The `Protect main` ruleset requires a review, not a status check,
-  so such a pull request is still mergeable. If a required status check is ever added, replace
-  `paths-ignore` with a job that detects the documentation-only case and reports success, or
-  GitHub will wait for a check that never runs. The DocC catalogs are Markdown under `Sources/`,
-  so a pull request that changes only them starts no CI run, but it starts the Documentation
-  workflow, which builds them.
+- **Documentation-only changes.** Both triggers list every path, then `!**.md`, then the three
+  Markdown files tests read: `THIRD_PARTY.md` (`FixturePinTests`), the configuration reference and
+  `docs/deployment.md` (`ConfigurationReferenceTests`). A pull request or push that changes only
+  other Markdown files starts no run; one that changes one of the three, or anything else, runs as
+  usual. The `Protect main` ruleset requires a review, not a status check, so such a pull request
+  is still mergeable. If a required status check is ever added, replace the path filters with a
+  job that detects the documentation-only case and reports success, or GitHub will wait for a
+  check that never runs. The DocC catalogs are Markdown under `Sources/`, so a pull request that
+  changes only them starts no CI run unless it changes the configuration reference, but it starts
+  the Documentation workflow, which builds them.
 - **Fixture regeneration.** The job runs on Apple silicon because the committed files were written
   there: CPython takes its math functions from the platform's C library, and another library could
   change the last digit of a float. It reproduced every committed file byte for byte.

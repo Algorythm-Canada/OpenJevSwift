@@ -6,11 +6,12 @@ does.
 ## Overview
 
 The settings are upstream OpenJev's variables, with upstream's names, defaults and startup checks,
-so deployment files written for upstream keep working (decision D-013). Two are this port's own.
-The `openjev` tool reads them from the process environment through
-``ServerSettings/init(environment:)``, after writing its flags over their variables; the libraries
-never read the environment themselves. In the table, unset means the variable may be left out or
-set to the empty string with the same effect.
+so deployment files written for upstream keep working (decision D-013). Two are this port's own. The
+`openjev` tool reads them from the process environment through
+``ServerSettings/init(environment:)``, after writing its flags over their variables, and passes
+`OPENJEV_ENCODER_MODELS` to the encoder store, `EncoderPackageStore(environment:)`; the libraries
+never read the process environment themselves. In the table, unset means the variable may be left
+out or set to the empty string with the same effect.
 
 | Variable | Default | Backends | Meaning |
 |---|---|---|---|

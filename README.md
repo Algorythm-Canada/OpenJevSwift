@@ -4,11 +4,12 @@
 
 A native Swift implementation of [OpenJev](https://github.com/razorback16/openjev), the open,
 Jev-compatible "System One" decision server. Send it a state and typed questions (`noul`,
-`choice`, `score`); it returns a probability distribution and a confidence for every answer,
-read from a model's probabilities rather than generated as text, so an answer cannot go
-off-schema. One `openjev` binary serves DiffusionGemma 26B-A4B on MLX, or Verdict or Laya on Core
-ML, on a Mac, with upstream's exact wire API, so TypeSafe's SDKs work against it unchanged; the
-same libraries answer requests inside an iPhone or Mac app.
+`choice`, `score`); it reads every answer from a model's probabilities rather than generating
+text, so an answer cannot go off-schema: a noul's is the probability of yes, and a choice's or a
+score's the probability of every option, with a confidence. One `openjev` binary serves
+DiffusionGemma 26B-A4B on MLX, or Verdict or Laya on Core ML, on a Mac, with upstream's exact wire
+API, so TypeSafe's SDKs work against it unchanged; the same libraries answer requests inside an
+iPhone or Mac app.
 
 OpenJevSwift is an independent project. It is not affiliated with or endorsed by TypeSafe AI (the
 makers of Jev), by Google DeepMind or NVIDIA (DiffusionGemma), or by the authors of the other
@@ -55,8 +56,8 @@ loads the same models inside an app.
 | Backend | Model | Mac | Memory |
 |---|---|---|---|
 | `verdict` | `verdict-1.4`, 151M parameters, Core ML | Apple silicon, macOS 15 or later | 1.6 GB with the functions one-question reads load, 2.8 GB with all six |
-| `laya` | `laya-1.0`, 421M parameters, Core ML | Apple silicon, macOS 15 or later | 4.7 GB with the functions one-question reads load, 8.9 GB with all eight; 2.1 GB with `OPENJEV_ENCODER_FUNCTIONS=2` |
-| `mlx` | `openjev-0.1`, DiffusionGemma 26B-A4B, 4-bit, MLX | Apple silicon | about 16 GB to load and 17.3 GiB in service; 32 GB or more recommended |
+| `laya` | `laya-1.0`, 421M parameters, Core ML | Apple silicon, macOS 15 or later | 4.7 GB with the functions one-question reads load, 8.9 GB with all eight and up to 9.7 GB at peak; with `OPENJEV_ENCODER_FUNCTIONS=2`, 2.1 GB for one-question reads and up to 4.4 GB at peak |
+| `mlx` | `openjev-0.1`, DiffusionGemma 26B-A4B, 4-bit, MLX | Apple silicon | about 16 GB to load, 17.3 GiB in service with short prompts and up to about 3.6 GB more for cached long prompts; 32 GB or more recommended |
 
 Building needs Xcode 26.4 or later. The `mlx` backend also needs MLX's Metal shaders, which Swift
 Build compiles with the Metal Toolchain: Swift Build is the default with Xcode 27, and Xcode 26
@@ -66,11 +67,12 @@ core, the server and the `openjev` tool for the tests, without any backend.
 
 ## Status
 
-Milestones 0 to 3 are complete: the foundations, the decision engine core, DiffusionGemma reads
-on MLX, and the Jev-compatible HTTP server with the `openjev` tool. Milestone 4, the read
-extensions and images, is in progress: `steps`, `samples` and `sequential` are verified end to end
-on the DiffusionGemma checkpoint (#43, #44 and #45), and images remain. Verdict and Laya, from
-milestone 6, and the JevBench comparison with upstream, from milestone 7, are done too.
+Milestones 0 to 3 are complete, every work issue in them closed: the foundations, the decision
+engine core, DiffusionGemma reads on MLX, and the Jev-compatible HTTP server with the `openjev`
+tool. Milestone 4, the read extensions and images, is in progress: `steps`, `samples` and
+`sequential` are verified end to end on the DiffusionGemma checkpoint (#43, #44 and #45), and images
+remain. Verdict and Laya, from milestone 6, and the JevBench comparison with upstream, from
+milestone 7, are done too.
 
 Not there yet:
 
@@ -85,15 +87,16 @@ index.
 
 ## Compatibility
 
-Everything up to the model's probabilities is upstream's byte for byte: the prompts, the answer
-templates, the canvases and seeds, the request validation, the error bodies, the headers and the
-`/v1/models` listing, all checked against fixtures upstream's own code writes. The probabilities
-agree within measured bounds: DiffusionGemma's within decision D-014's on the oracle reads (the top
-label on 96.2% of slots, and on all 120 where mlx-vlm's top two are at least 0.5 apart), Verdict's
-and Laya's with upstream's top answer on all 666 JevBench and TypeSafe items. The differences, among
-them a stricter JSON parser, the 503 for any backend failure and the features not built yet, each
-have a decision record. [docs/compatibility.md](docs/compatibility.md) has the three tables and the
-matrix of what runs on macOS, iOS and Linux.
+Apart from the recorded differences, everything up to the model's probabilities is upstream's byte
+for byte: the prompts, the answer templates, the canvases and seeds, the request validation, the
+error bodies, the headers and the `/v1/models` listing, all checked against fixtures upstream's own
+code writes. The probabilities agree within measured bounds: DiffusionGemma's within decision
+D-014's on the oracle reads (the top label on 96.2% of slots, and on all 120 where mlx-vlm's top two
+are at least 0.5 apart), Verdict's and Laya's with upstream's top answer on all 666 JevBench and
+TypeSafe items. The differences, among them a stricter JSON parser, the 503 for any backend failure
+and the features not built yet, each have a decision record.
+[docs/compatibility.md](docs/compatibility.md) has the three tables and the matrix of what runs on
+macOS, iOS and Linux.
 
 ## Documentation
 
@@ -114,8 +117,8 @@ matrix of what runs on macOS, iOS and Linux.
 
 ## License and credits
 
-Apache-2.0, the same as upstream OpenJev. Code ported from MIT-licensed projects (mlx-vlm,
-mlx-swift-lm and its Layr-Labs fork) keeps its attribution; [THIRD_PARTY.md](THIRD_PARTY.md) lists
-every referenced project at its pinned revision. The models are other people's work and keep their
-own licenses: [docs/credits.md](docs/credits.md) credits each, with where this project gets its
-weights. No weights are part of this repository.
+Apache-2.0, the same as upstream OpenJev. Code ported from mlx-vlm (MIT) keeps its copyright notice
+in each file's header; [THIRD_PARTY.md](THIRD_PARTY.md) lists every referenced project at its pinned
+revision. The models are other people's work and keep their own licenses:
+[docs/credits.md](docs/credits.md) credits each, with where this project gets its weights. No
+weights are part of this repository.

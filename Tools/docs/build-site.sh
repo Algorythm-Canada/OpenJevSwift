@@ -30,6 +30,10 @@ fi
 
 mkdir -p "$(dirname "$output")"
 output="$(cd "$(dirname "$output")" && pwd)/$(basename "$output")"
+if [[ -e "$output" || -L "$output" ]] && [[ ! -d "$output" ]]; then
+    echo "build-site.sh: $output exists and is not a directory; not replacing it" >&2
+    exit 1
+fi
 if [[ -d "$output" ]] && [[ -n "$(ls -A "$output")" ]]; then
     if [[ ! -f "$output/metadata.json" || ! -d "$output/documentation" ]]; then
         echo "build-site.sh: $output is not empty and is not a documentation site; not replacing it" >&2

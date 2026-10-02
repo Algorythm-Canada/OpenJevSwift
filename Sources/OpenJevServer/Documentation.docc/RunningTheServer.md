@@ -31,7 +31,8 @@ swift build -c release --product openjev
 The binary is `.build/release/openjev`. Xcode 26.4 to 26.6 build it too, but their default build
 system leaves out MLX's Metal shaders, without which the `mlx` backend cannot run; pass
 `--build-system swiftbuild` there. A Linux build has the tool without any backend, since MLX and
-Core ML are Apple's: every backend there exits with status 3. The commands below call the binary
+Core ML are Apple's: there `serve` and `decide` exit with status 3 whatever the backend, though
+`models` still prints a backend's listing, which needs no model. The commands below call the binary
 `openjev`, as if it were installed on the `PATH`; the deployment guide installs it in
 `/usr/local/bin`.
 

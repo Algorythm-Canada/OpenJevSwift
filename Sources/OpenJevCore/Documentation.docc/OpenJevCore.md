@@ -8,9 +8,10 @@ upstream OpenJev builds, and the two engines that answer a request through a mod
 OpenJevSwift is a native Swift implementation of
 [OpenJev](https://github.com/razorback16/openjev), the open, Jev-compatible "System One" decision
 server, at upstream commit `dcd2094`. A request is a state and typed questions: a noul (yes or
-no), a choice among named options or a score over ordered levels. The answer to each is a
-probability distribution and a confidence, read from a model's probabilities rather than
-generated as text, so an answer cannot go off-schema.
+no), a choice among named options or a score over ordered levels. Each answer is read from a
+model's probabilities rather than generated as text, so it cannot go off-schema: a noul's is the
+probability of yes, and a choice's or a score's the probability of every option, with a
+confidence.
 
 This module is everything that does not depend on a model. It parses and validates requests as
 upstream's FastAPI app does, builds the question schema, the prompts, the answer templates and

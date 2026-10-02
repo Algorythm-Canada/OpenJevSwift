@@ -2344,11 +2344,12 @@ Decision.
    types in code voice, and the backend modules' articles link back to it.
 2. **One site from one build.** `Tools/docs/build-site.sh`, which `make docs` and the Documentation
    workflow run, builds the four archives in one `generate-documentation` call with
-   `--enable-experimental-combined-documentation`: each archive with the issue's
-   `--transform-for-static-hosting --hosting-base-path OpenJevSwift`, then `docc merge` into one
-   site with one sidebar and DocC's own landing page of the four modules at `documentation/`, and
-   `Tools/docs/index.html` as the site's front page. Built that way, each module's archive is
-   converted with its dependencies' archives, so a server or backend page can link to a core symbol.
+   `--enable-experimental-combined-documentation`: each archive with
+   `--transform-for-static-hosting --hosting-base-path OpenJevSwift` (the issue asks only for the
+   Swift Package Index or GitHub Pages), then `docc merge` into one site with one sidebar and
+   DocC's own landing page of the four modules at `documentation/`, and `Tools/docs/index.html` as
+   the site's front page. Built that way, each module's archive is converted with its
+   dependencies' archives, so a server or backend page can link to a core symbol.
    Such a link is absolute, ``` ``/OpenJevCore/DecisionEngine`` ```. `OpenJevServer` extends two
    core types, which gives it a page of its own named `OpenJevCore`: a relative `OpenJevCore/...`
    link resolves against that page and fails, and Swift 6.2's DocC did the same with every absolute
@@ -2385,15 +2386,20 @@ Decision.
    `OPENJEV_MAX_IMAGE_BYTES` none until images (#48), since every backend refuses images first.
    `ConfigurationReferenceTests` (`OpenJevServerTests`) parses the table: its names must be exactly
    the `env.<reader>("OPENJEV_...")` reads of `ServerSettings.swift` and the store's variable, each
-   documented default must leave `ServerSettings` as an unset variable does, and every variable of
-   [deployment.md](deployment.md)'s settings table must appear with the same default. Changing a
-   default, adding a read or dropping a row fails it.
+   documented default must leave `ServerSettings` as an unset variable does (and for the three
+   numbers an empty value leaves at their default, the setting must hold the documented value or
+   none), and every variable of [deployment.md](deployment.md)'s settings table must appear with
+   the same default. Changing a default, adding a read or dropping a row fails it. CI's path
+   filters, which skipped every Markdown-only change, now let a change to the reference or to
+   deployment.md through, and one to `THIRD_PARTY.md`, which `FixturePinTests` already read.
 6. **The compatibility page.** [compatibility.md](compatibility.md) has the three tables the issue
    names, each difference with its decision number, and the matrix of three platforms by four kinds
    of backend by seven features, each cell "yes", "no" with an issue, or "n/a". The matrix follows
    from `BackendCapabilities`, the CLI's `BackendRegistry` and the platform matrix of
-   [05-architecture.md](05-architecture.md); no test checks it, because the DiffusionGemma
-   runtime's capabilities belong to a loaded runtime.
+   [05-architecture.md](05-architecture.md). No test reads the matrix itself: the capabilities it
+   is derived from are tested where they are declared (`RuntimeTests` on a DiffusionGemma runtime
+   without weights, the engines' refusal tests for the encoders), so a change there fails a test
+   and this page is updated by hand.
 7. **Credits beyond the served models.** [credits.md](credits.md) credits the three models served,
    the two upstream serves that this port does not yet, where each model's weights come from (the
    `Algorythm-Canada/openjev-models` releases for Verdict and Laya, the Hugging Face Hub for
@@ -2410,15 +2416,15 @@ Decision.
 
 Alternatives rejected. (a) Four separate archives copied into one folder: their navigator indexes
 and root files collide, so the sidebar would show one module, and no link could cross modules. (b)
-A hosting base path per module: four sites with four sidebars and no links between them, and not
-the issue's `--hosting-base-path OpenJevSwift`. (c) A documentation-only umbrella target linking
+A hosting base path per module: four sites with four sidebars and no links between them, none
+at the repository's Pages path, `/OpenJevSwift/`. (c) A documentation-only umbrella target linking
 every module: a target for documentation alone, which Linux could not build. (d) Generating the
 configuration table from `ServerSettings`: DocC has no build step for it, and the test keeps a
 written table honest at a fraction of the cost.
 
-Consequences. A pull request that changes only DocC Markdown starts no CI run (`paths-ignore`) but
-starts the Documentation workflow, which builds the site. The workflow has no cache, so each run
-compiles the dependencies on the macOS runner. The site is published at
+Consequences. A pull request that changes only DocC Markdown starts no CI run, unless it changes the
+configuration reference, but starts the Documentation workflow, which builds the site. The workflow
+has no cache, so each run compiles the dependencies on the macOS runner. The site is published at
 <https://algorythm-canada.github.io/OpenJevSwift/> once GitHub Pages is enabled with GitHub Actions
 as its source; until then the deploy job is skipped. A new public symbol needs a doc comment, and a
 new setting a row in the reference.

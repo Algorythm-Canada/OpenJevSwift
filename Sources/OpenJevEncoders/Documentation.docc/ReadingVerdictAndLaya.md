@@ -6,20 +6,22 @@ with it.
 ## Overview
 
 Each backend loads from an ``EncoderPackageStore``, which finds the model's files or downloads
-them, and is answered through an ``/OpenJevCore/EncoderDecisionEngine``:
+them, and is answered through an ``/OpenJevCore/EncoderDecisionEngine``. On a Mac or an iPhone:
 
 ```swift
 import OpenJevCore
 import OpenJevEncoders
 
 let store = try EncoderPackageStore(environment: [:])
-let backend = try await LayaBackend.load(from: store)
+let backend = try await VerdictBackend.load(from: store)
 let engine = EncoderDecisionEngine(backend: backend)
 try await engine.warmUp()
 let decision = try await engine.decide(request)
 ```
 
-`VerdictBackend.load(from:functionCapacity:)` loads Verdict the same way.
+`LayaBackend.load(from:packageSet:functionCapacity:)` loads Laya the same way on a Mac. On an
+iPhone it fetches only Laya's tokenizer and configuration, and the warm-up read throws until the
+app has downloaded a package, as the section on an iPhone below describes.
 
 ### Packages and downloads
 

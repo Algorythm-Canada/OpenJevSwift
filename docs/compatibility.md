@@ -10,9 +10,9 @@ The last section is the matrix of what runs where.
 
 ## Identical to upstream
 
-Everything up to the model's probabilities is upstream's, byte for byte. The golden fixtures are
-written by upstream's own code at the pinned commit ([Fixtures/](../Fixtures/README.md)), and the
-tests compare with them exactly.
+Apart from the differences the third table lists, everything up to the model's probabilities is
+upstream's, byte for byte. The golden fixtures are written by upstream's own code at the pinned
+commit ([Fixtures/](../Fixtures/README.md)), and the tests compare with them exactly.
 
 | Area | What is identical | Checked against |
 |---|---|---|
@@ -24,12 +24,12 @@ tests compare with them exactly.
 | Answers from probabilities | Each slot's distribution and entropy from the same log-probabilities, the confidence, the choice, the score, the averaging | `Fixtures/distributions` |
 | Encoder inputs | Verdict's prompts, Laya's heads, options, sequences and truncation, byte for byte; their calibration within 1e-6, Laya's bit for bit | `Fixtures/encoders` |
 | Requests | Which bodies are accepted, pydantic's lax coercion of the extension fields, every 422 with its `loc`, `msg`, `input` and `ctx`, and CPython's `json_invalid` message and position for a body that is not JSON (728 recorded documents) | `Fixtures/wire/cases.json`, `Fixtures/python-json` |
-| Errors | The status, body and `retry-after` of every error: 400, 401, 403, 404, 413, 422, 503 and 529 | `Fixtures/wire`, `Fixtures/errors` |
+| Errors | The status, body and `retry-after` of the errors both answer: 400, 401, 403, 413, 422, 503 and 529, and the 404 of an unknown path | `Fixtures/wire`, `Fixtures/errors`; the 404 against FastAPI's body in the server's application tests |
 | Headers | `x-typesafe-request-id` and `x-request-id`, the same `req_` id with 32 hex digits, on every response; `server-timing` with its `model`, `server` and `total` spans | `Fixtures/wire`, the live suite |
 | Response bytes | Key order, the exact key sets of each answer, Python's float formatting and FastAPI's compact separators | `Fixtures/wire/answers.json` |
 | The listing | The `/v1/models` body of each backend, the served version a response names, and the accepted names, the SDK aliases `jev-latest` and `jev-preview` included | `Fixtures/wire/models.json` |
 | Model routes | Which requests are forwarded, the bytes and the three headers sent, what comes back, the routed listing, and the 503 names of a failed exchange | the server's route tests (D-040) |
-| Settings | The names, defaults and startup checks of every `OPENJEV_*` variable this port reads, and their messages | the settings tests, upstream's `test_settings_are_checked_at_startup` |
+| Settings | Upstream's `OPENJEV_*` variables: their names, defaults and startup checks and the checks' messages, apart from the settings rows of the third table; `OPENJEV_ENCODER_MODELS` and `OPENJEV_ENCODER_FUNCTIONS` are this port's own | the settings tests, upstream's `test_settings_are_checked_at_startup` |
 | Clients | TypeSafe's Python SDK 0.7.2 and TypeScript SDK 0.6.0, unchanged, decode answers, retry the 529, and raise the authentication error and the 422 as against upstream | `Tools/sdk-compat`, in CI (D-040) |
 
 Upstream's own end-to-end file, `tests/test_live.py`, passes against the Swift server on Verdict
@@ -53,10 +53,10 @@ hardware.
 | | Largest label probability difference | reported, not bounded | 0.374, on the quickstart's `is_urgent` slot |
 | `mlx`, mlx-vlm's Metal library and RoPE table | Reads identical to mlx-vlm's | every read | 27 of 27, bit for bit (D-036) |
 | `verdict`, Core ML float16 against upstream's PyTorch float32 | Largest probability difference | 0.02 (D-034) | 0.0022 over 333 JevBench and TypeSafe items; 0.0014 over spike #56's 200 questions |
-| | Mean probability difference | 0.003 | 2.8e-4 and 2.9e-4 |
+| | Mean probability difference | 0.003 | 2.8e-4 on JevBench and 2.9e-4 on TypeSafe |
 | | Top answer, wherever upstream's top two are at least 0.01 apart | unchanged | unchanged on all 333 items |
-| `laya`, Core ML float16 against upstream's PyTorch float32 | Largest probability difference, before laya's rounding | 0.02 (D-037) | 0.0026 over 333 items; 0.0039 over spike #56's 200 questions |
-| | Mean probability difference | 0.003 | 1.6e-4 and 2.1e-4 |
+| `laya`, Core ML float16 against upstream's PyTorch float32 | Largest probability difference | 0.02, before laya's 4-decimal rounding (D-037) | 0.0026 over 333 items, between the rounded answers the servers sent; 0.0039 over spike #56's 200 questions, before rounding |
+| | Mean probability difference | 0.003, before rounding | 2.1e-4 on JevBench and 1.6e-4 on TypeSafe, between the rounded answers |
 | | Top answer, wherever upstream's top two are at least 0.01 apart | unchanged | unchanged on all 333 items |
 
 The `mlx` figures are D-014's bounds over `Fixtures/oracle`, measured on 2026-10-01 on an M3 Max
@@ -133,7 +133,8 @@ encoder engines do), from the `openjev` tool's `BackendRegistry`, and from the p
   server on iOS, and no iPhone holds DiffusionGemma, although the module compiles for it. Laya on
   an iPhone reads through one package per sequence length, which the app fetches.
 - **Linux** builds `OpenJevCore`, the server and the `openjev` tool for the tests and the SDK
-  suite's stub server, but no backend: MLX and Core ML are Apple's, so every backend exits with
-  status 3, and a server cannot start to forward routes.
+  suite's stub server, but no backend: MLX and Core ML are Apple's, so `serve` and `decide` exit
+  with status 3 whatever the backend (`models` still prints a listing, which needs no model), and
+  a server cannot start to forward routes.
 - **JevK5 and CLM**, upstream's other two models, are not served on any platform yet (issues #55
   and #59).
