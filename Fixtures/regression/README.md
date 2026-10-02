@@ -14,9 +14,11 @@ on the pinned 4-bit checkpoint, under mlx-swift's own kernels (D-014's native ti
 - `generator` holds the pins: the test that wrote it, the checkpoint repository and revision, the
   mlx-swift version Package.resolved pins, the macOS version, the GPU's name and the day it was
   recorded.
-- `entries` lists 29 requests:
-  - the 27 reads of [Fixtures/oracle/reads.json](../oracle/README.md), each sent to
-    `DiffusionGemmaRuntime.read` with the oracle's prompt ids, canvas, slots and steps;
+- `entries` lists 65 requests:
+  - the 63 reads of [Fixtures/oracle/reads.json](../oracle/README.md), each sent to
+    `DiffusionGemmaRuntime.read` with the oracle's prompt ids, canvas, slots and steps (the 36
+    reads of JevBench items that D-048 added to the oracle were recorded on 2026-10-02, when the 29
+    earlier entries reproduced bit for bit);
   - `engine/quickstart`, the wire quickstart of [Fixtures/wire/cases.json](../wire/README.md),
     and `engine/readme`, upstream's README example ("Everything is down and we have a demo with
     our biggest client at noon." under the urgent, team and tone questions), each through
@@ -34,7 +36,9 @@ probability, entropy and answer probability must equal the recorded one exactly,
 prompt tokens too: seven runs in separate processes on the M3 Max reproduced every value bit for
 bit, so the tolerance is 0 (D-044). On another machine the kernels round differently, so the test
 holds the port to D-014's aggregate bounds instead (mean label probability difference at most 0.02,
-top label on at least 90% of slots) and says to record that machine's own file.
+top label on at least 90% of slots) and says to record that machine's own file. So it does with
+`OPENJEV_MLX_METALLIB` set, D-014's exact tier, whose kernels are not the ones the file was recorded
+on, and it refuses to record under them (D-048).
 
 ## Recording
 

@@ -3153,6 +3153,774 @@
       ]
     },
     {
+      "id" : "hard-opus-c-long_policy-04/g0/c0/steps1",
+      "reads" : [
+        {
+          "promptTokens" : 3264,
+          "slots" : [
+            {
+              "entropy" : 0.7890272198557519,
+              "probabilities" : [
+                0.547101138120656,
+                0.4528988618793441
+              ],
+              "topLabel" : 0,
+              "topLabelID" : 11262
+            }
+          ],
+          "steps" : 1
+        }
+      ]
+    },
+    {
+      "id" : "hard-opus-c-long_policy-04/g0/c1/steps1",
+      "reads" : [
+        {
+          "promptTokens" : 3264,
+          "slots" : [
+            {
+              "entropy" : 1.3800677375433132,
+              "probabilities" : [
+                0.13443486989420958,
+                0.8655651301057905
+              ],
+              "topLabel" : 1,
+              "topLabelID" : 951
+            }
+          ],
+          "steps" : 1
+        }
+      ]
+    },
+    {
+      "id" : "hard-opus-c-long_policy-04/g0/c2/steps1",
+      "reads" : [
+        {
+          "promptTokens" : 3264,
+          "slots" : [
+            {
+              "entropy" : 1.5911537643329925,
+              "probabilities" : [
+                0.3090676982741585,
+                0.6909323017258415
+              ],
+              "topLabel" : 1,
+              "topLabelID" : 951
+            }
+          ],
+          "steps" : 1
+        }
+      ]
+    },
+    {
+      "id" : "hard-opus-c-long_policy-04/g0/c3/steps1",
+      "reads" : [
+        {
+          "promptTokens" : 3264,
+          "slots" : [
+            {
+              "entropy" : 1.0964622974223435,
+              "probabilities" : [
+                0.2805786419958919,
+                0.7194213580041081
+              ],
+              "topLabel" : 1,
+              "topLabelID" : 951
+            }
+          ],
+          "steps" : 1
+        }
+      ]
+    },
+    {
+      "id" : "hard-sol-b-long_policy-06/g0/c0/steps1",
+      "reads" : [
+        {
+          "promptTokens" : 2647,
+          "slots" : [
+            {
+              "entropy" : 1.3580700411088276,
+              "probabilities" : [
+                0.24980883145590033,
+                0.07112059129038749,
+                0.6079499859633246,
+                0.07112059129038749
+              ],
+              "topLabel" : 2,
+              "topLabelID" : 565
+            }
+          ],
+          "steps" : 1
+        }
+      ]
+    },
+    {
+      "id" : "hard-sol-b-long_policy-06/g0/c1/steps1",
+      "reads" : [
+        {
+          "promptTokens" : 2647,
+          "slots" : [
+            {
+              "entropy" : 1.3865617387949694,
+              "probabilities" : [
+                0.2606659603755558,
+                0.07420340733498182,
+                0.6197801690568275,
+                0.04535046323263485
+              ],
+              "topLabel" : 2,
+              "topLabelID" : 565
+            }
+          ],
+          "steps" : 1
+        }
+      ]
+    },
+    {
+      "id" : "hard-sol-b-long_policy-06/g0/c2/steps1",
+      "reads" : [
+        {
+          "promptTokens" : 2647,
+          "slots" : [
+            {
+              "entropy" : 1.2821322263101103,
+              "probabilities" : [
+                0.39356427423225854,
+                0.09871862032642607,
+                0.47414003493329515,
+                0.033577070508020265
+              ],
+              "topLabel" : 2,
+              "topLabelID" : 565
+            }
+          ],
+          "steps" : 1
+        }
+      ]
+    },
+    {
+      "id" : "hard-sol-b-long_policy-06/g0/c3/steps1",
+      "reads" : [
+        {
+          "promptTokens" : 2647,
+          "slots" : [
+            {
+              "entropy" : 1.1864315435742345,
+              "probabilities" : [
+                0.23075331882714428,
+                0.02506604082003897,
+                0.7097650525544805,
+                0.03441558779833616
+              ],
+              "topLabel" : 2,
+              "topLabelID" : 565
+            }
+          ],
+          "steps" : 1
+        }
+      ]
+    },
+    {
+      "id" : "hard-opus-a-long_policy-19/g0/c0/steps1",
+      "reads" : [
+        {
+          "promptTokens" : 2318,
+          "slots" : [
+            {
+              "entropy" : 0.6777307813175215,
+              "probabilities" : [
+                0.6898502721192452,
+                0.31014972788075473
+              ],
+              "topLabel" : 0,
+              "topLabelID" : 11262
+            }
+          ],
+          "steps" : 1
+        }
+      ]
+    },
+    {
+      "id" : "hard-opus-a-long_policy-19/g0/c1/steps1",
+      "reads" : [
+        {
+          "promptTokens" : 2318,
+          "slots" : [
+            {
+              "entropy" : 0.3844080904395171,
+              "probabilities" : [
+                0.10650894523713367,
+                0.8934910547628664
+              ],
+              "topLabel" : 1,
+              "topLabelID" : 951
+            }
+          ],
+          "steps" : 1
+        }
+      ]
+    },
+    {
+      "id" : "hard-opus-a-long_policy-19/g0/c2/steps1",
+      "reads" : [
+        {
+          "promptTokens" : 2318,
+          "slots" : [
+            {
+              "entropy" : 0.7697111445312408,
+              "probabilities" : [
+                0.5173956250888132,
+                0.4826043749111868
+              ],
+              "topLabel" : 0,
+              "topLabelID" : 11262
+            }
+          ],
+          "steps" : 1
+        }
+      ]
+    },
+    {
+      "id" : "hard-opus-a-long_policy-19/g0/c3/steps1",
+      "reads" : [
+        {
+          "promptTokens" : 2318,
+          "slots" : [
+            {
+              "entropy" : 0.6316465824472709,
+              "probabilities" : [
+                0.8402702408349483,
+                0.1597297591650517
+              ],
+              "topLabel" : 0,
+              "topLabelID" : 11262
+            }
+          ],
+          "steps" : 1
+        }
+      ]
+    },
+    {
+      "id" : "hard-opus-b-multi_hop-03/g0/c0/steps1",
+      "reads" : [
+        {
+          "promptTokens" : 2989,
+          "slots" : [
+            {
+              "entropy" : 1.3004932638394338,
+              "probabilities" : [
+                0.006353050398186313,
+                0.6685534915889553,
+                0.3183180311556243,
+                0.006775426857234078
+              ],
+              "topLabel" : 1,
+              "topLabelID" : 603
+            }
+          ],
+          "steps" : 1
+        }
+      ]
+    },
+    {
+      "id" : "hard-opus-b-multi_hop-03/g0/c1/steps1",
+      "reads" : [
+        {
+          "promptTokens" : 2989,
+          "slots" : [
+            {
+              "entropy" : 1.795155325516045,
+              "probabilities" : [
+                0.003665973438662665,
+                0.6654758111571565,
+                0.32416868371211804,
+                0.006689531692062772
+              ],
+              "topLabel" : 1,
+              "topLabelID" : 603
+            }
+          ],
+          "steps" : 1
+        }
+      ]
+    },
+    {
+      "id" : "hard-opus-b-multi_hop-03/g0/c2/steps1",
+      "reads" : [
+        {
+          "promptTokens" : 2989,
+          "slots" : [
+            {
+              "entropy" : 1.1334859433117814,
+              "probabilities" : [
+                0.0046298719069524374,
+                0.7552896130134418,
+                0.23658509776962244,
+                0.0034954173099833448
+              ],
+              "topLabel" : 1,
+              "topLabelID" : 603
+            }
+          ],
+          "steps" : 1
+        }
+      ]
+    },
+    {
+      "id" : "hard-opus-b-multi_hop-03/g0/c3/steps1",
+      "reads" : [
+        {
+          "promptTokens" : 2989,
+          "slots" : [
+            {
+              "entropy" : 1.5791511512964003,
+              "probabilities" : [
+                0.005915917073565627,
+                0.7125288926241202,
+                0.2741364538307396,
+                0.007418736471574667
+              ],
+              "topLabel" : 1,
+              "topLabelID" : 603
+            }
+          ],
+          "steps" : 1
+        }
+      ]
+    },
+    {
+      "id" : "hard-sol-a-multi_hop-08/g0/c0/steps1",
+      "reads" : [
+        {
+          "promptTokens" : 2335,
+          "slots" : [
+            {
+              "entropy" : 0.9506472786236805,
+              "probabilities" : [
+                0.6707086058315523,
+                0.04556661771761675,
+                0.28202509159977457,
+                0.0016996848510564637
+              ],
+              "topLabel" : 0,
+              "topLabelID" : 562
+            }
+          ],
+          "steps" : 1
+        }
+      ]
+    },
+    {
+      "id" : "hard-sol-a-multi_hop-08/g0/c1/steps1",
+      "reads" : [
+        {
+          "promptTokens" : 2335,
+          "slots" : [
+            {
+              "entropy" : 1.2479181080078834,
+              "probabilities" : [
+                0.6794636904804952,
+                0.06158234973500159,
+                0.25625077355669185,
+                0.002703186227811455
+              ],
+              "topLabel" : 0,
+              "topLabelID" : 562
+            }
+          ],
+          "steps" : 1
+        }
+      ]
+    },
+    {
+      "id" : "hard-sol-a-multi_hop-08/g0/c2/steps1",
+      "reads" : [
+        {
+          "promptTokens" : 2335,
+          "slots" : [
+            {
+              "entropy" : 1.1677519560075076,
+              "probabilities" : [
+                0.6723099657112669,
+                0.0503897889299266,
+                0.2754958123968665,
+                0.0018044329619400113
+              ],
+              "topLabel" : 0,
+              "topLabelID" : 562
+            }
+          ],
+          "steps" : 1
+        }
+      ]
+    },
+    {
+      "id" : "hard-sol-a-multi_hop-08/g0/c3/steps1",
+      "reads" : [
+        {
+          "promptTokens" : 2335,
+          "slots" : [
+            {
+              "entropy" : 0.9294640049245066,
+              "probabilities" : [
+                0.8319380453561305,
+                0.04675951024111043,
+                0.119894337352161,
+                0.0014081070505980056
+              ],
+              "topLabel" : 0,
+              "topLabelID" : 562
+            }
+          ],
+          "steps" : 1
+        }
+      ]
+    },
+    {
+      "id" : "hard-opus-c-long_policy-08/g0/c0/steps1",
+      "reads" : [
+        {
+          "promptTokens" : 3322,
+          "slots" : [
+            {
+              "entropy" : 0.7423442318161431,
+              "probabilities" : [
+                0.000872800694079266,
+                0.12819751487003092,
+                0.8017779843340588,
+                0.0691517001018311
+              ],
+              "topLabel" : 2,
+              "topLabelID" : 236778
+            }
+          ],
+          "steps" : 1
+        }
+      ]
+    },
+    {
+      "id" : "hard-opus-c-long_policy-08/g0/c1/steps1",
+      "reads" : [
+        {
+          "promptTokens" : 3322,
+          "slots" : [
+            {
+              "entropy" : 0.8357332886872468,
+              "probabilities" : [
+                0.0009593830477243787,
+                0.22093321756938747,
+                0.7105647043122426,
+                0.0675426950706456
+              ],
+              "topLabel" : 2,
+              "topLabelID" : 236778
+            }
+          ],
+          "steps" : 1
+        }
+      ]
+    },
+    {
+      "id" : "hard-opus-c-long_policy-08/g0/c2/steps1",
+      "reads" : [
+        {
+          "promptTokens" : 3322,
+          "slots" : [
+            {
+              "entropy" : 0.8474022386485872,
+              "probabilities" : [
+                0.0017053169803257562,
+                0.26274416845556126,
+                0.679161695058795,
+                0.056388819505317996
+              ],
+              "topLabel" : 2,
+              "topLabelID" : 236778
+            }
+          ],
+          "steps" : 1
+        }
+      ]
+    },
+    {
+      "id" : "hard-opus-c-long_policy-08/g0/c3/steps1",
+      "reads" : [
+        {
+          "promptTokens" : 3322,
+          "slots" : [
+            {
+              "entropy" : 0.8172127381017964,
+              "probabilities" : [
+                0.0003400032576891402,
+                0.27771797184618074,
+                0.6813685070213459,
+                0.04057351787478421
+              ],
+              "topLabel" : 2,
+              "topLabelID" : 236778
+            }
+          ],
+          "steps" : 1
+        }
+      ]
+    },
+    {
+      "id" : "hard-opus-a-long_policy-08/g0/c0/steps1",
+      "reads" : [
+        {
+          "promptTokens" : 2396,
+          "slots" : [
+            {
+              "entropy" : 1.290629031320336,
+              "probabilities" : [
+                0.052719645586856864,
+                0.02492328745296644,
+                0.9209629788494396,
+                0.001394088110737128
+              ],
+              "topLabel" : 2,
+              "topLabelID" : 565
+            }
+          ],
+          "steps" : 1
+        }
+      ]
+    },
+    {
+      "id" : "hard-opus-a-long_policy-08/g0/c1/steps1",
+      "reads" : [
+        {
+          "promptTokens" : 2396,
+          "slots" : [
+            {
+              "entropy" : 0.844119375739153,
+              "probabilities" : [
+                0.016957346205036035,
+                0.02029923486425394,
+                0.9608645071822696,
+                0.001878911748440442
+              ],
+              "topLabel" : 2,
+              "topLabelID" : 565
+            }
+          ],
+          "steps" : 1
+        }
+      ]
+    },
+    {
+      "id" : "hard-opus-a-long_policy-08/g0/c2/steps1",
+      "reads" : [
+        {
+          "promptTokens" : 2396,
+          "slots" : [
+            {
+              "entropy" : 0.6249924676861597,
+              "probabilities" : [
+                0.11213369399059148,
+                0.009900648472220896,
+                0.8770527024957696,
+                0.0009129550414180022
+              ],
+              "topLabel" : 2,
+              "topLabelID" : 565
+            }
+          ],
+          "steps" : 1
+        }
+      ]
+    },
+    {
+      "id" : "hard-opus-a-long_policy-08/g0/c3/steps1",
+      "reads" : [
+        {
+          "promptTokens" : 2396,
+          "slots" : [
+            {
+              "entropy" : 1.8307554385638383,
+              "probabilities" : [
+                0.10006806728353256,
+                0.0333471318377635,
+                0.864772821391708,
+                0.0018119794869959297
+              ],
+              "topLabel" : 2,
+              "topLabelID" : 565
+            }
+          ],
+          "steps" : 1
+        }
+      ]
+    },
+    {
+      "id" : "hard-opus-c-long_policy-10/g0/c0/steps1",
+      "reads" : [
+        {
+          "promptTokens" : 3643,
+          "slots" : [
+            {
+              "entropy" : 1.1293875598590464,
+              "probabilities" : [
+                0.9867513025885546,
+                0.01284000703952587,
+                0.000211820515823043,
+                0.00019686985609653415
+              ],
+              "topLabel" : 0,
+              "topLabelID" : 562
+            }
+          ],
+          "steps" : 1
+        }
+      ]
+    },
+    {
+      "id" : "hard-opus-c-long_policy-10/g0/c1/steps1",
+      "reads" : [
+        {
+          "promptTokens" : 3643,
+          "slots" : [
+            {
+              "entropy" : 1.1536165883259848,
+              "probabilities" : [
+                0.994074582924893,
+                0.005763734665039073,
+                6.474095555384783e-05,
+                9.694145451400792e-05
+              ],
+              "topLabel" : 0,
+              "topLabelID" : 562
+            }
+          ],
+          "steps" : 1
+        }
+      ]
+    },
+    {
+      "id" : "hard-opus-c-long_policy-10/g0/c2/steps1",
+      "reads" : [
+        {
+          "promptTokens" : 3643,
+          "slots" : [
+            {
+              "entropy" : 1.1653057221633374,
+              "probabilities" : [
+                0.9760015796756566,
+                0.022634552658041374,
+                0.0010022468614588806,
+                0.00036162080484328696
+              ],
+              "topLabel" : 0,
+              "topLabelID" : 562
+            }
+          ],
+          "steps" : 1
+        }
+      ]
+    },
+    {
+      "id" : "hard-opus-c-long_policy-10/g0/c3/steps1",
+      "reads" : [
+        {
+          "promptTokens" : 3643,
+          "slots" : [
+            {
+              "entropy" : 0.8051308245712371,
+              "probabilities" : [
+                0.9881647418330064,
+                0.011752855919372291,
+                4.662953960637962e-05,
+                3.577270801499663e-05
+              ],
+              "topLabel" : 0,
+              "topLabelID" : 562
+            }
+          ],
+          "steps" : 1
+        }
+      ]
+    },
+    {
+      "id" : "hard-opus-b-multi_hop-08/g0/c0/steps1",
+      "reads" : [
+        {
+          "promptTokens" : 2406,
+          "slots" : [
+            {
+              "entropy" : 0.34103985353882793,
+              "probabilities" : [
+                0.0012733774968459895,
+                0.9987266225031539
+              ],
+              "topLabel" : 1,
+              "topLabelID" : 951
+            }
+          ],
+          "steps" : 1
+        }
+      ]
+    },
+    {
+      "id" : "hard-opus-b-multi_hop-08/g0/c1/steps1",
+      "reads" : [
+        {
+          "promptTokens" : 2406,
+          "slots" : [
+            {
+              "entropy" : 0.17568979282501637,
+              "probabilities" : [
+                0.0020453988567750445,
+                0.997954601143225
+              ],
+              "topLabel" : 1,
+              "topLabelID" : 951
+            }
+          ],
+          "steps" : 1
+        }
+      ]
+    },
+    {
+      "id" : "hard-opus-b-multi_hop-08/g0/c2/steps1",
+      "reads" : [
+        {
+          "promptTokens" : 2406,
+          "slots" : [
+            {
+              "entropy" : 1.2789431822932524,
+              "probabilities" : [
+                0.0007544200582955237,
+                0.9992455799417045
+              ],
+              "topLabel" : 1,
+              "topLabelID" : 951
+            }
+          ],
+          "steps" : 1
+        }
+      ]
+    },
+    {
+      "id" : "hard-opus-b-multi_hop-08/g0/c3/steps1",
+      "reads" : [
+        {
+          "promptTokens" : 2406,
+          "slots" : [
+            {
+              "entropy" : 0.25911065348176193,
+              "probabilities" : [
+                0.002323122735890526,
+                0.9976768772641096
+              ],
+              "topLabel" : 1,
+              "topLabelID" : 951
+            }
+          ],
+          "steps" : 1
+        }
+      ]
+    },
+    {
       "answers" : [
         {
           "key" : "department",
@@ -3494,7 +4262,7 @@
     }
   ],
   "generator" : {
-    "date" : "2026-10-01",
+    "date" : "2026-10-02",
     "gpu" : "Apple M3 Max",
     "macos" : "Version 27.0.1 (Build 26A434)",
     "mlx_swift" : "0.32.2",

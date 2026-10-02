@@ -485,7 +485,8 @@ class HarnessSmokeTest(unittest.TestCase):
         # the reference's top two are at least 0.5 apart only on t-noul-1 (0.75 against 0.25),
         # where both runs answer yes; every fake prompt is 10 tokens, so none is long
         self.assertEqual(result["bounds"], {"confident_items": 1, "confident_agree": 1,
-                                            "long_items": 0, "long_mean_abs_diff": None})
+                                            "long_items": 0, "long_mean_abs_diff": None,
+                                            "long_mean_max_abs_diff": None})
         long_a = json.loads(json.dumps(self.doc_a))
         long_b = json.loads(json.dumps(self.doc_b))
         for doc in (long_a, long_b):
@@ -494,7 +495,17 @@ class HarnessSmokeTest(unittest.TestCase):
                     item["usage"] = {"input_tokens": 2000, "output_tokens": 0}
         bounds = harness.compare_docs(long_a, long_b)["bounds"]
         # t-noul-2: yes 0.625 against 0.375 and no 0.375 against 0.625, over two labels
-        self.assertEqual((bounds["long_items"], bounds["long_mean_abs_diff"]), (1, 0.25))
+        self.assertEqual((bounds["long_items"], bounds["long_mean_abs_diff"],
+                          bounds["long_mean_max_abs_diff"]), (1, 0.25, 0.25))
+        # with t-choice-1 too (0.25, 0.25 and 0 apart) the mean over every label falls, and the
+        # mean of each item's largest difference does not (D-048)
+        for doc in (long_a, long_b):
+            for item in doc["items"]:
+                if item["id"] == "t-choice-1":
+                    item["usage"] = {"input_tokens": 2000, "output_tokens": 0}
+        bounds = harness.compare_docs(long_a, long_b)["bounds"]
+        self.assertEqual((bounds["long_items"], bounds["long_mean_abs_diff"],
+                          bounds["long_mean_max_abs_diff"]), (2, 0.2, 0.25))
 
     def test_report_handles_diffusiongemma_runs(self):
         import report
@@ -558,7 +569,7 @@ class HarnessSmokeTest(unittest.TestCase):
         self.assertFalse(report.within_d014(compared["overall"], compared["bounds"]))
         tables = report.agreement_tables([swift, upstream])
         self.assertIn("D-014", tables[-2])
-        self.assertIn("| openjev-0.1 | jevbench | 5 | 0.1042 | n/a over 0 | 3 of 5 (60.0%) | "
+        self.assertIn("| openjev-0.1 | jevbench | 5 | 0.1042 | n/a and n/a over 0 | 3 of 5 (60.0%) | "
                       "1 of 1 (100.0%) | no |", tables[-1])
         self.assertNotIn("openjev-0.1", tables[-3], "no near-tie row for DiffusionGemma")
         # a pair with no item both runs answered renders, and meets no bound
@@ -567,7 +578,7 @@ class HarnessSmokeTest(unittest.TestCase):
                 item["status"] = "failed"
         compared = harness.compare_docs(swift, upstream)
         self.assertFalse(report.within_d014(compared["overall"], compared["bounds"]))
-        self.assertIn("| openjev-0.1 | jevbench | 0 | n/a | n/a over 0 | 0 of 0 (n/a) |",
+        self.assertIn("| openjev-0.1 | jevbench | 0 | n/a | n/a and n/a over 0 | 0 of 0 (n/a) |",
                       report.agreement_tables([swift, upstream])[-1])
 
     def test_upstream_confidence(self):

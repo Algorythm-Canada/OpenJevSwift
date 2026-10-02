@@ -918,9 +918,11 @@ def mcnemar_exact(b: int, c: int) -> float:
 # spike #56, D-034 and D-037: the top answer must hold wherever the reference's top two are at
 # least 0.01 apart.
 NEAR_TIE = 0.01
-# Two of D-014's aggregate bounds for DiffusionGemma take a subset: the slots where the reference's
-# top two are at least 0.5 apart (the top label must hold on 97% of them) and the prompts over
-# 1,024 tokens (mean label probability difference at most 0.01, against 0.02 over every label).
+# One of D-014's aggregate bounds for DiffusionGemma takes a subset: the slots where the reference's
+# top two are at least 0.5 apart, where the top label must hold on 97% of them. Over the prompts
+# past 1,024 tokens D-048 bounds each read slot's largest label probability difference, a measure
+# of reads, which answers average; `compare` reports the long prompts' figures per answer, not
+# against a bound.
 CONFIDENT_MARGIN = 0.5
 LONG_PROMPT = 1024
 
@@ -956,7 +958,7 @@ def compare_docs(a: dict, b: dict, top: int = 10) -> dict:
     groups, disagreements, deviations, near_ties = {}, [], [], []
     flips = {"both_correct": 0, "both_wrong": 0, "a_only": 0, "b_only": 0}
     bounds = {"confident_items": 0, "confident_agree": 0, "long_items": 0, "long_sum": 0.0,
-              "long_entries": 0}
+              "long_entries": 0, "long_max_sum": 0.0}
     for item_id in both:
         x, y = items_a[item_id], items_b[item_id]
         kind = x["type"]
@@ -984,6 +986,7 @@ def compare_docs(a: dict, b: dict, top: int = 10) -> dict:
             bounds["long_items"] += 1
             bounds["long_sum"] += sum(diffs.values())
             bounds["long_entries"] += len(diffs)
+            bounds["long_max_sum"] += largest
         if margin_b < NEAR_TIE:
             near_ties.append({"id": item_id, "type": kind, "a": x["predicted"],
                               "b": y["predicted"], "a_margin": top_two(px)[2],
@@ -1021,12 +1024,16 @@ def compare_docs(a: dict, b: dict, top: int = 10) -> dict:
         "correctness": {**flips, "mcnemar_p": mcnemar_exact(flips["a_only"], flips["b_only"])},
         "disagreements": disagreements, "largest": deviations[:top],
         "near_ties": near_ties,
-        # over the items both answered, by the reference's margin and prompt length (D-014)
+        # over the items both answered, by the reference's margin and prompt length (D-014, D-048):
+        # past 1,024 tokens the mean over every label, which items with many labels dilute, and
+        # the mean of each item's largest difference, which they cannot (both informational)
         "bounds": {"confident_items": bounds["confident_items"],
                    "confident_agree": bounds["confident_agree"],
                    "long_items": bounds["long_items"],
                    "long_mean_abs_diff": (bounds["long_sum"] / bounds["long_entries"]
-                                          if bounds["long_entries"] else None)},
+                                          if bounds["long_entries"] else None),
+                   "long_mean_max_abs_diff": (bounds["long_max_sum"] / bounds["long_items"]
+                                              if bounds["long_items"] else None)},
         "answered_by_one_only": one_side,
     }
 
@@ -1161,7 +1168,9 @@ def compare_text(result: dict, items: int = 10) -> str:
     out.append(f"where {result['b']['server']}'s top two are at least {CONFIDENT_MARGIN} apart the "
                f"top answer agrees on {bounds['confident_agree']} of {bounds['confident_items']}; "
                f"over the {bounds['long_items']} prompts longer than {LONG_PROMPT} tokens the mean "
-               f"abs diff is {num(bounds['long_mean_abs_diff'])}")
+               f"of each item's largest abs diff is {num(bounds['long_mean_max_abs_diff'])} and the "
+               f"mean abs diff over their labels {num(bounds['long_mean_abs_diff'])} (informational: "
+               f"D-048 bounds reads, which an answer averages)")
     flips = result["correctness"]
     out.append(f"correct in both {flips['both_correct']}, wrong in both {flips['both_wrong']}, "
                f"only {result['a']['server']} {flips['a_only']}, only {result['b']['server']} "

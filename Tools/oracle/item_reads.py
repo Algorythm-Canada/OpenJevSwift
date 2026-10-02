@@ -34,8 +34,8 @@ mlx-vlm 0.6.15 (Tools/jevbench/.venv or Tools/oracle/.venv) and the datasets fet
   labels), each prefill layer's keys, values and sliding decoder view by SHA-256, and the answers;
   per configuration, the mean and largest |dp| over the reads' label probabilities and the answers
   whose top label differs from upstream's. --summary writes that as JSON.
-- long-slots: D-014's long-prompt figure over the oracle fixture's slots with few labels, from
-  committed files only (Fixtures/oracle/reads.json and two of spike #22's runs).
+- long-slots: the long-prompt figures over the oracle fixture's slots with few labels, from
+  committed files only (Fixtures/oracle/reads.json and two of D-048's runs in results/d048).
 
 The work files (bodies.json, upstream.json, port_*.json) go to ~/Library/Caches/OpenJevSwift/
 item-reads unless --work or OPENJEV_ITEM_READS names another folder. Keep them out of the
@@ -773,23 +773,25 @@ def compare_variant(variant, data, reference, slot_distribution) -> dict:
 
 
 def command_long_slots(args) -> int:
-    """From committed files: D-014's long-prompt mean |dp| over all labels and over slots with at
-    most --max-labels labels, for spike #22's chunked-prefill mlx-vlm and the transliteration on
-    native kernels, and the oracle's top-two margins of those slots."""
+    """From committed files: the long-prompt mean |dp| over all labels and over slots with at most
+    --max-labels labels, and D-048's mean of each long slot's largest |dp|, for mlx-vlm with a
+    chunked prefill and the transliteration on native kernels (D-048's runs on the widened
+    fixture), and the oracle's top-two margins of those slots."""
     sys.path.insert(0, str(HERE))
-    import tolerance_stats  # noqa: E402  (its LONG prompts and upstream's slot_distribution)
+    import tolerance_stats  # noqa: E402  (its LONG_PROMPT and upstream's slot_distribution)
 
     oracle = read_json(ROOT / "Fixtures" / "oracle" / "reads.json")
     by_id = {r["id"]: r for r in oracle["reads"]}
     runs = {}
-    sensitivity = read_json(RESULTS / "sensitivity.json")["variants"]["chunked_prefill"]["reads"]
-    runs["mlx-vlm, 64-token chunked prefill (sensitivity.json)"] = {
+    sensitivity = read_json(RESULTS / "d048" / "sensitivity.json")["variants"]["chunked_prefill"]["reads"]
+    runs["mlx-vlm, 64-token chunked prefill (d048/sensitivity.json)"] = {
         r["id"]: r["per_slot"] for r in sensitivity}
-    native = read_json(RESULTS / "transliteration_run.json")["per_read"]
-    runs["transliteration, mlx-swift kernels (transliteration_run.json)"] = {
+    native = read_json(RESULTS / "d048" / "transliteration_run.json")["per_read"]
+    runs["transliteration, mlx-swift kernels (d048/transliteration_run.json)"] = {
         r["id"]: tolerance_stats.distributions_from_maps(by_id[r["id"]], r["logprobs"])
         for r in native}
-    long_reads = [r for r in oracle["reads"] if r["prompt"] in tolerance_stats.LONG]
+    long_reads = [r for r in oracle["reads"]
+                  if oracle["prompts"][r["prompt"]]["tokens"] > tolerance_stats.LONG_PROMPT]
     slots = [d for r in long_reads for d in r["distributions"]]
     few = [d for d in slots if len(d["probs"]) <= args.max_labels]
     margins = []
@@ -809,18 +811,20 @@ def command_long_slots(args) -> int:
     print(f"slots whose oracle top-two margin is under 0.5: {sum(m < 0.5 for m in margins)} of "
           f"{len(margins)}")
     for name, run in runs.items():
-        every, small = [], []
+        every, small, largest = [], [], []
         for r in long_reads:
             if r["id"] not in run:
                 raise SystemExit(f"{name} has no read {r['id']}")
             for want, got in paired(r["distributions"], run[r["id"]], f"{name}: {r['id']}"):
                 d = [abs(a - b) for a, b in paired(want["probs"], got["probs"], f"{r['id']}")]
                 every += d
+                largest.append(max(d))
                 if len(want["probs"]) <= args.max_labels:
                     small += d
         print(f"{name}: mean |dp| {sum(every) / len(every):.4f} over all {len(every):,} labels, "
               f"{sum(small) / len(small):.4f} over the {len(small)} labels of the slots with at "
-              f"most {args.max_labels}")
+              f"most {args.max_labels}; each slot's largest |dp| {sum(largest) / len(largest):.4f} "
+              f"on average (D-048 bounds it at 0.14)")
     return 0
 
 

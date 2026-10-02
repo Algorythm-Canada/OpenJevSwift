@@ -351,7 +351,8 @@ Entropy never changed upstream's re-read decision: every fixture read has a slot
 (D-028) keep their CPU-reference tolerances. The bounds are calibrated on 27 reads; issue #31
 should widen the fixture set and recompute them with `Tools/oracle/tolerance_stats.py`.
 
-Status. Accepted: two tiers, with the bounds above. Decided by spike #22.
+Status. Accepted: two tiers, with the bounds above; D-048 replaces the two long-prompt rows. Decided
+by spike #22.
 
 ## D-015 Slot-only output projection is allowed
 
@@ -2431,3 +2432,131 @@ as its source; until then the deploy job is skipped. A new public symbol needs a
 new setting a row in the reference.
 
 Status. Proposed with issue #64.
+
+## D-048 Long-prompt parity: each slot's largest difference, over a fixture with long JevBench reads
+
+Context. D-014's native tier bounds the mean |Δp| over every label of the oracle fixture's prompts
+over 1,024 tokens at 0.01. Of those 1,496 labels, 1,440 belong to the 26 slots with 10 to 255
+labels, most of them near 0, so the mean is diluted: over the 56 labels of the 24 long slots with
+two or three labels, spike #22's committed runs give 0.0428 for mlx-vlm with a 64-token chunked
+prefill and 0.0537 for the transliteration on native kernels, which reads as the port does. A
+JevBench question has two to six labels and a TypeSafe one two to eight. PR #105 measured 0.0396
+over JevBench's 41 long prompts, per answer, and reported it outside D-014; #110 then showed, in
+the exact tier, that the port reads PR #105's four wide-margin long-prompt flips as mlx-vlm does,
+bit for bit. D-014 asked for a wider fixture and recomputed bounds, which issue #31 did not do.
+
+Decision.
+
+1. **The fixture gains 36 long reads of JevBench items.** Nine items of JevBench v1's public hard
+   tier (fstandhartinger/jevbench at `bb05a33`, MIT), each one question with two to four labels over
+   a state of 2,318 to 3,643 prompt tokens: PR #105's three long-policy flips
+   (`hard-opus-c-long_policy-04`, `hard-sol-b-long_policy-06`, `hard-opus-a-long_policy-19`) and six
+   items both servers answered alike, at upstream top-two margins from 0.005 to 0.99; three nouls,
+   five choices of four and a score of four, one state a JSON object. Each is the body
+   `Tools/jevbench/harness.py` sends, built by JevBench's own typesafe adapter and checked against
+   both result files' `body_sha256`, read as upstream's default policy reads it: the request seed
+   and the re-reads at +7919k for k = 1 to 3, one step each. Every first read's entropy is above
+   the 0.1 threshold (0.24 at the least), so upstream makes all four. The mean of an item's four
+   oracle reads is upstream's answer in PR #105's run to the last bit (a noul's `no` is 1e-16 away,
+   the adapter's 1 - p), and the mean of the port's four native reads is the Swift server's. The
+   27 reads, the 12 prompts and their cache digests come out byte for byte unchanged; `reads.json`
+   grows from 330,596 to 661,074 bytes, and its generator version 2 adds JevBench's pin and a
+   `jevbench` record per item. The states' dashes are written as JSON escapes. Upstream's prefill
+   cache holds at most 16,384 prompt tokens, which the new prompts exceed together, so the
+   generator now takes each prompt's cache digests right after its first read of a pass. No
+   TypeSafe row is added: its text carries no license grant.
+2. **Exact tier: 63 of 63.** `ReadOracleTests` on the wheel's metallib (`dc59d1cc…`) with the
+   oracle's RoPE table: every read bit-identical, the 36 new ones included, all 126 cache digests
+   equal (layers 0 and 29 of the 21 prompts, and the sliding layer's decoder view), and the
+   written argmaxes of all six multi-step reads.
+3. **The bounds.** Native tier, the 63 reads, against spike #22's legitimate implementations
+   (mlx-vlm with a 64-token chunked prefill or with unsorted decoder experts, the Layr-Labs fork,
+   the transliteration on mlx-swift's kernels) and its planted bugs (self-conditioning skipped on
+   step 1, canvas RoPE from position 0, no sliding window for the canvas), with upstream's Gemma 4
+   router arithmetic, exact in real numbers, apart:
+
+   | Aggregate over the 63 fixture reads | Bound | Legitimate range | Planted bugs | Upstream's router |
+   |---|---|---|---|---|
+   | Mean \|Δp\|, all 1,883 labels | ≤ 0.02 | 0.0010 to 0.0140 | 0.0218 to 0.0681 | 0.0132 |
+   | Mean over the 86 slots of prompts over 1,024 tokens of each slot's largest \|Δp\| | ≤ 0.14 (new) | 0.0000 to 0.1057 | 0.1766 to 0.4154 | 0.0976 |
+   | Mean \|ΔH\|, all 192 slots | ≤ 0.2 | 0.013 to 0.132 | 0.191 to 0.762 | 0.113 |
+   | The same over the 86 long-prompt slots | ≤ 0.27 (was 0.2) | 0.000 to 0.205 | 0.347 to 0.850 | 0.182 |
+   | Top label agreement, all slots | ≥ 90% | 91.7% to 100% | 64.1% to 89.6% | 90.6% |
+   | Top label agreement where the oracle's top-two margin is at least 0.5 (140 slots) | ≥ 97% | 99.3% to 100% | 73.6% to 97.1% | 98.6% |
+   | Mean \|Δp\| over the 1,616 long-prompt labels, D-014's row | reported (was ≤ 0.01) | 0.0000 to 0.0121 | 0.0212 to 0.0477 | 0.0110 |
+   | The same over the 176 labels of the 60 long slots with at most four labels | reported | 0.0000 to 0.0757 | 0.1076 to 0.2597 | 0.0682 |
+
+   Per implementation (`Tools/oracle/results/d048/tolerance_stats.json`; long means over 1,024
+   prompt tokens):
+
+   | Implementation | Mean \|Δp\| | Long, all labels | Long, ≤ 4 labels | Long, each slot's largest | Mean \|ΔH\| | Long \|ΔH\| | Top label | Margin ≥ 0.5 |
+   |---|---|---|---|---|---|---|---|---|
+   | mlx-vlm, chunked prefill | 0.0139 | 0.0113 | 0.0628 | 0.1003 | 0.132 | 0.205 | 178/192 | 139/140 |
+   | mlx-vlm, unsorted decoder experts | 0.0010 | 0.0000 | 0.0000 | 0.0000 | 0.013 | 0.000 | 192/192 | 140/140 |
+   | Layr-Labs fork | 0.0140 | 0.0121 | 0.0749 | 0.1057 | 0.113 | 0.172 | 176/192 | 139/140 |
+   | Transliteration, mlx-swift kernels (the port) | 0.0133 | 0.0113 | 0.0757 | 0.1006 | 0.104 | 0.152 | 176/192 | 139/140 |
+   | Bug: self-conditioning skipped | 0.0474 | 0.0239 | 0.1120 | 0.1939 | 0.584 | 0.601 | 157/192 | 121/140 |
+   | Bug: canvas RoPE from position 0 | 0.0681 | 0.0477 | 0.2597 | 0.4154 | 0.762 | 0.850 | 123/192 | 103/140 |
+   | Bug: no sliding window | 0.0218 | 0.0212 | 0.1076 | 0.1766 | 0.191 | 0.347 | 172/192 | 136/140 |
+   | Upstream's Gemma 4 router | 0.0132 | 0.0110 | 0.0682 | 0.0976 | 0.113 | 0.182 | 174/192 | 138/140 |
+
+4. **Each planted bug breaks a bound; upstream's router breaks none.** Skipping self-conditioning
+   and the canvas RoPE from position 0 break all six. No sliding window breaks the new long row
+   (0.1766) and the long entropy row (0.347) clearly, the all-label mean (0.0218) and the top label
+   (89.6%) narrowly, and passes the other two. Upstream's router stays inside the legitimate range
+   on every aggregate, as in spike #22: no native bound can catch an implementation that is exact
+   in real arithmetic, and the exact tier does (D-014, item 1).
+5. **What this fixture settles, and what it does not.** The four sources of last-bit noise agree
+   on the new row within 0.008 (0.0976 to 0.1057, the router among them), and the window bug sits
+   at 1.67 times their largest. That separation belongs to these long prompts: over 2,000 resamples
+   of the 13 long prompts the 95% interval is 0.056 to 0.160 for the port and 0.112 to 0.272 for
+   the window bug, and on the JevBench reads alone the window bug's 0.1766 is only 1.25 times the
+   port's 0.1413. The fixture's own long reads with many questions carry most of the margin
+   (`many_choices`: 0.42 against the port's 0.12). The bounds are calibrated on this fixture; a
+   fixture widened again must recompute them, as this one did.
+6. **The live tests.** `ReadOracleTests` and `RuntimeLiveTests` assert the six rows and print D-014's
+   long-prompt label mean as reported. Native tier, 2026-10-02: the port gives the transliteration's
+   figures through the model and through the runtime, every slot's probabilities to the last bit;
+   the largest single |Δp| is 0.500 (`hard-opus-c-long_policy-04` read c2, at an oracle margin of
+   0.62, the one confident slot that moves) and the written argmaxes agree on 4 of 6, as before.
+   `LiveCheckpoint` takes `OPENJEV_MLX_CACHE_LIMIT_GB` as the server does, so a long run can cap
+   MLX's pool. `RegressionTests` holds the port to D-014's aggregate bounds rather than to
+   tolerance 0 when `OPENJEV_MLX_METALLIB` loads the exact tier's kernels, and refuses to record
+   under them: its file is the port's output on mlx-swift's kernels, so in the exact tier it failed
+   every slot. The regression file gains the 36 reads' entries; its 29 entries are unchanged and
+   only the date pin moves.
+7. **The JevBench comparison reports the long prompts and does not bound them.** D-048's long row
+   measures reads, and an answer averages up to four of them: on the fixture's JevBench reads the
+   port's per-read figure is 0.141, on PR #105's 41 long JevBench items its per-answer figure 0.074.
+   `harness.py compare` and `report` therefore give, past 1,024 tokens, the mean of each item's
+   largest difference and the mean over every label as information, and "within every bound"
+   covers the three bounds an answer carries: the all-label mean, the top answer, and the top
+   answer where upstream's margin is at least 0.5. PR #105's runs meet all three on both datasets.
+8. **The runs.** `Tools/oracle/results/d048` holds the oracle's run, `sensitivity.json`, the fork's
+   maps (`fork_reads.json`), the transliteration's native run and `tolerance_stats.json`; the
+   planted-bug runs are summarized there, as spike #22 kept them. Every run capped MLX's pool at
+   4 GB, which changes no read: restricted to the 27 old reads, the new runs reproduce spike #22's
+   runs and every row of its `tolerance_stats.json` bit for bit, the planted bugs included.
+   `sensitivity.py` gained `--cache-limit-gb` and `--out`, `tolerance_stats.py` `--oracle`,
+   `--sensitivity`, `--native` and `--out`, long prompts by token count and the new rows, the fork
+   probe `--maps`, and `item_reads.py long-slots` reads the widened fixture's runs.
+
+Alternatives rejected. (a) D-014's long-prompt label mean with another bound: it measures the
+fixture's mix of label counts as much as the reads (0.0113 for the port, whose few-label long slots
+move by 0.0757), so a bound on it says little about a benchmark question. (b) The label mean over
+long slots with at most four labels: it separates the window bug by 1.42 times the legitimate
+maximum against 1.67, its resampled intervals overlap more, and it needs a label threshold where
+benchmark questions have up to eight. (c) Bounding the JevBench reads alone: there nothing
+separates the window bug. (d) A per-slot or per-read bound: D-014's reasons stand, and a legitimate
+slot moves by up to 0.50 here and 0.62 under mlx-vlm's own chunked prefill. (e) One bound for reads
+and answers: the ratio between them depends on how many reads each server averages, and an answer
+bound would need the planted bugs run through the engine on the benchmarks. (f) TypeSafe rows in the
+fixture: no license grant (D-041).
+
+Consequences. D-014's two long-prompt rows are replaced by item 3's, its four other rows stand,
+and the port meets all six. The long-prompt excess PR #105 reported came from a diluted bound, not
+from the port; quality.md's comparison now meets every bound an answer carries. Upstream's router
+arithmetic stays detectable in the exact tier only. A later widening of the fixture recomputes
+these bounds with `Tools/oracle/tolerance_stats.py`.
+
+Status. Proposed; revises D-014's long-prompt rows. Follows PR #105 and #110.

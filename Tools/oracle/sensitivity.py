@@ -11,10 +11,13 @@ in bfloat16:
 - explicit_masks: the decoder given all-true boolean masks where mlx-vlm passes None.
 
 Each variant is compared with the oracle using the Swift probe's metrics, and the result goes to
-Tools/oracle/results/sensitivity.json. Run from the repository root:
+Tools/oracle/results/sensitivity.json, or --out. --cache-limit-gb caps MLX's buffer pool as
+OPENJEV_MLX_CACHE_LIMIT_GB does, which leaves every read bit-identical (spike #22). Run from the
+repository root:
 
-    PYTHONHASHSEED=0 Tools/oracle/.venv/bin/python Tools/oracle/sensitivity.py
+    PYTHONHASHSEED=0 Tools/oracle/.venv/bin/python Tools/oracle/sensitivity.py [--cache-limit-gb 4] [--out PATH]
 """
+import argparse
 import json
 import os
 import sys
@@ -122,9 +125,15 @@ def compare(tops, oracle_read):
 
 
 def main():
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--cache-limit-gb", type=float, default=None,
+                    help="MlxRuntime.set_cache_limit before the reads, as OPENJEV_MLX_CACHE_LIMIT_GB does")
+    ap.add_argument("--out", default=str(ROOT / "Tools" / "oracle" / "results" / "sensitivity.json"))
+    args = ap.parse_args()
     oracle = json.loads((ROOT / "Fixtures" / "oracle" / "reads.json").read_text())
     path = huggingface_hub.snapshot_download(MODEL_REPO, revision=MODEL_REVISION, local_files_only=True)
     rt = MlxRuntime(path)
+    rt.set_cache_limit(args.cache_limit_gb)
     variants = ["baseline", "chunked_prefill", "unsorted_decoder_experts", "explicit_masks"]
     results = {}
     for variant in variants:
@@ -157,9 +166,11 @@ def main():
               f"max|dlp| {overall['max_label_logprob_difference']:.3e}  bit-identical reads "
               f"{overall['reads_bit_identical']}/{overall['reads']}  written mismatches {overall['written_mismatches']}",
               flush=True)
-    out = ROOT / "Tools" / "oracle" / "results" / "sensitivity.json"
-    out.write_text(json.dumps({"chunk": CHUNK, "variants": results}, indent=1) + "\n")
-    print(f"wrote {out.relative_to(ROOT)}")
+    out = Path(args.out).resolve()
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps({"chunk": CHUNK, "cache_limit_gb": args.cache_limit_gb, "variants": results},
+                              indent=1) + "\n")
+    print(f"wrote {out.relative_to(ROOT) if out.is_relative_to(ROOT) else out}")
     rt.close()
 
 

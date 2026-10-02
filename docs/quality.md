@@ -43,10 +43,11 @@ asked one question, one request at a time.
 - **On DiffusionGemma the two servers agree on 326 of 333 top answers,** 225 of 231 on JevBench and
   101 of 102 on TypeSafe, every one of the 299 whose upstream top two are at least 0.5 apart among
   them, with a mean probability difference of 0.0135 and 0.0069. Seven items are right on one server
-  only, five of them upstream's (McNemar p = 0.45). That meets D-014's aggregate bounds but one: on
-  JevBench's 41 prompts over 1,024 tokens the mean difference is 0.0396, where D-014 allows 0.01,
-  and in D-014's exact tier the port's reads of the four items whose top answers differ at a wide
-  margin are mlx-vlm's bit for bit, so the difference is the kernels' ([A disagreement on
+  only, five of them upstream's (McNemar p = 0.45). That meets every D-014 bound an answer
+  carries. On JevBench's 41 prompts over 1,024 tokens the mean difference is 0.0396, past the 0.01
+  D-014 set there, a bound that many-option labels diluted and that D-048 replaced, and in D-014's
+  exact tier the port's reads of the four items whose top answers differ at a wide margin are
+  mlx-vlm's bit for bit, so the difference is the kernels' ([A disagreement on
   DiffusionGemma](#a-disagreement-on-diffusiongemma)).
 - **DiffusionGemma scores like the benchmark's published row, and like Jev on TypeSafe.** JevBench's
   `openjev-razorback16` row, the NVFP4 weights on vLLM, has 81.8% on the public items; these runs
@@ -160,14 +161,15 @@ allows a changed top answer (`harness.py compare` lists each):
 | laya-1.0 | typesafe102 | 11 | 11 of 11 | 692da1b417be96e6e96f0389 (2.0e-04 upstream, 0.0000 Swift) | none |
 | verdict-1.4 | typesafe102 | 13 | 13 of 13 | 767af54164feae1d84407b1e (0.0019 upstream, 0.0023 Swift) | none |
 
-DiffusionGemma's answers against D-014's aggregate bounds, which the 27 oracle reads are held to
+DiffusionGemma's answers against D-014's aggregate bounds, which the 63 oracle reads are held to
 (here over answers, each the mean of up to four reads, with upstream's as the reference; `harness.py
-compare` lists every disagreement):
+compare` lists every disagreement). Past 1,024 tokens D-048 bounds each read slot's largest
+difference, which an answer averages, so the long prompts' figures are shown and not bounded:
 
-| model | dataset | items | mean abs diff, every label (at most 0.02) | the same over prompts of more than 1,024 tokens (at most 0.01) | top answer agrees (at least 90%) | where upstream's top two are at least 0.5 apart (at least 97%) | within every bound |
+| model | dataset | items | mean abs diff, every label (at most 0.02) | over prompts of more than 1,024 tokens: mean of each item's largest abs diff, and mean abs diff over every label (not bounded) | top answer agrees (at least 90%) | where upstream's top two are at least 0.5 apart (at least 97%) | within every bound |
 |---|---|---|---|---|---|---|---|
-| openjev-0.1 | jevbench | 231 | 0.0135 | 0.0396 over 41 | 225 of 231 (97.4%) | 200 of 200 (100.0%) | no |
-| openjev-0.1 | typesafe102 | 102 | 0.0069 | 0.0075 over 76 | 101 of 102 (99.0%) | 99 of 99 (100.0%) | yes |
+| openjev-0.1 | jevbench | 231 | 0.0135 | 0.0741 and 0.0396 over 41 | 225 of 231 (97.4%) | 200 of 200 (100.0%) | yes |
+| openjev-0.1 | typesafe102 | 102 | 0.0069 | 0.0102 and 0.0075 over 76 | 101 of 102 (99.0%) | 99 of 99 (100.0%) | yes |
 
 ### Against JevBench's published rows
 
@@ -324,8 +326,8 @@ out one or two float32 steps away from mlx-vlm's (spike #22,
 [spikes/backend-validation.md](spikes/backend-validation.md)). The read is chaotic in bfloat16: such
 last-bit differences move label probabilities by up to 0.62 and change top labels even where the
 oracle's margin is 0.68, so D-014 bounds the difference in aggregate only, and holds the port to
-mlx-vlm's 27 oracle reads bit for bit when it runs on the wheel's metallib and the oracle's RoPE
-table (D-036). The prompts are not part of it: both servers count the same prompt tokens on all 333
+mlx-vlm's 63 oracle reads bit for bit when it runs on the wheel's metallib and the oracle's RoPE
+table (D-036, D-048). The prompts are not part of it: both servers count the same prompt tokens on all 333
 items.
 
 Over these 333 answers, each the mean of up to four reads, the difference is what D-014 measured on
@@ -336,8 +338,8 @@ short prompts and grows past 1,024 tokens, the length of the model's sliding win
   `hard-opus-b-tradeoff-08` at an upstream margin of 0.0015 and `hard-opus-c-temporal_numeric-08` at
   0.026.
 - **Over 1,024 tokens** JevBench's 41 prompts (up to 3,940 tokens) differ by 0.0396 on average, four
-  times D-014's long-prompt bound of 0.01, and TypeSafe's 76 (up to 11,600 tokens) by 0.0075, within
-  it. Most of what separates them is how uncertain the answers are: JevBench's long items are the
+  times the 0.01 D-014 set over long prompts before D-048 replaced it, and TypeSafe's 76 (up to
+  11,600 tokens) by 0.0075. Most of what separates them is how uncertain the answers are: JevBench's long items are the
   hard tier's long-policy and multi-hop questions, and an answer whose upstream top two are less
   than 0.5 apart moves by 0.06 to 0.09 on average at any length, while TypeSafe's long rows are
   mostly confident. At the same confidence a long prompt still moves more: on JevBench, answers with
@@ -391,17 +393,26 @@ bring the Swift server's reads closer. `Tools/oracle/item_reads.py` runs the che
 or TypeSafe item ([Tools/README.md](../Tools/README.md#reading-benchmark-items-against-upstream)),
 and `Tools/oracle/results/item_reads_long_flips.json` keeps this run, without TypeSafe's text.
 
-What the long-prompt excess says about D-014 is an observation, and its bounds stay as they are.
-The long-prompt bound is a mean over the 1,496 label probabilities of the oracle fixture's 50 slots
-on prompts over 1,024 tokens (four prompts of 1,572 to 2,939 tokens, where the port met it with
-0.0054, D-044), and 1,440 of them belong to the 26 slots with 10 to 255 labels, most of them near 0.
+The long-prompt excess led to D-048, which widened the oracle fixture and replaced D-014's
+long-prompt row. That bound was a mean over the 1,496 label probabilities of the oracle fixture's
+50 slots on prompts over 1,024 tokens (four prompts of 1,572 to 2,939 tokens, where the port met it
+with 0.0054, D-044), and 1,440 of them belong to the 26 slots with 10 to 255 labels, most of them
+near 0.
 The other 24 slots have two or three labels, the only long slots of the fixture with no more labels
 than a benchmark question (two to six on JevBench, two to eight on TypeSafe). Over their 56 labels
 spike #22's committed runs give 0.0428 for mlx-vlm's chunked prefill and 0.0537 for the
 transliteration on native kernels, against 0.0064 and 0.0054 over all labels, and 27 of the 50
 slots have an oracle top-two margin under 0.5. JevBench's 0.0396 over its 41 long prompts is of
-that size, a little under both. `item_reads.py long-slots` recomputes these figures from the
-committed files.
+that size, a little under both. D-048 added 36 reads of nine of JevBench's long items, PR #105's
+three long-policy flips among them, each one question with two to four labels as the harness asks
+it; the port reads all 63 of the fixture's reads bit for bit in the exact tier. Over the 60 long
+slots with at most four labels the widened fixture's figures are 0.0628 for mlx-vlm's chunked
+prefill and 0.0757 for the transliteration, and the bound is now the mean of each long slot's
+largest difference, which many-option labels cannot dilute: at most 0.14, where the port gives
+0.1006 and the planted no-window bug 0.1766. An answer averages up to four reads, so the comparison
+above reports its long-prompt figures instead of bounding them: the mean of each item's largest
+difference is 0.0741 over JevBench's 41 long items and 0.0102 over TypeSafe's 76.
+`item_reads.py long-slots` recomputes the fixture's figures from the committed files.
 
 ### Against the published results
 

@@ -4,7 +4,7 @@ import OpenJevCore
 import OpenJevDiffusionGemma
 import Testing
 
-/// Fixtures/oracle/reads.json's prompts, with their cache digests, and its 27 reads.
+/// Fixtures/oracle/reads.json's prompts, with their cache digests, and its 63 reads.
 private struct OracleReads: Decodable {
     struct Digest: Decodable {
         let shape: [Int]
@@ -117,10 +117,12 @@ private func withTier<T>(
     return try body(exact)
 }
 
-/// The D-014 aggregates of one comparison.
+/// The D-014 aggregates of one comparison, with D-048's long-prompt row.
 private struct Aggregates {
     var labelDifferences: [Double] = []
     var longLabelDifferences: [Double] = []
+    /// Each long-prompt slot's largest |dp|, which many-option labels cannot dilute (D-048).
+    var longSlotMaxima: [Double] = []
     var entropyDifferences: [Double] = []
     var longEntropyDifferences: [Double] = []
     var slots = 0
@@ -138,20 +140,21 @@ extension MLXTests {
         "DiffusionGemma reads against the oracle (opt-in)",
         .enabled(if: ModelFixtures.checkpointAvailable, ModelFixtures.missingCheckpointMessage))
     struct ReadOracleTests {
-        /// D-014 on all 27 oracle reads. Each of the 12 prompts is prefilled once and its reads
+        /// D-014 on all 63 oracle reads. Each of the 21 prompts is prefilled once and its reads
         /// share the cache. Exact tier (`OPENJEV_MLX_METALLIB` set to the wheel's metallib, the
         /// oracle's RoPE table installed): every map, written list, prompt token count and cache
         /// digest identical. Native tier:
         /// D-014's six bounds on the label probabilities and entropies through
-        /// `SlotDistribution.compute`; per-read maxima and the written argmaxes are printed. In both,
+        /// `SlotDistribution.compute`, the long-prompt rows as D-048 revised them; per-read maxima,
+        /// the written argmaxes and the long-prompt label mean D-048 no longer bounds are printed. In both,
         /// how often the slot-only projection (D-015) matches the full one is printed.
-        @Test("The 27 oracle reads meet D-014")
+        @Test("The 63 oracle reads meet D-014")
         func oracleReads() async throws {
             let live = try await LiveCheckpoint.shared()
             let model = live.loaded.model
             let oracle = try OracleReads.load()
-            #expect(oracle.reads.count == 27)
-            #expect(oracle.prompts.count == 12)
+            #expect(oracle.reads.count == 63)
+            #expect(oracle.prompts.count == 21)
 
             try withTier(model) { exact in
                 var order: [String] = []
@@ -272,6 +275,7 @@ extension MLXTests {
                             if long {
                                 aggregates.longLabelDifferences += differences
                                 aggregates.longEntropyDifferences.append(entropy)
+                                aggregates.longSlotMaxima.append(differences.max() ?? 0)
                             }
                             readMaxDifference = max(readMaxDifference, differences.max() ?? 0)
                             readMaxEntropy = max(readMaxEntropy, entropy)
@@ -316,6 +320,7 @@ extension MLXTests {
 
                 let meanP = Aggregates.mean(aggregates.labelDifferences)
                 let longMeanP = Aggregates.mean(aggregates.longLabelDifferences)
+                let longSlotMax = Aggregates.mean(aggregates.longSlotMaxima)
                 let meanH = Aggregates.mean(aggregates.entropyDifferences)
                 let longMeanH = Aggregates.mean(aggregates.longEntropyDifferences)
                 let topShare = Double(aggregates.topAgree) / Double(aggregates.slots)
@@ -336,16 +341,17 @@ extension MLXTests {
                 let report =
                     """
                     \(exact ? "exact tier (wheel metallib, oracle RoPE)" : "native kernels"): \
-                    \(identicalReads)/27 reads bit-identical, \(digestsEqual)/\(digestsTotal) cache digests equal \
+                    \(identicalReads)/\(oracle.reads.count) reads bit-identical, \(digestsEqual)/\(digestsTotal) cache digests equal \
                     (largest relative sum-of-squares difference \(digestMaxRelative)), \
                     written argmaxes equal on \(writtenEqual)/\(writtenTotal) multi-step reads, \
                     slot-only projection identical on \(slotOnlyIdentical)/\(slotCount) slots (max |d lp| \(slotOnlyMax))
                     labels \(aggregates.labelDifferences.count), long-prompt labels \(aggregates.longLabelDifferences.count), \
                     slots \(slotCount), long-prompt slots \(aggregates.longEntropyDifferences.count)
                     mean |dp| all labels \(String(format: "%.4f", meanP)) (bound 0.02)
-                    mean |dp| long prompts \(String(format: "%.4f", longMeanP)) (bound 0.01)
+                    mean of each long-prompt slot's largest |dp| \(String(format: "%.4f", longSlotMax)) (bound 0.14, D-048)
+                    mean |dp| long prompts \(String(format: "%.4f", longMeanP)) (reported: many-option labels dilute it, D-048)
                     mean |dH| all slots \(String(format: "%.4f", meanH)) (bound 0.2)
-                    mean |dH| long prompts \(String(format: "%.4f", longMeanH)) (bound 0.2)
+                    mean |dH| long prompts \(String(format: "%.4f", longMeanH)) (bound 0.27, D-048)
                     top label \(aggregates.topAgree)/\(slotCount) \(String(format: "%.1f%%", topShare * 100)) (bound 90%)
                     top label, oracle margin >= 0.5: \(aggregates.confidentAgree)/\(aggregates.confidentSlots) \
                     \(String(format: "%.1f%%", confidentShare * 100)) (bound 97%)
@@ -358,21 +364,22 @@ extension MLXTests {
                 print(report)
                 SpikeReport.record("read-parity", report)
 
-                #expect(aggregates.labelDifferences.count == 1_763)
+                #expect(aggregates.labelDifferences.count == 1_883)
                 #expect(aggregates.longLabelDifferences.isEmpty == false)
-                #expect(slotCount == 156)
-                #expect(aggregates.longEntropyDifferences.count == 50)
+                #expect(slotCount == 192)
+                #expect(aggregates.longEntropyDifferences.count == 86)
+                #expect(aggregates.longSlotMaxima.count == 86)
                 // The slot-only projection is measured, not required: on 2026-10-01 it was
                 // identical on 29 of 156 slots in the exact tier and 40 natively, so D-015's
                 // condition fails and reads project every row.
                 if exact {
-                    #expect(identicalReads == 27)
+                    #expect(identicalReads == oracle.reads.count)
                     #expect(digestsEqual == digestsTotal)
                 }
                 #expect(meanP <= 0.02)
-                #expect(longMeanP <= 0.01)
+                #expect(longSlotMax <= 0.14)
                 #expect(meanH <= 0.2)
-                #expect(longMeanH <= 0.2)
+                #expect(longMeanH <= 0.27)
                 #expect(topShare >= 0.90)
                 #expect(confidentShare >= 0.97)
             }

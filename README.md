@@ -90,11 +90,10 @@ index.
 Apart from the recorded differences, everything up to the model's probabilities is upstream's byte
 for byte: the prompts, the answer templates, the canvases and seeds, the request validation, the
 error bodies, the headers and the `/v1/models` listing, all checked against fixtures upstream's own
-code writes. The probabilities agree within measured bounds: DiffusionGemma's within decision
-D-014's on the oracle reads (the top label on 96.2% of slots, and on all 120 where mlx-vlm's top two
-are at least 0.5 apart), and between the two servers on 333 JevBench and TypeSafe items, but for
-JevBench's prompts past 1,024 tokens; Verdict's and Laya's with upstream's top answer on all 666
-items. The differences, among them a stricter JSON parser, the 503 for any backend failure and the
+code writes. The probabilities agree within measured bounds: DiffusionGemma's within decisions
+D-014's and D-048's on the 63 oracle reads (the top label on 91.7% of slots, and on 139 of the 140
+where mlx-vlm's top two are at least 0.5 apart), and between the two servers on 333 JevBench and
+TypeSafe items; Verdict's and Laya's with upstream's top answer on all 666 items. The differences, among them a stricter JSON parser, the 503 for any backend failure and the
 features not built yet, each have a decision record. [docs/compatibility.md](docs/compatibility.md)
 has the three tables and the matrix of what runs on macOS, iOS and Linux.
 
