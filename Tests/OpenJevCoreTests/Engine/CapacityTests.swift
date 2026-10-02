@@ -122,8 +122,10 @@ struct CapacityTests {
     // and the hops around each call take: the engine times each call around the stub's own
     // timing of it, so the recorder holds at least the stub's call times, and the calls of these
     // requests run one after another inside `decide`, so it holds at most the time `decide`
-    // took. A call counted twice adds at least the stub's delay, more than an unloaded request
-    // spends outside its calls, so the upper bound still catches it.
+    // took. A call counted twice adds at least the stub's delay, which the upper bound catches
+    // whenever the request spends less than that outside its calls. Beside the whole suite, the
+    // thought's request can wait longer than that before its call starts, so there its upper
+    // bound misses most double counts.
 
     @Test(
         "A request refused after its thought reports the thought's time",

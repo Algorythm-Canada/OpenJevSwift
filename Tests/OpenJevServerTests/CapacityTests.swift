@@ -114,8 +114,8 @@
         // take: the engine times each call around the stub's own timing of it, so `model` is at
         // least the stub's call times, less `rounding`, and every call lies inside the request,
         // so `model` is at most `total` when the calls run one after another. A call counted
-        // twice adds at least the stub's delay, more than an unloaded request spends outside its
-        // calls, so the upper bound still catches it.
+        // twice adds at least the stub's delay, which the upper bound catches whenever the
+        // request spends less than that outside its calls.
 
         @Test("A serial read's model time is the stub's time and server is the rest")
         func serialRead() async throws {
