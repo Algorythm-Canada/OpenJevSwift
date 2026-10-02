@@ -321,7 +321,9 @@
             let headers = [
                 ("content-type", "application/json"), ("x-request-id", "req_routed"),
                 ("x-typesafe-request-id", "req_routed"),
-                ("server-timing", "model;dur=9.0, server;dur=1.0, total;dur=10.0"),
+                // A day of model time: this server's own model is the forward's round trip,
+                // which never lasts a day, so it cannot equal the routed server's by chance.
+                ("server-timing", "model;dur=86400000.0, server;dur=1.0, total;dur=86400001.0"),
                 ("set-cookie", "a=b"), ("x-extra", "yes"), ("cache-control", "no-store"),
             ].map { RoutedTarget.Header(name: $0.0, value: $0.1) }
             let behaviour = RoutedTarget.Behaviour.answer(
@@ -342,7 +344,7 @@
                     // This server's own request ids and timing, not the routed server's.
                     ServerHarness.expectServerHeaders(response, "forwarded 200")
                     #expect(ServerHarness.header(response, "x-request-id") != "req_routed")
-                    #expect(try Self.timing(response).model != 9.0)
+                    #expect(try Self.timing(response).model != 86_400_000)
                 }
             }
         }
