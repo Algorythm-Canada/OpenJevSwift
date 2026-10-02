@@ -244,13 +244,22 @@ struct CapacityTests {
         #expect(encoderStub.closeCount == 1)
     }
 
-    /// Polls `condition` every millisecond for up to five seconds.
-    static func until(_ condition: () -> Bool) async throws {
+    /// Polls `condition` every millisecond for up to 60 seconds, and records an issue at the
+    /// caller's line if it never holds.
+    ///
+    /// Only a failure waits that long: a condition that holds returns at once. The limit is
+    /// generous because Swift Testing starts every test at once, so on a small CI runner a new
+    /// task can wait seconds for a thread. On the Linux job, 60 tasks once took more than five
+    /// seconds to reach the semaphore.
+    static func until(
+        sourceLocation: SourceLocation = #_sourceLocation, _ condition: () -> Bool
+    ) async throws {
         let clock = ContinuousClock()
-        let deadline = clock.now + .seconds(5)
+        let deadline = clock.now + .seconds(60)
         while !condition() {
             guard clock.now < deadline else {
-                Issue.record("the condition did not hold within five seconds")
+                Issue.record(
+                    "the condition did not hold within 60 seconds", sourceLocation: sourceLocation)
                 return
             }
             try await Task.sleep(for: .milliseconds(1))
