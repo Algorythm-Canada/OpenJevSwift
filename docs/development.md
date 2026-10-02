@@ -579,15 +579,15 @@ And took this long:
 - **Superseded runs.** A newer push to a pull request cancels the run it replaces. Every commit on
   `main` runs in a concurrency group of its own, so no merged commit's run is cancelled.
 - **Documentation-only changes.** Both triggers list every path, then `!**.md`, then the three
-  Markdown files tests read: `THIRD_PARTY.md` (`FixturePinTests`), the configuration reference and
-  `docs/deployment.md` (`ConfigurationReferenceTests`). A pull request or push that changes only
-  other Markdown files starts no run; one that changes one of the three, or anything else, runs as
-  usual. The `Protect main` ruleset requires a review, not a status check, so such a pull request
-  is still mergeable. If a required status check is ever added, replace the path filters with a
-  job that detects the documentation-only case and reports success, or GitHub will wait for a
-  check that never runs. The DocC catalogs are Markdown under `Sources/`, so a pull request that
-  changes only them starts no CI run unless it changes the configuration reference, but it starts
-  the Documentation workflow, which builds them.
+  Markdown files tests read: `THIRD_PARTY.md` (`FixturePinTests` and the JevBench smoke test), the
+  configuration reference and `docs/deployment.md` (`ConfigurationReferenceTests`). A pull request
+  or push that changes only other Markdown files starts no run; one that changes one of the three,
+  or anything else, runs as usual. The `Protect main` ruleset requires a review, not a status check,
+  so such a pull request is still mergeable. If a required status check is ever added, replace the
+  path filters with a job that detects the documentation-only case and reports success, or GitHub
+  will wait for a check that never runs. The DocC catalogs are Markdown under `Sources/`, so a pull
+  request that changes only them starts no CI run unless it changes the configuration reference, but
+  it starts the Documentation workflow, which builds them.
 - **Fixture regeneration.** The job runs on Apple silicon because the committed files were written
   there: CPython takes its math functions from the platform's C library, and another library could
   change the last digit of a float. It reproduced every committed file byte for byte.

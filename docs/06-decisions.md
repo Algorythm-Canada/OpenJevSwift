@@ -2391,7 +2391,8 @@ Decision.
    none), and every variable of [deployment.md](deployment.md)'s settings table must appear with
    the same default. Changing a default, adding a read or dropping a row fails it. CI's path
    filters, which skipped every Markdown-only change, now let a change to the reference or to
-   deployment.md through, and one to `THIRD_PARTY.md`, which `FixturePinTests` already read.
+   deployment.md through, and one to `THIRD_PARTY.md`, which `FixturePinTests` and the JevBench
+   smoke test already read.
 6. **The compatibility page.** [compatibility.md](compatibility.md) has the three tables the issue
    names, each difference with its decision number, and the matrix of three platforms by four kinds
    of backend by seven features, each cell "yes", "no" with an issue, or "n/a". The matrix follows
