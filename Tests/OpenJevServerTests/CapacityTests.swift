@@ -37,6 +37,10 @@
             milliseconds(times.reduce(Duration.zero, +))
         }
 
+        /// How far below a time its `server-timing` value can be: half the one decimal it is
+        /// written with.
+        private let rounding = 0.05
+
         // MARK: The queue bound
 
         @Test("A request past the queue bound is the 529 with retry-after 1; the one inside ends")
@@ -106,6 +110,13 @@
 
         // MARK: Model time
 
+        // The bounds on `model` hold however long the semaphore and the hops around each call
+        // take: the engine times each call around the stub's own timing of it, so `model` is at
+        // least the stub's call times, less `rounding`, and every call lies inside the request,
+        // so `model` is at most `total` when the calls run one after another. A call counted
+        // twice adds at least the stub's delay, more than an unloaded request spends outside its
+        // calls, so the upper bound still catches it.
+
         @Test("A serial read's model time is the stub's time and server is the rest")
         func serialRead() async throws {
             let stub = StubBackend(delay: .milliseconds(40))
@@ -115,7 +126,7 @@
                 #expect(response.status == .ok)
                 let timing = try timing(response)
                 #expect(stub.callTimes.count == 1)
-                #expect(abs(timing.model - spent(stub.callTimes)) < 5, "\(timing)")
+                #expect(timing.model >= spent(stub.callTimes) - rounding, "\(timing)")
                 #expect(timing.model >= 40)
                 // server is what remains of total, each written with one decimal.
                 #expect(abs(timing.server - max(0, timing.total - timing.model)) <= 0.15)
@@ -141,7 +152,9 @@
                 let timing = try timing(response)
                 let times = Array(stub.callTimes.dropFirst(before))
                 #expect(times.count == 6)
-                #expect(abs(timing.model - spent(times)) < 10, "\(timing)")
+                #expect(timing.model >= spent(times) - rounding, "\(timing)")
+                // Each read lies inside the request, so the six add up to at most six totals.
+                #expect(timing.model <= 6 * (timing.total + rounding) + rounding, "\(timing)")
                 #expect(timing.model > timing.total, "\(timing)")
                 #expect(timing.server == 0)
             }
@@ -161,7 +174,8 @@
                 let timing = try timing(response)
                 #expect(stub.thinks.count == 1 && stub.reads.isEmpty)
                 #expect(timing.model >= 30)
-                #expect(abs(timing.model - spent(stub.callTimes)) < 5, "\(timing)")
+                #expect(timing.model >= spent(stub.callTimes) - rounding, "\(timing)")
+                #expect(timing.model <= timing.total, "\(timing)")
             }
         }
 
@@ -181,7 +195,8 @@
                 let timing = try timing(response)
                 #expect(stub.callTimes.count == 2)
                 #expect(timing.model >= 60)
-                #expect(abs(timing.model - spent(stub.callTimes)) < 5, "\(timing)")
+                #expect(timing.model >= spent(stub.callTimes) - rounding, "\(timing)")
+                #expect(timing.model <= timing.total, "\(timing)")
             }
         }
 
@@ -204,7 +219,8 @@
                 let timing = try timing(response)
                 #expect(stub.calls.count == 2)
                 #expect(timing.model >= 40)
-                #expect(abs(timing.model - spent(stub.callTimes)) < 5, "\(timing)")
+                #expect(timing.model >= spent(stub.callTimes) - rounding, "\(timing)")
+                #expect(timing.model <= timing.total, "\(timing)")
             }
         }
 

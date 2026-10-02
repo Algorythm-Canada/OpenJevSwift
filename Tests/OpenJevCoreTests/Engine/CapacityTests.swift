@@ -117,6 +117,14 @@ struct CapacityTests {
         #expect(encoderDecision.modelTime >= .milliseconds(15))
     }
 
+    // A refused or failed request has no decision to compare its recorder with, so the next
+    // tests bound the recorder from both sides, by bounds that hold however long the semaphore
+    // and the hops around each call take: the engine times each call around the stub's own
+    // timing of it, so the recorder holds at least the stub's call times, and the calls of these
+    // requests run one after another inside `decide`, so it holds at most the time `decide`
+    // took. A call counted twice adds at least the stub's delay, more than an unloaded request
+    // spends outside its calls, so the upper bound still catches it.
+
     @Test(
         "A request refused after its thought reports the thought's time",
         .enabled(if: PolicyFixtures.exists, PolicyFixtures.missingMessage))
@@ -125,10 +133,14 @@ struct CapacityTests {
         // read does not, so the engine refuses after the backend has thought.
         let stub = StubBackend(maxPromptTokens: 190, delay: .milliseconds(20))
         let engine = try DecisionEngine(backend: stub)
+        let request = try request("think_256")
         let recorder = ModelTimeRecorder()
-        let error = await #expect(throws: SchemaError.self) {
-            try await ModelTimeRecorder.$current.withValue(recorder) {
-                try await engine.decide(try self.request("think_256"))
+        var error: SchemaError?
+        let elapsed = await ContinuousClock().measure {
+            error = await #expect(throws: SchemaError.self) {
+                try await ModelTimeRecorder.$current.withValue(recorder) {
+                    try await engine.decide(request)
+                }
             }
         }
         #expect(error?.message == "the request is 191 tokens; the limit is 190")
@@ -136,7 +148,7 @@ struct CapacityTests {
         #expect(stub.reads.isEmpty)
         let thought = try #require(stub.callTimes.first)
         #expect(recorder.total >= thought)
-        #expect(recorder.total - thought < .milliseconds(5))
+        #expect(recorder.total <= elapsed)
     }
 
     @Test(
@@ -146,23 +158,26 @@ struct CapacityTests {
         let stub = StubBackend(
             delay: .milliseconds(20), failure: BackendRefusal(reason: "no"), succeedingCalls: 1)
         let engine = try DecisionEngine(backend: stub)
+        let request = try request("sequential_24_nouls")
         let recorder = ModelTimeRecorder()
-        await #expect(throws: BackendRefusal.self) {
-            try await ModelTimeRecorder.$current.withValue(recorder) {
-                try await engine.decide(try self.request("sequential_24_nouls"))
+        let elapsed = await ContinuousClock().measure {
+            await #expect(throws: BackendRefusal.self) {
+                try await ModelTimeRecorder.$current.withValue(recorder) {
+                    try await engine.decide(request)
+                }
             }
         }
         #expect(stub.reads.count == 2)
         let spent = stub.callTimes.reduce(Duration.zero, +)
         #expect(stub.callTimes.count == 2)
         #expect(recorder.total >= spent)
-        #expect(recorder.total - spent < .milliseconds(5))
+        #expect(recorder.total <= elapsed)
     }
 
     @Test("An encoder request whose second batch fails reports both batches")
     func failureAfterAFirstBatch() async throws {
         let stub = StubQuestionReadBackend(
-            delay: .milliseconds(10), failure: .throwing("boom"), succeedingBatches: 1)
+            delay: .milliseconds(20), failure: .throwing("boom"), succeedingBatches: 1)
         let engine = EncoderDecisionEngine(backend: stub)
         let questions = OrderedMap<Question>(
             uniqueKeysWithValues: (0..<20).map {
@@ -170,15 +185,17 @@ struct CapacityTests {
             })
         let request = SystemOneRequest(model: "laya-1.0", state: "s", questions: questions)
         let recorder = ModelTimeRecorder()
-        await #expect(throws: StubQuestionReadBackend.StubError.self) {
-            try await ModelTimeRecorder.$current.withValue(recorder) {
-                try await engine.decide(request)
+        let elapsed = await ContinuousClock().measure {
+            await #expect(throws: StubQuestionReadBackend.StubError.self) {
+                try await ModelTimeRecorder.$current.withValue(recorder) {
+                    try await engine.decide(request)
+                }
             }
         }
         #expect(stub.calls.count == 2)
         let spent = stub.callTimes.reduce(Duration.zero, +)
         #expect(recorder.total >= spent)
-        #expect(recorder.total - spent < .milliseconds(5))
+        #expect(recorder.total <= elapsed)
     }
 
     // MARK: Cancellation
