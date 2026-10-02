@@ -1868,7 +1868,9 @@ requests, each reload taking several times an ordinary read), and a function's f
 warm-up's three questions do not cover, took 0.2 to 1.9 s across the runs.
 
 Status. Proposed with issue #61. The two Core ML functions its runs had loaded on a Mac are
-every function since D-042.
+every function since D-042. The DiffusionGemma runs it left for after #31 were recorded with issue
+#62, both servers capping MLX's buffer pool at 4 GB ([quality.md](quality.md#diffusiongemma),
+D-046).
 
 ## D-042 Encoder functions on a Mac: every function stays loaded, `OPENJEV_ENCODER_FUNCTIONS` caps them
 
@@ -2223,3 +2225,100 @@ attribution to the first group is checked on the stub by the recorded `sequentia
 of Fixtures/policies until then.
 
 Status. Proposed with issues #43, #44 and #45.
+
+## D-046 DiffusionGemma's probabilities stay upstream's: no temperature-scaling hook
+
+Context. Issue #62 asks for the ECE and Brier score of DiffusionGemma's raw reads on the public
+labelled sets the harness uses, for how the answers' `confidence` relates to observed accuracy per
+question type and option count, and for a decision: offer an optional, clearly non-Jev,
+per-deployment temperature-scaling hook, fitted offline by the user and applied to label logits
+before the softmax, or stay strictly upstream-compatible. Upstream applies no calibration to
+DiffusionGemma. Each read's label distribution is a softmax over the label tokens' log-probabilities
+at the answer's slot (`slot_distribution` in `engine.py` at `dcd2094`), and an answer is the
+arithmetic mean of the reads: the first, and three more with other noise when a slot's top-k entropy
+exceeds `OPENJEV_AUTO_THRESHOLD`, 0.1 (`read_group`). `confidence` is `1 - H(p)/ln K`, how peaked an
+answer is. The method is SemIf's (`docs/CALIBRATION.md` and `benchmarks/calibrate.py` at
+`23cf1f3`): one scalar T per workload, fitted by NLL, with the ECE out of fold under group-disjoint
+5-fold cross-validation and bootstrap intervals over the groups. `Tools/jevbench/calibration.py`
+computes it from the DiffusionGemma runs this issue recorded with the harness of issue #61 (D-041),
+on both servers, and [quality.md](quality.md) holds the tables.
+
+Decision.
+
+1. **No hook: the server returns upstream's probabilities, and only those.** No setting, request
+   field or library option rescales an answer. A deployment that wants calibrated probabilities
+   rescales the answers it receives, with a T fitted on its own labelled answers (item 5).
+2. **The measurements** (2026-10-02, M3 Max; the Swift server's figure first, upstream's second).
+   On JevBench's 231 items the reads are right 81.4% and 82.3% of the time at a mean top
+   probability of 0.92: ECE 0.106 and 0.097, Brier 0.245 and 0.239, NLL 0.566 and 0.563. The answers
+   at 0.9 or more are right 94.5% and 94.9% of the time at a mean of 0.99; those below 0.9 are right
+   33% and 43% of the time at a mean of 0.65 and 0.68. The overconfidence is nearly all the hard
+   tier's: easy items are right 100% of the time at 0.999, standard items 98.6% at 0.99 (ECE 0.016
+   and 0.018), hard items 62% and 64% at 0.84 (ECE 0.22 and 0.20). On the 102 TypeSafe rows the
+   reads agree with the reference's top option 89.2% and 90.2% of the time at 0.97 (ECE 0.092 and
+   0.096). `confidence` ranks answers about as well as the top probability does (AUROC 0.88 and 0.87
+   on JevBench, 0.76 and 0.72 on TypeSafe): at 0.8 or more, 89.5% of JevBench's nouls, 97% to 98%
+   of its choices and 13 of 13 scores are right, and below 0.6 about 30% of its choices are. It is
+   not a probability of being right, and upstream does not present it as one.
+3. **What temperature scaling would buy.** One T fitted on JevBench is 2.01 and 2.00 (1.85 to 2.18
+   over the folds). Out of fold it lowers the ECE from 0.106 to 0.063 and from 0.097 to 0.058, the
+   Brier score from 0.245 to 0.227 and from 0.239 to 0.225, and the NLL from 0.566 and 0.563 to
+   0.446. The paired 95% interval of the NLL's change excludes zero on both runs; those of the ECE
+   and the Brier score exclude it on the Swift run and just include it on upstream's (ECE -0.057 to
+   0.010, Brier -0.029 to 0.002); SemIf's own test, the two ECE intervals not overlapping, fails on
+   both. Applied to the TypeSafe rows, JevBench's T lowers their ECE from 0.092 to 0.037 and from
+   0.096 to 0.035. So a scalar T helps on both public sets, by about 0.04 to 0.06 of ECE, and the
+   sets are too small to call the ECE gain more than likely.
+4. **Why the server does not apply it.**
+   - **The hook as the issue words it changes answers, and cannot be fitted offline.** A T applied
+     to each read's label logits before the softmax acts before the mean of the reads, and a mean of
+     tempered softmaxes need not keep the order of the labels: reads of P(yes) 0.67, 0.67, 0.67 and
+     0.001 average to 0.503, a yes, and at T = 2 to 0.448, a no. Such a hook would move accuracy,
+     which temperature scaling is chosen for not doing, and the per-read distributions it would be
+     fitted on never reach the wire.
+   - **Applied to the averaged answer, it is the client's own arithmetic.** softmax(ln p / T) is
+     `q_k = p_k^(1/T) / sum_j p_j^(1/T)`, which keeps the argmax and needs only what the answer
+     carries: a noul's `noul`, a choice's or score's `probabilities`, from which a client recomputes
+     `confidence` and a score's expected level. A server hook would add no capability.
+   - **T belongs to a workload, not to a model.** The tiers alone would be fitted to T = 0.8
+     (standard) and 2.9 (hard), and every easy answer is right; the question types to about 3.7
+     (noul), 1.6 (choice) and 1.4 to 1.5 (score), a difference these 74, 139 and 18 items cannot
+     separate from one T. Request options change the average a T would be fitted on: `samples`
+     replaces the automatic re-reads, and `steps` and `think` change each read. One server-wide T
+     would be wrong for most of the traffic of a server that answers more than one workload.
+   - **Upstream compatibility is the port's contract** (D-001). With a hook set, every parity claim
+     of D-014 and D-041 would need a caveat, for arithmetic clients can do themselves.
+5. **What the port offers instead.** quality.md publishes the measurements and the formula, and
+   `Tools/jevbench/calibration.py` fits a T by SemIf's method on any result file with hard labels: a
+   deployment runs its own labelled items through `harness.py run --items`, reads the T and its
+   out-of-fold effect from `harness.py calibration --results DIR --model NAME`, and applies
+   `p^(1/T)` to the answers it receives.
+6. **What would justify a hook later.** A deployment's own labelled set of about 1,000 items or
+   more on which SemIf's unpaired test separates; per-read label distributions, which only a
+   server-side trace can give, to measure whether scaling before the mean does better than scaling
+   after it; a T that holds across `samples`, `steps` and `think`; and a client that cannot
+   post-process an answer. None of these exists today.
+7. **Departures from SemIf's method,** both forced by the harness's standard library: the folds and
+   the bootstrap draw from Python's `random.Random(217)` rather than NumPy's `default_rng(217)`, so
+   the groups fall into other folds than SemIf's script would put them in; and a T divides the
+   logarithms of an answer's probabilities, since an answer carries no logits. Beside SemIf's test
+   the tables give the paired interval of each change over the same resampled groups. SemIf leaves
+   rows with a reference distribution, as TypeSafe's are, out of its fits; JevBench's T is applied
+   to them instead.
+
+Alternatives rejected. (a) The hook as worded, T on each read's label logits: it changes answers
+and cannot be fitted from them. (b) A server-side T on the averaged answer: the same arithmetic any
+client can do, at the price of a non-upstream server mode. (c) Shipping a default T, such as
+JevBench's 2.0: the tiers alone want 0.8 to 2.9, and a T fitted on a benchmark would be wrong for an
+easier workload. (d) A T per question type or option count, as Laya's checkpoint carries
+(`rl_agent_config.json`, [10-other-models.md](10-other-models.md)): the per-type control does not
+separate it from one T at these sizes, and it would still be fitted on a benchmark. (e) Replacing
+`confidence` with a calibrated probability: it is upstream's and Jev's wire value, and changing its
+meaning would break every client that reads it.
+
+Consequences. The port stays strictly upstream-compatible, and quality.md says with the numbers
+that DiffusionGemma's probabilities are overconfident on hard questions. A deployment that needs
+calibrated probabilities fits a T on its own labelled answers with the harness and rescales them
+client-side. The conditions of item 6 are what would reopen the question.
+
+Status. Proposed with issue #62.

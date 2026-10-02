@@ -1,16 +1,18 @@
-# JevBench harness (issue #61)
+# JevBench harness (issues #61 and #62)
 
 Runs JevBench v1's public items, and the TypeSafe subset SemIf compares with Jev, against any
-`/v1/systemone` server, scores the answers with each benchmark's own code and compares two runs of
-one model item by item. [docs/quality.md](../../docs/quality.md) holds the tables it produced for
-the Swift and upstream servers and what they mean; the decision behind its choices is D-041 in
-[docs/06-decisions.md](../../docs/06-decisions.md).
+`/v1/systemone` server, scores the answers with each benchmark's own code, compares two runs of
+one model item by item and measures how well a model's probabilities are calibrated.
+[docs/quality.md](../../docs/quality.md) holds the tables it produced for the Swift and upstream
+servers and what they mean; the decisions behind its choices are D-041 and, for the calibration,
+D-046 in [docs/06-decisions.md](../../docs/06-decisions.md).
 
 | Path | What it is |
 |---|---|
-| `harness.py` | The runner and scorer: `fetch`, `run`, `summary`, `compare`, `published`, `report`. Standard library only |
+| `harness.py` | The runner and scorer: `fetch`, `run`, `summary`, `compare`, `published`, `report`, `calibration`. Standard library only |
 | `servers.py` | Starts the Swift or upstream server for one backend on a free port, records its versions, runs `harness.py` against it and stops it with SIGTERM |
-| `report.py` | Renders every table of docs/quality.md from `results/` |
+| `report.py` | Renders the comparison tables of docs/quality.md from `results/` |
+| `calibration.py` | Renders its calibration tables (issue #62): JevBench's Brier score and ECE, reliability bins, `confidence` against accuracy by type and option count, and SemIf's temperature scaling fitted offline |
 | `smoke_test.py` | The harness's own test: a fake server in the process, no model and no download. CI runs it |
 | `testdata/items.jsonl` | Seven items written for the smoke test, in JevBench's format |
 | `vendor/` | JevBench's and SemIf's scoring code, unchanged and pinned by SHA-256 ([vendor/README.md](vendor/README.md)) |
@@ -88,6 +90,19 @@ towards the three (the runner exempts only a 422; D-041).
   model: the outcome of every public item, both public accuracies, per tier, and the board's
   aggregates. The rows were not produced the way this harness runs upstream's server;
   `PUBLISHED_ROWS` in `harness.py` says how each was.
+- **`calibration [--model NAME] [--results DIR]`** (`calibration.py`) takes every run of one
+  model (`openjev-0.1` by default) over its items with an expected label: JevBench's Brier score
+  and ECE, the NLL of the expected label, the reliability bins (the top label's probability
+  against observed accuracy, 10 equal-width bins with counts), how the answer's `confidence`
+  (upstream's 1 - H(p)/ln K, computed for a noul, whose answer has none) relates to accuracy per
+  question type and option count, and SemIf's per-workload temperature scaling (its
+  `docs/CALIBRATION.md` at `23cf1f3`): one T fitted by NLL on each hard-labelled run, the ECE
+  out of fold under group-disjoint 5-fold cross-validation with 95% bootstrap intervals over the
+  groups, the paired intervals of the changes, a T per question type against one T, and
+  JevBench's T applied to the TypeSafe rows. The module's docstring gives every formula and its
+  source. A deployment's own labelled items, run with `run --items`, are fitted the same way:
+  `calibration` reads every folder under `results/`, `items/` included, where such a run is
+  written by default.
 
 ## Running it
 
@@ -120,15 +135,34 @@ python3 Tools/jevbench/servers.py --server upstream --backend laya
 python3 Tools/jevbench/harness.py report
 ```
 
-The DiffusionGemma runs, `--backend mlx`, wait for issue #31; their commands are in
-[docs/quality.md](../../docs/quality.md#diffusiongemma). `--encoder-models` names the folder the
-converters write to; without it the Swift server downloads
-the published packages (D-033), which have the same bytes (`Tools/encoders/manifest.py --check`,
-which `servers.py` runs and records, and which stops the run before the server starts when a
-package differs). Add `--force` to replace earlier result files. Any other
-server: `python3 Tools/jevbench/harness.py run --base-url URL --model NAME --server LABEL
-[--dataset typesafe102] [--api-key-env VARIABLE]`, then `summary`, `compare` and `published` on the
-files it writes. `--ids a,b` runs only those items.
+`--encoder-models` names the folder the converters write to; without it the Swift server
+downloads the published packages (D-033), which have the same bytes
+(`Tools/encoders/manifest.py --check`, which `servers.py` runs and records, and which stops the run
+before the server starts when a package differs). Add `--force` to replace earlier result files.
+
+The DiffusionGemma runs, `--backend mlx`, read `mlx-community/diffusiongemma-26B-A4B-it-4bit` at
+`a7a81407` from the Hugging Face cache (both servers load about 16 GB; run them one after the
+other), upstream's from the same `.venv`, whose lock includes upstream's `mlx` extra:
+
+```bash
+python3 Tools/jevbench/servers.py --server swift --backend mlx --setting OPENJEV_MLX_CACHE_LIMIT_GB=4
+python3 Tools/jevbench/servers.py --server upstream --backend mlx --setting OPENJEV_MLX_CACHE_LIMIT_GB=4
+python3 Tools/jevbench/harness.py report
+python3 Tools/jevbench/harness.py calibration
+```
+
+`--setting OPENJEV_NAME=VALUE` (repeatable) gives the server one setting beyond its defaults, which
+the result file records with the others. `servers.py` refuses the settings it chooses itself, and
+any that can hold a credential the file would then record: the API key, the origin secret, the
+model routes, upstream's vLLM URL and any name with KEY, SECRET, TOKEN, PASSWORD or CREDENTIAL in
+it (the harness sends no key, so such a server would refuse its requests anyway). The
+MLX runs cap MLX's buffer pool at 4 GB: without a cap the pool grows to the peak working set, as
+upstream's README says ("MLX memory"), and on JevBench's long hard-tier states the Swift server's
+footprint reached 102 GB of a 128 GB Mac. The cap changes no answer
+([docs/quality.md](../../docs/quality.md#diffusiongemma)). Any other server:
+`python3 Tools/jevbench/harness.py run --base-url URL --model NAME --server LABEL
+[--dataset typesafe102] [--api-key-env VARIABLE]`, then `summary`, `compare`, `published` and
+`calibration` on the files it writes. `--ids a,b` runs only those items.
 
 ## Result files
 
