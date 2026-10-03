@@ -23,8 +23,9 @@ extension JevK5Backend {
     /// ```
     ///
     /// - Parameters:
-    ///   - source: the checkpoint, a converted folder or Hub repository; by default the 4-bit
-    ///     conversion's repository, which is refused until it is published (D-051).
+    ///   - source: the checkpoint, a converted folder or Hub repository; by default
+    ///     ``JevK5Checkpoint/platformDefault``'s repository, the 8-bit conversion on macOS and the
+    ///     4-bit one on iOS, which is refused until it is published (D-051).
     ///   - cache: the Hugging Face cache a Hub source is kept in.
     ///   - token: the Hub access token, `HF_TOKEN`.
     ///   - cacheLimitGB: the MLX buffer pool's ceiling in GB, as upstream's `set_cache_limit`
@@ -33,7 +34,7 @@ extension JevK5Backend {
     /// - Throws: ``JevK5LoadError``, ``/OpenJevDiffusionGemma/ModelResolverError``, and the
     ///   tokenizer's and the weight loader's errors.
     public static func load(
-        _ source: ModelSource = JevK5Checkpoint.fourBit.hubSource,
+        _ source: ModelSource = JevK5Checkpoint.platformDefault.hubSource,
         cache: HubCacheLocation = .standard, token: String? = nil, cacheLimitGB: Double? = nil,
         resolver: ModelResolver = ModelResolver()
     ) async throws -> JevK5Backend {

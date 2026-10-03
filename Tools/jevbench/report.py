@@ -16,9 +16,10 @@ import harness
 from harness import markdown_table, num, pct
 
 LARGEST = 5
-# Models whose runs' timings the tables leave out, and why. The DiffusionGemma and JevK5 runs shared
-# the Mac's GPU with other work, so their timings are not a measurement; docs/benchmarks.md is
-# (D-044). JevK5's reference was timed on the author's GPU, which says nothing about a Mac either.
+# Models whose runs' timings the tables leave out, and why. The DiffusionGemma runs shared the Mac's
+# GPU with other work, and the JevK5 runs were not taken under a benchmark's protocol, so their
+# timings are not a measurement; docs/benchmarks.md is (D-044). JevK5's reference was timed on the
+# author's GPU, which says nothing about a Mac either.
 UNTIMED = {"openjev-0.1": "not reported", "jevk5-0.2": "not reported"}
 # D-014's bounds on the aggregates the wire answers allow (the entropy bounds need the top-k
 # entropy of each read, which an answer does not carry). D-048 bounds the long prompts by each
@@ -88,6 +89,68 @@ def author_tables(docs: list) -> list:
         markdown_table(["model", "dataset", "item", "type", "label", "Swift", "author",
                         "abs diff", "top answer agrees"], largest_rows),
     ]
+
+
+# JevK5's other conversions' runs, `results/jevk5-conversions/<conversion>/` with a `typesafe102/`
+# folder as `results/` has. The main result files are the server's default conversion's; only the
+# table of conversions reads these.
+CONVERSIONS = "jevk5-conversions"
+# A conversion's top answer is expected to be the author's where the author's top two are at least
+# this far apart; closer is a near-tie, which bfloat16 rounding alone can turn (D-051).
+CLEAR_MARGIN = 0.05
+
+
+def conversion_files(results: Path) -> list:
+    folder = results / CONVERSIONS
+    if not folder.is_dir():
+        return []
+    return sorted(folder.glob("*/*.json")) + sorted(folder.glob("*/typesafe102/*.json"))
+
+
+def conversion_tables(docs: list, others: list) -> list:
+    """Every conversion of a model against its author's published run, the default conversion's
+    run (in `docs`) first and the others' (`others`) after it: the top answers, overall and where
+    the author's top two are clear of a tie, the billed tokens, the probability differences, and
+    the accuracy on the author's dataset and on TypeSafe's."""
+    rows = []
+    for dataset, model, default, author in author_pairs(docs):
+        def runs(group, name):
+            return [doc for doc in group if doc["server"]["name"] == "swift"
+                    and doc["model"] == model and doc["dataset"]["name"] == name]
+
+        clear = {item["id"] for item in author["items"] if item["status"] == "answered"
+                 and harness.top_two(item["probabilities"])[2] >= CLEAR_MARGIN}
+        typesafe = {doc["server"].get("conversion"): doc
+                    for doc in runs(docs, "typesafe102") + runs(others, "typesafe102")}
+        others_here = sorted(runs(others, dataset),
+                             key=lambda doc: doc["server"].get("conversion") or "")
+        if not others_here:
+            continue
+        for doc in [default] + others_here:
+            result = harness.compare_docs(doc, author)
+            overall, tokens = result["overall"], result["input_tokens"]
+            answered = {item["id"] for item in doc["items"] if item["status"] == "answered"}
+            judged = clear & answered
+            missed = sum(1 for entry in result["disagreements"] if entry["id"] in judged)
+            name = doc["server"].get("conversion") or "not recorded"
+            other = typesafe.get(doc["server"].get("conversion"))
+            rows.append([
+                model, name + (", the default" if doc is default else ""),
+                f"{overall['agree']} of {overall['items']}",
+                f"{len(judged) - missed} of {len(judged)}",
+                f"{tokens['equal']} of {tokens['items']}", num(overall["mean_abs_diff"]),
+                num(overall["median_max_abs_diff"]), num(overall["max_abs_diff"]),
+                pct(doc["summary"]["overall"].get("accuracy")),
+                pct(other["summary"]["overall"].get("accuracy")) if other else "not run"])
+        rows.append([model, "the author's published run", "", "", "", "", "", "",
+                     pct(author["summary"]["overall"].get("accuracy")), "not published"])
+    if not rows:
+        return []
+    return [markdown_table(
+        ["model", "conversion", "top answer agrees",
+         f"top answer agrees where the author's top two are at least {CLEAR_MARGIN} apart",
+         "input tokens equal", "mean abs diff", "median of each item's largest abs diff",
+         "largest abs diff", "accuracy", "TypeSafe accuracy"], rows)]
 
 
 def is_diffusiongemma(doc: dict) -> bool:
@@ -384,6 +447,14 @@ def render(results: Path, cache: Path) -> str:
                 "JevK5's reference is its author's own published v0.2 run, as it is upstream's: "
                 "upstream's server reads JevK5's letters from vLLM, which needs an NVIDIA GPU "
                 "(D-051). Equal input tokens mean equal prompts."] + author
+    conversions = conversion_tables(docs, harness.load_docs(conversion_files(results), cache))
+    if conversions:
+        out += ["### JevK5's conversions against the author's run",
+                "The same runs with each MLX conversion of JevK5 v0.2 that Tools/jevk5/convert.py "
+                f"pins, from {CONVERSIONS}/: the default is the main result files' conversion, "
+                "and bfloat16 is the unquantized weights. A near-tie, the author's top two less "
+                f"than {CLEAR_MARGIN} apart, can turn on bfloat16 rounding alone (D-051)."]
+        out += conversions
     published = published_tables(docs, cache)
     if published:
         out += ["### Against JevBench's published rows"] + published

@@ -42,7 +42,7 @@ DEFAULT_PYTHON = harness.HERE / ".venv" / "bin" / "python"
 # backend -> the model it serves
 MODELS = {"verdict": "verdict-1.4", "laya": "laya-1.0", "mlx": "openjev-0.1", "jevk5": "jevk5-0.2"}
 # The JevK5 conversion the Swift server reads by default: Tools/jevk5/convert.py --bits 4's folder.
-JEVK5_MODEL = Path.home() / "Library" / "Caches" / "OpenJevSwift" / "jevk5" / "jevk5-0.2-mlx-4bit"
+JEVK5_MODEL = Path.home() / "Library" / "Caches" / "OpenJevSwift" / "jevk5" / "jevk5-0.2-mlx-8bit"
 # The checkpoints upstream loads, at the revisions Fixtures/encoders and THIRD_PARTY.md pin, and
 # the files of each its loader reads (Tools/encoders/common.py).
 CHECKPOINTS = {
@@ -205,9 +205,9 @@ def swift_server(backend: str, binary: Path, encoder_models: str | None,
                                       else f"jevk5-0.2-mlx-{bits}bit")
                 break
         else:
-            # the 4-bit check's reason, since that is the conversion the server takes by default
-            sys.exit(f"{harness.display_path(folder)} is not a pinned conversion: {checks[4]}; "
-                     "run Tools/jevk5/convert.py --bits 4")
+            # the 8-bit check's reason, since that is the conversion the server takes by default
+            sys.exit(f"{harness.display_path(folder)} is not a pinned conversion: {checks[8]}; "
+                     "run Tools/jevk5/convert.py --bits 8")
     info["settings"] = {key: harness.display_path(value)
                         if key in ("OPENJEV_ENCODER_MODELS", "OPENJEV_JEVK5_MODEL") else value
                         for key, value in settings.items()}
@@ -323,8 +323,8 @@ def main(argv=None) -> int:
                         help="OPENJEV_ENCODER_MODELS for the Swift server; unset downloads the "
                              "published packages")
     parser.add_argument("--jevk5-model", default=str(JEVK5_MODEL),
-                        help="OPENJEV_JEVK5_MODEL for the Swift jevk5 server, the 4-bit "
-                             "conversion's folder (default %(default)s)")
+                        help="OPENJEV_JEVK5_MODEL for the Swift jevk5 server, a pinned "
+                             "conversion's folder (default %(default)s, the 8-bit one)")
     parser.add_argument("--python", default=str(DEFAULT_PYTHON),
                         help="the interpreter of upstream's environment (default %(default)s)")
     parser.add_argument("--cache", default=str(harness.default_cache()))

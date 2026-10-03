@@ -124,8 +124,20 @@ public struct JevK5Checkpoint: Sendable, Hashable {
     /// Both conversions.
     public static let all = [fourBit, eightBit]
 
-    /// `OPENJEV_JEVK5_MODEL`'s default: the 4-bit conversion's repository.
-    public static let defaultSetting = fourBit.repository
+    /// The conversion this platform loads by default (D-051): ``eightBit`` on macOS, which gives
+    /// the author's published top answer on 230 of JevBench's 231 items where ``fourBit`` gives it
+    /// on 209, and ``fourBit`` on iOS, half the size, where memory is the limit. Neither has run
+    /// on an iPhone yet.
+    public static var platformDefault: JevK5Checkpoint {
+        #if os(macOS)
+            return eightBit
+        #else
+            return fourBit
+        #endif
+    }
+
+    /// `OPENJEV_JEVK5_MODEL`'s default, the server's: the 8-bit conversion's repository.
+    public static let defaultSetting = eightBit.repository
 }
 
 /// Where a JevK5 checkpoint comes from: the folder or repository `OPENJEV_JEVK5_MODEL` names,

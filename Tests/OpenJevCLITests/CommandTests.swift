@@ -122,7 +122,7 @@ struct CommandTests {
             #expect(
                 outcome.errors
                     == "openjev: jevk5-0.2 failed to load (OPENJEV_BACKEND=jevk5): "
-                    + "Algorythm-Canada/jevk5-0.2-mlx-4bit is not published yet; convert the "
+                    + "Algorythm-Canada/jevk5-0.2-mlx-8bit is not published yet; convert the "
                     + "checkpoint with Tools/jevk5/convert.py and set OPENJEV_JEVK5_MODEL to the "
                     + "folder it writes (docs/deployment.md)\n")
         } else {
@@ -488,7 +488,7 @@ struct CommandTests {
         #expect(
             line.contains(
                 " max_body_bytes=67108864 encoder_batch=16 "
-                    + "jevk5_model=Algorythm-Canada/jevk5-0.2-mlx-4bit mlx_cache_limit_gb=unset "
+                    + "jevk5_model=Algorythm-Canada/jevk5-0.2-mlx-8bit mlx_cache_limit_gb=unset "
                     + "api_key=unset "))
         #expect(!line.contains("encoder_functions") && !line.contains("encoder_models"))
         let capped = try ServerSettings(environment: [

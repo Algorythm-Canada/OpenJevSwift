@@ -336,6 +336,20 @@ class HarnessSmokeTest(unittest.TestCase):
         self.assertIn(f"| {MODEL} | items | {tokens['items']} | ", tables[0])
         self.assertIn(f" | {tokens['equal']} of {tokens['items']} | ", tables[0])
         self.assertEqual(report.author_tables([swift]), [])
+        # the table of conversions: the default conversion's run, then another's, then the author's
+        swift["server"]["conversion"], other = "model-8bit", json.loads(json.dumps(swift))
+        other["server"]["conversion"] = "model-4bit"
+        for doc in (swift, other, author):
+            doc["summary"] = harness.summarize_doc(doc)
+        self.assertEqual(report.conversion_tables([swift, author], []), [])
+        table = report.conversion_tables([swift, author], [other])[0].splitlines()
+        self.assertEqual(len(table), 5)
+        agree = f"{result['overall']['agree']} of {result['overall']['items']}"
+        self.assertTrue(table[2].startswith(f"| {MODEL} | model-8bit, the default | {agree} | "))
+        self.assertTrue(table[3].startswith(f"| {MODEL} | model-4bit | {agree} | "))
+        self.assertTrue(table[2].endswith(" | not run |"))
+        self.assertTrue(table[4].startswith(f"| {MODEL} | the author's published run | "))
+        self.assertTrue(table[4].endswith(" | not published |"))
         # the machines table says the run was published, and that its machine was not recorded
         row = report.environment_rows([author])[0]
         self.assertTrue(row[3].endswith(", published"))

@@ -18,7 +18,7 @@ D-046 in [docs/06-decisions.md](../../docs/06-decisions.md).
 | `vendor/` | JevBench's and SemIf's scoring code, unchanged and pinned by SHA-256 ([vendor/README.md](vendor/README.md)) |
 | `requirements.txt` | Empty: the harness needs only Python's standard library |
 | `requirements-upstream.txt` | The complete lock of `.venv`, the environment upstream's server runs in |
-| `results/` | One file per run: `{model}-{server}.json` for JevBench, `typesafe102/{model}-{server}.json` for the TypeSafe rows; `jevk5-0.2-author.json` is JevK5's own published run, converted by `author-run` |
+| `results/` | One file per run: `{model}-{server}.json` for JevBench, `typesafe102/{model}-{server}.json` for the TypeSafe rows; `jevk5-0.2-author.json` is JevK5's own published run, converted by `author-run`, and `jevk5-conversions/{4bit,bf16}/` JevK5's runs on its other conversions |
 
 ## The datasets
 
@@ -155,14 +155,18 @@ downloads the published packages (D-033), which have the same bytes
 (`Tools/encoders/manifest.py --check`, which `servers.py` runs and records, and which stops the run
 before the server starts when a package differs). Add `--force` to replace earlier result files.
 
-JevK5, `--backend jevk5`, reads the 4-bit conversion `Tools/jevk5/convert.py` writes
-(`--jevk5-model`, by default `~/Library/Caches/OpenJevSwift/jevk5/jevk5-0.2-mlx-4bit`), which
-`servers.py` checks against the pinned digests (`convert.py --check`) before the server starts and
-records. Only the Swift server runs it; its reference is the author's run:
+JevK5, `--backend jevk5`, reads a conversion `Tools/jevk5/convert.py` writes (`--jevk5-model`, by
+default the 8-bit one, `~/Library/Caches/OpenJevSwift/jevk5/jevk5-0.2-mlx-8bit`, the server's
+default), which `servers.py` checks against the pinned digests of the 4-bit, 8-bit and bfloat16
+conversions (`convert.py --check`) before the server starts, and records. Only the Swift server
+runs it; its reference is the author's run. The main result files are the 8-bit conversion's, and
+`results/jevk5-conversions/` holds the other two, which the report's table of conversions reads:
 
 ```bash
 python3 Tools/jevbench/harness.py author-run
 python3 Tools/jevbench/servers.py --server swift --backend jevk5 --setting OPENJEV_MLX_CACHE_LIMIT_GB=4
+python3 Tools/jevbench/servers.py --server swift --backend jevk5 --jevk5-model ~/Library/Caches/OpenJevSwift/jevk5/jevk5-0.2-mlx-4bit --setting OPENJEV_MLX_CACHE_LIMIT_GB=4 --output-dir Tools/jevbench/results/jevk5-conversions/4bit
+python3 Tools/jevbench/servers.py --server swift --backend jevk5 --jevk5-model ~/Library/Caches/OpenJevSwift/jevk5/jevk5-0.2-mlx-bf16 --setting OPENJEV_MLX_CACHE_LIMIT_GB=4 --output-dir Tools/jevbench/results/jevk5-conversions/bf16
 python3 Tools/jevbench/harness.py compare Tools/jevbench/results/jevk5-0.2-swift.json Tools/jevbench/results/jevk5-0.2-author.json
 ```
 

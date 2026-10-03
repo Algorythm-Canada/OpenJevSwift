@@ -28,16 +28,20 @@ struct JevK5CheckpointTests {
         // A conversion's repository takes the conversion's pinned revision, none until published.
         #expect(
             JevK5ModelFiles.source(setting: JevK5Checkpoint.defaultSetting)
+                == JevK5Checkpoint.eightBit.hubSource)
+        #expect(
+            JevK5ModelFiles.source(setting: "Algorythm-Canada/jevk5-0.2-mlx-4bit")
                 == JevK5Checkpoint.fourBit.hubSource)
         #expect(
             JevK5ModelFiles.source(setting: "Algorythm-Canada/jevk5-0.2-mlx-8bit@main")
                 == .hub(repository: "Algorythm-Canada/jevk5-0.2-mlx-8bit", revision: "main"))
     }
 
-    @Test("The server's default is the 4-bit conversion's repository")
+    @Test("The server's default is the 8-bit conversion's repository, the platform's on macOS")
     func serverDefault() throws {
         #expect(try ServerSettings().jevk5Model == JevK5Checkpoint.defaultSetting)
-        #expect(JevK5Checkpoint.defaultSetting == "Algorythm-Canada/jevk5-0.2-mlx-4bit")
+        #expect(JevK5Checkpoint.defaultSetting == "Algorythm-Canada/jevk5-0.2-mlx-8bit")
+        #expect(JevK5Checkpoint.platformDefault == .eightBit)
         #expect(
             try ServerSettings(environment: ["OPENJEV_JEVK5_MODEL": "/tmp/x"]).jevk5Model
                 == "/tmp/x")
@@ -45,7 +49,7 @@ struct JevK5CheckpointTests {
 
     @Test("An unpublished conversion is refused before any request reaches the Hub")
     func unpublishedDefault() async throws {
-        #expect(!JevK5Checkpoint.fourBit.isPublished)
+        #expect(JevK5Checkpoint.all.allSatisfy { !$0.isPublished })
         // Nothing listens on port 9: a request would fail with a transport error instead.
         let resolver = ModelResolver(endpoint: URL(string: "http://127.0.0.1:9")!, maxAttempts: 1)
         do {
@@ -55,7 +59,7 @@ struct JevK5CheckpointTests {
                 resolver: resolver)
             Issue.record("the unpublished default resolved")
         } catch let error as JevK5LoadError {
-            #expect(error == .notPublished(repository: "Algorythm-Canada/jevk5-0.2-mlx-4bit"))
+            #expect(error == .notPublished(repository: "Algorythm-Canada/jevk5-0.2-mlx-8bit"))
             #expect(error.description.contains("Tools/jevk5/convert.py"))
         }
     }

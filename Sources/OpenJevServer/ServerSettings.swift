@@ -95,7 +95,7 @@ public struct ServerSettings: Sendable, Hashable {
     public let verdictModel: String
     /// The JevK5 checkpoint, `OPENJEV_JEVK5_MODEL`, this port's (D-051): a folder holding a
     /// conversion (when it starts with `/`, `~` or `.`) or a Hub repository, optionally followed
-    /// by `@revision`. The default is the 4-bit conversion's repository.
+    /// by `@revision`. The default is the 8-bit conversion's repository.
     public let jevk5Model: String
     /// The device an encoder runs on, `OPENJEV_DEVICE`; empty picks the default.
     public let device: String
@@ -147,7 +147,7 @@ public struct ServerSettings: Sendable, Hashable {
         warmup: Bool = true,
         layaModel: String = "convaiinnovations/laya-typed-decisions",
         verdictModel: String = "heman10x/rlcd-modernbert-151m",
-        jevk5Model: String = "Algorythm-Canada/jevk5-0.2-mlx-4bit",
+        jevk5Model: String = "Algorythm-Canada/jevk5-0.2-mlx-8bit",
         device: String = "",
         encoderBatch: Int = 16,
         encoderFunctions: Int? = nil,
@@ -238,7 +238,7 @@ public struct ServerSettings: Sendable, Hashable {
             verdictModel: env.string(
                 "OPENJEV_VERDICT_MODEL", default: "heman10x/rlcd-modernbert-151m"),
             jevk5Model: env.string(
-                "OPENJEV_JEVK5_MODEL", default: "Algorythm-Canada/jevk5-0.2-mlx-4bit"),
+                "OPENJEV_JEVK5_MODEL", default: "Algorythm-Canada/jevk5-0.2-mlx-8bit"),
             device: env.string("OPENJEV_DEVICE", default: ""),
             encoderBatch: env.integer("OPENJEV_ENCODER_BATCH", default: 16),
             encoderFunctions: env.optionalInteger("OPENJEV_ENCODER_FUNCTIONS", minimum: 1),
