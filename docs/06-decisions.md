@@ -2763,3 +2763,65 @@ evidence rather than code, posted when its maintainers choose. Issue #66's accep
 met by this record: no pull request for the port, and why.
 
 Status. Proposed with issue #66. The draft in upstream-log.md is not posted.
+
+## D-051 Image preprocessing parity: where the port goes beyond or differs from the issue text
+
+Context. Issue #46 asks for Swift preprocessing that gives upstream's image prompts, within 1e-3 of
+mlx-vlm on upstream's hot dog photo and two synthetic images, and asks whether `MLXVLM`'s Gemma 4
+processor can be reused (R9, R18). Spike #46 measured both
+([spikes/vision-preprocessing.md](spikes/vision-preprocessing.md)).
+
+Decision.
+
+1. **Port, not reuse.** `MLXVLM.Gemma4Processor.preprocess(image:processing:)` resizes with Core
+   Image's bicubic in float, and its `pixel_values` miss mlx-vlm's by 0.17 (`gray.png`) to 0.69
+   (`frames.gif`) at most, over 1.7 to 1.9 million values per image, on every fixture image. mlx-vlm
+   resizes with Pillow's 8-bit bicubic, whose fixed-point weights, kernel widening when shrinking
+   and byte result after each pass a float pipeline cannot reproduce. `PillowResample` ports
+   Pillow 12.3.0's `Resample.c` for 8-bit RGB and `Gemma4ImageProcessor` ports mlx-vlm's resize
+   rule and rescale: every value of every fixture image's `pixel_values` equals mlx-vlm's, bit for
+   bit. The package already links `MLXVLM`; only the tests use its processor, to keep the
+   comparison measured.
+2. **JPEG decodes through a port of libjpeg-turbo.** The issue assumed ImageIO and Core Graphics
+   decode. They do for PNG, GIF and lossless WebP, whose samples equal PIL's when read without
+   colour management. ImageIO's JPEG decode does not: on the hot dog it is up to 30 levels from
+   Pillow's at 74,176 of 216,576 samples, which alone puts the hot dog's `pixel_values` 0.110 off.
+   `LibjpegTurboDecoder` ports libjpeg-turbo 3.1.4.1's default decompression (Huffman baseline and
+   progressive, the accurate integer IDCT, fancy upsampling, fixed-point YCbCr), the path Pillow
+   runs, and decodes every fixture JPEG to Pillow's bytes. JPEGs it does not cover (arithmetic,
+   lossless, 12-bit, CMYK) fall back to ImageIO, unmeasured.
+3. **The budget is always 280, and the token count follows from the size.** `size` 224 by 224 is
+   never read, and 70, 140, 560 and 1,120 are only the video processor's allowed budgets. An image
+   gets the largest sides that are multiples of 48 and fit 2,520 patches, which is 236 to 280 soft
+   tokens over the table, 253 for the hot dog. docs/03 is corrected.
+4. **The image prompt's system turn keeps mlx-vlm's extra space.** mlx-vlm makes the system
+   message a list of text parts, and the template writes each as `trim + ' '`, so image prompts
+   have one token (236743) more than text prompts before `<turn|>`. The port renders the same
+   message shape, so it matches; it is upstream's behaviour, kept as such.
+5. **Images 1 or 3 pixels high are refused.** Transformers reads their arrays as channels first:
+   upstream raises on height 1 and resizes height 3 as if it were the width. `targetSize` throws
+   a `VisionError` for both rather than reproduce a misread image; #47 decides the wire answer
+   (upstream's would be a 500).
+6. **More fixture images than the issue lists, and the full tensors outside it.** Seven synthetic
+   images instead of two (two JPEGs for the decoder in CI, a grey PNG large enough to widen the
+   kernel, beside the non-square PNG, the small PNG, the GIF and the WebP), all drawn by the
+   generator and each under 5 KB. The full tensors (62 MB) stay in `Tools/oracle/results/vision/`,
+   ignored by git; the fixture keeps digests, statistics and 4,096 samples per image.
+7. **`pixel_values` follow mlx-vlm's shapes.** One `(n, 3, H, W)` array when the images share a
+   size, else one `(3, H, W)` array per image, as `preprocess` stacks them; `MLXVLM` zero-pads
+   instead.
+
+Alternatives rejected. (a) Reusing `MLXVLM`'s processor with a tolerance: 0.17 to 0.69 is far past
+1e-3 and would move what the vision tower sees. (b) Rendering Core Image without its sRGB tone
+curve, or with another filter: Core Image has no filter with Pillow's fixed-point arithmetic and
+8-bit intermediate, so this could only narrow the gap. (c) Keeping ImageIO for JPEG and loosening
+the bound: the hot dog, upstream's own example, would be 0.110 off. (d) Decoding with the Layr-Labs
+fork's `DiffusionGemmaImagePixels.swift` and `DiffusionGemmaBicubicRGB.swift`: not used; nothing
+here derives from them.
+
+Consequences. #47 has `ImageReadInputs` (ids, `mm_token_type_ids`, `pixel_values`) and an oracle,
+`Fixtures/vision/reads.json`, for the hot dog reads. The runtime still refuses images. R9 is
+resolved for preprocessing; the vision tower and the overlay remain #47's, and R18's tower
+question with them.
+
+Status. Proposed with issue #46.

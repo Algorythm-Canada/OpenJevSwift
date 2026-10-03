@@ -26,7 +26,7 @@ and which the mlx-vlm authors verified against the Transformers implementation t
 | Decoder extras | `layer_scalar` per decoder layer; a `self_conditioning` module (pre-norm → GeGLU MLP → post-norm) that adds the previous step's soft embeddings to the canvas embeddings |
 | Canvas | 256 tokens by default (`canvas_length`); OpenJev uses 64 (vLLM `--diffusion-config canvas_length 64`) and, on MLX, a width rounded to 16 up to 64 |
 | Context | 262,144 positions |
-| Vision | Gemma 4 vision tower + multimodal embedder; image token budgets 70, 140, 280, 560 or 1,120; `boi` 255999, `eoi` 258882, image placeholder 258880; vision tokens attend bidirectionally within their own image block (`use_bidirectional_attention: "vision"`) |
+| Vision | Gemma 4 vision tower + multimodal embedder; a budget of 280 soft tokens per image (`max_soft_tokens`; 70, 140, 560 and 1,120 are budgets only the video processor accepts): each image is resized, preserving its aspect ratio, to the largest sides that are multiples of 48 and fit 2,520 patches of 16 pixels, so it gets `(H / 16) * (W / 16) / 9` soft tokens, at most 280 (253 for upstream's hot dog photo; `size` 224 by 224 in `processor_config.json` is not used); Pillow bicubic, rescaled by 1/255, not normalised; `<|image>` (`boi`) 255999, `<image|>` (`eoi`) 258882, `<|image|>` (placeholder and soft token) 258880; vision tokens attend bidirectionally within their own image block (`use_bidirectional_attention: "vision"`). See [spikes/vision-preprocessing.md](spikes/vision-preprocessing.md) |
 
 Special token ids that the read path depends on: `pad` 0, `eos` {1, 106, 50}, `bos` 2,
 `<turn|>` 106 (upstream's `TURN_CLOSE`). `<end_of_turn>` is not a token of this vocabulary: it
