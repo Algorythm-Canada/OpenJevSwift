@@ -91,14 +91,15 @@ server that serves them.
 | [libjpeg-turbo/libjpeg-turbo](https://github.com/libjpeg-turbo/libjpeg-turbo) | The JPEG decoder Pillow bundles: its default decompression path, translated in `LibjpegTurboDecoder.swift`. This software is based in part on the work of the Independent JPEG Group. | 3.1.4.1 | IJG License, with its Modified BSD and zlib parts |
 | [huggingface/swift-transformers](https://github.com/huggingface/swift-transformers) | The tokenizers and chat templates | 1.3.4 (researched at `af520cf`) | Apache-2.0 |
 
-Code ported from mlx-vlm keeps its copyright notice, Copyright © 2025 Prince Canuma, in each
-file's header; mlx-vlm's Gemma 4 processing file, which the image processor's port follows, says it
-is adapted from Hugging Face Transformers (Apache-2.0). The Pillow and libjpeg-turbo translations
-keep each source file's copyright notice in their headers, and their licence texts are in
-`Sources/OpenJevDiffusionGemma/Vision/ThirdPartyLicenses` ([NOTICE](../NOTICE)). [Layr-Labs/mlx-swift-lm](https://github.com/Layr-Labs/mlx-swift-lm) (MIT), a fork
-with its own DiffusionGemma, was a second reference, not a dependency. The random number and
-`json.loads` ports follow CPython (PSF-2.0; the MT19937 reference code BSD-3-Clause), and the
-request reading follows FastAPI (MIT) and Starlette (BSD-3-Clause), behaviour only.
+Code ported from mlx-vlm keeps its copyright notice, Copyright © 2025 Prince Canuma, in each file's
+header; mlx-vlm's Gemma 4 processing file, which the image processor's port follows, says it is
+adapted from Hugging Face Transformers (Apache-2.0). The Pillow and libjpeg-turbo translations keep
+each source file's copyright notice in their headers, and their licence texts are in
+`Sources/OpenJevDiffusionGemma/Vision/ThirdPartyLicenses` ([NOTICE](../NOTICE)).
+[Layr-Labs/mlx-swift-lm](https://github.com/Layr-Labs/mlx-swift-lm) (MIT), a fork with its own
+DiffusionGemma, was a second reference, not a dependency. The random number and `json.loads` ports
+follow CPython (PSF-2.0; the MT19937 reference code BSD-3-Clause), and the request reading follows
+FastAPI (MIT) and Starlette (BSD-3-Clause), behaviour only.
 
 ## The Swift packages the build resolves
 
