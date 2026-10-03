@@ -4,6 +4,7 @@
     PY=~/Library/Caches/OpenJevSwift/jevk5/venv/bin/python
     $PY Tools/jevk5/convert.py --bits 4             # writes ~/Library/Caches/OpenJevSwift/jevk5/jevk5-0.2-mlx-4bit
     $PY Tools/jevk5/convert.py --bits 8             # writes .../jevk5-0.2-mlx-8bit
+    $PY Tools/jevk5/convert.py --bits 16            # writes .../jevk5-0.2-mlx-bf16, unquantized
     $PY Tools/jevk5/convert.py --check DIR --bits 4 # checks a directory against the pinned digests
 
 The source is alibiserikbay/JevK5 at the author's `v0.2` tag (SOURCE_REVISION), the weights
@@ -22,7 +23,9 @@ under `qwen3_5_text` before converting. The checkpoint stores its 426 tensors un
 sanitizing (the conv1d layout and the RMSNorm offset), as transformers' key mapping does. The
 output keeps the checkpoint's `config.json` (plus mlx-lm's quantization entries) and the text
 model's weight names, which is what mlx-swift-lm loads for that model type. Quantization is
-mlx-lm's default affine scheme with a group size of 64, at 4 or 8 bits.
+mlx-lm's default affine scheme with a group size of 64, at 4 or 8 bits; `--bits 16` keeps the
+checkpoint's bfloat16, a reference for telling quantization from the rest in a comparison, not a
+conversion meant for publishing.
 
 After mlx-lm has written the weights and `config.json`, the tokenizer files, the chat template,
 `generation_config.json` and `jevk5_config.json` (the calibration temperature, 1.532) are copied
@@ -213,14 +216,27 @@ def register_text_model() -> None:
     sys.modules["mlx_lm.models.qwen3_5_text"] = module
 
 
+def folder_name(bits: int) -> str:
+    return "jevk5-0.2-mlx-bf16" if bits == 16 else f"jevk5-0.2-mlx-{bits}bit"
+
+
 def readme(bits: int, versions: dict[str, str]) -> str:
     """The model card of the converted repository: the attribution, the license and how the files
     were made. Deterministic, so the output's digests are."""
+    relation = "" if bits == 16 else "base_model_relation: quantized\n"
+    if bits == 16:
+        title, form = "bfloat16", "without quantization, in bfloat16"
+        weights = (f"- The weights were converted to MLX unquantized by mlx-lm {versions['mlx-lm']}"
+                   f" with\n  MLX {versions['mlx']}. `config.json` is the source's.")
+    else:
+        title, form = f"{bits}-bit", f"with {bits}-bit affine quantization (group\nsize {GROUP_SIZE})"
+        weights = (f"- The weights were quantized to {bits} bits by mlx-lm {versions['mlx-lm']} with"
+                   f" MLX\n  {versions['mlx']}. `config.json` is the source's with mlx-lm's "
+                   "`quantization` entries added.")
     return f"""---
 license: apache-2.0
 base_model: {SOURCE_REPO}
-base_model_relation: quantized
-library_name: mlx
+{relation}library_name: mlx
 pipeline_tag: text-generation
 language:
 - en
@@ -232,7 +248,7 @@ tags:
 - typed-decisions
 ---
 
-# JevK5 v0.2, MLX {bits}-bit
+# JevK5 v0.2, MLX {title}
 
 [JevK5](https://huggingface.co/{SOURCE_REPO}) v0.2 is Alibi Serikbay's model
 ([github.com/{JEVK5_REPO}](https://github.com/{JEVK5_REPO})); the credit is theirs. It is
@@ -240,8 +256,7 @@ Qwen3.5-4B with a LoRA distilled from Qwen3.6-27B, merged into the weights, and 
 typed decision with a softmax over its answer letters' next-token logits under one calibration
 temperature, the readout of SemIf (github.com/TheoLeeCJ/SemIf).
 
-This repository holds the same model converted to MLX with {bits}-bit affine quantization (group
-size {GROUP_SIZE}), for the `jevk5` backend of
+This repository holds the same model converted to MLX {form}, for the `jevk5` backend of
 [OpenJevSwift](https://github.com/Algorythm-Canada/OpenJevSwift), which serves it as `jevk5-0.2`
 on Apple silicon. It is not the author's release, and it is not affiliated with TypeSafe AI.
 
@@ -249,8 +264,7 @@ on Apple silicon. It is not the author's release, and it is not affiliated with 
 
 - Source: `{SOURCE_REPO}` at its `v0.2` tag, commit `{SOURCE_REVISION}` (`model.safetensors`
   SHA-256 `{SOURCE_FILES["model.safetensors"][1]}`).
-- The weights were quantized to {bits} bits by mlx-lm {versions["mlx-lm"]} with MLX
-  {versions["mlx"]}. `config.json` is the source's with mlx-lm's `quantization` entries added.
+{weights}
 - `tokenizer.json`, `tokenizer_config.json`, `chat_template.jinja`, `generation_config.json` and
   `jevk5_config.json` (temperature 1.532) are the source's files, unchanged.
 - `Tools/jevk5/convert.py` in OpenJevSwift reproduces every file of this repository byte for byte.
@@ -281,8 +295,11 @@ def convert(bits: int, out: Path, source: Path, versions: dict[str, str], cache:
     if staging.exists():
         shutil.rmtree(staging)
     legal = legal_files(cache)
-    mlx_convert(hf_path=str(source), mlx_path=str(staging), quantize=True, q_bits=bits,
-                q_group_size=GROUP_SIZE, q_mode="affine")
+    if bits == 16:
+        mlx_convert(hf_path=str(source), mlx_path=str(staging))
+    else:
+        mlx_convert(hf_path=str(source), mlx_path=str(staging), quantize=True, q_bits=bits,
+                    q_group_size=GROUP_SIZE, q_mode="affine")
     # What mlx-lm wrote beyond the weights and config.json (transformers' tokenizer files and a
     # template model card) goes; the source's own files replace it.
     for path in staging.iterdir():
@@ -318,9 +335,10 @@ def report(folder: Path, bits: int) -> int:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--bits", type=int, choices=(4, 8), required=True)
-    parser.add_argument("--out", help="the output folder (default: jevk5-0.2-mlx-{bits}bit in "
-                                      f"{DEFAULT_ROOT})")
+    parser.add_argument("--bits", type=int, choices=(4, 8, 16), required=True,
+                        help="4 or 8 for a quantized conversion, 16 for the unquantized reference")
+    parser.add_argument("--out", help="the output folder (default: jevk5-0.2-mlx-4bit, -8bit or "
+                                      f"-bf16 in {DEFAULT_ROOT})")
     parser.add_argument("--source", help="a local copy of the source revision instead of the "
                                          "Hugging Face cache; it is checked all the same")
     parser.add_argument("--check", metavar="DIR",
@@ -332,7 +350,7 @@ def main(argv=None) -> int:
         return report(Path(args.check).expanduser(), args.bits)
     os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
     versions = check_versions(args.allow_other_versions)
-    out = Path(args.out).expanduser() if args.out else DEFAULT_ROOT / f"jevk5-0.2-mlx-{args.bits}bit"
+    out = Path(args.out).expanduser() if args.out else DEFAULT_ROOT / folder_name(args.bits)
     source = source_snapshot(args.source)
     verify_source(source)
     convert(args.bits, out, source, versions, DEFAULT_ROOT / "downloads")

@@ -161,40 +161,57 @@ public actor JevK5Backend: QuestionReadBackend {
     public nonisolated func readBatch(
         state: JSONValue, stateText: String, questions: [EncoderQuestion]
     ) async throws -> BatchReadResult {
-        typealias Outcome = Result<(probabilities: [Double], tokens: Int), any Error>
-        let outcomes = await withTaskGroup(of: (Int, Outcome).self) { group in
+        // Each question's outcome by its index: its read, or the error it ended with.
+        let outcomes = await withTaskGroup(
+            of: (Int, Result<QuestionRead, any Error>).self,
+            returning: [Int: Result<QuestionRead, any Error>].self
+        ) { group in
             for (index, question) in questions.enumerated() {
                 group.addTask {
+                    // The read ends before the index is paired with it. Swift 6.4 at -O returned
+                    // 0 for every child's index from `do { return (index, .success(try await
+                    // ...)) } catch { ... }`, so a release server lost all but one read.
+                    let outcome: Result<QuestionRead, any Error>
                     do {
-                        return (index, .success(try await self.read(question, state: state)))
+                        outcome = .success(try await self.read(question, state: state))
                     } catch {
-                        return (index, .failure(error))
+                        outcome = .failure(error)
                     }
+                    return (index, outcome)
                 }
             }
-            var outcomes = [Outcome?](repeating: nil, count: questions.count)
-            for await (index, outcome) in group {
-                outcomes[index] = outcome
+            var outcomes: [Int: Result<QuestionRead, any Error>] = [:]
+            while let next = await group.next() {
+                outcomes[next.0] = next.1
             }
             return outcomes
         }
         var probabilities: [[Double]] = []
         probabilities.reserveCapacity(questions.count)
         var tokens = 0
-        for outcome in outcomes {
-            // Every child returns, so every slot is filled.
-            let read = try outcome!.get()
+        for (index, question) in questions.enumerated() {
+            guard let outcome = outcomes[index] else {
+                throw JevK5ModelError(
+                    "\(modelInfo.name) has no read of question \(question.key.pythonRepr)")
+            }
+            let read = try outcome.get()
             probabilities.append(read.probabilities)
             tokens += read.tokens
         }
         return BatchReadResult(probabilities: probabilities, inputTokens: tokens)
     }
 
+    /// One question's read: its distribution and the prompt tokens of its passes.
+    struct QuestionRead: Sendable {
+        var probabilities: [Double]
+        var tokens: Int
+    }
+
     /// One question, upstream's `read_question`: its options, then as many passes as
     /// ``JevK5Readout/spread(_:texts:method:temperature:)`` takes, and the tokens of all of them.
-    nonisolated func read(_ question: EncoderQuestion, state: JSONValue) async throws -> (
-        probabilities: [Double], tokens: Int
-    ) {
+    nonisolated func read(_ question: EncoderQuestion, state: JSONValue) async throws
+        -> QuestionRead
+    {
         let texts = JevK5Option.options(for: question.question).map(\.text)
         let criterion = question.rawInstructions
         var tokens = 0
@@ -207,7 +224,7 @@ public actor JevK5Backend: QuestionReadBackend {
                 return JevK5Readout.letterProbabilities(
                     logits: logits.map(Double.init), temperature: self.temperature)
             }, texts: texts, method: method)
-        return (probabilities, tokens)
+        return QuestionRead(probabilities: probabilities, tokens: tokens)
     }
 
     /// The prompt's ids, or vLLM's refusal of it: the character bound, checked before the text

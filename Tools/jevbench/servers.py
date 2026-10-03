@@ -189,16 +189,23 @@ def swift_server(backend: str, binary: Path, encoder_models: str | None,
         settings["OPENJEV_JEVK5_MODEL"] = str(folder)
         info["runtime"] = "MLX on the GPU, Qwen3.5 through mlx-swift-lm (D-051)"
         info["model_source"] = f"OPENJEV_JEVK5_MODEL={harness.display_path(folder)}"
-        # the folder must be the pinned 4-bit conversion, which the published digests describe
-        check = subprocess.run(
-            [sys.executable, str(ROOT / "Tools" / "jevk5" / "convert.py"), "--check", str(folder),
-             "--bits", "4"], capture_output=True, text=True, cwd=ROOT)
-        lines = (check.stdout.strip() or check.stderr.strip()).splitlines()
-        info["model_check"] = (lines[-1].replace(str(folder), harness.display_path(folder))
-                               if lines else None)
-        if check.returncode != 0:
-            sys.exit(f"{harness.display_path(folder)} is not the pinned 4-bit conversion: "
-                     f"{info['model_check']}; run Tools/jevk5/convert.py --bits 4")
+        # the folder must be one of the pinned conversions, 4-bit or 8-bit, as convert.py checks
+        checks = {}
+        for bits in (4, 8):
+            check = subprocess.run(
+                [sys.executable, str(ROOT / "Tools" / "jevk5" / "convert.py"), "--check",
+                 str(folder), "--bits", str(bits)], capture_output=True, text=True, cwd=ROOT)
+            lines = (check.stdout.strip() or check.stderr.strip()).splitlines()
+            checks[bits] = (lines[-1].replace(str(folder), harness.display_path(folder))
+                            if lines else None)
+            if check.returncode == 0:
+                info["model_check"] = checks[bits]
+                info["conversion"] = f"jevk5-0.2-mlx-{bits}bit"
+                break
+        else:
+            # the 4-bit check's reason, since that is the conversion the server takes by default
+            sys.exit(f"{harness.display_path(folder)} is not a pinned conversion: {checks[4]}; "
+                     "run Tools/jevk5/convert.py --bits 4")
     info["settings"] = {key: harness.display_path(value)
                         if key in ("OPENJEV_ENCODER_MODELS", "OPENJEV_JEVK5_MODEL") else value
                         for key, value in settings.items()}
