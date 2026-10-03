@@ -1,11 +1,12 @@
 # Builds and tests the package on every pull request and on main, except when the change touches
 # only Markdown files that no test reads: a macOS run costs eight minutes on an empty cache. The
-# tests read three: FixturePinTests and the JevBench smoke test read THIRD_PARTY.md, and
-# ConfigurationReferenceTests checks the configuration reference and docs/deployment.md against the
-# settings code, so a change to any of them runs CI. The repository's ruleset requires no status
-# check, so a documentation-only pull request stays mergeable without a run; if a required check is
-# ever added, replace the path filters with a job that reports success. docs/development.md
-# describes the jobs, the toolchains they pin and how to run the same commands locally.
+# tests read three: FixturePinTests, the JevBench smoke test and the upstream review's test read
+# THIRD_PARTY.md, and ConfigurationReferenceTests checks the configuration reference and
+# docs/deployment.md against the settings code, so a change to any of them runs CI. The
+# repository's ruleset requires no status check, so a documentation-only pull request stays
+# mergeable without a run; if a required check is ever added, replace the path filters with a job
+# that reports success. docs/development.md describes the jobs, the toolchains they pin and how to
+# run the same commands locally.
 name: CI
 
 # A later pattern overrides an earlier one: every path, then no Markdown, then the three back.
@@ -212,6 +213,13 @@ jobs:
         run: |
           python3 --version
           python3 Tools/jevbench/smoke_test.py
+
+      # The upstream review's own test (Tools/upstream, issue #66): its parsing of THIRD_PARTY.md
+      # and of git's and the APIs' output, its rendering and the tracking issue's logic, with git
+      # and the standard library only, no network. The Upstream review workflow runs it too.
+      - name: Upstream review test
+        if: ${{ !cancelled() }}
+        run: python3 Tools/upstream/test_review.py
 
   ios:
     name: iOS

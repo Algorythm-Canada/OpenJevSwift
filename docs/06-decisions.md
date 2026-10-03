@@ -2653,3 +2653,113 @@ reading, is lost without counting, as before. The rule rests on SwiftNIO's docum
 semantics; a change there would fail `ConnectionTests`' first test.
 
 Status. Proposed with this change, which has no issue; refines D-038 item 9.
+
+## D-050 The DiffusionGemma port stays here; upstream's own DiffusionGemma pull request is offered the oracle
+
+Context. Issue #66 asks to offer the DiffusionGemma model port to ml-explore/mlx-swift-lm, or to
+publish it as its own small package, once parity is proven, so that the community shares one
+implementation, and to record the outcome. Parity is proven: on the fixture D-048 widened to 63
+oracle reads, the port matches mlx-vlm bit for bit in the exact tier (R3, D-048). mlx-swift-lm's
+`main` ships `MLXVLM/Models/Gemma4.swift` and no diffusion read path. The first upstream review
+(2026-10-02, [upstream-log.md](upstream-log.md)) and a reading of upstream's pull requests, its
+contribution guide and its license gave this evidence:
+
+1. **What the port is, and what it takes from mlx-swift-lm.** `OpenJevDiffusionGemma` is 4,577
+   lines of Swift, 2,454 of them the model under `Model/`. It runs on mlx-swift's MLX, MLXNN and
+   MLXFast and takes five things from mlx-swift-lm: `SwitchLinear`, `QuantizedSwitchLinear`,
+   `gatherSort` and `scatterUnsort` (`SwitchLayers.swift`) for the experts;
+   `loadWeights(modelDirectory:model:perLayerQuantization:)` (`Load.swift`); the
+   `BaseLanguageModel` protocol, through which `loadWeights` calls `sanitize`; `BaseConfiguration`'s
+   quantization types; and `Gemma4VisionConfiguration` (`MLXVLM`), which decodes the vision part of
+   `config.json`. It leaves mlx-swift-lm's own Gemma 4 pieces aside on purpose, to keep mlx-vlm's
+   rounding: its router is mlx-vlm's, not `Gemma4TextRouter`, which folds the scale into the norm
+   weight (spike #22, R20); its experts keep the fused, quantized `gate_up_proj` rather than
+   `SwitchGLU`; its caches are its own rather than `RotatingKVCache`. It has no generation loop
+   (#50, #51): a read is a prefill and one to three decoder passes, and `Read.swift` and the
+   runtime serve OpenJev's contract rather than mlx-swift-lm's `LanguageModel` and
+   `TokenIterator`.
+2. **Upstream already has a DiffusionGemma in review.** ml-explore/mlx-swift-lm#352, "Base Gemma
+   diffusion implementation", has been open since 2026-06-15. It adds 4,056 lines in 19 files:
+   `Models/DiffusionGemma.swift` in MLXLMCommon (1,152 lines) and in MLXVLM (707), a block
+   diffusion token iterator, changes to `KVCache.swift`, `Evaluate.swift` and
+   `LanguageModel.swift`, and 1,056 lines of tests on small random configurations. A maintainer
+   left nine review comments on 2026-06-26 and 2026-08-21, among them a self-conditioning
+   difference from mlx-vlm's `_embed_canvas` and a change to `RotatingKVCache`'s semantics. It was
+   rewritten on 2026-10-02 and carries `needs-review`. It covers generation and vision, which the
+   port does not, and fuses operations the port keeps apart, such as a compiled residual add with
+   RMSNorm. None of its tests compares its output with mlx-vlm's on the real checkpoint: the one
+   named for mlx-vlm parity checks the model against a hand-written copy of mlx-vlm's
+   self-conditioning recipe, on a small random model, within 1e-5. mlx-swift-lm takes diffusion
+   models: Nemotron-Labs-Diffusion (#310) merged on 2026-06-16.
+3. **What upstream's contribution guide asks** (`CONTRIBUTING.md` and `AGENTS.md` on 2026-10-02):
+   a pull request from a fork, with tests, passing tests and at least one review; swift-format
+   through pre-commit; tests through `xcodebuild`, since `swift test` does not work there, that
+   need no special hardware and download no model, while integration tests that download
+   checkpoints run nightly on a self-hosted runner and never block a merge; DocC without warnings.
+   AI-generated code is allowed, but the contributor must understand and be able to explain every
+   line and disclose how AI was used, and must read every word of AI-drafted prose; a violation
+   can close the pull request and ban the contributor. Agents must not open a pull request, an
+   issue or a comment for a user.
+4. **The licenses.** This repository is Apache-2.0 (D-010). The files under `Model/` adapt mlx-vlm
+   (MIT, Copyright © 2025 Prince Canuma) and keep its notice; `Read.swift` adapts upstream
+   OpenJev's `MlxRuntime.read` (Apache-2.0). mlx-swift-lm is MIT and takes contributions under its
+   LICENSE; #352's files carry "Copyright © 2026 Apple Inc.". The Layr-Labs fork is MIT. The
+   weights are Apache-2.0 with the Gemma Terms of Use and are never redistributed. Offering the
+   model upstream means Algorythm Canada licensing its own work in those files under MIT, which it
+   may do as their copyright holder, with mlx-vlm's notice kept and `Read.swift` left out. A
+   package of its own, or keeping the port here, changes no license.
+5. **What each option costs to maintain.** Upstream: a review that has taken #352 three and a half
+   months so far, and afterwards upstream maintains the model, but this repository still reruns
+   the oracle on every mlx-swift-lm move, since an upstream refactor (a fusion, a shared router or
+   cache) can change the bits its parity claims rest on, and the read, the runtime and the parity
+   tests stay here either way. A package of its own: a second repository with its own CI on a
+   macOS runner with Swift Build (8 minutes a run on an empty cache), releases, issues and
+   documentation, its pins kept in step with this repository's, and the oracle tooling split from
+   the tests that use it. Here: what it costs today, the monthly review and an oracle rerun when
+   mlx-swift, mlx-swift-lm or mlx-vlm moves.
+
+Decision.
+
+1. **The port stays in this repository, and no pull request offers it upstream.** #352 is the
+   community's candidate for one implementation, and a second pull request would compete with it
+   rather than join it. The port's departures from mlx-swift-lm's components are what bit-exactness
+   takes, and are what an upstream review would ask to undo. Its parity tests need the 16 GB
+   checkpoint, so upstream could run them only as integration tests that never block a merge.
+2. **Upstream is offered what #352 lacks: a comparison with mlx-vlm on the real checkpoint.** The
+   draft in [upstream-log.md](upstream-log.md#draft-for-ml-exploremlx-swift-lm-not-posted) offers
+   #352 the 63 oracle reads, the exact tier's method, the four places where the bits moved for this
+   port (the router, the fused expert projection, self-conditioning, chunked prefill), and a run of
+   #352's model on the oracle under both sets of kernels, posted read by read. It is not posted:
+   the maintainers of this repository decide whether and where it goes, as upstream's own
+   `AGENTS.md` also asks.
+3. **No package of its own.** `OpenJevDiffusionGemma` is already a library product of this package
+   on macOS. A second repository would add item 5's costs for a third Swift implementation beside
+   #352 and the Layr-Labs fork. What keeps a downstream package from depending on it by version
+   today is the revision pin of mlx-swift-lm, which a tag removes (3.32.3, #119), not the
+   repository the port lives in.
+4. **The question reopens when #352 merges or closes.** If it merges, its model is run on the oracle
+   in both tiers, with a probe built like spike #22's probe of the Layr-Labs fork
+   (`Tools/oracle/Probe`). If it gives all 63 reads bit for bit in the exact tier and stays within
+   D-048's bounds natively, an issue moves the port's model onto upstream's, keeping `Read.swift`,
+   the runtime and the parity tests here, and upstream's becomes the one shared implementation. If
+   it does not, the reads that differ are reported upstream and the port stays. If #352 closes
+   unmerged, offering the port becomes the question again, with this entry's evidence. The monthly
+   review lists #352 among mlx-swift-lm's open pull requests about diffusion, so the trigger does
+   not depend on anyone remembering.
+
+Alternatives rejected. (a) The port as a pull request now: it would compete with #352, a review
+would likely ask for mlx-swift-lm's own router, `SwitchGLU` and `RotatingKVCache`, which would
+break the exact tier, upstream's unit tests could not hold it to mlx-vlm, and this repository would
+still keep its own copy to hold its parity claims across mlx-swift-lm moves (R6). (b) A package of
+its own: item 3. (c) Contributing the oracle fixture itself to mlx-swift-lm now: its prompts come
+from upstream OpenJev's templates (Apache-2.0) and JevBench's items (MIT) and its reads from
+mlx-vlm (MIT), so a copy under mlx-swift-lm's license needs those terms settled first, while a
+comparison run needs none of that. (d) Offering nothing until #352 merges: it would merge without a
+comparison on the real checkpoint, and a difference would surface later, in its users' reads.
+
+Consequences. The port stays self-contained and pinned, as R6 asks, at today's maintenance cost.
+The shared implementation, if there is to be one, is #352, and this repository's part in it is
+evidence rather than code, posted when its maintainers choose. Issue #66's acceptance criterion is
+met by this record: no pull request for the port, and why.
+
+Status. Proposed with issue #66. The draft in upstream-log.md is not posted.

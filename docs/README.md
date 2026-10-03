@@ -19,6 +19,9 @@ tests the package, and builds and previews the API documentation.
 [compatibility.md](compatibility.md) says what is identical to upstream, what agrees within a
 measured tolerance and what differs and why, with the matrix of what runs on macOS, iOS and Linux.
 [credits.md](credits.md) credits the models, their authors and licenses, and the upstream projects.
+[upstream-log.md](upstream-log.md) follows the projects the pins in THIRD_PARTY.md name: the
+monthly review, what a review checks, what moving a pin takes, each review's note, and an unposted
+draft for mlx-swift-lm's DiffusionGemma pull request (D-050).
 [quality.md](quality.md) compares the Swift server's answers with upstream's on JevBench and
 TypeSafe's public evaluations, and both with the published results, and measures how well
 DiffusionGemma's probabilities are calibrated. [benchmarks.md](benchmarks.md) measures

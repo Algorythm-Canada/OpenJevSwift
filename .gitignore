@@ -29,8 +29,9 @@ DerivedData/
 Models/
 .cache/
 
-# Pinned upstream reference checkouts, created by `make upstream`
-Upstream/
+# Pinned upstream reference checkouts, created by `make upstream`. Anchored to the root: git on
+# macOS ignores case, and an unanchored pattern would also ignore Tools/upstream.
+/Upstream/
 
 # Session task checklist (kept local)
 TASKS.md

@@ -1,0 +1,95 @@
+# Reviews the upstream projects that THIRD_PARTY.md pins, monthly, and keeps one tracking issue up
+# to date (issue #66). Tools/upstream/review.py reads the pins it follows and their projects' state
+# and writes nothing; Tools/upstream/tracking_issue.py opens, updates or reopens the one issue
+# labelled area/ci that carries the review, and is the only step that writes. docs/upstream-log.md
+# describes the review a maintainer then does, and docs/development.md how to run the same commands
+# locally.
+name: Upstream review
+
+on:
+  schedule:
+    # The first day of every month at 06:37 UTC.
+    - cron: "37 6 1 * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Print what would change on the tracking issue without changing it
+        type: boolean
+        default: false
+  # A pull request that changes the review or the pins runs the whole review as a dry run: its
+  # summary shows the report and what the issue step would do, and it never writes.
+  pull_request:
+    paths:
+      - Tools/upstream/**
+      - THIRD_PARTY.md
+      - .github/workflows/upstream-review.yml
+
+# issues: write is for the tracking issue alone. Reading other repositories needs no permission:
+# they are public.
+permissions:
+  contents: read
+  issues: write
+
+# One run per ref at a time, so two runs never race on the tracking issue. A newer push to a pull
+# request cancels its older dry run; a run on main is never cancelled.
+concurrency:
+  group: upstream-review-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  review:
+    name: Review the pins
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      # The scripts need the standard library and git only: the image's python3 is enough.
+      - name: Test the review scripts
+        run: |
+          python3 --version
+          python3 Tools/upstream/test_review.py
+
+      # review.py reads upstream OpenJev's history from this clone with git, as on a developer's
+      # machine, and the other projects through the REST API.
+      - name: Check out upstream OpenJev
+        run: make upstream
+
+      - name: Review the pins
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 Tools/upstream/review.py --gh gh --json > "$RUNNER_TEMP/review.json"
+          python3 Tools/upstream/review.py --from "$RUNNER_TEMP/review.json" > "$RUNNER_TEMP/review.md"
+          cat "$RUNNER_TEMP/review.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Open or update the tracking issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Pull requests and a dispatch with dry_run only read the issues.
+          DRY_RUN: ${{ (github.event_name == 'pull_request' || inputs.dry_run) && '--dry-run' || '' }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 Tools/upstream/tracking_issue.py "$RUNNER_TEMP/review.json" \
+            --gh gh --repo "$GITHUB_REPOSITORY" --run-url "$RUN_URL" $DRY_RUN \
+            | tee "$RUNNER_TEMP/tracking.txt"
+          {
+            printf '\n## Tracking issue\n\n```\n'
+            cat "$RUNNER_TEMP/tracking.txt"
+            printf '```\n'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the review
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: upstream-review
+          path: |
+            ${{ runner.temp }}/review.json
+            ${{ runner.temp }}/review.md
+          if-no-files-found: ignore
+          retention-days: 90
