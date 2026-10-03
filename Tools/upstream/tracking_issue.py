@@ -7,8 +7,8 @@ the only part of the review that writes anything.
 
 The tracking issue is the issue labelled area/ci whose body starts with MARKER, open or closed.
 
-- The review found nothing to look at (every pin at its project's head, no error, no disagreement
-  between pins): nothing changes, and an open tracking issue stays as it is.
+- The review found nothing to look at (every pin it follows at its project's head, no error, no
+  disagreement between pins): nothing changes, and an open tracking issue stays as it is.
 - No tracking issue exists: it opens one with the review as its body.
 - The tracking issue's body records the review's fingerprint: nothing changes. A closed issue with
   that fingerprint was closed by a maintainer who reviewed exactly this state, so it stays closed.

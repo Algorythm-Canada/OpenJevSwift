@@ -3,12 +3,12 @@
 
     python3 Tools/upstream/test_review.py
 
-They cover review.py's parsing (THIRD_PARTY.md's table and every pin it names, git's and the APIs'
-output), its review of a project from a local clone (a repository the test builds with git) and
-from the GitHub API (a stand-in that answers the requests the review makes), a checkpoint on the
-Hub, the Markdown it renders, and tracking_issue.py's choice of what to do with the tracking issue.
-Standard library and git only; CI runs it in the macOS job beside the JevBench smoke test, and the
-Upstream review workflow runs it before each review.
+They cover review.py's parsing (THIRD_PARTY.md's table and the pins of the projects it follows,
+git's and the APIs' output), its review of a project from a local clone (a repository the test
+builds with git) and from the GitHub API (a stand-in that answers the requests the review makes), a
+checkpoint on the Hub, the Markdown it renders, and tracking_issue.py's choice of what to do with
+the tracking issue. Standard library and git only; CI runs it in the macOS job beside the JevBench
+smoke test, and the Upstream review workflow runs it before each review.
 """
 
 from __future__ import annotations
@@ -153,6 +153,26 @@ class ParsingTests(unittest.TestCase):
         _, warnings = review.local_pins("Blaizzy/mlx-vlm", "v0.6.15",
                                         {"oracle": "mlx==0.32.2\nmlx-vlm==0.6.15\n"})
         self.assertEqual(warnings, [])
+
+    def test_a_missing_local_pin_is_a_disagreement(self):
+        cases = [
+            ("razorback16/openjev", "dcd2094", {"Makefile": None},
+             "The Makefile is missing, so its pin was not compared."),
+            ("razorback16/openjev", "dcd2094", {"Makefile": "PYTHON ?= python3.14\n"},
+             "The Makefile sets no `UPSTREAM_OPENJEV_COMMIT`."),
+            ("ml-explore/mlx-swift", "0.32.2", {"Package.resolved": None},
+             "Package.resolved is missing, so its pin was not compared."),
+            ("huggingface/swift-transformers", "af520cf",
+             {"Package.resolved": json.dumps({"pins": []})},
+             "Package.resolved has no pin for swift-transformers."),
+            ("Blaizzy/mlx-vlm", "v0.6.15", {"oracle": None},
+             "Tools/oracle/requirements.txt is missing, so its pin was not compared."),
+            ("Blaizzy/mlx-vlm", "v0.6.15", {"oracle": "mlx==0.32.2\n"},
+             "Tools/oracle/requirements.txt locks no mlx-vlm."),
+        ]
+        for name, pinned, files, warning in cases:
+            facts, warnings = review.local_pins(name, pinned, files)
+            self.assertEqual((facts, warnings), ([], [warning]), warning)
 
     def test_git_output(self):
         log = ("a" * 40 + "\x1f2026-09-30T08:00:00-04:00\x1fAda\x1fFix the read loop\n"
@@ -558,6 +578,34 @@ class CheckpointTests(unittest.TestCase):
         self.assertIn("`main` is now at `bbbbbbb`", text)
         self.assertIn("- `bbbbbbb` 2026-10-01 Update chat_template.jinja", text)
 
+    def test_a_search_that_stops_at_the_limit(self):
+        pages = {"page1": ([{"id": f"{i:040x}", "title": f"commit {i}",
+                             "date": "2026-10-01T00:00:00.000Z"} for i in range(3)], "page2"),
+                 "page2": ([{"id": f"{i:040x}", "title": f"commit {i}",
+                             "date": "2026-09-30T00:00:00.000Z"} for i in range(3, 6)], "page3")}
+
+        def http_json(url):
+            if url.endswith("/commits/main"):
+                return pages["page1"]
+            if url in pages:
+                return pages[url]
+            return {"sha": "f" * 40, "lastModified": "2026-10-01T00:00:00.000Z"}, None
+
+        review.http_json = http_json
+        saved, review.HUB_COMMIT_LIMIT = review.HUB_COMMIT_LIMIT, 4
+        try:
+            record = review.review_checkpoint(review.HubCheckpoint("org/model"), "`1a793eb`")
+        finally:
+            review.HUB_COMMIT_LIMIT = saved
+        self.assertTrue(record["commits_capped"])
+        self.assertEqual(record["commit_count"], 6)
+        self.assertEqual(record["warnings"], ["The search stopped after main's newest 6 commits "
+                                              "without reaching the pin, so there are more."])
+        self.assertIn("At least 6 commits since the pin:", "\n".join(review.render_checkpoint(
+            record)))
+        self.assertEqual(review.summary_since(record),
+                         "at least 6 commits; " + record["warnings"][0])
+
     def test_a_pin_that_left_main(self):
         self.answer({"sha": "c" * 40, "lastModified": "2026-10-01T00:00:00.000Z"},
                     [{"id": "c" * 40, "title": "rewrite", "date": "2026-10-01T00:00:00.000Z"}])
@@ -670,6 +718,23 @@ class RenderTests(unittest.TestCase):
         self.assertEqual(review.fingerprint(later), data["fingerprint"])
         later["projects"][1]["head"]["sha"] = "3" * 40
         self.assertNotEqual(review.fingerprint(later), data["fingerprint"])
+
+    def test_a_prerelease_since_the_pin_changes_the_state(self):
+        data = sample_review()
+        before = review.state_of(data)["ml-explore/mlx-swift"]
+        data["projects"][1]["releases"].insert(0, {"tag": "0.33.0rc1", "prerelease": True})
+        after = review.state_of(data)["ml-explore/mlx-swift"]
+        self.assertTrue(before.endswith("release 0.32.3"))
+        self.assertTrue(after.endswith("release 0.33.0rc1"))
+
+    def test_the_header_counts_the_pins_it_read(self):
+        data = sample_review()
+        data["projects"] = data["projects"][:1]
+        data["attention"] = []
+        text = review.render(data)
+        self.assertIn("1 pin of THIRD_PARTY.md, the ones `Tools/upstream/review.py` follows, "
+                      "against their projects, read at 2026-10-02 23:57:27 UTC.\nIt is at its "
+                      "pin.", text)
 
     def test_the_scripts_hold_no_em_dash(self):
         for name in ("review.py", "tracking_issue.py", "test_review.py"):

@@ -1,8 +1,9 @@
 # Reviews the upstream projects that THIRD_PARTY.md pins, monthly, and keeps one tracking issue up
-# to date (issue #66). Tools/upstream/review.py reads each pin and its project's state and writes
-# nothing; Tools/upstream/tracking_issue.py opens, updates or reopens the one issue labelled area/ci
-# that carries the review, and is the only step that writes. docs/upstream-log.md describes the
-# review a maintainer then does, and docs/development.md how to run the same commands locally.
+# to date (issue #66). Tools/upstream/review.py reads the pins it follows and their projects' state
+# and writes nothing; Tools/upstream/tracking_issue.py opens, updates or reopens the one issue
+# labelled area/ci that carries the review, and is the only step that writes. docs/upstream-log.md
+# describes the review a maintainer then does, and docs/development.md how to run the same commands
+# locally.
 name: Upstream review
 
 on:

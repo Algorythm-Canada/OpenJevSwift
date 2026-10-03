@@ -114,11 +114,14 @@ match [05-architecture.md](05-architecture.md).
   `af520cf` from `main`. The 1.3.x requirement resolves to the 1.3.4 tag, which lacks three later
   commits that change `byte_fallback` handling in the BPE and Unigram tokenizers. The tokenizer
   parity spike (#20) should test the resolved version.
-- **mlx-swift-lm is pinned by revision.** No release contains `c043fb3`: the newest tag, 3.31.4,
-  is 154 commits older and requires mlx-swift 0.31. SwiftPM refuses a revision-pinned dependency
-  inside a package that another package requires by version, so on macOS a downstream package can
-  depend on OpenJevSwift only by branch, revision or local path. Linux is unaffected because its
-  manifest has no MLX packages. Release 0.1.0 (#65) needs an mlx-swift-lm tag at or after the pin.
+- **mlx-swift-lm is pinned by revision.** No release contained `c043fb3` when it was pinned: the
+  newest tag then, 3.31.4, was 154 commits older and required mlx-swift 0.31. Release 3.32.3
+  (2026-09-30) is the first that contains it, five commits later, and requires mlx-swift 0.32.3;
+  moving to it is #119 ([upstream-log.md](upstream-log.md)). Until then, SwiftPM refuses a
+  revision-pinned dependency inside a package that another package requires by version, so on
+  macOS a downstream package can depend on OpenJevSwift only by branch, revision or local path.
+  Linux is unaffected because its manifest has no MLX packages. Release 0.1.0 (#65) needs an
+  mlx-swift-lm tag at or after the pin, which 3.32.3 now is.
 - **Linux downloads the Apple-only pins.** When `Package.resolved` matches the manifest, SwiftPM
   checks out every pinned package before it computes the graph. A Linux build therefore downloads
   8 Apple-only packages, including mlx-swift and swift-syntax, without loading or building them.
@@ -385,8 +388,9 @@ is ever committed. When the pin moves, update `UPSTREAM_OPENJEV_COMMIT` in the `
 
 ## The upstream review
 
-`Tools/upstream/review.py` (issue #66) compares every pin of [THIRD_PARTY.md](../THIRD_PARTY.md)
-with its project as it is now. [upstream-log.md](upstream-log.md) says what a review checks and
+`Tools/upstream/review.py` (issue #66) compares the pins of [THIRD_PARTY.md](../THIRD_PARTY.md)
+it follows, six GitHub projects and six Hugging Face checkpoints, with their projects as they are
+now. The other rows of THIRD_PARTY.md, such as TypeSafe's SDKs and vLLM, are not reviewed. [upstream-log.md](upstream-log.md) says what a review checks and
 what moving a pin takes, and holds each review's note. From the repository root:
 
 ```bash

@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-"""Reviews the upstream projects that THIRD_PARTY.md pins against their current state (issue #66).
+"""Reviews the pins of THIRD_PARTY.md that it follows against their projects' state (issue #66).
 
     python3 Tools/upstream/review.py                 # the review as Markdown, on stdout
     python3 Tools/upstream/review.py --json          # the same review as JSON
     python3 Tools/upstream/review.py --from FILE     # render a saved --json review; no network
 
-For each pinned GitHub project (razorback16/openjev, ml-explore/mlx-swift, ml-explore/mlx-swift-lm,
-Blaizzy/mlx-vlm, the Layr-Labs fork of mlx-swift-lm and huggingface/swift-transformers) it prints
-the pinned revision, the head of the default branch and the latest release, the commits and releases
-in between with their dates and first lines, and the commits that touch the paths this repository
-depends on. For upstream OpenJev it also lists the files changed under openjev/ and tests/ by area
-(wire, engine and read policy, models, settings, tests), and the mlx-vlm requirement and backends
-that upstream's pyproject.toml declares. For each pinned Hugging Face checkpoint it prints the
-revision that `main` points at now, since a moved `main` changes what a fresh download gets, and the
-commits since the pin. It also checks that the Makefile, Package.resolved and
-Tools/oracle/requirements.txt agree with THIRD_PARTY.md.
+For each GitHub project it follows (razorback16/openjev, ml-explore/mlx-swift,
+ml-explore/mlx-swift-lm, Blaizzy/mlx-vlm, the Layr-Labs fork of mlx-swift-lm and
+huggingface/swift-transformers) it prints the pinned revision, the head of the default branch and
+the latest release, the commits and releases in between with their dates and first lines, and the
+commits that touch the paths this repository depends on. For upstream OpenJev it also lists the
+files changed under openjev/ and tests/ by area (wire, engine and read policy, models, settings,
+tests), and the mlx-vlm requirement and backends that upstream's pyproject.toml declares. For each
+Hugging Face checkpoint it follows it prints the revision that `main` points at now, since a moved
+`main` changes what a fresh download gets, and the commits since the pin. It also checks that the
+Makefile, Package.resolved and Tools/oracle/requirements.txt agree with THIRD_PARTY.md.
 
 It only reads. Pins come from THIRD_PARTY.md and the files above. A project's history comes from
 `git` when a local clone already holds the default branch's head (`--clone`; by default
@@ -62,6 +62,7 @@ ATTEMPTS = 3  # each network read, against connection resets and 5xx answers
 COMMAND_TIMEOUT = 120  # seconds for one gh or git ls-remote call
 MAX_COMMITS = 30  # newest commits listed per project; watched paths list all of theirs
 MAX_WATCHED = 100  # commits listed per watched path
+HUB_COMMIT_LIMIT = 500  # commits of a checkpoint's main read before the search stops
 COMPARE_FILE_CAP = 300  # GitHub's compare lists at most this many files
 
 
@@ -318,24 +319,34 @@ def requirement_version(requirements, package):
 
 def local_pins(name, pinned, files):
     """What this repository's other files pin for a project, and the disagreements with
-    THIRD_PARTY.md. `files` maps "Makefile", "Package.resolved" and "oracle" to their text (or
-    None when missing). Returns (facts, warnings), two lists of sentences."""
+    THIRD_PARTY.md. `files` maps "Makefile", "Package.resolved" and "oracle" to their text (None
+    when the file is missing). A file or an entry that is missing counts as a disagreement.
+    Returns (facts, warnings), two lists of sentences."""
     facts, warnings = [], []
 
-    def resolved(identity):
-        text = files.get("Package.resolved")
-        return resolved_pins(text).get(identity) if text else None
+    def text_of(key, label):
+        text = files.get(key)
+        if text is None:
+            warnings.append(f"{label} is missing, so its pin was not compared.")
+        return text
 
-    if name == "razorback16/openjev" and files.get("Makefile") is not None:
-        commit = makefile_commit(files["Makefile"])
-        facts.append(f"The Makefile's `UPSTREAM_OPENJEV_COMMIT` is `{commit}`.")
-        if commit != pinned:
-            warnings.append(f"The Makefile pins `{commit}`, THIRD_PARTY.md `{pinned}`.")
+    if name == "razorback16/openjev":
+        text = text_of("Makefile", "The Makefile")
+        commit = makefile_commit(text) if text is not None else None
+        if text is not None and commit is None:
+            warnings.append("The Makefile sets no `UPSTREAM_OPENJEV_COMMIT`.")
+        elif commit is not None:
+            facts.append(f"The Makefile's `UPSTREAM_OPENJEV_COMMIT` is `{commit}`.")
+            if commit != pinned:
+                warnings.append(f"The Makefile pins `{commit}`, THIRD_PARTY.md `{pinned}`.")
     elif name in ("ml-explore/mlx-swift", "ml-explore/mlx-swift-lm",
                   "huggingface/swift-transformers"):
         identity = name.split("/")[1]
-        pin = resolved(identity)
-        if pin is not None:
+        text = text_of("Package.resolved", "Package.resolved")
+        pin = resolved_pins(text).get(identity) if text is not None else None
+        if text is not None and pin is None:
+            warnings.append(f"Package.resolved has no pin for {identity}.")
+        elif pin is not None:
             version, revision = pin
             facts.append(f"Package.resolved resolves {version or 'revision'} `{revision[:7]}`.")
             if name == "ml-explore/mlx-swift" and version != pinned:
@@ -344,12 +355,16 @@ def local_pins(name, pinned, files):
             if name == "ml-explore/mlx-swift-lm" and not revision.startswith(pinned or "-"):
                 warnings.append(f"Package.resolved resolves `{revision[:7]}`, THIRD_PARTY.md "
                                 f"pins `{pinned}`.")
-    elif name == "Blaizzy/mlx-vlm" and files.get("oracle") is not None:
-        version = requirement_version(files["oracle"], "mlx-vlm")
-        facts.append(f"Tools/oracle/requirements.txt locks mlx-vlm {version}.")
-        if version is not None and version != (pinned or "").lstrip("v"):
-            warnings.append(f"Tools/oracle/requirements.txt locks mlx-vlm {version}, "
-                            f"THIRD_PARTY.md pins {pinned}.")
+    elif name == "Blaizzy/mlx-vlm":
+        text = text_of("oracle", "Tools/oracle/requirements.txt")
+        version = requirement_version(text, "mlx-vlm") if text is not None else None
+        if text is not None and version is None:
+            warnings.append("Tools/oracle/requirements.txt locks no mlx-vlm.")
+        elif version is not None:
+            facts.append(f"Tools/oracle/requirements.txt locks mlx-vlm {version}.")
+            if version != (pinned or "").lstrip("v"):
+                warnings.append(f"Tools/oracle/requirements.txt locks mlx-vlm {version}, "
+                                f"THIRD_PARTY.md pins {pinned}.")
     return facts, warnings
 
 
@@ -855,7 +870,7 @@ def review_checkpoint(checkpoint, cell):
         if moved:
             commits, found = [], False
             next_url = f"{HUB}/api/models/{checkpoint.repo}/commits/main"
-            while next_url and not found and len(commits) < 500:
+            while next_url and not found and len(commits) < HUB_COMMIT_LIMIT:
                 page, next_url = http_json(next_url)
                 for item in page:
                     if pinned and item["id"].startswith(pinned):
@@ -868,9 +883,15 @@ def review_checkpoint(checkpoint, cell):
                                     "subject": first_line(item.get("title")),
                                     "author": ", ".join(a.get("user", "") for a in
                                                         item.get("authors", []))})
+            # Not found with older history left to read: the search stopped at the limit.
+            capped = not found and bool(next_url)
             record["commits"] = commits
             record["commit_count"] = len(commits)
-            if not found and pinned:
+            record["commits_capped"] = capped
+            if capped:
+                record["warnings"].append(f"The search stopped after main's newest {len(commits)} "
+                                          "commits without reaching the pin, so there are more.")
+            elif not found and pinned:
                 record["warnings"].append(f"`{pinned[:8]}` is not in main's history: the pinned "
                                           "revision may be on another branch, or main was "
                                           "rewritten.")
@@ -914,7 +935,9 @@ def state_of(review):
             state[record["name"]] = "error: " + record["error"][:200]
             continue
         head = (record.get("head") or {}).get("sha", "")
-        release = (record.get("latest_release") or {}).get("tag", "")
+        # The newest release since the pin, a prerelease included, else the latest release.
+        newest = (record.get("releases") or [None])[0] or record.get("latest_release") or {}
+        release = newest.get("tag", "")
         parts = [f"pin {record['pinned'].get('rev')}", f"head {head[:12]}"]
         if release:
             parts.append(f"release {release}")
@@ -924,7 +947,8 @@ def state_of(review):
 
 
 def collect(github_command, clones, max_commits=MAX_COMMITS, only=None, progress=None):
-    """Reviews every pinned project. `clones` maps owner/name to a local clone's path."""
+    """Reviews the projects the script follows, or those of them `only` names. `clones` maps
+    owner/name to a local clone's path."""
     markdown = THIRD_PARTY.read_text(encoding="utf-8")
     pins = third_party_pins(markdown)
     local = {}
@@ -1026,8 +1050,9 @@ def summary_since(record):
         if behind:
             parts.append(f"{behind} pinned commits missing from the branch")
     else:
-        parts.append(plural(record.get("commit_count", 0), "commit") if record.get("commits")
-                     else "main moved")
+        count = plural(record.get("commit_count", 0), "commit")
+        parts.append(("at least " + count if record.get("commits_capped") else count)
+                     if record.get("commits") else "main moved")
     return ", ".join(parts) + ("; " + " ".join(record["warnings"]) if record.get("warnings")
                                else "")
 
@@ -1050,9 +1075,9 @@ def render(review):
     projects = review["projects"]
     attention = [r for r in projects if needs_attention(r)]
     lines = [f"# Upstream review of {day(review['reviewed_at'])}", ""]
-    lines.append(f"Every pin of THIRD_PARTY.md against its project, read at "
-                 f"{review['reviewed_at'].replace('T', ' ').replace('Z', ' UTC')}, by "
-                 "`Tools/upstream/review.py`.")
+    lines.append(f"{plural(len(projects), 'pin')} of THIRD_PARTY.md, the ones "
+                 "`Tools/upstream/review.py` follows, against their projects, read at "
+                 f"{review['reviewed_at'].replace('T', ' ').replace('Z', ' UTC')}.")
     if attention:
         lines.append(f"{plural(len(attention), 'project')} of {len(projects)} moved or need a "
                      "look: " + ", ".join(r["name"] for r in attention) + ".")
@@ -1185,7 +1210,10 @@ def render_checkpoint(record):
         lines.append(f"`main` is now at {short(head['sha'])} (last modified {day(head['date'])}), "
                      "so a download that names no revision gets other files than the pin.")
         if record.get("commits"):
-            lines += ["", f"{plural(record['commit_count'], 'commit')} since the pin:", ""]
+            count = plural(record["commit_count"], "commit")
+            lead = ("At least " + count if record.get("commits_capped")
+                    else count[0].upper() + count[1:])
+            lines += ["", f"{lead} since the pin:", ""]
             lines += [commit_line(c) for c in record["commits"]]
     for warning in record.get("warnings", []):
         lines.append(f"**Check:** {warning}")
