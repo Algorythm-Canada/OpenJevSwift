@@ -9,6 +9,10 @@ import Testing
 
 @testable import openjev
 
+#if canImport(OpenJevLetterReadout)
+    import OpenJevLetterReadout
+#endif
+
 /// The three subcommands run in the test process, with stub backends registered through the
 /// command context (issue #40): their exit statuses, their messages, `decide`'s bytes against the
 /// server's, `models` without a load, and `serve` from the settings line to a clean shutdown.
@@ -112,31 +116,41 @@ struct CommandTests {
         #expect(await CommandHarness.run([subcommand], environment: environment).status == 3)
     }
 
+    /// Checked without a load: the default downloads 4.5 GB, and `models` needs no model.
+    @Test("jevk5's default is the published 8-bit conversion at its commit, listed without a load")
+    func jevk5PublishedDefault() async throws {
+        let settings = try ServerSettings(environment: ["OPENJEV_BACKEND": "jevk5"])
+        #expect(
+            SettingsSummary.line(settings, environment: [:], kind: .letterReadout)
+                .contains(" jevk5_model=Algorythm-Canada/jevk5-0.2-mlx-8bit "))
+        #if canImport(OpenJevLetterReadout)
+            // The source the backend loads for that setting.
+            #expect(
+                JevK5ModelFiles.source(setting: settings.jevk5Model)
+                    == JevK5Checkpoint.eightBit.hubSource)
+            #expect(JevK5Checkpoint.eightBit.revision == "d19a6f09b42fdd3b4ff7fc85b1ebbda2a79bfa4a")
+        #endif
+        let outcome = await CommandHarness.run(["models", "--backend", "jevk5"])
+        #expect(outcome.status == 0, "\(outcome.errors)")
+        #expect(
+            outcome.output
+                == (try WireFixtures.listing(forBackend: "jevk5")["body_text"]?.stringValue))
+    }
+
     @Test(
-        "jevk5 over its unpublished default exits 3 before any download; on Linux it is unavailable",
+        "jevk5 over a non-conversion folder exits 3 naming what it lacks; on Linux jevk5 is unavailable",
         arguments: ["serve", "decide"])
-    func jevk5UnpublishedDefault(subcommand: String) async {
-        let outcome = await CommandHarness.run([subcommand, "--backend", "jevk5"])
+    func jevk5NotAConversion(subcommand: String) async {
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("openjev-not-a-jevk5-\(UUID().uuidString)")
+        let outcome = await CommandHarness.run(
+            [subcommand, "--backend", "jevk5"], environment: ["OPENJEV_JEVK5_MODEL": folder.path])
         #expect(outcome.status == 3)
         if canImportLetterReadout {
-            #expect(
-                outcome.errors
-                    == "openjev: jevk5-0.2 failed to load (OPENJEV_BACKEND=jevk5): "
-                    + "Algorythm-Canada/jevk5-0.2-mlx-8bit is not published yet; convert the "
-                    + "checkpoint with Tools/jevk5/convert.py and set OPENJEV_JEVK5_MODEL to the "
-                    + "folder it writes (docs/deployment.md)\n")
+            #expect(outcome.errors.contains("lacks config.json, model.safetensors.index.json"))
         } else {
             #expect(outcome.errors.hasPrefix("openjev: OPENJEV_BACKEND=jevk5: "))
             #expect(outcome.errors.contains("Apple silicon"))
-        }
-        // A folder that is not a conversion names what it lacks.
-        let folder = FileManager.default.temporaryDirectory
-            .appendingPathComponent("openjev-not-a-jevk5-\(UUID().uuidString)")
-        let missing = await CommandHarness.run(
-            [subcommand, "--backend", "jevk5"], environment: ["OPENJEV_JEVK5_MODEL": folder.path])
-        #expect(missing.status == 3)
-        if canImportLetterReadout {
-            #expect(missing.errors.contains("lacks config.json, model.safetensors.index.json"))
         }
     }
 

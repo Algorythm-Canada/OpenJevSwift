@@ -38,9 +38,6 @@ public enum JevK5LoadError: Error, Sendable, Hashable, CustomStringConvertible {
     case invalidTemperature(String)
     /// The checkpoint is not the text-only Qwen3.5 the backend runs.
     case unsupportedModel(String)
-    /// The default checkpoint's repository has not been published yet (D-052), so there is
-    /// nothing to download.
-    case notPublished(repository: String)
     /// The MLX cache limit is not a finite number of GB, 0 or more.
     case invalidCacheLimit(Double)
 
@@ -57,10 +54,6 @@ public enum JevK5LoadError: Error, Sendable, Hashable, CustomStringConvertible {
         case .invalidCacheLimit(let gb):
             return "the MLX cache limit is \(gb) GB (OPENJEV_MLX_CACHE_LIMIT_GB); it must be a "
                 + "finite number of GB, 0 or more"
-        case .notPublished(let repository):
-            return "\(repository) is not published yet; convert the checkpoint with "
-                + "Tools/jevk5/convert.py and set OPENJEV_JEVK5_MODEL to the folder it writes "
-                + "(docs/deployment.md)"
         }
     }
 }
