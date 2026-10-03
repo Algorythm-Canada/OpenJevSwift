@@ -68,15 +68,15 @@ towards the three (the runner exempts only a 422; D-041).
 ## JevK5's reference: the author's published run
 
 Upstream's `jevk5` server reads its letters from a vLLM server, which needs an NVIDIA GPU, so this
-Mac cannot run it. The reference for the Swift `jevk5` backend is the one upstream used: the
-`jevk5` package's own published v0.2 run of the 231 public items
+Mac cannot run it. The reference for the Swift `jevk5` backend is the one upstream used: the `jevk5`
+package's own published v0.2 run of the 231 public items
 ([allebee/jevk5](https://github.com/allebee/jevk5) at `85238d7`, the v0.2.0 commit that added
 `results/public231/jevk5-v0.2.jsonl`, Apache-2.0). Its `bench/SUBMISSION.md` says how it was made:
 the package's in-process adapter, `jevk5_direct`, with transformers and the bf16 weights of
-`alibiserikbay/JevK5` at `3c67329` (the same files as the `v0.2` tag the conversions use), through
-JevBench's runner at `0caa1d0` on one H100. Its prompts were built in that process, not sent to a
-server, so its token counts compare with this harness's only as far as the prompts are the same,
-and equal counts on an item show that they are.
+`alibiserikbay/JevK5` at `3c67329` (whose weights, configuration and tokenizer files are the `v0.2`
+tag's), through JevBench's runner at `0caa1d0` on one H100. Its prompts were built in that process,
+not sent to a server, so its token counts compare with this harness's only as far as the prompts are
+the same, and equal counts on an item show that they are.
 `fetch` downloads it into the cache and checks its size and SHA-256 (`AUTHOR_RUNS`), and
 `author-run` turns it into a result file whose server is `author`: each item takes the
 distribution the author's server returned and its `usage`, scored again with JevBench's

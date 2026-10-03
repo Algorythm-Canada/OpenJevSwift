@@ -27,14 +27,16 @@ upstream's read policy (three more reads, averaged with the first, when a slot i
 asked one question, one request at a time.
 
 The JevK5 runs: 2026-10-03 UTC, the same Mac. The Swift server is a release build of this branch as
-`db1d51b` left the package, reading JevK5 v0.2 with MLX on the GPU (D-052) from the pinned 8-bit
+`31ef11f` left the package, reading JevK5 v0.2 with MLX on the GPU (D-052) from the pinned 8-bit
 conversion, the server's default, with `OPENJEV_MLX_CACHE_LIMIT_GB=4`; the same build ran JevBench
 again on the 4-bit conversion and on the unquantized bfloat16 weights. The reference is the `jevk5`
 package's published v0.2 run (`results/public231/jevk5-v0.2.jsonl` in allebee/jevk5 at `85238d7`,
 the v0.2.0 commit that added it), which `harness.py author-run` turns into a result file. The
 author's `bench/SUBMISSION.md` there says how it was made: the package's in-process adapter with
-transformers and the bfloat16 weights of `alibiserikbay/JevK5` at `3c67329`, whose files are the
-`v0.2` tag's, through JevBench's runner on one H100. The author published no TypeSafe run.
+transformers and the bfloat16 weights of `alibiserikbay/JevK5` at `3c67329`, whose weights,
+configuration and tokenizer files are the `v0.2` tag's, through JevBench's runner on one H100. The
+author published no TypeSafe run.
+
 
 ## What the runs show
 
@@ -351,8 +353,8 @@ input shape:
 
 | datasets | model | server | code | runtime | machine | run on |
 |---|---|---|---|---|---|---|
-| jevbench | jevk5-0.2 | author | allebee/jevk5 0.2.2 at 0571ef3, published | the jevk5 package's own runtime (JevK5 0.2.2: transformers, the bf16 v0.2 weights, CUDA graphs) through JevBench's runner, as the author published it | not recorded by the published run | 2026-09-22 |
-| jevbench, typesafe102 | jevk5-0.2 | swift | OpenJevSwift 0.1.0-dev at db1d51b | MLX on the GPU, Qwen3.5 through mlx-swift-lm (D-052), OPENJEV_JEVK5_MODEL=~/Library/Caches/OpenJevSwift/jevk5/jevk5-0.2-mlx-8bit, OPENJEV_MLX_CACHE_LIMIT_GB=4 | Apple M3 Max, 128 GB, macOS 27.0.1 (26A434) | 2026-10-03 |
+| jevbench | jevk5-0.2 | author | allebee/jevk5 0.2.0 at 85238d7, published | the jevk5 package 0.2.0's in-process adapter, jevk5_direct (transformers, the bf16 weights of alibiserikbay/JevK5 at 3c67329, CUDA graphs), through JevBench's runner at 0caa1d0, as the author published it | one NVIDIA H100, batch 1 (the author's bench/SUBMISSION.md) | 2026-09-22 |
+| jevbench, typesafe102 | jevk5-0.2 | swift | OpenJevSwift 0.1.0-dev at 31ef11f | MLX on the GPU, Qwen3.5 through mlx-swift-lm (D-052), OPENJEV_JEVK5_MODEL=~/Library/Caches/OpenJevSwift/jevk5/jevk5-0.2-mlx-8bit, OPENJEV_MLX_CACHE_LIMIT_GB=4 | Apple M3 Max, 128 GB, macOS 27.0.1 (26A434) | 2026-10-03 |
 | jevbench, typesafe102 | laya-1.0 | swift | OpenJevSwift 0.1.0-dev at c77cca9 | Core ML, float16 multifunction package, .cpuAndGPU, up to 16 questions per call | Apple M3 Max, 128 GB, macOS 27.0.1 (26A434) | 2026-10-01 |
 | jevbench, typesafe102 | laya-1.0 | upstream | openjev 0.5.0 at dcd2094, Python 3.12.2 | PyTorch 2.13.0 on the cpu, float32, 12 threads | Apple M3 Max, 128 GB, macOS 27.0.1 (26A434) | 2026-10-01 |
 | jevbench, typesafe102 | openjev-0.1 | swift | OpenJevSwift 0.1.0-dev at 2414408 | MLX on the GPU (D-039), OPENJEV_MLX_CACHE_LIMIT_GB=4 | Apple M3 Max, 128 GB, macOS 27.0.1 (26A434) | 2026-10-02 |
@@ -552,9 +554,10 @@ would not compare either: upstream's MLX engine writes `model;dur=0.0`, and the 
 the reads it runs in parallel (D-038 item 7). The read baseline of both servers on this Mac,
 measured under a protocol, is in [benchmarks.md](benchmarks.md) (D-044).
 
-The JevK5 runs' timings are left out too. They were not taken under that protocol: a second run of
-the 8-bit conversion, in a new process, gave every answer bit for bit and a median 36% slower. The
-author's run was timed on another machine and runtime. [deployment.md](deployment.md#jevk5) gives
+The JevK5 runs' timings are left out too. They were not taken under that protocol: made a second
+time from a second build of the same JevK5 code, the six runs gave every answer bit for bit, while
+TypeSafe's 95th percentile on the 8-bit conversion moved from 13.5 s to 9.8 s. The author's run was
+timed on another machine and runtime. [deployment.md](deployment.md#jevk5) gives
 the times these runs saw, as a guide.
 
 ## Rerunning every table
@@ -676,8 +679,10 @@ it was for upstream.
 - **What is recorded.** `jevk5-0.2-swift.json` and `typesafe102/jevk5-0.2-swift.json` are the
   8-bit conversion's runs, the server's default; `jevk5-conversions/4bit/` and
   `jevk5-conversions/bf16/` hold the other two, each with its TypeSafe run; `jevk5-0.2-author.json`
-  is the author's run as `harness.py author-run` reads it. All five Swift runs used one build, and
-  the 8-bit run, repeated in a new process, gave all 231 answers bit for bit.
+  is the author's run as `harness.py author-run` reads it. All six Swift runs used one build of
+  `31ef11f`. They repeat, bit for bit on all 999 answers, the branch's first six runs, which were
+  built from the same JevK5 code before a rebase and are these files' earlier commits in the pull
+  request.
 
 ## Calibration of DiffusionGemma's reads
 

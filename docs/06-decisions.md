@@ -2774,15 +2774,17 @@ the process, and some points needed choices the issue does not spell out.
 Decision.
 
 1. **The checkpoint is the author's `v0.2` tag, not `main`.** Since 2026-09-25 the repository's
-   `main` (`c4f7fdb`) holds JevK5 v0.3: other weights (`model.safetensors` SHA-256 `13824e47…`)
-   and `jevk5_config.json` `{"temperature": 1.22, "knockout_temperature": 0.93}`. Its
-   `SHA256SUMS`, which only v0.3 has, matches the files downloaded at that commit. The model upstream
-   names `jevk5-0.2`, its description, the issue's temperature of 1.532 and the published run the
-   parity is measured against are v0.2's, so the port pins the author's `v0.2` tag, `ea4804e`: a
-   model card on top of `27d2d6b`, whose files are those of every commit from `844e4d0` (the v0.2
-   weights, `0fba3bba…`) on. Upstream's `OPENJEV_MODEL` for `jevk5` names the bare repository, so
-   its image now serves v0.3's weights and temperature as `jevk5-0.2`, with jevk5 0.2.2's knockout
-   temperature of 0.77 where v0.3 ships 0.93.
+   `main` (`c4f7fdb`) holds JevK5 v0.3: other weights (`model.safetensors` SHA-256 `13824e47…`) and
+   `jevk5_config.json` `{"temperature": 1.22, "knockout_temperature": 0.93}`. Its `SHA256SUMS`,
+   which only v0.3 has, matches the files downloaded at that commit. The model upstream names
+   `jevk5-0.2`, its description, the issue's temperature of 1.532 and the published run the parity
+   is measured against are v0.2's, so the port pins the author's `v0.2` tag, `ea4804e`: a model card
+   on top of `27d2d6b`. Its weights (`0fba3bba…`) are those of every commit from `844e4d0` to
+   `27d2d6b`, and its weights, `config.json`, `jevk5_config.json`, tokenizer files and chat template
+   are byte for byte those of `3c67329`, the revision the author's published run read (item 11).
+   Upstream's `OPENJEV_MODEL` for `jevk5` names the bare repository, so its image now serves v0.3's
+   weights and temperature as `jevk5-0.2`, with jevk5 0.2.2's knockout temperature of 0.77 where
+   v0.3 ships 0.93.
 2. **The conversion is mlx-lm's, made reproducible.** `Tools/jevk5/convert.py` runs `mlx_lm.convert`
    (mlx-lm 0.32.0 with MLX 0.32.2, the MLX mlx-swift 0.32.2 builds), affine quantization with a
    group size of 64, at 4 and 8 bits. mlx-lm has no module for the checkpoint's model type,
@@ -2842,7 +2844,7 @@ Decision.
    repository, and `JevK5Backend.load()` takes `JevK5Checkpoint.platformDefault`: the 8-bit
    conversion on macOS and the 4-bit one on iOS, where memory is the limit and which has not run on
    an iPhone yet. The 8-bit server holds 6.0 GB once loaded and 8.5 to 11.0 GB in service with
-   `OPENJEV_MLX_CACHE_LIMIT_GB=4`, against 3.6 and 7.0 to 8.9 GB for the 4-bit one. The criterion
+   `OPENJEV_MLX_CACHE_LIMIT_GB=4`, against 3.6 and 6.8 to 8.9 GB for the 4-bit one. The criterion
    of all 231 is not met on MLX by any conversion; the misses at 8 bits and in bfloat16 are where
    the order of bfloat16 arithmetic decides a near-tie.
 5. **The downloader is OpenJevDiffusionGemma's `ModelResolver`, through a dependency.** A thin
@@ -2895,14 +2897,15 @@ Decision.
 10. **`jevk5_config.json` is checked at load.** A missing, non-numeric or non-positive temperature
     fails the load, where upstream fails at load for a missing key and at the first read for zero.
     `knockout_temperature`, v0.3's key, is ignored, as jevk5 0.2.2 and upstream ignore it.
-11. **Parity is against the author's published run.** Upstream's server for `jevk5` needs vLLM on
-    an NVIDIA GPU. As upstream did, the Swift server's JevBench run is compared with the `jevk5`
+11. **Parity is against the author's published run.** Upstream's server for `jevk5` needs vLLM on an
+    NVIDIA GPU. As upstream did, the Swift server's JevBench run is compared with the `jevk5`
     package's published v0.2 run (`results/public231/jevk5-v0.2.jsonl`, added by the v0.2.0 commit
-    `85238d7`), which `harness.py author-run` turns into a result file; item 4 has the figures.
-    The author's `bench/SUBMISSION.md` there says the run used the package's in-process adapter,
-    transformers and the bf16 weights at checkpoint revision `3c67329`, whose files are the
-    `v0.2` tag's, byte for byte, on one H100, so the reference is the model this port converts. The answers are
-    deterministic: the 8-bit run, repeated in a new process, gave all 231 bit for bit.
+    `85238d7`), which `harness.py author-run` turns into a result file; item 4 has the figures. The
+    author's `bench/SUBMISSION.md` there says the run used the package's in-process adapter,
+    transformers and the bf16 weights at checkpoint revision `3c67329`, whose weights, configuration
+    and tokenizer files are the `v0.2` tag's, byte for byte, on one H100, so the reference is the
+    model this port converts. The answers are deterministic: made a second time from a second build
+    of the same JevK5 code, all six runs gave their 999 answers bit for bit.
 12. **The live tests hold the Swift model to mlx-lm on the same conversion.** `Fixtures/jevk5`
     records mlx-lm's letter logits for every pass on the 4-bit conversion; with
     `OPENJEV_JEVK5_MODEL` the Swift tokenizer gives transformers' ids on all 324 passes, and the

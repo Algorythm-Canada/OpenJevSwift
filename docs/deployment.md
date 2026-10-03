@@ -12,7 +12,7 @@ document follows upstream's README, "Run your own", where it applies to a Mac.
 | `verdict` | `verdict-1.4`, 151M parameters, Core ML | yes | Apple silicon, macOS 15 or later | 1.6 GB with the functions one-question reads load, 2.8 GB with all six (D-042) |
 | `mlx` | `openjev-0.1`, DiffusionGemma 26B-A4B, 4-bit, MLX | yes | Apple silicon | about 16 GB to load (MLX holds 14.35 GiB), 17.3 GiB of MLX memory in service with short prompts and up to about 3.6 GB more for cached long prompts ([benchmarks.md](benchmarks.md), R4); 32 GB or more recommended, not yet measured on a 32 or 48 GB Mac |
 | `laya` | `laya-1.0`, 421M parameters, Core ML | yes | Apple silicon, macOS 15 or later | 4.7 GB with the functions one-question reads load, 8.9 GB with all eight and up to 9.7 GB at peak (D-042); with `OPENJEV_ENCODER_FUNCTIONS=2`, 2.1 GB for one-question reads and up to 4.4 GB at peak |
-| `jevk5` | `jevk5-0.2`, JevK5 (Qwen3.5-4B), 8-bit, MLX | yes, from a local conversion until the conversion is published (D-052) | Apple silicon | 6.0 GB once loaded; with `OPENJEV_MLX_CACHE_LIMIT_GB=4`, 8.5 to 10.7 GB in service and up to 11.0 GB at peak on prompts up to 11,130 tokens. The 4-bit conversion: 3.6 GB, 7.0 to 8.2 GB and 8.9 GB ([JevK5](#jevk5)) |
+| `jevk5` | `jevk5-0.2`, JevK5 (Qwen3.5-4B), 8-bit, MLX | yes, from a local conversion until the conversion is published (D-052) | Apple silicon | 6.0 GB once loaded; with `OPENJEV_MLX_CACHE_LIMIT_GB=4`, 8.5 to 10.7 GB in service and up to 11.0 GB at peak on prompts up to 11,130 tokens. The 4-bit conversion: 3.6 GB, 6.8 to 8.5 GB and 8.9 GB ([JevK5](#jevk5)) |
 
 On an M3 Max, Verdict reads one question in 7.5 to 20.3 ms depending on its length, and a batch
 of 16 in 4.3 to 19.3 ms per question ([spikes/encoder-runtime.md](spikes/encoder-runtime.md)). Like
@@ -420,10 +420,10 @@ five points of accuracy on TypeSafe's rows ([quality.md](quality.md#jevk5)).
 
 On an M3 Max the server loads the 8-bit conversion in about 2 seconds and holds 6.0 GB once it
 has warmed up. A question costs one forward pass over its prompt, so its time grows with the
-state: in the recorded JevBench runs, whose prompts have 209 tokens at the median and up to 4,033,
-a question took 0.17 s at the median and 2.3 s at the 95th percentile, and on TypeSafe's rows,
-2,646 tokens at the median and up to 11,130, 2.8 s and 13.5 s, the longest 18 s. Those runs were
-not taken under a benchmark's protocol: a repeat ran 36% slower at the median. With
+state: in two runs of JevBench, whose prompts have 209 tokens at the median and up to 4,033, a
+question took 0.17 s at the median and 2.2 to 2.3 s at the 95th percentile, and on TypeSafe's rows,
+2,646 tokens at the median and up to 11,130, 2.5 to 2.8 s and 9.8 to 13.5 s, the longest 11 to
+18 s. Those runs were not taken under a benchmark's protocol, as the spread shows. With
 `OPENJEV_MLX_CACHE_LIMIT_GB=4` the footprint stayed between 8.5 and 10.7 GB in service, 11.0 GB at
 its peak. MLX does not fuse attention over Qwen3.5's 256-wide heads, so a prompt over 2,048 tokens
 is read in chunks of 2,048, which bounds its memory, not its time.

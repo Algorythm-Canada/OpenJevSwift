@@ -157,7 +157,8 @@ PUBLISHED_ROWS = {
 AUTHOR_SERVER = "author"
 # The run is the file as the commit that added it holds it, made by that commit's code, as the
 # author's bench/SUBMISSION.md there describes: the package's in-process adapter, jevk5_direct,
-# no server, on the checkpoint revision it names, whose files are the v0.2 tag's (D-052).
+# no server, on the checkpoint revision it names, whose weights, configuration and tokenizer files
+# are the v0.2 tag's (D-052).
 AUTHOR_RUNS = {
     "jevk5-0.2": {
         "repo": "allebee/jevk5", "commit": "85238d7be5527370c43206fe54cd752eb3134c1b",
