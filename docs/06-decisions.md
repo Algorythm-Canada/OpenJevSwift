@@ -2801,7 +2801,10 @@ Decision.
 5. **Images 1 or 3 pixels high are refused.** Transformers reads their arrays as channels first:
    upstream raises on height 1 and resizes height 3 as if it were the width. `targetSize` throws
    a `VisionError` for both rather than reproduce a misread image; #47 decides the wire answer
-   (upstream's would be a 500).
+   (upstream's would be a 500). So does an image whose header declares more than 178,956,970
+   pixels, where Pillow's `Image.open` raises `DecompressionBombError`: the port checks the size
+   ImageIO reads from the header before decoding, so a small file cannot make it allocate a huge
+   image.
 6. **More fixture images than the issue lists, and the full tensors outside it.** Seven synthetic
    images instead of two (two JPEGs for the decoder in CI, a grey PNG large enough to widen the
    kernel, beside the non-square PNG, the small PNG, the GIF and the WebP), all drawn by the

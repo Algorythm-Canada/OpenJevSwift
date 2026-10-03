@@ -55,6 +55,7 @@ extension RGBImage {
     ///     parameter exists so a test can show that the second frame of a GIF differs.
     /// - Throws: A ``VisionError`` when ImageIO cannot decode the data or has no such frame.
     public init(decoding data: Data, frame: Int = 0) throws(VisionError) {
+        try Self.checkSize(of: data)
         let bytes = [UInt8](data)
         if frame == 0, LibjpegTurboDecoder.isJPEG(bytes),
             let decoded = try? LibjpegTurboDecoder.decode(bytes)
@@ -69,6 +70,7 @@ extension RGBImage {
     ///
     /// - Throws: A ``VisionError`` when ImageIO cannot decode the data or has no such frame.
     public init(imageIO data: Data, frame: Int = 0) throws(VisionError) {
+        try Self.checkSize(of: data)
         let options = [kCGImageSourceShouldCache: false] as CFDictionary
         guard let source = CGImageSourceCreateWithData(data as CFData, options) else {
             throw VisionError("the image data is not an image ImageIO can open")
@@ -83,6 +85,28 @@ extension RGBImage {
             self = samples
         } else {
             self = try Self.drawn(image)
+        }
+    }
+
+    /// The most pixels an image may have: Pillow's `2 * Image.MAX_IMAGE_PIXELS`. Above it,
+    /// `Image.open` raises `DecompressionBombError` in upstream, so a small file that declares a
+    /// huge size is refused before anything is allocated for it.
+    public static let maxPixels = 178_956_970
+
+    /// Refuses an image whose header declares more than ``maxPixels`` pixels, read by ImageIO
+    /// without decoding. A header ImageIO cannot read is left to the decoders to refuse.
+    static func checkSize(of data: Data) throws(VisionError) {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+            let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil)
+                as? [CFString: Any],
+            let width = (properties[kCGImagePropertyPixelWidth] as? NSNumber)?.intValue,
+            let height = (properties[kCGImagePropertyPixelHeight] as? NSNumber)?.intValue
+        else { return }
+        let pixels = max(1, width) * max(1, height)
+        if pixels > maxPixels {
+            throw VisionError(
+                "the image is \(pixels) pixels; the limit is \(maxPixels) (Pillow's "
+                    + "decompression bomb limit)")
         }
     }
 

@@ -181,6 +181,40 @@ struct VisionPreprocessingTests {
         }
     }
 
+    /// A PNG of `width` by `height` grey pixels with no pixel data: a header ImageIO reads.
+    static func headerOnlyPNG(width: Int, height: Int) -> Data {
+        func crc32(_ bytes: [UInt8]) -> UInt32 {
+            var crc: UInt32 = 0xFFFF_FFFF
+            for byte in bytes {
+                crc ^= UInt32(byte)
+                for _ in 0..<8 { crc = crc & 1 == 1 ? (crc >> 1) ^ 0xEDB8_8320 : crc >> 1 }
+            }
+            return ~crc
+        }
+        func be32(_ value: Int) -> [UInt8] { (0..<4).map { UInt8((value >> (24 - 8 * $0)) & 255) } }
+        func chunk(_ type: String, _ body: [UInt8]) -> [UInt8] {
+            let typed = Array(type.utf8) + body
+            return be32(body.count) + typed + be32(Int(crc32(typed)))
+        }
+        let header = be32(width) + be32(height) + [8, 0, 0, 0, 0]
+        let bytes =
+            [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A] + chunk("IHDR", header)
+            + chunk("IEND", [])
+        return Data(bytes)
+    }
+
+    @Test("An image past Pillow's decompression bomb limit is refused before it is decoded")
+    func decompressionBomb() throws {
+        // 13,400 by 13,400 is 179,560,000 pixels, past the limit of 178,956,970.
+        #expect(throws: VisionError.self) {
+            try RGBImage(decoding: Self.headerOnlyPNG(width: 13_400, height: 13_400))
+        }
+        #expect(throws: VisionError.self) {
+            try RGBImage(imageIO: Self.headerOnlyPNG(width: 13_400, height: 13_400))
+        }
+        #expect(RGBImage.maxPixels == 2 * 89_478_485)
+    }
+
     @Test("A state that spells out more image placeholders than there are images is refused")
     func extraPlaceholder() throws {
         #expect(throws: VisionError.self) {

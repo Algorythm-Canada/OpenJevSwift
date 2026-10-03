@@ -57,7 +57,9 @@ read's budget is always 280 and its token count follows from the image's size.
 Two sizes upstream cannot process. Transformers' `infer_channel_dimension_format` reads an
 `(height, width, 3)` array whose height is 1 or 3 as channels first. An image 1 pixel high then
 raises a `TypeError` in Pillow. An image 3 pixels high is resized as if it were 3 pixels wide:
-100 by 3 becomes 96 by 4,608. The port refuses both with a `VisionError` (D-051).
+100 by 3 becomes 96 by 4,608. The port refuses both with a `VisionError` (D-051). It also refuses,
+as Pillow's `Image.open` does, an image of more than 178,956,970 pixels (`2 * MAX_IMAGE_PIXELS`),
+reading the size from the header before it decodes anything.
 
 The resize is `PIL.Image.resize((w, h), BICUBIC)` on the 8-bit image, then
 `image.astype(np.float32) * rescale_factor`, which NumPy 2 computes in float32 with the factor cast
