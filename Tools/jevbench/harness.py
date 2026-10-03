@@ -153,7 +153,7 @@ PUBLISHED_ROWS = {
 # A model author's own published run of the public items, for a model whose upstream server this
 # Mac cannot run: JevK5's, the reference the Swift `jevk5` backend is compared with, as upstream
 # compared its vLLM path with it (upstream's JevK5 server reads its letters from vLLM, which needs an
-# NVIDIA GPU; D-051). `author-run` turns the file into a result file whose server is AUTHOR_SERVER.
+# NVIDIA GPU; D-052). `author-run` turns the file into a result file whose server is AUTHOR_SERVER.
 AUTHOR_SERVER = "author"
 AUTHOR_RUNS = {
     "jevk5-0.2": {

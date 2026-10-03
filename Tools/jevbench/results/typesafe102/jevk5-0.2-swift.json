@@ -58,7 +58,7 @@
   "binary_sha256": "09d392d05cf552891797d22a2b49ff8645d7551b39c814e2fc8d01c64de1ca82",
   "toolchain": "Apple Swift version 6.4 (swiftlang-6.4.0.34.1 clang-2100.3.34.1)",
   "xcode": "Xcode 27.0 Build version 27A266a",
-  "runtime": "MLX on the GPU, Qwen3.5 through mlx-swift-lm (D-051)",
+  "runtime": "MLX on the GPU, Qwen3.5 through mlx-swift-lm (D-052)",
   "package": null,
   "model_source": "OPENJEV_JEVK5_MODEL=~/Library/Caches/OpenJevSwift/jevk5/jevk5-0.2-mlx-8bit",
   "model_check": "~/Library/Caches/OpenJevSwift/jevk5/jevk5-0.2-mlx-8bit is the pinned 8-bit conversion (11 files)",

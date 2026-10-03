@@ -58,7 +58,7 @@ loads the same models inside an app.
 | `verdict` | `verdict-1.4`, 151M parameters, Core ML | Apple silicon, macOS 15 or later | 1.6 GB with the functions one-question reads load, 2.8 GB with all six |
 | `laya` | `laya-1.0`, 421M parameters, Core ML | Apple silicon, macOS 15 or later | 4.7 GB with the functions one-question reads load, 8.9 GB with all eight and up to 9.7 GB at peak; with `OPENJEV_ENCODER_FUNCTIONS=2`, 2.1 GB for one-question reads and up to 4.4 GB at peak |
 | `mlx` | `openjev-0.1`, DiffusionGemma 26B-A4B, 4-bit, MLX | Apple silicon | about 16 GB to load, 17.3 GiB in service with short prompts and up to about 3.6 GB more for cached long prompts; 32 GB or more recommended |
-| `jevk5` | `jevk5-0.2`, JevK5 (Qwen3.5-4B), 4-bit, MLX, from a local conversion until it is published | Apple silicon | <<JEVK5_MEMORY_SHORT>> |
+| `jevk5` | `jevk5-0.2`, JevK5 (Qwen3.5-4B), 8-bit, MLX, from a local conversion until it is published | Apple silicon | 6.0 GB once loaded, up to 11.0 GB in service with `OPENJEV_MLX_CACHE_LIMIT_GB=4`; 3.6 and 8.9 GB with the 4-bit conversion |
 
 Building needs Xcode 26.4 or later. The `mlx` backend also needs MLX's Metal shaders, which Swift
 Build compiles with the Metal Toolchain: Swift Build is the default with Xcode 27, and Xcode 26
@@ -73,15 +73,15 @@ Milestones 0 to 3 are complete, every work issue in them closed: the foundations
 engine core, DiffusionGemma reads on MLX, and the Jev-compatible HTTP server with the `openjev`
 tool. Milestone 4, the read extensions and images, is in progress: `steps`, `samples` and
 `sequential` are verified end to end on the DiffusionGemma checkpoint (#43, #44 and #45), and images
-remain. Verdict and Laya, from milestone 6, and from milestone 7 the JevBench comparison with
-upstream and DiffusionGemma's calibration report (#61 and #62), are done too.
+remain. Verdict, Laya and JevK5 (#55), from milestone 6, and from milestone 7 the JevBench
+comparison with upstream and DiffusionGemma's calibration report (#61 and #62), are done too.
 
 Not there yet:
 
 - Images in requests: #46, #47 and #48.
 - `think`, a thought before the read: #50, #51 and #52.
 - `POST /v1/chat/completions`: #53.
-- The CLM model: #59. The JevK5 conversions' publication, the maintainer's choice (D-051).
+- The CLM model: #59. The JevK5 conversions' publication, the maintainer's choice (D-052).
 - Release 0.1.0, with a version tag a package can depend on: #65.
 
 [docs/08-implementation-plan.md](docs/08-implementation-plan.md) has the milestones and the issue
@@ -95,9 +95,12 @@ error bodies, the headers and the `/v1/models` listing, all checked against fixt
 code writes. The probabilities agree within measured bounds: DiffusionGemma's within decisions
 D-014's and D-048's on the 63 oracle reads (the top label on 91.7% of slots, and on 139 of the 140
 where mlx-vlm's top two are at least 0.5 apart), and between the two servers on 333 JevBench and
-TypeSafe items; Verdict's and Laya's with upstream's top answer on all 666 items. The differences, among them a stricter JSON parser, the 503 for any backend failure and the
-features not built yet, each have a decision record. [docs/compatibility.md](docs/compatibility.md)
-has the three tables and the matrix of what runs on macOS, iOS and Linux.
+TypeSafe items; Verdict's and Laya's with upstream's top answer on all 666 items; JevK5's, on its
+8-bit conversion, with its author's published top answer on 230 of JevBench's 231 items and the same
+token counts on all of them. The differences, among them a stricter JSON parser, the 503 for any
+backend failure and the features not built yet, each have a decision record.
+[docs/compatibility.md](docs/compatibility.md) has the three tables and the matrix of what runs on
+macOS, iOS and Linux.
 
 ## Documentation
 

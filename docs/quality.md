@@ -27,7 +27,7 @@ upstream's read policy (three more reads, averaged with the first, when a slot i
 asked one question, one request at a time.
 
 The JevK5 runs: 2026-10-03 UTC, the same Mac. The Swift server is a release build of this branch as
-`db1d51b` left the package, reading JevK5 v0.2 with MLX on the GPU (D-051) from the pinned 8-bit
+`db1d51b` left the package, reading JevK5 v0.2 with MLX on the GPU (D-052) from the pinned 8-bit
 conversion, the server's default, with `OPENJEV_MLX_CACHE_LIMIT_GB=4`; the same build ran JevBench
 again on the 4-bit conversion and on the unquantized bfloat16 weights. The reference is the `jevk5`
 package's published v0.2 run (`results/public231/jevk5-v0.2.jsonl` in allebee/jevk5 at `0571ef3`):
@@ -75,7 +75,7 @@ transformers with the bfloat16 weights on the author's NVIDIA GPU, through JevBe
   the 22 changed answers on items whose author top two are at least 0.05 apart. Accuracy follows:
   85.7% for 8 bits and bfloat16 and 85.3% for 4 bits on JevBench, against the author's 86.1%, and
   on SemIf's TypeSafe subset 86.3% for 8 bits and bfloat16 and 81.4% for 4 bits (the 8-bit
-  conversion's modal agreement is 0.845, against Jev's published 0.883). D-051 makes the 8-bit
+  conversion's modal agreement is 0.845, against Jev's published 0.883). D-052 makes the 8-bit
   conversion the server's default for that reason.
 - **DiffusionGemma's probabilities are overconfident on hard questions.** On JevBench it is right
   81% to 82% of the time at a mean top probability of 0.92, an ECE of 0.106 (Swift) and 0.097
@@ -201,7 +201,7 @@ difference, which an answer averages, so the long prompts' figures are shown and
 ### Swift against the model author's published run
 
 JevK5's reference is its author's own published v0.2 run, as it is upstream's: upstream's server
-reads JevK5's letters from vLLM, which needs an NVIDIA GPU (D-051). Equal input tokens mean equal
+reads JevK5's letters from vLLM, which needs an NVIDIA GPU (D-052). Equal input tokens mean equal
 prompts.
 
 | model | dataset | items | top answer agrees | input tokens equal | mean abs diff | median of each item's largest abs diff | largest abs diff | right only on Swift, only the author's | McNemar p |
@@ -229,7 +229,7 @@ The 5 largest deviations:
 The same runs with each MLX conversion of JevK5 v0.2 that Tools/jevk5/convert.py pins, from
 jevk5-conversions/: the default is the main result files' conversion, and bfloat16 is the
 unquantized weights. A near-tie, the author's top two less than 0.05 apart, can turn on bfloat16
-rounding alone (D-051).
+rounding alone (D-052).
 
 | model | conversion | top answer agrees | top answer agrees where the author's top two are at least 0.05 apart | input tokens equal | mean abs diff | median of each item's largest abs diff | largest abs diff | accuracy | TypeSafe accuracy |
 |---|---|---|---|---|---|---|---|---|---|
@@ -350,7 +350,7 @@ input shape:
 | datasets | model | server | code | runtime | machine | run on |
 |---|---|---|---|---|---|---|
 | jevbench | jevk5-0.2 | author | allebee/jevk5 0.2.2 at 0571ef3, published | the jevk5 package's own runtime (JevK5 0.2.2: transformers, the bf16 v0.2 weights, CUDA graphs) through JevBench's runner, as the author published it | not recorded by the published run | 2026-09-22 |
-| jevbench, typesafe102 | jevk5-0.2 | swift | OpenJevSwift 0.1.0-dev at db1d51b | MLX on the GPU, Qwen3.5 through mlx-swift-lm (D-051), OPENJEV_JEVK5_MODEL=~/Library/Caches/OpenJevSwift/jevk5/jevk5-0.2-mlx-8bit, OPENJEV_MLX_CACHE_LIMIT_GB=4 | Apple M3 Max, 128 GB, macOS 27.0.1 (26A434) | 2026-10-03 |
+| jevbench, typesafe102 | jevk5-0.2 | swift | OpenJevSwift 0.1.0-dev at db1d51b | MLX on the GPU, Qwen3.5 through mlx-swift-lm (D-052), OPENJEV_JEVK5_MODEL=~/Library/Caches/OpenJevSwift/jevk5/jevk5-0.2-mlx-8bit, OPENJEV_MLX_CACHE_LIMIT_GB=4 | Apple M3 Max, 128 GB, macOS 27.0.1 (26A434) | 2026-10-03 |
 | jevbench, typesafe102 | laya-1.0 | swift | OpenJevSwift 0.1.0-dev at c77cca9 | Core ML, float16 multifunction package, .cpuAndGPU, up to 16 questions per call | Apple M3 Max, 128 GB, macOS 27.0.1 (26A434) | 2026-10-01 |
 | jevbench, typesafe102 | laya-1.0 | upstream | openjev 0.5.0 at dcd2094, Python 3.12.2 | PyTorch 2.13.0 on the cpu, float32, 12 threads | Apple M3 Max, 128 GB, macOS 27.0.1 (26A434) | 2026-10-01 |
 | jevbench, typesafe102 | openjev-0.1 | swift | OpenJevSwift 0.1.0-dev at 2414408 | MLX on the GPU (D-039), OPENJEV_MLX_CACHE_LIMIT_GB=4 | Apple M3 Max, 128 GB, macOS 27.0.1 (26A434) | 2026-10-02 |
@@ -649,7 +649,7 @@ it was for upstream.
 - **The prompts are the author's.** On every conversion every item bills the author's token count,
   231 of 231, and the count is the prompt's: the system text, the evidence and the options rendered
   through the pinned template, then tokenized. `Fixtures/jevk5` holds the prompts byte for byte and
-  the readout bit for bit on recorded logits (D-051), so what is left is the model's logits.
+  the readout bit for bit on recorded logits (D-052), so what is left is the model's logits.
 - **The 8-bit conversion meets the criterion except at one near-tie.** It changes one top answer,
   `hard-sol-a-multi_hop-10`, where the author gives `approve_45_days` 0.507 and the next 0.467, and
   the Swift server `reduce_to_30_days` 0.528. Its largest difference is 0.083, on
@@ -659,7 +659,7 @@ it was for upstream.
   the same probability (`hard-opus-b-tradeoff-07` and `hard-sol-a-multi_hop-12`), and one at 0.030
   (`hard-opus-b-ambiguous-10`). Their largest difference, 0.051, is near what upstream saw on vLLM.
   On the same 4-bit weights the Swift model's letter logits are mlx-lm's within 0.375, 0.068 on
-  average, over the fixture's 324 passes (the live tests, D-051): two implementations ordering
+  average, over the fixture's 324 passes (the live tests, D-052): two implementations ordering
   bfloat16 arithmetic differently.
 - **The 4-bit conversion is the one that moves answers.** It changes 22 top answers, 18 of them on
   items whose author top two are at least 0.05 apart and four at margins above 0.6, such as

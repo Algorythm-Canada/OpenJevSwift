@@ -62,7 +62,7 @@
     struct JevK5LiveTests {
         /// The largest difference allowed between a letter logit in Swift and in mlx-lm, and
         /// the mean over every letter of every pass. The two Qwen3.5 implementations order their
-        /// bfloat16 arithmetic differently (D-051): on 2026-10-02 the largest difference was 0.375
+        /// bfloat16 arithmetic differently (D-052): on 2026-10-02 the largest difference was 0.375
         /// and the mean 0.068 on Swift's own Metal library, 0.625 and 0.071 on the Python wheel's.
         static let logitBound: Float = 1.0
         static let meanLogitBound = 0.1

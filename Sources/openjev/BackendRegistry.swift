@@ -203,7 +203,7 @@ struct BackendRegistry: Sendable {
         #endif
     }
 
-    /// JevK5 on MLX (D-051): the converted checkpoint `OPENJEV_JEVK5_MODEL` names, a folder or a
+    /// JevK5 on MLX (D-052): the converted checkpoint `OPENJEV_JEVK5_MODEL` names, a folder or a
     /// Hub repository resolved in the Hugging Face cache the environment names, with `HF_TOKEN`,
     /// and MLX's buffer pool capped by `OPENJEV_MLX_CACHE_LIMIT_GB`. The engine warms it up with
     /// upstream's warm-up questions when `OPENJEV_WARMUP` asks.

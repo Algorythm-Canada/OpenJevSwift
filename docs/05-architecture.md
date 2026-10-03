@@ -57,7 +57,7 @@ OpenJevSwift/                          Swift package, tools 6.2, strict concurre
                      (download on first use, SHA-256, the tokenizer alone, held packages)
     OpenJevLetterReadout/              Apple silicon. JevK5 (jevk5-0.2) on MLX: depends on mlx-swift,
                                        MLXLLM (Qwen3.5), MLXLMCommon, swift-transformers Tokenizers
-                                       and OpenJevDiffusionGemma's ModelResolver (D-051).
+                                       and OpenJevDiffusionGemma's ModelResolver (D-052).
       Prompt/        JevK5Prompt (prompt_text, byte for byte), JevK5Option (decision_options),
                      Python's str() of JSON values
       Readout/       JevK5Readout: the letter softmax, groups, spread, knockout and tree
@@ -110,7 +110,7 @@ OpenJevSwift/                          Swift package, tools 6.2, strict concurre
 `EncoderDecisionEngine`, so the server holds either kind of engine as a `SystemOneService`. They
 are separate from `OpenJevDiffusionGemma` so that an app can take one model without the others;
 `OpenJevLetterReadout` still links `OpenJevDiffusionGemma` for its downloader, `ModelResolver`,
-until that moves to a target of its own (D-051).
+until that moves to a target of its own (D-052).
 
 ## Module dependency graph
 
@@ -130,7 +130,7 @@ swift-http-types, swift-log, swift-nio's `NIOCore`, `NIOPosix` and `NIOHTTP1`,
 swift-service-lifecycle and AsyncHTTPClient, never on a backend. The CLI picks the backend and
 links it: `OpenJevEncoders`, `OpenJevDiffusionGemma` and `OpenJevLetterReadout` on macOS. Backends
 depend on the core, never the reverse; `OpenJevLetterReadout` also depends on
-`OpenJevDiffusionGemma` for `ModelResolver` (D-051).
+`OpenJevDiffusionGemma` for `ModelResolver` (D-052).
 
 ## Core types (sketch)
 
@@ -487,7 +487,7 @@ QuestionReadBackendProvider { settings in
 
 `OPENJEV_JEVK5_MODEL` (this port's setting) names a converted folder or a Hub repository; a
 conversion's repository takes its pinned revision, and the default, the 4-bit conversion's
-repository, is refused before any download until it is published (D-051). The loader reads the
+repository, is refused before any download until it is published (D-052). The loader reads the
 calibration temperature from `jevk5_config.json`, checks that the 16 letters are single tokens and
 caps MLX's pool with `OPENJEV_MLX_CACHE_LIMIT_GB`. Without MLX, `jevk5` is a known backend that
 exits 3, as `mlx` is.

@@ -8,7 +8,7 @@ import OpenJevCore
 /// Upstream's `Settings`, for everything that is not vLLM-specific: the same names, defaults and
 /// startup validation, so deployment documentation and compose files transfer (decision D-013).
 /// Two settings are this port's own: `OPENJEV_ENCODER_FUNCTIONS` (D-042), read and checked as
-/// upstream's `_env_num` settings are, and `OPENJEV_JEVK5_MODEL` (D-051), the JevK5 checkpoint,
+/// upstream's `_env_num` settings are, and `OPENJEV_JEVK5_MODEL` (D-052), the JevK5 checkpoint,
 /// which upstream reads from its vLLM server's `OPENJEV_MODEL`.
 ///
 /// The fields are constants, as upstream's frozen dataclass is: a value exists only once the
@@ -93,7 +93,7 @@ public struct ServerSettings: Sendable, Hashable {
     public let layaModel: String
     /// The Verdict checkpoint, `OPENJEV_VERDICT_MODEL`.
     public let verdictModel: String
-    /// The JevK5 checkpoint, `OPENJEV_JEVK5_MODEL`, this port's (D-051): a folder holding a
+    /// The JevK5 checkpoint, `OPENJEV_JEVK5_MODEL`, this port's (D-052): a folder holding a
     /// conversion (when it starts with `/`, `~` or `.`) or a Hub repository, optionally followed
     /// by `@revision`. The default is the 8-bit conversion's repository.
     public let jevk5Model: String

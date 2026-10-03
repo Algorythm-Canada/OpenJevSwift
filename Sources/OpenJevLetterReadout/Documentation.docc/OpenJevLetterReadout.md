@@ -20,11 +20,14 @@ upstream's 400.
 
 The model is a conversion of the checkpoint to MLX that `Tools/jevk5/convert.py` writes and
 ``JevK5Checkpoint`` pins. ``JevK5ModelFiles`` finds it in a folder or downloads it from the
-Hugging Face Hub at a pinned revision, through ``/OpenJevDiffusionGemma/ModelResolver``.
+Hugging Face Hub at a pinned revision, through ``/OpenJevDiffusionGemma/ModelResolver``. By
+default ``JevK5Backend/load(_:cache:token:cacheLimitGB:resolver:)`` takes
+``JevK5Checkpoint/platformDefault``: the 8-bit conversion on macOS, which gives the author's
+published answers, and the 4-bit one on iOS, half the size.
 
 ```swift
 let backend = try await JevK5Backend.load(
-    .directory(URL(fileURLWithPath: "/models/jevk5-0.2-mlx-4bit")), cacheLimitGB: 4)
+    .directory(URL(fileURLWithPath: "/models/jevk5-0.2-mlx-8bit")), cacheLimitGB: 4)
 let engine = EncoderDecisionEngine(backend: backend)
 let decision = try await engine.decide(request)
 ```

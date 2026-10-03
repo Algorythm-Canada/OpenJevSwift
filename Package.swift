@@ -295,7 +295,7 @@ var targets: [Target] = [
         // JevK5 (`jevk5-0.2`, issue #55): the jevk5 package's prompt and many-option readout,
         // and the letter logits of mlx-swift-lm's Qwen3.5 text model. The checkpoint comes
         // through OpenJevDiffusionGemma's ModelResolver, the downloader that shares the Hugging
-        // Face cache with Python (D-051).
+        // Face cache with Python (D-052).
         .target(
             name: "OpenJevLetterReadout",
             dependencies: [

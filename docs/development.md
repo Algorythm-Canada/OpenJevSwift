@@ -43,7 +43,7 @@ The package declares macOS 14 and iOS 17 as minimum deployment targets.
 | `OpenJevCore` (library product) | yes | yes | yes |
 | `OpenJevDiffusionGemma` (library product) | yes, Apple silicon | compiles, but the model does not fit in memory | not declared |
 | `OpenJevEncoders` (library product) | yes; its Core ML types from macOS 15 | yes; its Core ML types from iOS 18 | not declared |
-| `OpenJevLetterReadout` (library product) | yes, Apple silicon | compiles; the 4-bit conversion (2.37 GB) is meant for recent iPhones and iPads, not yet run on one | not declared |
+| `OpenJevLetterReadout` (library product) | yes, Apple silicon | compiles; loads the 4-bit conversion (2.37 GB) by default, meant for recent iPhones and iPads, not yet run on one | not declared |
 | `OpenJevServer` (internal target) | yes | no | yes |
 | `openjev` (executable) | yes, with the encoder and JevK5 backends | no | yes, without the encoder, JevK5 and MLX backends |
 | `openjev-stub-server` (executable, not a product) | yes | no | yes |
@@ -62,7 +62,7 @@ The package declares macOS 14 and iOS 17 as minimum deployment targets.
 - **JevK5.** `OpenJevLetterReadout` runs JevK5 (`jevk5-0.2`) on MLX through mlx-swift-lm's
   `MLXLLM` Qwen3.5 text model (issue #55). It depends on `OpenJevDiffusionGemma` for
   `ModelResolver`, the downloader that keeps the Hugging Face cache's layout, which links that
-  module into an app that uses JevK5 (D-051). Its live tests need the conversion
+  module into an app that uses JevK5 (D-052). Its live tests need the conversion
   `Tools/jevk5/convert.py` writes, named by `OPENJEV_JEVK5_MODEL`.
 - **The server.** `OpenJevServer` is not a library product, so library consumers never link
   Hummingbird (D-009). Its Hummingbird dependency applies only on macOS and Linux, which keeps

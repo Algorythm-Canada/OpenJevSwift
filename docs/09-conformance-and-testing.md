@@ -129,7 +129,9 @@ equal to upstream's, every request's billing upstream's), and upstream's three J
 its stub model through the server. The live suite needs the converted checkpoint,
 `OPENJEV_JEVK5_MODEL=<folder>` (`Tools/jevk5/convert.py --bits 4`'s output), and skips naming that
 variable otherwise: the tokenizer's ids for every pass, the Swift model's letter logits against
-mlx-lm's on the same conversion, and the corpus's answers and billing (D-051).
+mlx-lm's on the same conversion (within 1.0 at most and 0.1 on average, the top letter mlx-lm's
+wherever its top two logits are more than 0.5 apart), and the corpus's billing exactly and answers
+within 0.1, the top answer mlx-lm's wherever its top two are at least 0.1 apart (D-052).
 
 The encoder backends (`OpenJevEncodersTests`, issues #57 and #58) take their oracle from
 `Fixtures/encoders`, PyTorch float32 reads through upstream's own code. Without any model they

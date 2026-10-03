@@ -38,7 +38,7 @@ public enum JevK5LoadError: Error, Sendable, Hashable, CustomStringConvertible {
     case invalidTemperature(String)
     /// The checkpoint is not the text-only Qwen3.5 the backend runs.
     case unsupportedModel(String)
-    /// The default checkpoint's repository has not been published yet (D-051), so there is
+    /// The default checkpoint's repository has not been published yet (D-052), so there is
     /// nothing to download.
     case notPublished(repository: String)
     /// The MLX cache limit is not a finite number of GB, 0 or more.

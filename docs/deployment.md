@@ -12,7 +12,7 @@ document follows upstream's README, "Run your own", where it applies to a Mac.
 | `verdict` | `verdict-1.4`, 151M parameters, Core ML | yes | Apple silicon, macOS 15 or later | 1.6 GB with the functions one-question reads load, 2.8 GB with all six (D-042) |
 | `mlx` | `openjev-0.1`, DiffusionGemma 26B-A4B, 4-bit, MLX | yes | Apple silicon | about 16 GB to load (MLX holds 14.35 GiB), 17.3 GiB of MLX memory in service with short prompts and up to about 3.6 GB more for cached long prompts ([benchmarks.md](benchmarks.md), R4); 32 GB or more recommended, not yet measured on a 32 or 48 GB Mac |
 | `laya` | `laya-1.0`, 421M parameters, Core ML | yes | Apple silicon, macOS 15 or later | 4.7 GB with the functions one-question reads load, 8.9 GB with all eight and up to 9.7 GB at peak (D-042); with `OPENJEV_ENCODER_FUNCTIONS=2`, 2.1 GB for one-question reads and up to 4.4 GB at peak |
-| `jevk5` | `jevk5-0.2`, JevK5 (Qwen3.5-4B), 4-bit, MLX | yes, from a local conversion until the conversion is published (D-051) | Apple silicon | <<JEVK5_MEMORY>> |
+| `jevk5` | `jevk5-0.2`, JevK5 (Qwen3.5-4B), 8-bit, MLX | yes, from a local conversion until the conversion is published (D-052) | Apple silicon | 6.0 GB once loaded; with `OPENJEV_MLX_CACHE_LIMIT_GB=4`, 8.5 to 10.7 GB in service and up to 11.0 GB at peak on prompts up to 11,130 tokens. The 4-bit conversion: 3.6 GB, 7.0 to 8.2 GB and 8.9 GB ([JevK5](#jevk5)) |
 
 On an M3 Max, Verdict reads one question in 7.5 to 20.3 ms depending on its length, and a batch
 of 16 in 4.3 to 19.3 ms per question ([spikes/encoder-runtime.md](spikes/encoder-runtime.md)). Like
@@ -96,7 +96,7 @@ The server reads upstream's `OPENJEV_*` variables, with upstream's defaults and 
 | `OPENJEV_ORIGIN_SECRET` | unset | Require `X-Origin-Secret` (for a server behind a proxy). |
 | `OPENJEV_ENCODER_MODELS` | unset | A folder of converted Core ML packages, used instead of downloading (this port's, D-033). |
 | `OPENJEV_ENCODER_BATCH` | `16` | Questions per backend call. On a Mac, Verdict splits a call into Core ML calls of at most 16 questions. |
-| `OPENJEV_JEVK5_MODEL` | `Algorythm-Canada/jevk5-0.2-mlx-4bit` | The JevK5 conversion: a folder, or a Hub repository with an optional `@revision` (this port's, D-051). The default is refused until it is published; set the folder `Tools/jevk5/convert.py` writes ([JevK5](#jevk5)). |
+| `OPENJEV_JEVK5_MODEL` | `Algorythm-Canada/jevk5-0.2-mlx-8bit` | The JevK5 conversion: a folder, or a Hub repository with an optional `@revision` (this port's, D-052). The default is refused until it is published; set the folder `Tools/jevk5/convert.py` writes ([JevK5](#jevk5)). |
 | `OPENJEV_ENCODER_FUNCTIONS` | unset | The most Core ML functions an encoder keeps loaded, at least 1 (this port's, D-042). Unset keeps every function a read has needed, up to Verdict's 6 and Laya's 8, and the settings line shows `encoder_functions=all`; a lower number releases the least recently used one first. |
 | `OPENJEV_MAX_QUEUE` | `512` | Decisions inside the server before a 529. `0` refuses every request, as upstream's does. |
 | `OPENJEV_MAX_QUESTIONS` | `256` | Questions per request before a 400. |
@@ -394,25 +394,39 @@ distilled LoRA, in the process on MLX, and serves it as `jevk5-0.2` with upstrea
 answers. Upstream runs it on vLLM and an NVIDIA GPU; here every question is one forward pass on
 the Mac's GPU, read from its 16 answer letters' logits, and the passes run one at a time.
 
-The model is a 4-bit MLX conversion of the checkpoint, which is not published yet (D-051). Until it
-is, convert it once, outside the repository, and name the folder:
+The model is an 8-bit MLX conversion of the checkpoint, which is not published yet (D-052). Until
+it is, convert it once, outside the repository, and name the folder:
 
 ```bash
 /usr/local/bin/python3.12 -m venv ~/Library/Caches/OpenJevSwift/jevk5/venv
 ~/Library/Caches/OpenJevSwift/jevk5/venv/bin/python -m pip install -r Tools/jevk5/requirements.txt
-~/Library/Caches/OpenJevSwift/jevk5/venv/bin/python Tools/jevk5/convert.py --bits 4
-OPENJEV_BACKEND=jevk5 OPENJEV_JEVK5_MODEL=~/Library/Caches/OpenJevSwift/jevk5/jevk5-0.2-mlx-4bit \
+~/Library/Caches/OpenJevSwift/jevk5/venv/bin/python Tools/jevk5/convert.py --bits 8
+OPENJEV_BACKEND=jevk5 OPENJEV_JEVK5_MODEL=~/Library/Caches/OpenJevSwift/jevk5/jevk5-0.2-mlx-8bit \
     OPENJEV_MLX_CACHE_LIMIT_GB=4 openjev serve
 ```
 
 The conversion downloads the checkpoint at its `v0.2` tag into the Hugging Face cache (8.4 GB),
-takes about 12 seconds and writes 2.4 GB ([Tools/jevk5/README.md](../Tools/jevk5/README.md));
-`convert.py --check <folder> --bits 4` checks a folder against the pinned digests. Once the
+takes under a minute and writes 4.5 GB ([Tools/jevk5/README.md](../Tools/jevk5/README.md));
+`convert.py --check <folder> --bits 8` checks a folder against the pinned digests. Once the
 conversion is published, the default `OPENJEV_JEVK5_MODEL` downloads it on first start into the
 Hugging Face cache at its pinned revision, as DiffusionGemma's checkpoint is, and the folder is
-not needed. An 8-bit conversion (`--bits 8`, 4.5 GB) reads the same way.
+not needed.
 
-<<JEVK5_RUNTIME>>
+The 8-bit conversion is the default because it gives JevK5's own answers: on JevBench's 231 items
+the author's published top answer on 230, and the same answers on every item whose top two the
+author's run puts at least 0.05 apart. The 4-bit conversion (`--bits 4`, 2.4 GB) reads the same
+way in less memory, changes the top answer on 22 items, 18 of them clear ones, and loses about
+five points of accuracy on TypeSafe's rows ([quality.md](quality.md#jevk5)).
+
+On an M3 Max the server loads the 8-bit conversion in about 2 seconds and holds 6.0 GB once it
+has warmed up. A question costs one forward pass over its prompt, so its time grows with the
+state: in the recorded JevBench runs, whose prompts have 209 tokens at the median and up to 4,033,
+a question took 0.17 s at the median and 2.3 s at the 95th percentile, and on TypeSafe's rows,
+2,646 tokens at the median and up to 11,130, 2.8 s and 13.5 s, the longest 18 s. Those runs were
+not taken under a benchmark's protocol: a repeat ran 36% slower at the median. With
+`OPENJEV_MLX_CACHE_LIMIT_GB=4` the footprint stayed between 8.5 and 10.7 GB in service, 11.0 GB at
+its peak. MLX does not fuse attention over Qwen3.5's 256-wide heads, so a prompt over 2,048 tokens
+is read in chunks of 2,048, which bounds its memory, not its time.
 
 A pass reads at most 16,383 prompt tokens: a longer one is refused with upstream's 400 (`the model
 rejected this request: This model's maximum context length is 16384 tokens. ...`), never cut, and

@@ -43,7 +43,7 @@ out or set to the empty string with the same effect.
 | `OPENJEV_ENCODER_MODELS` | unset | encoders | This port's: a folder of converted Core ML packages, used instead of downloading them (D-033). |
 | `OPENJEV_VERDICT_MODEL` | `heman10x/rlcd-modernbert-151m` | verdict | Read as upstream reads it, with no effect: the backend loads the package and the checkpoint revision its manifest pins (D-033). |
 | `OPENJEV_LAYA_MODEL` | `convaiinnovations/laya-typed-decisions` | laya | Read as upstream reads it, with no effect, for the same reason. |
-| `OPENJEV_JEVK5_MODEL` | `Algorythm-Canada/jevk5-0.2-mlx-4bit` | jevk5 | This port's: the JevK5 checkpoint converted to MLX, a directory (`Tools/jevk5/convert.py` writes one) or a Hugging Face repository with an optional `@revision`. A conversion's repository loads its pinned revision; the default is refused until the conversion is published (D-051). Upstream reads its vLLM server's `OPENJEV_MODEL` instead. |
+| `OPENJEV_JEVK5_MODEL` | `Algorythm-Canada/jevk5-0.2-mlx-8bit` | jevk5 | This port's: the JevK5 checkpoint converted to MLX, a directory (`Tools/jevk5/convert.py` writes one) or a Hugging Face repository with an optional `@revision`. A conversion's repository loads its pinned revision; the default is refused until the conversion is published (D-052). Upstream reads its vLLM server's `OPENJEV_MODEL` instead. |
 | `OPENJEV_DEVICE` | unset | encoders | Upstream's PyTorch device. Read, with no effect: Core ML picks the compute units for the platform (D-011). |
 | `OPENJEV_GEN_MAX_INFLIGHT` | `8` | none yet | Generations in flight at once. Read and checked; text generation arrives with issue #53. |
 | `OPENJEV_GEN_MAX_QUEUE` | `32` | none yet | Generations waiting before a 529. No effect until issue #53. |

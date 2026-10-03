@@ -187,7 +187,7 @@ def swift_server(backend: str, binary: Path, encoder_models: str | None,
     if backend == "jevk5":
         folder = Path(jevk5_model or JEVK5_MODEL).expanduser()
         settings["OPENJEV_JEVK5_MODEL"] = str(folder)
-        info["runtime"] = "MLX on the GPU, Qwen3.5 through mlx-swift-lm (D-051)"
+        info["runtime"] = "MLX on the GPU, Qwen3.5 through mlx-swift-lm (D-052)"
         info["model_source"] = f"OPENJEV_JEVK5_MODEL={harness.display_path(folder)}"
         # the folder must be one of the pinned conversions, as convert.py checks: 4-bit, 8-bit, or
         # the unquantized reference that tells quantization from the rest in a comparison

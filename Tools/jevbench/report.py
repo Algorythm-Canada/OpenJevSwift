@@ -96,7 +96,7 @@ def author_tables(docs: list) -> list:
 # table of conversions reads these.
 CONVERSIONS = "jevk5-conversions"
 # A conversion's top answer is expected to be the author's where the author's top two are at least
-# this far apart; closer is a near-tie, which bfloat16 rounding alone can turn (D-051).
+# this far apart; closer is a near-tie, which bfloat16 rounding alone can turn (D-052).
 CLEAR_MARGIN = 0.05
 
 
@@ -446,14 +446,14 @@ def render(results: Path, cache: Path) -> str:
         out += ["### Swift against the model author's published run",
                 "JevK5's reference is its author's own published v0.2 run, as it is upstream's: "
                 "upstream's server reads JevK5's letters from vLLM, which needs an NVIDIA GPU "
-                "(D-051). Equal input tokens mean equal prompts."] + author
+                "(D-052). Equal input tokens mean equal prompts."] + author
     conversions = conversion_tables(docs, harness.load_docs(conversion_files(results), cache))
     if conversions:
         out += ["### JevK5's conversions against the author's run",
                 "The same runs with each MLX conversion of JevK5 v0.2 that Tools/jevk5/convert.py "
                 f"pins, from {CONVERSIONS}/: the default is the main result files' conversion, "
                 "and bfloat16 is the unquantized weights. A near-tie, the author's top two less "
-                f"than {CLEAR_MARGIN} apart, can turn on bfloat16 rounding alone (D-051)."]
+                f"than {CLEAR_MARGIN} apart, can turn on bfloat16 rounding alone (D-052)."]
         out += conversions
     published = published_tables(docs, cache)
     if published:

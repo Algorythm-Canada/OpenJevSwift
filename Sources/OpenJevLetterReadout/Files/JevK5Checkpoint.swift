@@ -5,7 +5,7 @@ import OpenJevDiffusionGemma
 /// meant to be published as, its pinned revision once it is, and the size and SHA-256 of every
 /// file.
 ///
-/// The conversions are not published yet (D-051): until the maintainer creates the repositories
+/// The conversions are not published yet (D-052): until the maintainer creates the repositories
 /// and pins their commits here, ``revision`` is `nil`, a download of the default is refused
 /// before any network access, and `OPENJEV_JEVK5_MODEL` names a local folder the script wrote.
 /// The digests are the script's output, which two runs reproduced byte for byte, so a local
@@ -83,7 +83,7 @@ public struct JevK5Checkpoint: Sendable, Hashable {
             sha256: "9cf04fffe3d8c3b85e439fb35c7acad0761ab51c422a8c4256d9f887c3a0be7d"),
     ]
 
-    /// The 4-bit conversion, 2.37 GB of weights, the default (`OPENJEV_JEVK5_MODEL`).
+    /// The 4-bit conversion, 2.37 GB of weights, iOS's ``platformDefault``.
     public static let fourBit = JevK5Checkpoint(
         model: "jevk5-0.2", bits: 4, repository: "Algorythm-Canada/jevk5-0.2-mlx-4bit",
         revision: nil, sourceRepository: source.repository, sourceRevision: source.revision,
@@ -102,7 +102,8 @@ public struct JevK5Checkpoint: Sendable, Hashable {
                 sha256: "f47a8c0ec8aa8d28fde00373f4f6ada5e203ca47c3d73a3133631983d1c37bfc"),
         ])
 
-    /// The 8-bit conversion, 4.47 GB of weights.
+    /// The 8-bit conversion, 4.47 GB of weights: the server's default (`OPENJEV_JEVK5_MODEL`) and
+    /// macOS's ``platformDefault``.
     public static let eightBit = JevK5Checkpoint(
         model: "jevk5-0.2", bits: 8, repository: "Algorythm-Canada/jevk5-0.2-mlx-8bit",
         revision: nil, sourceRepository: source.repository, sourceRevision: source.revision,
@@ -124,7 +125,7 @@ public struct JevK5Checkpoint: Sendable, Hashable {
     /// Both conversions.
     public static let all = [fourBit, eightBit]
 
-    /// The conversion this platform loads by default (D-051): ``eightBit`` on macOS, which gives
+    /// The conversion this platform loads by default (D-052): ``eightBit`` on macOS, which gives
     /// the author's published top answer on 230 of JevBench's 231 items where ``fourBit`` gives it
     /// on 209, and ``fourBit`` on iOS, half the size, where memory is the limit. Neither has run
     /// on an iPhone yet.
