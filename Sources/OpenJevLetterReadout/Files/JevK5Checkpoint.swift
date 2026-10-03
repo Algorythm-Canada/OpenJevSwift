@@ -89,8 +89,8 @@ public struct JevK5Checkpoint: Sendable, Hashable {
         revision: nil, sourceRepository: source.repository, sourceRevision: source.revision,
         files: sharedFiles + [
             File(
-                name: "README.md", bytes: 2122,
-                sha256: "c388ccb6857189cc29d37af3dca7cc710aa22db0d23581302f7293766ff9bccd"),
+                name: "README.md", bytes: 2190,
+                sha256: "281143de695eff0af6408c8560425cfdd88ae1e24540a5817c650821d2dd860b"),
             File(
                 name: "config.json", bytes: 2430,
                 sha256: "35fb2a84659b33e4d54af1a9d6cc3c179e40c95f3af00b3dc7dc9135d358ca9a"),
@@ -109,8 +109,8 @@ public struct JevK5Checkpoint: Sendable, Hashable {
         revision: nil, sourceRepository: source.repository, sourceRevision: source.revision,
         files: sharedFiles + [
             File(
-                name: "README.md", bytes: 2122,
-                sha256: "382e564d06f9326d59204fb1a17c2daf625135416a80c808af4f2b9c80b49e01"),
+                name: "README.md", bytes: 2190,
+                sha256: "42cddae7f1c370442433c5a939f8c4a6f776c91de15c1b2986342a3b42f5df07"),
             File(
                 name: "config.json", bytes: 2430,
                 sha256: "8ac5be312381d497966eca8877c0fea5d7f3760461a3713e026d838aef050072"),

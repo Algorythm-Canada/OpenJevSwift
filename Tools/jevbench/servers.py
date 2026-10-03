@@ -41,7 +41,7 @@ DEFAULT_PYTHON = harness.HERE / ".venv" / "bin" / "python"
 
 # backend -> the model it serves
 MODELS = {"verdict": "verdict-1.4", "laya": "laya-1.0", "mlx": "openjev-0.1", "jevk5": "jevk5-0.2"}
-# The JevK5 conversion the Swift server reads by default: Tools/jevk5/convert.py --bits 4's folder.
+# The JevK5 conversion the Swift server reads by default: Tools/jevk5/convert.py --bits 8's folder.
 JEVK5_MODEL = Path.home() / "Library" / "Caches" / "OpenJevSwift" / "jevk5" / "jevk5-0.2-mlx-8bit"
 # The checkpoints upstream loads, at the revisions Fixtures/encoders and THIRD_PARTY.md pin, and
 # the files of each its loader reads (Tools/encoders/common.py).

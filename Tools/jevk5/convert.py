@@ -21,8 +21,9 @@ under `qwen3_5_text` before converting. The checkpoint stores its 426 tensors un
 `model.language_model.`, the multimodal model's prefix, although it declares
 `Qwen3_5ForCausalLM`; the registered model renames that prefix to `model.` before mlx-lm's own
 sanitizing (the conv1d layout and the RMSNorm offset), as transformers' key mapping does. The
-output keeps the checkpoint's `config.json` (plus mlx-lm's quantization entries) and the text
-model's weight names, which is what mlx-swift-lm loads for that model type. Quantization is
+output keeps the checkpoint's `config.json` as mlx-lm writes it back (indented its own way, with
+`rope_parameters.rope_type` named `type` and the quantization entries added) and the text model's
+weight names, which is what mlx-swift-lm loads for that model type. Quantization is
 mlx-lm's default affine scheme with a group size of 64, at 4 or 8 bits; `--bits 16` keeps the
 checkpoint's bfloat16, a reference for telling quantization from the rest in a comparison, not a
 conversion meant for publishing.
@@ -90,7 +91,7 @@ OUTPUTS: dict[int, dict[str, tuple[int, str]]] = {
     4: {
         "LICENSE": (11358, "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"),
         "NOTICE": (1401, "c6dc9c346b2b516da42b80902916bb6f07b90139d7aa7543420f0674474f31d7"),
-        "README.md": (2122, "c388ccb6857189cc29d37af3dca7cc710aa22db0d23581302f7293766ff9bccd"),
+        "README.md": (2190, "281143de695eff0af6408c8560425cfdd88ae1e24540a5817c650821d2dd860b"),
         "chat_template.jinja": (7756, "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715"),
         "config.json": (2430, "35fb2a84659b33e4d54af1a9d6cc3c179e40c95f3af00b3dc7dc9135d358ca9a"),
         "generation_config.json": (116, "62153eb6c69f2e1f426beaa8002b7186437e949c7588167085df14e10e9c0a73"),
@@ -103,7 +104,7 @@ OUTPUTS: dict[int, dict[str, tuple[int, str]]] = {
     8: {
         "LICENSE": (11358, "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"),
         "NOTICE": (1401, "c6dc9c346b2b516da42b80902916bb6f07b90139d7aa7543420f0674474f31d7"),
-        "README.md": (2122, "382e564d06f9326d59204fb1a17c2daf625135416a80c808af4f2b9c80b49e01"),
+        "README.md": (2190, "42cddae7f1c370442433c5a939f8c4a6f776c91de15c1b2986342a3b42f5df07"),
         "chat_template.jinja": (7756, "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715"),
         "config.json": (2430, "8ac5be312381d497966eca8877c0fea5d7f3760461a3713e026d838aef050072"),
         "generation_config.json": (116, "62153eb6c69f2e1f426beaa8002b7186437e949c7588167085df14e10e9c0a73"),
@@ -116,7 +117,7 @@ OUTPUTS: dict[int, dict[str, tuple[int, str]]] = {
     16: {
         "LICENSE": (11358, "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"),
         "NOTICE": (1401, "c6dc9c346b2b516da42b80902916bb6f07b90139d7aa7543420f0674474f31d7"),
-        "README.md": (2047, "e2bd2a329c64bf93699264cdc6c59359cf95062d35ac82d1c4e9e373f0c04d29"),
+        "README.md": (2121, "83edb60bdd0f4fe235c19da871c92974b576deda22d43053774157dbe48802ff"),
         "chat_template.jinja": (7756, "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715"),
         "config.json": (2225, "d7d5cfcd5e6137a3efd09df123510d4429e3ffb26e39259da83fb66633d6483d"),
         "generation_config.json": (116, "62153eb6c69f2e1f426beaa8002b7186437e949c7588167085df14e10e9c0a73"),
@@ -241,12 +242,14 @@ def readme(bits: int, versions: dict[str, str]) -> str:
     if bits == 16:
         title, form = "bfloat16", "without quantization, in bfloat16"
         weights = (f"- The weights were converted to MLX unquantized by mlx-lm {versions['mlx-lm']}"
-                   f" with\n  MLX {versions['mlx']}. `config.json` is the source's.")
+                   f" with\n  MLX {versions['mlx']}. `config.json` is the source's as mlx-lm writes"
+                   " it back, with\n  `rope_parameters.rope_type` named `type`.")
     else:
         title, form = f"{bits}-bit", f"with {bits}-bit affine quantization (group\nsize {GROUP_SIZE})"
         weights = (f"- The weights were quantized to {bits} bits by mlx-lm {versions['mlx-lm']} with"
-                   f" MLX\n  {versions['mlx']}. `config.json` is the source's with mlx-lm's "
-                   "`quantization` entries added.")
+                   f" MLX\n  {versions['mlx']}. `config.json` is the source's as mlx-lm writes it "
+                   "back, with\n  `rope_parameters.rope_type` named `type` and the `quantization` "
+                   "entries added.")
     return f"""---
 license: apache-2.0
 base_model: {SOURCE_REPO}

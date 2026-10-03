@@ -38,18 +38,23 @@ extension JevK5Backend {
         cache: HubCacheLocation = .standard, token: String? = nil, cacheLimitGB: Double? = nil,
         resolver: ModelResolver = ModelResolver()
     ) async throws -> JevK5Backend {
+        var cacheLimitBytes: Int?
         if let cacheLimitGB {
             let bytes = cacheLimitGB * 1024 * 1024 * 1024
             guard cacheLimitGB.isFinite, cacheLimitGB >= 0, bytes < Double(Int.max) else {
                 throw JevK5LoadError.invalidCacheLimit(cacheLimitGB)
             }
-            Memory.cacheLimit = Int(bytes)
+            cacheLimitBytes = Int(bytes)
         }
         let directory = try await JevK5ModelFiles.resolve(
             source, cache: cache, token: token, resolver: resolver)
         let calibration = try JevK5Calibration(
             contentsOf: directory.appendingPathComponent("jevk5_config.json"))
         let tokenizer = try await JevK5Tokenizer.load(directory: directory)
+        // The pool is the process's, so a load that fails before the weights leaves it alone.
+        if let cacheLimitBytes {
+            Memory.cacheLimit = cacheLimitBytes
+        }
         let model = try await Qwen35LetterReadoutModel.load(directory: directory)
         return try JevK5Backend(
             model: model, tokenizer: tokenizer, temperature: calibration.temperature)

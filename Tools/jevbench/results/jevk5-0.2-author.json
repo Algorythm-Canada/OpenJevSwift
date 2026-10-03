@@ -29,17 +29,18 @@
  "server": {
   "name": "author",
   "implementation": "allebee/jevk5",
-  "version": "0.2.2",
-  "commit": "0571ef373722dd10cace82c81580d7b675fe6b53",
-  "runtime": "the jevk5 package's own runtime (JevK5 0.2.2: transformers, the bf16 v0.2 weights, CUDA graphs) through JevBench's runner, as the author published it",
-  "source": "allebee/jevk5@0571ef3:results/public231/jevk5-v0.2.jsonl",
+  "version": "0.2.0",
+  "commit": "85238d7be5527370c43206fe54cd752eb3134c1b",
+  "runtime": "the jevk5 package 0.2.0's in-process adapter, jevk5_direct (transformers, the bf16 weights of alibiserikbay/JevK5 at 3c67329, CUDA graphs), through JevBench's runner at 0caa1d0, as the author published it",
+  "checkpoint": "alibiserikbay/JevK5@3c673298eb7f2dc7cb98019262c55b1fac01a0bc",
+  "source": "allebee/jevk5@85238d7:results/public231/jevk5-v0.2.jsonl",
   "source_bytes": 221596,
   "source_sha256": "571872b233bb48d26ebd735b4573aa8f28bd4828471bb89b4b9e1651dcb2e265",
   "models": null
  },
  "client": {
   "harness": "Tools/jevbench/harness.py author-run",
-  "harness_sha256": "2261a32439ffa59d28f6ac34da7e1b88b0955be10c02abcc391e9819d8b6fb4f",
+  "harness_sha256": "a33106a6e96794149fc8365282c04d3bfb7a920db0174b047c03a42659b44c60",
   "python": "3.12.2",
   "vendored": {
    "jevbench/LICENSE": "3e5beed774bb0bcbfb2fcf24ba9554212c6ae112937d308040989465ab0c5784",
@@ -56,7 +57,7 @@
   }
  },
  "hardware": {
-  "platform": "not recorded by the published run"
+  "platform": "one NVIDIA H100, batch 1 (the author's bench/SUBMISSION.md)"
  },
  "published_row": null,
  "started_utc": "2026-09-22T18:50:18+00:00",

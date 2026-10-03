@@ -143,11 +143,13 @@ struct JevK5BackendTests {
     @Test("When several questions fail, the first in question order is reported")
     func firstErrorInQuestionOrder() async throws {
         // Prompts are numbered as they are tokenized, which the concurrent questions do in any
-        // order; every question fails here, each with its own prompt's number.
+        // order; every question fails here, each with its own prompt's number. The first
+        // question is tokenized last, so its pass fails last: the batch must still report its
+        // error, not the first one to happen.
         struct Numbered: Error, Equatable { var prompt: Int }
         let failures = Dictionary(uniqueKeysWithValues: (1...4).map { ($0, Numbered(prompt: $0)) })
         let model = StubLetterModel(failures: failures)
-        let tokenizer = StubLetterTokenizer()
+        let tokenizer = StubLetterTokenizer(slowText: "question 0", slowSeconds: 0.3)
         let backend = try Self.backend(model: model, tokenizer: tokenizer)
         var questions = OrderedMap<Question>()
         for index in 0..<4 {
@@ -161,8 +163,9 @@ struct JevK5BackendTests {
                 state: .string("state"), stateText: "state", questions: schema.questions)
             Issue.record("the batch did not fail")
         } catch let error as Numbered {
-            // The first question's prompt holds "question 0".
+            // The first question's prompt holds "question 0", and it was the last to fail.
             let first = try #require(tokenizer.prompts.firstIndex { $0.contains("question 0") })
+            #expect(first == tokenizer.prompts.count - 1)
             #expect(error.prompt == first + 1)
         }
     }

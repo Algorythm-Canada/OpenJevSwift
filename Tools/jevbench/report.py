@@ -118,8 +118,9 @@ def conversion_tables(docs: list, others: list) -> list:
             return [doc for doc in group if doc["server"]["name"] == "swift"
                     and doc["model"] == model and doc["dataset"]["name"] == name]
 
+        # an invalid answer has no top answer to agree with, as compare_docs counts it
         clear = {item["id"] for item in author["items"] if item["status"] == "answered"
-                 and harness.top_two(item["probabilities"])[2] >= CLEAR_MARGIN}
+                 and item.get("valid") and harness.top_two(item["probabilities"])[2] >= CLEAR_MARGIN}
         typesafe = {doc["server"].get("conversion"): doc
                     for doc in runs(docs, "typesafe102") + runs(others, "typesafe102")}
         others_here = sorted(runs(others, dataset),
@@ -129,7 +130,8 @@ def conversion_tables(docs: list, others: list) -> list:
         for doc in [default] + others_here:
             result = harness.compare_docs(doc, author)
             overall, tokens = result["overall"], result["input_tokens"]
-            answered = {item["id"] for item in doc["items"] if item["status"] == "answered"}
+            answered = {item["id"] for item in doc["items"]
+                        if item["status"] == "answered" and item.get("valid")}
             judged = clear & answered
             missed = sum(1 for entry in result["disagreements"] if entry["id"] in judged)
             name = doc["server"].get("conversion") or "not recorded"

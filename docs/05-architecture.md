@@ -486,7 +486,7 @@ QuestionReadBackendProvider { settings in
 ```
 
 `OPENJEV_JEVK5_MODEL` (this port's setting) names a converted folder or a Hub repository; a
-conversion's repository takes its pinned revision, and the default, the 4-bit conversion's
+conversion's repository takes its pinned revision, and the default, the 8-bit conversion's
 repository, is refused before any download until it is published (D-052). The loader reads the
 calibration temperature from `jevk5_config.json`, checks that the 16 letters are single tokens and
 caps MLX's pool with `OPENJEV_MLX_CACHE_LIMIT_GB`. Without MLX, `jevk5` is a known backend that

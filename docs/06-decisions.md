@@ -2789,9 +2789,11 @@ Decision.
    `qwen3_5_text`, and the checkpoint stores its tensors under `model.language_model.`, the
    multimodal model's prefix, although it declares `Qwen3_5ForCausalLM`; the script registers
    mlx-lm's Qwen3.5 text model under that type with the prefix mapped, so the output keeps the model
-   type and the weight names mlx-swift-lm's `Qwen35TextModel` loads. The tokenizer files, the chat
-   template, `generation_config.json` and `jevk5_config.json` are copied unchanged over what
-   transformers wrote; a model card, JevK5's `LICENSE` and its `NOTICE` are added. Two conversions
+   type and the weight names mlx-swift-lm's `Qwen35TextModel` loads. `config.json` is the source's
+   as mlx-lm writes it back, indented its own way, with `rope_parameters.rope_type` named `type`
+   and the quantization entries added. The tokenizer files, the chat template,
+   `generation_config.json` and `jevk5_config.json` are copied unchanged over what transformers
+   wrote; a model card, JevK5's `LICENSE` and its `NOTICE` are added. Two conversions
    gave identical bytes at each size, and the digests are pinned in the script and, for the two
    quantized ones, in `JevK5Checkpoint`. `--bits 16` writes the unquantized bfloat16 weights, a
    reference for item 4's measurements that is pinned in the script only and not meant for
@@ -2895,8 +2897,11 @@ Decision.
     `knockout_temperature`, v0.3's key, is ignored, as jevk5 0.2.2 and upstream ignore it.
 11. **Parity is against the author's published run.** Upstream's server for `jevk5` needs vLLM on
     an NVIDIA GPU. As upstream did, the Swift server's JevBench run is compared with the `jevk5`
-    package's published v0.2 run (`results/public231/jevk5-v0.2.jsonl` at `0571ef3`), which
-    `harness.py author-run` turns into a result file; item 4 has the figures. The answers are
+    package's published v0.2 run (`results/public231/jevk5-v0.2.jsonl`, added by the v0.2.0 commit
+    `85238d7`), which `harness.py author-run` turns into a result file; item 4 has the figures.
+    The author's `bench/SUBMISSION.md` there says the run used the package's in-process adapter,
+    transformers and the bf16 weights at checkpoint revision `3c67329`, whose files are the
+    `v0.2` tag's, byte for byte, on one H100, so the reference is the model this port converts. The answers are
     deterministic: the 8-bit run, repeated in a new process, gave all 231 bit for bit.
 12. **The live tests hold the Swift model to mlx-lm on the same conversion.** `Fixtures/jevk5`
     records mlx-lm's letter logits for every pass on the 4-bit conversion; with

@@ -42,6 +42,19 @@ struct JevK5ReadoutTests {
         }
     }
 
+    @Test("A reader that answers another number of options than it was asked is refused")
+    func readerCountChecked() async throws {
+        // One pass up to 16 options, and each group of a knockout beyond.
+        for count in [2, 40] {
+            let texts = (0..<count).map { "option \($0)" }
+            await #expect(throws: JevK5ModelError.self) {
+                _ = try await JevK5Readout.spread(
+                    { texts in Array(repeating: 1 / Double(texts.count), count: texts.count - 1) },
+                    texts: texts)
+            }
+        }
+    }
+
     @Test("The corpus through the engine gives upstream's answers bit for bit, and its billing")
     func corpusThroughTheEngine() async throws {
         let reference = try JevK5Fixtures.reference()

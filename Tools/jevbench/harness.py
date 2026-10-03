@@ -155,13 +155,19 @@ PUBLISHED_ROWS = {
 # compared its vLLM path with it (upstream's JevK5 server reads its letters from vLLM, which needs an
 # NVIDIA GPU; D-052). `author-run` turns the file into a result file whose server is AUTHOR_SERVER.
 AUTHOR_SERVER = "author"
+# The run is the file as the commit that added it holds it, made by that commit's code, as the
+# author's bench/SUBMISSION.md there describes: the package's in-process adapter, jevk5_direct,
+# no server, on the checkpoint revision it names, whose files are the v0.2 tag's (D-052).
 AUTHOR_RUNS = {
     "jevk5-0.2": {
-        "repo": "allebee/jevk5", "commit": "0571ef373722dd10cace82c81580d7b675fe6b53",
-        "version": "0.2.2", "path": "results/public231/jevk5-v0.2.jsonl", "bytes": 221596,
+        "repo": "allebee/jevk5", "commit": "85238d7be5527370c43206fe54cd752eb3134c1b",
+        "version": "0.2.0", "path": "results/public231/jevk5-v0.2.jsonl", "bytes": 221596,
         "sha256": "571872b233bb48d26ebd735b4573aa8f28bd4828471bb89b4b9e1651dcb2e265",
-        "runtime": "the jevk5 package's own runtime (JevK5 0.2.2: transformers, the bf16 v0.2 "
-                   "weights, CUDA graphs) through JevBench's runner, as the author published it",
+        "checkpoint": "alibiserikbay/JevK5@3c673298eb7f2dc7cb98019262c55b1fac01a0bc",
+        "runtime": "the jevk5 package 0.2.0's in-process adapter, jevk5_direct (transformers, "
+                   "the bf16 weights of alibiserikbay/JevK5 at 3c67329, CUDA graphs), through "
+                   "JevBench's runner at 0caa1d0, as the author published it",
+        "hardware": "one NVIDIA H100, batch 1 (the author's bench/SUBMISSION.md)",
     },
 }
 
@@ -783,8 +789,10 @@ def author_doc(dataset: Dataset, rows: list, model: str, run: dict) -> dict:
 
     Each item takes the distribution the author's server returned (`probs_as_returned`) and its
     `usage`, scored again with JevBench's score_task as this harness scores its own runs; the
-    published record's own outcome is kept beside it. The run's requests were JevBench's typesafe
-    adapter's, as this harness sends them, so the token counts compare."""
+    published record's own outcome is kept beside it. The run's prompts were built in the author's
+    process from JevBench's tasks, not sent to a server, so a token count compares with this
+    harness's runs only as far as the prompts are the same; equal counts on an item show that
+    they are."""
     by_id = {row["task_id"]: row for row in rows}
     items = []
     for task in dataset.tasks:
@@ -824,12 +832,13 @@ def author_doc(dataset: Dataset, rows: list, model: str, run: dict) -> dict:
         "model": model,
         "server": {"name": AUTHOR_SERVER, "implementation": run["repo"],
                    "version": run["version"], "commit": run["commit"], "runtime": run["runtime"],
+                   "checkpoint": run.get("checkpoint"),
                    "source": f"{run['repo']}@{run['commit'][:7]}:{run['path']}",
                    "source_bytes": run["bytes"], "source_sha256": run["sha256"], "models": None},
         "client": {"harness": "Tools/jevbench/harness.py author-run",
                    "harness_sha256": sha256_file(Path(__file__)),
                    "python": platform.python_version(), "vendored": check_vendored()},
-        "hardware": {"platform": "not recorded by the published run"},
+        "hardware": {"platform": run.get("hardware") or "not recorded by the published run"},
         "published_row": None,
         "started_utc": started,
         "duration_s": None,

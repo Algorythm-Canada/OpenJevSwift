@@ -52,7 +52,10 @@ public enum JevK5Readout {
 
     /// `groups(n, count)`: `count` contiguous runs covering `0..<n`, their sizes differing by at
     /// most one, the longer ones first.
+    ///
+    /// - Precondition: `groupCount` is positive, where the package raises `ZeroDivisionError`.
     public static func groups(_ count: Int, into groupCount: Int) -> [Range<Int>] {
+        precondition(groupCount > 0, "groups(_:into:) needs at least one group")
         let base = count / groupCount
         let extra = count % groupCount
         var runs: [Range<Int>] = []
@@ -77,7 +80,7 @@ public enum JevK5Readout {
         _ read: Reader, texts: [String], method: Method = .knockout, temperature: Double? = nil
     ) async throws -> [Double] {
         if texts.count <= JevK5Prompt.letters.count {
-            return try await read(texts)
+            return try await answer(read, texts)
         }
         var probabilities = try await combine(read, texts: texts, method: method)
         let temperature = temperature ?? method.temperature
@@ -93,7 +96,7 @@ public enum JevK5Readout {
     /// `_combine`: one pass up to 16 options, else the method's weights normalised.
     static func combine(_ read: Reader, texts: [String], method: Method) async throws -> [Double] {
         if texts.count <= JevK5Prompt.letters.count {
-            return try await read(texts)
+            return try await answer(read, texts)
         }
         let weights: [Double]
         switch method {
@@ -104,6 +107,18 @@ public enum JevK5Readout {
         }
         let total = pythonSum(weights)
         return weights.map { $0 / total }
+    }
+
+    /// `read(texts)`, refused with ``JevK5ModelError`` when the reader answers another number of
+    /// options than it was asked, which the package's `zip` would cut short and an index here
+    /// would trap on.
+    static func answer(_ read: Reader, _ texts: [String]) async throws -> [Double] {
+        let probabilities = try await read(texts)
+        guard probabilities.count == texts.count else {
+            throw JevK5ModelError(
+                "the reader answered \(probabilities.count) options of \(texts.count)")
+        }
+        return probabilities
     }
 
     /// The number of groups of at most 16 that `count` options need, `-(-count // 16)`.
@@ -123,7 +138,7 @@ public enum JevK5Readout {
         let runs = groups(texts.count, into: groupCount(texts.count))
         var inner: [[Double]] = []
         for run in runs {
-            inner.append(try await read(Array(texts[run])))
+            inner.append(try await answer(read, Array(texts[run])))
         }
         inner = inner.map { probabilities in
             let total = pythonSum(probabilities)
@@ -203,8 +218,8 @@ public enum JevK5Readout {
     static func tree(_ read: Reader, texts: [String]) async throws -> [Double] {
         let runs = groups(
             texts.count, into: min(JevK5Prompt.letters.count, groupCount(texts.count)))
-        let outer = try await read(
-            runs.map { run in "One of: " + texts[run].joined(separator: "; ") })
+        let outer = try await answer(
+            read, runs.map { run in "One of: " + texts[run].joined(separator: "; ") })
         var weights: [Double] = []
         for (run, share) in zip(runs, outer) {
             let inner = try await combine(read, texts: Array(texts[run]), method: .tree)

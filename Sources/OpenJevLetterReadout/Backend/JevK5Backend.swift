@@ -203,14 +203,23 @@ public actor JevK5Backend: QuestionReadBackend {
                     "\(modelInfo.name) has no read of question \(question.key.pythonRepr)")
             }
             let read = try outcome.get()
+            // Each read names the question it read, so a read paired with the wrong index fails
+            // the batch instead of answering another question.
+            guard read.key == question.key else {
+                throw JevK5ModelError(
+                    "\(modelInfo.name) paired the read of question \(read.key.pythonRepr) with "
+                        + "question \(question.key.pythonRepr)")
+            }
             probabilities.append(read.probabilities)
             tokens += read.tokens
         }
         return BatchReadResult(probabilities: probabilities, inputTokens: tokens)
     }
 
-    /// One question's read: its distribution and the prompt tokens of its passes.
+    /// One question's read: the question's key, its distribution and the prompt tokens of its
+    /// passes.
     struct QuestionRead: Sendable {
+        var key: String
         var probabilities: [Double]
         var tokens: Int
     }
@@ -232,7 +241,7 @@ public actor JevK5Backend: QuestionReadBackend {
                 return JevK5Readout.letterProbabilities(
                     logits: logits.map(Double.init), temperature: self.temperature)
             }, texts: texts, method: method)
-        return QuestionRead(probabilities: probabilities, tokens: tokens)
+        return QuestionRead(key: question.key, probabilities: probabilities, tokens: tokens)
     }
 
     /// The prompt's ids, or vLLM's refusal of it: the character bound, checked before the text

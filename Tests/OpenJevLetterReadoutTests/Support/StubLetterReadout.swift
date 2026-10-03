@@ -73,13 +73,19 @@ final class StubLetterModel: LetterReadoutModel, @unchecked Sendable {
 final class StubLetterTokenizer: LetterReadoutTokenizing, @unchecked Sendable {
     let promptTokens: Int
     let maxCharactersPerToken = 128
+    /// A prompt holding this text is tokenized after a pause of `slowSeconds`, so its question
+    /// reaches the model after the others.
+    let slowText: String?
+    let slowSeconds: Double
 
     // Guarded by `lock`.
     private let lock = NSLock()
     private var recorded: [String] = []
 
-    init(promptTokens: Int = 100) {
+    init(promptTokens: Int = 100, slowText: String? = nil, slowSeconds: Double = 0) {
         self.promptTokens = promptTokens
+        self.slowText = slowText
+        self.slowSeconds = slowSeconds
     }
 
     /// The prompts, in the order they were tokenized.
@@ -88,6 +94,9 @@ final class StubLetterTokenizer: LetterReadoutTokenizing, @unchecked Sendable {
     func encode(_ text: String) -> [Int] {
         if JevK5Prompt.letters.contains(text), let scalar = text.unicodeScalars.first {
             return [1000 + Int(scalar.value)]
+        }
+        if let slowText, text.contains(slowText) {
+            Thread.sleep(forTimeInterval: slowSeconds)
         }
         let number = lock.withLock {
             recorded.append(text)

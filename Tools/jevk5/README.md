@@ -48,7 +48,7 @@ upstream does not serve. The output goes to `~/Library/Caches/OpenJevSwift/jevk5
 | File | Where it comes from |
 |---|---|
 | `model.safetensors`, `model.safetensors.index.json` | mlx-lm's affine quantization, group size 64: 2.37 GB at 4 bits (4.503 bits per weight), 4.47 GB at 8 bits (8.502); in bfloat16, 8.41 GB in `model-00001-of-00002.safetensors` and `model-00002-of-00002.safetensors` |
-| `config.json` | The source's, with mlx-lm's `quantization` entries (none in bfloat16) |
+| `config.json` | The source's as mlx-lm writes it back: indented its own way, `rope_parameters.rope_type` named `type`, and with its `quantization` entries (none in bfloat16) |
 | `tokenizer.json`, `tokenizer_config.json`, `chat_template.jinja`, `generation_config.json`, `jevk5_config.json` | The source's files, unchanged; `jevk5_config.json` holds the temperature, 1.532 |
 | `README.md` | The model card: the attribution, the license and how the files were made |
 | `LICENSE`, `NOTICE` | JevK5's own, from github.com/allebee/jevk5 at v0.2.2 |

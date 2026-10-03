@@ -30,9 +30,11 @@ The JevK5 runs: 2026-10-03 UTC, the same Mac. The Swift server is a release buil
 `db1d51b` left the package, reading JevK5 v0.2 with MLX on the GPU (D-052) from the pinned 8-bit
 conversion, the server's default, with `OPENJEV_MLX_CACHE_LIMIT_GB=4`; the same build ran JevBench
 again on the 4-bit conversion and on the unquantized bfloat16 weights. The reference is the `jevk5`
-package's published v0.2 run (`results/public231/jevk5-v0.2.jsonl` in allebee/jevk5 at `0571ef3`):
-transformers with the bfloat16 weights on the author's NVIDIA GPU, through JevBench's runner, which
-`harness.py author-run` turns into a result file. The author published no TypeSafe run.
+package's published v0.2 run (`results/public231/jevk5-v0.2.jsonl` in allebee/jevk5 at `85238d7`,
+the v0.2.0 commit that added it), which `harness.py author-run` turns into a result file. The
+author's `bench/SUBMISSION.md` there says how it was made: the package's in-process adapter with
+transformers and the bfloat16 weights of `alibiserikbay/JevK5` at `3c67329`, whose files are the
+`v0.2` tag's, through JevBench's runner on one H100. The author published no TypeSafe run.
 
 ## What the runs show
 
@@ -667,10 +669,10 @@ it was for upstream.
   0.499). On TypeSafe's rows it loses five points of accuracy to the other two. It is half the
   8-bit conversion's size, the one an iPhone app would load, and a Mac server should not.
 - **The author's 86.1%.** Upstream's README says its run and the author's both scored 86.6%, 200 of
-  the 231 items. The author's records score 199: two items are exact ties in the author's run,
-  `original-policy-03-1`, a noul at exactly 0.5, and `hard-sol-a-multi_hop-12`, and the author's
-  runner broke both against the expected answer. A scorer that breaks either tie the other way
-  counts 200. These tables score every run from its own records.
+  the 231 items. The author's records score 199. Two of the four exact ties in the author's run
+  tie the expected answer with another, `original-policy-03-1`, a noul at exactly 0.5, and
+  `hard-sol-a-multi_hop-12`, and the author's runner broke both against it. A scorer that breaks
+  either tie the other way counts 200. These tables score every run from its own records.
 - **What is recorded.** `jevk5-0.2-swift.json` and `typesafe102/jevk5-0.2-swift.json` are the
   8-bit conversion's runs, the server's default; `jevk5-conversions/4bit/` and
   `jevk5-conversions/bf16/` hold the other two, each with its TypeSafe run; `jevk5-0.2-author.json`
