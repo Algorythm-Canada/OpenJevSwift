@@ -8,7 +8,7 @@ findings are in [docs/spikes/vision-preprocessing.md](../../docs/spikes/vision-p
 
 ## The images
 
-Seven synthetic images, drawn by the generator and committed, each under 5 KB:
+Eleven synthetic images, drawn by the generator and committed, each under 5 KB:
 
 | File | Format | Size | What it exercises |
 |---|---|---|---|
@@ -19,6 +19,10 @@ Seven synthetic images, drawn by the generator and committed, each under 5 KB:
 | `small.png` | PNG, RGB noise | 32 by 20 | a 31 times enlargement |
 | `frames.gif` | GIF, two frames over one palette | 96 by 64 | the first frame only (the second differs) |
 | `pattern.webp` | WebP, lossless | 160 by 240 | WebP and a portrait image |
+| `transparent.gif` | GIF, one frame, transparent index 3 (white) | 80 by 56 | a transparent pixel keeps its palette colour, where ImageIO hands (0, 0, 0, 0) over |
+| `offset.gif` | GIF, a 72 by 40 frame at (30, 20), no transparency | 120 by 80 | the screen around the first frame is palette index 0 (orange) |
+| `local.gif` | GIF, a local colour table unlike the global one | 64 by 64 | the frame's own table is the one used |
+| `interlaced.gif` | GIF, interlaced | 72 by 60 | the four interlace passes land on their rows |
 
 Upstream's `tests/data/hotdog.jpg` (12,860 bytes, a baseline 4:2:0 JPEG, 384 by 188) is read from
 the pinned `Upstream/openjev` checkout and not committed; the fixture records its size and SHA-256.
@@ -34,8 +38,10 @@ Pillow 12.3.0) and no model.
 - `processor` is what the processor was built with: `max_soft_tokens` 280, `patch_size` 16,
   `pooling_kernel_size` 3, `rescale_factor`, `do_normalize` false, `resample` 3 (bicubic), the
   `size` it ignores, and the image tokens and their ids.
-- `budget_rule` runs the processor's resize on blank images of 27 sizes: the size it resizes each
-  to and the soft tokens that gives, or the error it raises (images 1 pixel high).
+- `budget_rule` runs the processor's resize on blank images of 34 sizes: the size it resizes each
+  to and the soft tokens that gives, or the error it raises (images 1 pixel high). The last three
+  rows show the fewest soft tokens the rule gives: 700 by 10 gets 280, 701 by 10 gets 140, and
+  1,190 by 17 gets 139.
 - `text_prompt` is `Engine.chat_prompt_ids` for the prompts' system and state texts, for
   comparison: an image prompt's system turn has one more token, a space.
 - `images` maps a name to the file, content type, byte count and SHA-256, PIL's format, mode and
@@ -48,6 +54,16 @@ Pillow 12.3.0) and no model.
   `Look at the photo.`: `ids`, `tokens`, `mm_token_type_ids`, `image_runs` (the `[start, end)`
   runs of soft image tokens), `soft_tokens` per image, and `pixel_values`, stacked with its shape
   or, for images of different sizes, a list of shapes.
+- `gif_cases` maps a name to a small GIF for the rest of Pillow's GIF reader: its byte count,
+  SHA-256 and the bytes in base64, and what upstream's `ImagePrompt.pil` (the decode in
+  `MlxRuntime._inputs`) makes of it, `decoded` (the size and the SHA-256 of the RGB bytes) or
+  `error`, the exception it raises. They cover a canvas grown to hold the frame, the transparent
+  index around an offset frame, indices past the colour table, tables that are the grey ramp
+  (global, local with a global table, local alone) and none at all, extensions and stray bytes
+  ahead of the image, an extension whose first sub-block is the terminator, a short interlaced
+  frame and LZW code size 12, and, raised on, an early end code, cut data, code size 13, a frame 0
+  pixels wide, a broken code, a short graphic control extension, a screen past the decompression
+  bomb limit and a file with no image.
 
 ## reads.json
 
@@ -85,12 +101,14 @@ runs the preprocessing and the reads twice, the second time in reverse order (an
 from an emptied prefill cache), and writes nothing unless the two passes agree bit for bit. It
 redraws the images every run, and they come out byte for byte the same. `--check` compares a run
 with the committed files instead of writing them. The full tensors, the decoded RGB as bytes and
-`pixel_values` as float32 (about 60 MB), go to `Tools/oracle/results/vision/`, which git ignores,
-and the run's timings to `Tools/oracle/results/vision_run.json`.
+`pixel_values` as float32 (about 90 MB), go to `Tools/oracle/results/vision/`, which git ignores,
+and the run's timings to `Tools/oracle/results/vision_run.json`. The committed record is a full
+run's, the reads included; pass `--run-out` with another path when redoing only the
+preprocessing, so the reads' record stays.
 
 ## Using it from Swift
 
 `Tests/OpenJevDiffusionGemmaTests/Vision/VisionPreprocessingTests.swift` compares the port with
-`preprocessing.json`: the synthetic images everywhere, the hot dog when the upstream checkout is
-present, every value when `Tools/oracle/results/vision/` is, and the prompts when the tokenizer
-files are. `reads.json` waits for the image runtime (#47).
+`preprocessing.json`: the synthetic images and the GIF cases everywhere, the hot dog when the
+upstream checkout is present, every value when `Tools/oracle/results/vision/` is, and the prompts
+when the tokenizer files are. `reads.json` waits for the image runtime (#47).
