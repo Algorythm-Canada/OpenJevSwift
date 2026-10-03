@@ -113,6 +113,20 @@ OUTPUTS: dict[int, dict[str, tuple[int, str]]] = {
         "tokenizer.json": (19989325, "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523"),
         "tokenizer_config.json": (1125, "9cf04fffe3d8c3b85e439fb35c7acad0761ab51c422a8c4256d9f887c3a0be7d"),
     },
+    16: {
+        "LICENSE": (11358, "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"),
+        "NOTICE": (1401, "c6dc9c346b2b516da42b80902916bb6f07b90139d7aa7543420f0674474f31d7"),
+        "README.md": (2047, "e2bd2a329c64bf93699264cdc6c59359cf95062d35ac82d1c4e9e373f0c04d29"),
+        "chat_template.jinja": (7756, "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715"),
+        "config.json": (2225, "d7d5cfcd5e6137a3efd09df123510d4429e3ffb26e39259da83fb66633d6483d"),
+        "generation_config.json": (116, "62153eb6c69f2e1f426beaa8002b7186437e949c7588167085df14e10e9c0a73"),
+        "jevk5_config.json": (23, "39d6574650b365c77425fc87ffd13ab389ea6508bc1e09ac1289a76faea62419"),
+        "model-00001-of-00002.safetensors": (5356480151, "00c61808fbf45a376d084d3fc01b3090af173ded162289abc5f58fdf68b82a8b"),
+        "model-00002-of-00002.safetensors": (3055071588, "52c27623938c41ba411e866925f128bd67c80e450de929bbb22858df7aa799c4"),
+        "model.safetensors.index.json": (37322, "8fa5319cd20676ac7ae8c7c66c3a1873ee2c3f6f0de28e832725c9741c7cb5f9"),
+        "tokenizer.json": (19989325, "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523"),
+        "tokenizer_config.json": (1125, "9cf04fffe3d8c3b85e439fb35c7acad0761ab51c422a8c4256d9f887c3a0be7d"),
+    },
 }
 DEFAULT_ROOT = Path.home() / "Library" / "Caches" / "OpenJevSwift" / "jevk5"
 # MLX keeps freed buffers for reuse up to its memory limit; a cap keeps the pool small, as the

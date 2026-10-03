@@ -189,9 +189,10 @@ def swift_server(backend: str, binary: Path, encoder_models: str | None,
         settings["OPENJEV_JEVK5_MODEL"] = str(folder)
         info["runtime"] = "MLX on the GPU, Qwen3.5 through mlx-swift-lm (D-051)"
         info["model_source"] = f"OPENJEV_JEVK5_MODEL={harness.display_path(folder)}"
-        # the folder must be one of the pinned conversions, 4-bit or 8-bit, as convert.py checks
+        # the folder must be one of the pinned conversions, as convert.py checks: 4-bit, 8-bit, or
+        # the unquantized reference that tells quantization from the rest in a comparison
         checks = {}
-        for bits in (4, 8):
+        for bits in (4, 8, 16):
             check = subprocess.run(
                 [sys.executable, str(ROOT / "Tools" / "jevk5" / "convert.py"), "--check",
                  str(folder), "--bits", str(bits)], capture_output=True, text=True, cwd=ROOT)
@@ -200,7 +201,8 @@ def swift_server(backend: str, binary: Path, encoder_models: str | None,
                             if lines else None)
             if check.returncode == 0:
                 info["model_check"] = checks[bits]
-                info["conversion"] = f"jevk5-0.2-mlx-{bits}bit"
+                info["conversion"] = ("jevk5-0.2-mlx-bf16" if bits == 16
+                                      else f"jevk5-0.2-mlx-{bits}bit")
                 break
         else:
             # the 4-bit check's reason, since that is the conversion the server takes by default
