@@ -383,6 +383,46 @@ recorded in [THIRD_PARTY.md](../THIRD_PARTY.md). `Upstream/` is ignored by git; 
 is ever committed. When the pin moves, update `UPSTREAM_OPENJEV_COMMIT` in the `Makefile`,
 `THIRD_PARTY.md` and the fixture pins together.
 
+## The upstream review
+
+`Tools/upstream/review.py` (issue #66) compares every pin of [THIRD_PARTY.md](../THIRD_PARTY.md)
+with its project as it is now. [upstream-log.md](upstream-log.md) says what a review checks and
+what moving a pin takes, and holds each review's note. From the repository root:
+
+```bash
+make upstream
+python3 Tools/upstream/review.py
+```
+
+`make upstream` fetches upstream OpenJev into `Upstream/openjev`, and the script reads upstream's
+history there with git. Without that clone, or when it lacks the head of `main`, the script reads
+the REST API instead. The other projects come from the REST API through `--gh`, `ghp` by default:
+pass `--gh gh` to use the GitHub CLI itself. The checkpoints come from the Hub's `/api/models`.
+The script writes nothing. A review makes about 50 API requests and takes from half a minute to
+three minutes, depending on the network.
+
+| Option | Effect |
+|---|---|
+| `--json` | Prints the review as JSON, the input of `tracking_issue.py` |
+| `--from FILE` | Renders a review that `--json` saved, without reading anything else |
+| `--project NAME` | Reviews only this project, such as `razorback16/openjev` or `mlx-community/diffusiongemma-26B-A4B-it-4bit` (repeatable) |
+| `--clone OWNER/NAME=PATH` | Reads a project's history from another local clone |
+| `--max-commits N` | Lists each project's newest N commits (30 by default); commits that touch a watched path are always listed |
+
+Its test needs no network and no account:
+
+```bash
+python3 Tools/upstream/test_review.py
+```
+
+`tracking_issue.py` is the step of the Upstream review workflow that opens or updates the
+tracking issue. With `--dry-run` it lists the issues and prints what it would do, changing nothing:
+
+```bash
+python3 Tools/upstream/review.py --json > "$TMPDIR/review.json"
+python3 Tools/upstream/tracking_issue.py "$TMPDIR/review.json" --repo Algorythm-Canada/OpenJevSwift --dry-run
+```
+
 ## Fixtures
 
 The golden fixtures in [Fixtures/](../Fixtures/README.md) are generated from upstream's code at
@@ -477,19 +517,20 @@ gives a call tree meanwhile. Traces stay out of git.
 
 ## Continuous integration
 
-Four workflows run on GitHub-hosted runners. The repository is public, so the standard runners
+Five workflows run on GitHub-hosted runners. The repository is public, so the standard runners
 cost nothing. No workflow uses the billed `-xlarge` runners unless asked to.
 
 | Workflow | When it runs | Job | Runner | What it runs |
 |---|---|---|---|---|
 | [ci.yml](../.github/workflows/ci.yml) | Every pull request and every push to `main`, except changes that touch only Markdown files no test reads | `Linux` | `ubuntu-24.04` with the `swift:6.2-noble` container | `swift build --build-tests` and `swift test`, both with `--scratch-path .build/linux`, then the test log check |
-| | | `macOS` | `macos-26` with Xcode 26.6, selected with `DEVELOPER_DIR` | `swift build --build-tests` and `swift test`, both with `--build-system swiftbuild`, the test log check, `make lint`, then the JevBench harness's smoke test with the image's `python3` |
+| | | `macOS` | `macos-26` with Xcode 26.6, selected with `DEVELOPER_DIR` | `swift build --build-tests` and `swift test`, both with `--build-system swiftbuild`, the test log check, `make lint`, then the JevBench harness's smoke test and the upstream review's test with the image's `python3` |
 | | | `iOS` | `macos-26` with Xcode 26.6, selected with `DEVELOPER_DIR` | `xcodebuild test` of the `OpenJevCore-iOS` scheme on an iPhone 17 Pro simulator, the test log check, then a build of `OpenJevDiffusionGemma` for the iOS Simulator |
 | | | `SDK compatibility` | `ubuntu-24.04` with the `swift:6.2-noble` container | `swift build --product openjev-stub-server` with `--scratch-path .build/linux`, Ubuntu's CPython 3.12 and Node.js 20 from `actions/setup-node`, the pinned SDKs, then `Tools/sdk-compat/run.py --swift-sdk`; the exchanges are uploaded when it fails |
 | [fixtures.yml](../.github/workflows/fixtures.yml) | Pull requests that change `Fixtures/`, `Tools/fixtures/`, `THIRD_PARTY.md`, the `Makefile` or the workflow; manual runs; Mondays at 06:23 UTC | `Regenerate the fixtures` | `macos-26` with CPython 3.14.7 from `actions/setup-python` | `make upstream`, `make fixtures-venv` and `make fixtures`, then fails if `git status --porcelain Fixtures/` lists a file, and prints and uploads the diff |
 | [docs.yml](../.github/workflows/docs.yml) | Pull requests and pushes to `main` that change `Sources/`, `Package.swift`, `Package.resolved`, `Tools/docs/` or the workflow; manual runs | `Build the documentation` | `macos-26` with Xcode 26.6, selected with `DEVELOPER_DIR` | `Tools/docs/build-site.sh`, then the upload of the site as the Pages artifact |
 | | Pushes to `main` and manual runs on `main` | `Check GitHub Pages` | `ubuntu-24.04` | Whether Pages publishes from GitHub Actions, through the Pages API with the workflow's token |
 | | The same, when it does | `Deploy to GitHub Pages` | `ubuntu-24.04` | `actions/deploy-pages`, to <https://algorythm-canada.github.io/OpenJevSwift/> |
+| [upstream-review.yml](../.github/workflows/upstream-review.yml) | The first day of each month at 06:37 UTC; manual runs, with a dry-run option; pull requests that change `Tools/upstream/`, `THIRD_PARTY.md` or the workflow, as a dry run | `Review the pins` | `ubuntu-24.04` | The upstream review's test, `make upstream`, `Tools/upstream/review.py --gh gh --json` with the workflow's token and the report in the run summary, then `tracking_issue.py`, which opens or updates the tracking issue (`issues: write`) or, in a dry run, says what it would do |
 | [mlx-probe.yml](../.github/workflows/mlx-probe.yml) | Manual runs only | `Probe <label>` | `macos-15`, `macos-26` and `xcode-27`, plus `macos-26-xlarge` when asked | The MLX runner probe of issue #8. Its findings are under R13 in [07-risks-and-unknowns.md](07-risks-and-unknowns.md). |
 
 The runs of 2026-09-30 reported these images and toolchains:
@@ -579,21 +620,31 @@ And took this long:
 - **Superseded runs.** A newer push to a pull request cancels the run it replaces. Every commit on
   `main` runs in a concurrency group of its own, so no merged commit's run is cancelled.
 - **Documentation-only changes.** Both triggers list every path, then `!**.md`, then the three
-  Markdown files tests read: `THIRD_PARTY.md` (`FixturePinTests` and the JevBench smoke test), the
-  configuration reference and `docs/deployment.md` (`ConfigurationReferenceTests`). A pull request
-  or push that changes only other Markdown files starts no run; one that changes one of the three,
-  or anything else, runs as usual. The `Protect main` ruleset requires a review, not a status check,
-  so such a pull request is still mergeable. If a required status check is ever added, replace the
-  path filters with a job that detects the documentation-only case and reports success, or GitHub
-  will wait for a check that never runs. The DocC catalogs are Markdown under `Sources/`, so a pull
-  request that changes only them starts no CI run unless it changes the configuration reference, but
-  it starts the Documentation workflow, which builds them.
+  Markdown files tests read: `THIRD_PARTY.md` (`FixturePinTests`, the JevBench smoke test and the
+  upstream review's test), the configuration reference and `docs/deployment.md`
+  (`ConfigurationReferenceTests`). A pull request or push that changes only other Markdown files
+  starts no run; one that changes one of the three, or anything else, runs as usual. The
+  `Protect main` ruleset requires a review, not a status check, so such a pull request is still
+  mergeable. If
+  a required status check is ever added, replace the path filters with a job that detects the
+  documentation-only case and reports success, or GitHub will wait for a check that never runs. The
+  DocC catalogs are Markdown under `Sources/`, so a pull request that changes only them starts no CI
+  run unless it changes the configuration reference, but it starts the Documentation workflow, which
+  builds them.
 - **Fixture regeneration.** The job runs on Apple silicon because the committed files were written
   there: CPython takes its math functions from the platform's C library, and another library could
   change the last digit of a float. It reproduced every committed file byte for byte.
   `FixturePinTests`, in the CI workflow, checks the pins the files record; this job checks that
   the scripts still write the files. It cannot notice a committed file that no script writes any
   more, because the scripts only write; delete such a file when the script that wrote it stops.
+- **The upstream review.** It reads other repositories through the REST API with the workflow's own
+  token, which needs no permission for public repositories, and `issues: write` is for the tracking
+  issue alone. A pull request that changes the review or the pins runs it as a dry run, so its
+  summary shows the report and what the issue step would do. Each run uploads the review as the
+  `upstream-review` artifact for 90 days. GitHub disables a public repository's schedule after 60
+  days without activity; enable it again from the workflow's page.
+  [upstream-log.md](upstream-log.md) describes the tracking issue and the review a maintainer then
+  does.
 - **The MLX runner probe.** Run it again when mlx-swift, Xcode or a runner image changes, from the
   repository's Actions tab or with `gh workflow run mlx-probe.yml`. Each job writes a table of
   outcomes and the probe's output to the run summary.
@@ -623,6 +674,7 @@ swift test --build-system swiftbuild 2>&1 | tee .build/test.log
 .github/scripts/check-test-log.sh .build/test.log
 make lint
 python3 Tools/jevbench/smoke_test.py
+python3 Tools/upstream/test_review.py
 ```
 
 With Xcode 27, the reference toolchain, leave out `DEVELOPER_DIR` and `--build-system swiftbuild`:
@@ -667,4 +719,5 @@ bullet above says. The checks worth requiring then are `Linux`, `macOS`, `iOS` a
 toolchain upgrade does not rename them. Do not require `Regenerate the fixtures`: it runs only when
 a pull request changes the fixture inputs, and a required check that never reports keeps the pull
 request waiting. `Build the documentation` runs only when a pull request changes the sources or the
-site's files, so the same holds for it. The probe is manual and is never a required check.
+site's files, and `Review the pins` only when one changes the upstream review or the pins, so the
+same holds for both. The probe is manual and is never a required check.

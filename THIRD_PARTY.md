@@ -2,6 +2,8 @@
 
 This project ports behaviour and, later, code from the projects below. Commits are pinned
 because several of them change daily. Update this table when a pin moves.
+[docs/upstream-log.md](docs/upstream-log.md) says what moving a pin takes and records each
+review of these pins. `Tools/upstream/review.py` reads them from this table.
 
 | Project | Role for OpenJevSwift | Pinned revision | License |
 |---|---|---|---|
