@@ -225,7 +225,7 @@ struct JPEGRobustnessTests {
             #expect(subset.lengths.count + subset.corruptions.count < 300, "\(name)")
             // Each corrupted byte takes all four values, as in the full run.
             let byIndex = Dictionary(grouping: subset.corruptions, by: \.index)
-            #expect(byIndex.values.allSatisfy { Set($0.map(\.value)).count == 4 }, "\(name)")
+            #expect(byIndex.values.allSatisfy { $0.count == 4 }, "\(name)")
             let allPairs = Set(all.corruptions.map { [$0.index, Int($0.value)] })
             #expect(subset.corruptions.allSatisfy { allPairs.contains([$0.index, Int($0.value)]) })
             // Every header segment's marker code and length are corrupted, and every segment is cut.
