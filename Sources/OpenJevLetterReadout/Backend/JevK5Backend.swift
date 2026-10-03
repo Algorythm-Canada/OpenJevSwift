@@ -96,7 +96,7 @@ public struct JevK5ModelError: Error, Sendable, Hashable, CustomStringConvertibl
 /// ``/OpenJevCore/BackendRefusal``, never truncated; when several questions of a batch fail, the
 /// first in question order is reported, as upstream's ordered `map` reports it.
 ///
-/// ``load(_:cache:token:cacheLimitGB:)`` runs the model on MLX. The initializer takes any
+/// ``load(_:cache:token:cacheLimitGB:resolver:)`` runs the model on MLX. The initializer takes any
 /// ``LetterReadoutModel`` and ``LetterReadoutTokenizing``, so tests can replay recorded logits.
 public actor JevK5Backend: QuestionReadBackend {
     /// ``/OpenJevCore/KnownEncoderModels/jevk5``: `jevk5-0.2` with upstream's description.
@@ -125,8 +125,16 @@ public actor JevK5Backend: QuestionReadBackend {
 
     /// Creates a backend over a model, a tokenizer and a temperature.
     ///
-    /// - Parameter limit: the prompt bound; by default upstream's 16,384-token context with the
-    ///   tokenizer's ``LetterReadoutTokenizing/maxCharactersPerToken``.
+    /// - Parameters:
+    ///   - model: the model that gives the letters' next-token logits for a prompt's tokens.
+    ///   - tokenizer: the tokenizer the prompts are encoded with; each of the 16 letters must be
+    ///     one of its tokens.
+    ///   - temperature: the calibration temperature the letter softmax divides by, 1.532 for
+    ///     v0.2 (`jevk5_config.json`).
+    ///   - limit: the prompt bound; by default upstream's 16,384-token context with the
+    ///     tokenizer's ``LetterReadoutTokenizing/maxCharactersPerToken``.
+    ///   - method: how more than 16 options are read, the `jevk5` package's `knockout` by
+    ///     default, as upstream reads them.
     /// - Throws: ``JevK5LoadError/letterNotOneToken(_:)`` when a letter is not one token, as
     ///   upstream's `load` checks, and ``JevK5LoadError/invalidTemperature(_:)`` for a temperature
     ///   that is not a positive finite number.
