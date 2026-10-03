@@ -6,3 +6,8 @@ decision server (https://github.com/razorback16/openjev, Apache-2.0). It is
 not affiliated with or endorsed by TypeSafe AI (Jev), Google DeepMind or
 NVIDIA (DiffusionGemma), or the authors of the other models it may serve.
 See THIRD_PARTY.md for the upstream projects this work references.
+
+OpenJevDiffusionGemma's image preprocessing includes Swift translations of
+code from Pillow (MIT-CMU License) and libjpeg-turbo (IJG License). This
+software is based in part on the work of the Independent JPEG Group. The
+licence texts are in Sources/OpenJevDiffusionGemma/Vision/ThirdPartyLicenses.
