@@ -95,8 +95,11 @@ public struct ImagePromptInputs: Sendable, Hashable {
     /// Builds the prompt for a read of `images`, ahead of `state`, under `system`.
     ///
     /// - Parameters:
+    ///   - system: The read's system text.
+    ///   - state: The state text, which follows the images.
     ///   - softTokens: Each image's soft tokens, from ``Gemma4ImageProcessor``.
     ///   - tokenizer: The checkpoint's tokenizer, whose chat template is rendered.
+    ///   - tokens: The special tokens the expansion writes and marks.
     /// - Throws: A ``VisionError`` from the expansion, or the tokenizer's error.
     public init(
         system: String, state: String, softTokens: [Int], tokenizer: SwiftTransformersTokenizer,

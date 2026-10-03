@@ -138,6 +138,7 @@ public struct Gemma4ImageProcessor: Sendable, Hashable {
     /// Resizes (unless the size is already the target) and rescales one image.
     ///
     /// - Parameters:
+    ///   - image: The decoded image.
     ///   - filter: The resampling filter. Bicubic is the processor's; another is only for a
     ///     planted-bug test.
     ///   - widen: Whether shrinking widens the kernel, as Pillow does; false only for a

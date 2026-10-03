@@ -131,8 +131,13 @@ public enum PillowResample {
     /// `image` resized to `width` by `height` as Pillow's `Image.resize((width, height),
     /// resample)` does it. An unchanged size returns the image as it is.
     ///
-    /// - Parameter widen: Whether a shrink widens the kernel (Pillow always does); false only
-    ///   for a planted-bug test.
+    /// - Parameters:
+    ///   - image: The image to resize.
+    ///   - width: The width to resize to.
+    ///   - height: The height to resize to.
+    ///   - filter: The resampling kernel; bicubic is the processor's.
+    ///   - widen: Whether a shrink widens the kernel (Pillow always does); false only for a
+    ///     planted-bug test.
     public static func resize(
         _ image: RGBImage, width: Int, height: Int, filter: Filter = .bicubic,
         widen: Bool = true

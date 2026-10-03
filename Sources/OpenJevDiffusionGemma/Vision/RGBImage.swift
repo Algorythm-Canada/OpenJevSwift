@@ -36,7 +36,7 @@ extension RGBImage {
 
     /// Decodes JPEG, PNG, WebP or GIF bytes to 8-bit RGB without colour management.
     ///
-    /// A JPEG goes through ``LibjpegTurboDecoder``, a port of the libjpeg-turbo that Pillow
+    /// A JPEG goes through `LibjpegTurboDecoder`, a port of the libjpeg-turbo that Pillow
     /// runs, because decoders are free to differ in the inverse DCT and chroma upsampling and
     /// ImageIO's does (by up to 30 levels on upstream's hot dog photo). A JPEG it does not cover
     /// (arithmetic-coded, lossless, 12-bit, CMYK) falls back to ImageIO. Other formats are
