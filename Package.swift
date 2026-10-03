@@ -256,11 +256,14 @@ var targets: [Target] = [
                 .product(name: "Hub", package: "swift-transformers"),
                 .product(name: "Jinja", package: "swift-jinja"),
             ],
+            // The licences of the code Vision/ ports (Pillow, libjpeg-turbo), kept with it.
+            exclude: ["Vision/ThirdPartyLicenses"],
             swiftSettings: swiftSettings
         ),
         // The tests also load the tokenizer through mlx-swift-lm's MLXHuggingFace macros, to
-        // confirm that path gives the same results as the direct one the module uses. The live
-        // runtime tests take their requests from the wire fixtures through OpenJevTestSupport.
+        // confirm that path gives the same results as the direct one the module uses, and run
+        // MLXVLM's Gemma 4 image processor on the vision fixtures to compare it with Pillow's. The
+        // live runtime tests take their requests from the wire fixtures through OpenJevTestSupport.
         .testTarget(
             name: "OpenJevDiffusionGemmaTests",
             dependencies: [
@@ -271,6 +274,7 @@ var targets: [Target] = [
                 .product(name: "MLXNN", package: "mlx-swift"),
                 .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
                 .product(name: "MLXHuggingFace", package: "mlx-swift-lm"),
+                .product(name: "MLXVLM", package: "mlx-swift-lm"),
                 .product(name: "Tokenizers", package: "swift-transformers"),
             ],
             swiftSettings: swiftSettings

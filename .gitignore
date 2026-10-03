@@ -47,3 +47,6 @@ Tools/oracle/results/*.safetensors
 
 # Instruments traces from profiling openjev-bench (docs/development.md)
 *.trace
+
+# The vision oracle's full tensors (tens of MB); the fixture keeps their digests and samples
+Tools/oracle/results/vision/

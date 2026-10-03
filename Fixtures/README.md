@@ -61,11 +61,13 @@ THIRD_PARTY.md, the scripts and that test together, then regenerate.
 | [model/](model/README.md) | The checkpoint's `config.json` and `generation_config.json` verbatim, and its safetensors weight map | `checkpoint_tables.py` | #23, #27 |
 | [regression/](regression/README.md) | The Swift port's own answers for the 63 oracle reads, the wire quickstart and upstream's README example; not upstream's output | `RegressionTests` (`OPENJEV_RECORD_REGRESSION=1`) | #31 |
 | [oracle/](oracle/README.md) | mlx-vlm 0.6.15 reads of the 4-bit checkpoint through upstream's `MlxRuntime.read`, nine long JevBench items among them (D-048): slot logprobs, distributions, written argmaxes, prompt ids, prefill cache digests and the full-attention RoPE table | `mlx_vlm_oracle.py` | #22, #31 |
+| [vision/](vision/README.md) | Seven synthetic images; mlx-vlm 0.6.15's preprocessing of them and of upstream's hot dog photo through upstream's `MlxRuntime._inputs` (decoded RGB digests, resized sizes, soft tokens, `pixel_values` digests, statistics and samples, expanded prompt ids and `mm_token_type_ids`, the resize rule), and upstream's hot dog reads | `vision_oracle.py` | #46, #47 |
 | [wire/](wire/README.md) | HTTP exchanges, answer bodies, request renderings and `/v1/models` listings, recorded with a stand-in tokenizer | `wire_tables.py` | #5, #35 |
 | [python-json/](python-json/README.md) | CPython `json.dumps` and float `repr` tables, and how `json.loads` ends on valid and malformed documents. These record the Python version, not the upstream commit. | `python_json_tables.py` | #3, #35 |
 
 `/v1/models` bodies for every backend are in `wire/models.json`, not in a `models.json` at this
-level. Model parity data from mlx-vlm (layer 2) is in `oracle/`; issue #31 widens it.
+level. Model parity data from mlx-vlm (layer 2) is in `oracle/`; issue #31 widens it. Image
+preprocessing and image reads are in `vision/`.
 
 ### Replaying tokenization without the tokenizer
 

@@ -1,0 +1,16 @@
+{
+"generator": {"script": "Tools/fixtures/vision_oracle.py", "version": 1, "upstream": "razorback16/openjev", "upstream_commit": "dcd2094", "tokenizer_repo": "mlx-community/diffusiongemma-26B-A4B-it-4bit", "tokenizer_revision": "a7a81407613811e8ba63af92ac0d852b809e191f", "model_repo": "mlx-community/diffusiongemma-26B-A4B-it-4bit", "model_revision": "a7a81407613811e8ba63af92ac0d852b809e191f", "python": "3.14.7", "mlx": "0.32.2", "mlx_metal": "0.32.2", "mlx_vlm": "0.6.15", "pillow": "12.3.0", "transformers": "5.17.0", "tokenizers": "0.23.2", "huggingface_hub": "1.33.0", "jinja2": "3.1.6", "numpy": "2.5.3", "device": "Apple M3 Max", "gpu_architecture": "applegpu_g15s", "metallib_sha256": "dc59d1cceb1a5c7e578232e6e41e28e2c73c9463ac6dbc3886c3ee17ffc270ed"},
+"cache_limit_gb": 4.0,
+"machine": {"platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O", "machine": "arm64", "device_name": "Apple M3 Max", "architecture": "applegpu_g15s", "memory_size": 137438953472},
+"preprocessing_passes_agree": true,
+"load_seconds": 2.581159708999621,
+"reads_differing_between_passes": [],
+"timings": [
+ {"id": "hotdog/g0/c0/steps1", "pass_1": {"seconds": 3.596666417000961, "prefill_cached": false}, "pass_2": {"seconds": 0.05567454199990607, "prefill_cached": true}},
+ {"id": "hotdog/g0/c1/steps1", "pass_1": {"seconds": 0.0611528340014047, "prefill_cached": true}, "pass_2": {"seconds": 0.6817085840011714, "prefill_cached": false}},
+ {"id": "readme_hotdog/g0/c0/steps1", "pass_1": {"seconds": 0.837905165997654, "prefill_cached": false}, "pass_2": {"seconds": 0.07913112500318675, "prefill_cached": true}},
+ {"id": "readme_hotdog/g0/c1/steps1", "pass_1": {"seconds": 0.10304066699973191, "prefill_cached": true}, "pass_2": {"seconds": 0.7355933750004624, "prefill_cached": false}}
+],
+"reads_deterministic": true,
+"problems": []
+}
