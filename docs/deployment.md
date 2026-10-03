@@ -412,9 +412,9 @@ conversion is published, the default `OPENJEV_JEVK5_MODEL` downloads it on first
 Hugging Face cache at its pinned revision, as DiffusionGemma's checkpoint is, and the folder is
 not needed.
 
-The 8-bit conversion is the default because it gives JevK5's own answers: on JevBench's 231 items
-the author's published top answer on 230, and the same answers on every item whose top two the
-author's run puts at least 0.05 apart. The 4-bit conversion (`--bits 4`, 2.4 GB) reads the same
+The 8-bit conversion is the default because it comes closest to JevK5's own answers: on
+JevBench's 231 items it gives the author's published top answer on 230, every item whose top two
+the author's run puts at least 0.05 apart among them. The 4-bit conversion (`--bits 4`, 2.4 GB) reads the same
 way in less memory, changes the top answer on 22 items, 18 of them clear ones, and loses about
 five points of accuracy on TypeSafe's rows ([quality.md](quality.md#jevk5)).
 

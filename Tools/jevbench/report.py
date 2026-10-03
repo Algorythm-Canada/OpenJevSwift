@@ -55,8 +55,8 @@ def author_pairs(docs: list) -> list:
 
 
 def author_tables(docs: list) -> list:
-    """Swift against the model author's published run: the top answers, the billed tokens, which
-    are equal exactly when the prompts are, and the probability differences, overall and by
+    """Swift against the model author's published run: the top answers, the billed tokens, equal
+    when the prompts have the same length, and the probability differences, overall and by
     question type, with the largest."""
     rows, type_rows, largest_rows = [], [], []
     for dataset, model, swift, author in author_pairs(docs):
@@ -448,7 +448,9 @@ def render(results: Path, cache: Path) -> str:
         out += ["### Swift against the model author's published run",
                 "JevK5's reference is its author's own published v0.2 run, as it is upstream's: "
                 "upstream's server reads JevK5's letters from vLLM, which needs an NVIDIA GPU "
-                "(D-052). Equal input tokens mean equal prompts."] + author
+                "(D-052). Equal input tokens mean prompts of the same length; the prompts "
+                "themselves are checked byte for byte against the package in Fixtures/jevk5."]
+        out += author
     conversions = conversion_tables(docs, harness.load_docs(conversion_files(results), cache))
     if conversions:
         out += ["### JevK5's conversions against the author's run",

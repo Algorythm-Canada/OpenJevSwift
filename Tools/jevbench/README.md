@@ -75,14 +75,14 @@ package's own published v0.2 run of the 231 public items
 the package's in-process adapter, `jevk5_direct`, with transformers and the bf16 weights of
 `alibiserikbay/JevK5` at `3c67329` (whose weights, configuration and tokenizer files are the `v0.2`
 tag's), through JevBench's runner at `0caa1d0` on one H100. Its prompts were built in that process,
-not sent to a server, so its token counts compare with this harness's only as far as the prompts are
-the same, and equal counts on an item show that they are.
-`fetch` downloads it into the cache and checks its size and SHA-256 (`AUTHOR_RUNS`), and
-`author-run` turns it into a result file whose server is `author`: each item takes the
-distribution the author's server returned and its `usage`, scored again with JevBench's
-`score_task` as this harness scores its own runs, the published record's own outcome kept beside
-it. `compare` then reads it as it reads any run, and also reports the items whose billed input
-tokens differ (equal counts mean equal prompts) and the median of each item's largest difference.
+not sent to a server. Equal token counts on an item show prompts of the same length, not the same
+prompts; `Fixtures/jevk5` checks the prompts byte for byte against the package. `fetch` downloads it
+into the cache and checks its size and SHA-256 (`AUTHOR_RUNS`), and `author-run` turns it into a
+result file whose server is `author`: each item takes the distribution the author's server returned
+and its `usage`, scored again with JevBench's `score_task` as this harness scores its own runs, the
+published record's own outcome kept beside it. `compare` then reads it as it reads any run, and also
+reports the items whose billed input tokens differ (equal counts mean prompts of the same length)
+and the median of each item's largest difference.
 
 ## Scoring
 

@@ -35,7 +35,7 @@ which needs nothing beyond the standard library, is used.
 ```
 
 The 8-bit conversion is the one the server loads by default, since it gives the author's published
-answers (D-052); the 4-bit one is half its size, the default of an iOS app; the bfloat16 one keeps
+top answer on 230 of JevBench's 231 items (D-052); the 4-bit one is half its size, the default of an iOS app; the bfloat16 one keeps
 the checkpoint's weights unquantized, a reference that tells the quantization's effect from the
 port's in [docs/quality.md](../../docs/quality.md#jevk5), and is not meant for publishing.
 

@@ -791,9 +791,9 @@ def author_doc(dataset: Dataset, rows: list, model: str, run: dict) -> dict:
     Each item takes the distribution the author's server returned (`probs_as_returned`) and its
     `usage`, scored again with JevBench's score_task as this harness scores its own runs; the
     published record's own outcome is kept beside it. The run's prompts were built in the author's
-    process from JevBench's tasks, not sent to a server, so a token count compares with this
-    harness's runs only as far as the prompts are the same; equal counts on an item show that
-    they are."""
+    process from JevBench's tasks, not sent to a server. Equal token counts on an item mean prompts
+    of the same length, not the same prompts; the prompts themselves are checked byte for byte
+    against the package by the Swift fixture tests (Fixtures/jevk5)."""
     by_id = {row["task_id"]: row for row in rows}
     items = []
     for task in dataset.tasks:
@@ -1069,7 +1069,8 @@ def compare_docs(a: dict, b: dict, top: int = 10) -> dict:
                 if usable(items_a.get(item_id)) != usable(items_b.get(item_id))]
     groups, disagreements, deviations, near_ties = {}, [], [], []
     flips = {"both_correct": 0, "both_wrong": 0, "a_only": 0, "b_only": 0}
-    # the prompt tokens each run billed, where both say: equal counts mean equal prompts
+    # the prompt tokens each run billed, where both say: equal counts mean prompts of the same
+    # length, which different prompts can share
     tokens = {"items": 0, "equal": 0, "differ": []}
     bounds = {"confident_items": 0, "confident_agree": 0, "long_items": 0, "long_sum": 0.0,
               "long_entries": 0, "long_max_sum": 0.0}

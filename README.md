@@ -73,8 +73,10 @@ Milestones 0 to 3 are complete, every work issue in them closed: the foundations
 engine core, DiffusionGemma reads on MLX, and the Jev-compatible HTTP server with the `openjev`
 tool. Milestone 4, the read extensions and images, is in progress: `steps`, `samples` and
 `sequential` are verified end to end on the DiffusionGemma checkpoint (#43, #44 and #45), and images
-remain. Verdict, Laya and JevK5 (#55), from milestone 6, and from milestone 7 the JevBench
-comparison with upstream and DiffusionGemma's calibration report (#61 and #62), are done too.
+remain. Verdict and Laya, from milestone 6, and from milestone 7 the JevBench comparison with
+upstream and DiffusionGemma's calibration report (#61 and #62), are done too. JevK5 (#55), also
+from milestone 6, is served, and gives its author's published top answer on 230 of JevBench's 231
+items (D-052).
 
 Not there yet:
 

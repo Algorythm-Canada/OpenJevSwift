@@ -23,7 +23,8 @@ The model is a conversion of the checkpoint to MLX that `Tools/jevk5/convert.py`
 Hugging Face Hub at a pinned revision, through ``/OpenJevDiffusionGemma/ModelResolver``. By
 default ``JevK5Backend/load(_:cache:token:cacheLimitGB:resolver:)`` takes
 ``JevK5Checkpoint/platformDefault``: the 8-bit conversion on macOS, which gives the author's
-published answers, and the 4-bit one on iOS, half the size.
+published top answer on 230 of JevBench's 231 items where the 4-bit one gives it on 209, and the
+4-bit one on iOS, half the size.
 
 ```swift
 let backend = try await JevK5Backend.load(

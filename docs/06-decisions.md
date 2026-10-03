@@ -2834,19 +2834,19 @@ Decision.
    | bfloat16 | 228 of 231 | 219 of 219 | 0.0037 | 0.051 | 85.7% | 86.3% |
    | 4-bit | 209 of 231 | 201 of 219 | 0.0440 | 0.530 | 85.3% | 81.4% |
 
-   The author's run scores 86.1% on JevBench, and every conversion bills its token counts on all
-   231 items. The bfloat16 weights show what the port does without quantization: each of its three
-   changed answers is a near-tie in the author's run, two of them exact ties, and its largest
-   difference is close to the 0.055 upstream saw on vLLM. The 8-bit conversion's one change is a
-   near-tie too, its top two 0.040 apart. The 4-bit conversion changes 22 answers, 18 of them clear
-   ones and four where the author's margin is above 0.6, and loses about five points of accuracy on
-   TypeSafe's rows. So `JevK5Checkpoint.defaultSetting`, the server's default, is the 8-bit
-   repository, and `JevK5Backend.load()` takes `JevK5Checkpoint.platformDefault`: the 8-bit
+   The author's run scores 86.1% on JevBench, and every conversion bills the author's prompt token
+   count on all 231 items. The bfloat16 weights show what the port does without quantization: each
+   of its three changed answers is a near-tie in the author's run, two of them exact ties, and its
+   largest difference is close to the 0.055 upstream saw on vLLM. The 8-bit conversion's one change
+   is a near-tie too, its top two 0.040 apart. The 4-bit conversion changes 22 answers, 18 of them
+   clear ones and four where the author's margin is above 0.6, and loses about five points of
+   accuracy on TypeSafe's rows. So `JevK5Checkpoint.defaultSetting`, the server's default, is the
+   8-bit repository, and `JevK5Backend.load()` takes `JevK5Checkpoint.platformDefault`: the 8-bit
    conversion on macOS and the 4-bit one on iOS, where memory is the limit and which has not run on
    an iPhone yet. The 8-bit server holds 6.0 GB once loaded and 8.5 to 11.0 GB in service with
-   `OPENJEV_MLX_CACHE_LIMIT_GB=4`, against 3.6 and 6.8 to 8.9 GB for the 4-bit one. The criterion
-   of all 231 is not met on MLX by any conversion; the misses at 8 bits and in bfloat16 are where
-   the order of bfloat16 arithmetic decides a near-tie.
+   `OPENJEV_MLX_CACHE_LIMIT_GB=4`, against 3.6 and 6.8 to 8.9 GB for the 4-bit one. The criterion of
+   all 231 is not met on MLX by any conversion; the misses at 8 bits and in bfloat16 are where the
+   order of bfloat16 arithmetic decides a near-tie.
 5. **The downloader is OpenJevDiffusionGemma's `ModelResolver`, through a dependency.** A thin
    equivalent would repeat about 900 lines (the Hub tree, resume, both digest kinds, the cache
    layout, offline use of a cached snapshot) or drop them. The cost is that an app using JevK5 links

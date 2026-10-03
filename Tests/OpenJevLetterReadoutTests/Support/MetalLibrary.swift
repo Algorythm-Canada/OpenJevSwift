@@ -1,5 +1,6 @@
 import Foundation
 import MLX
+import Testing
 
 /// Points MLX at the Metal library that Swift Build copies into this test bundle, the helper of
 /// docs/development.md ("MLX in tests", issue #8).
@@ -41,3 +42,10 @@ enum MetalLibrary {
         _ = configured
     }
 }
+
+/// The parent of every suite in this target that runs MLX. Serialized, as the DiffusionGemma
+/// tests' parent is, so that no two MLX tests evaluate at once: MLX's streams are not meant to be
+/// driven from several threads. Each test target is its own test bundle, run in its own process,
+/// so the MLX suites of other targets cannot overlap these.
+@Suite("MLX", .serialized)
+enum MLXTests {}

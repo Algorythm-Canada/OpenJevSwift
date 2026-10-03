@@ -84,7 +84,8 @@ public struct JevK5ModelError: Error, Sendable, Hashable, CustomStringConvertibl
 ///
 /// Each question is read on its own, as upstream reads it: its options lettered `A` to `P` in
 /// ``JevK5Prompt``'s JSON prompt, one forward pass, and a softmax over the letters' next-token
-/// logits under the checkpoint's calibration temperature (``JevK5Readout/letterProbabilities(logits:temperature:)``).
+/// logits under the checkpoint's calibration temperature,
+/// ``JevK5Readout/letterProbabilities(logits:temperature:)``.
 /// A question with more than 16 options takes ceil(n / 16) + 1 passes, combined by
 /// ``JevK5Readout/spread(_:texts:method:temperature:)`` with the knockout method. The questions
 /// of a batch are read concurrently, as upstream's `fanout` pool reads a request's, and their
@@ -104,8 +105,9 @@ public actor JevK5Backend: QuestionReadBackend {
     /// 255, Jev's limit, as upstream's encoder engines keep it.
     public nonisolated let maxChoices = 255
 
-    /// The model the passes run through.
-    public nonisolated let model: any LetterReadoutModel
+    /// The model the passes run through. Private, so that every pass goes through the actor:
+    /// an MLX model is safe only while one actor drives it.
+    private nonisolated let model: any LetterReadoutModel
     /// The tokenizer the prompts are written with.
     public nonisolated let tokenizer: any LetterReadoutTokenizing
     /// The calibration temperature, `jevk5_config.json`'s `temperature` (1.532 for v0.2).

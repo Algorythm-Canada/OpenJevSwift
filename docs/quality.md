@@ -69,7 +69,7 @@ author published no TypeSafe run.
   SemIf's TypeSafe subset DiffusionGemma agrees with the reference answer 0.888 and 0.892 of the
   time, against Jev's published 0.883.
 - **JevK5 on its 8-bit conversion gives the author's top answer on 230 of the 231 JevBench items
-  and bills the same tokens on all 231,** so every prompt is the author's. The one item that
+  and bills the author's prompt token count on all 231.** The one item that
   differs, `hard-sol-a-multi_hop-10`, is a near-tie in the author's run, its top two 0.040 apart;
   the mean probability difference is 0.0049 and the largest 0.083, where upstream measured 0.055 on
   vLLM. Issue #55 asks for all 231.
@@ -205,8 +205,9 @@ difference, which an answer averages, so the long prompts' figures are shown and
 ### Swift against the model author's published run
 
 JevK5's reference is its author's own published v0.2 run, as it is upstream's: upstream's server
-reads JevK5's letters from vLLM, which needs an NVIDIA GPU (D-052). Equal input tokens mean equal
-prompts.
+reads JevK5's letters from vLLM, which needs an NVIDIA GPU (D-052). Equal input tokens mean prompts
+of the same length; the prompts themselves are checked byte for byte against the package in
+Fixtures/jevk5.
 
 | model | dataset | items | top answer agrees | input tokens equal | mean abs diff | median of each item's largest abs diff | largest abs diff | right only on Swift, only the author's | McNemar p |
 |---|---|---|---|---|---|---|---|---|---|
@@ -651,11 +652,12 @@ recorded, which upstream measured at 0.055 at most. Upstream's `jevk5` backend r
 from a vLLM server, which needs an NVIDIA GPU, so the reference here is the author's run itself, as
 it was for upstream.
 
-- **The prompts are the author's.** On every conversion every item bills the author's token count,
-  231 of 231, and the count is the prompt's: the system text, the evidence and the options rendered
-  through the pinned template, then tokenized. `Fixtures/jevk5` holds the prompts byte for byte and
-  the readout bit for bit on recorded logits (D-052), so what is left is the model's logits.
-- **The 8-bit conversion meets the criterion except at one near-tie.** It changes one top answer,
+- **The token counts are the author's.** On every conversion every item bills the author's prompt
+  token count, 231 of 231. Equal counts show prompts of the same length, not the same prompts. The
+  prompt itself, the system text, the evidence and the options through the pinned template, is
+  checked byte for byte against the package on the fixture's 324 passes, and the readout bit for
+  bit on recorded logits (`Fixtures/jevk5`, D-052).
+- **The 8-bit conversion misses the criterion by one near-tie.** It changes one top answer,
   `hard-sol-a-multi_hop-10`, where the author gives `approve_45_days` 0.507 and the next 0.467, and
   the Swift server `reduce_to_30_days` 0.528. Its largest difference is 0.083, on
   `hard-sol-b-long_policy-05`, an answer it keeps.
