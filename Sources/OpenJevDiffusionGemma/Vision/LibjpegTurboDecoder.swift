@@ -1,16 +1,123 @@
 // A Swift translation of libjpeg-turbo 3.1.4.1's default decompression path, the one Pillow
-// 12.3.0 runs: `jdhuff.c`, `jdphuff.c`, `jidctint.c` (`jpeg_idct_islow`), `jdsample.c` (fancy
-// upsampling), `jdcolor.c` (`ycc_rgb_convert`), `jdmaster.c` (`prepare_range_limit_table`) and
-// `jdapimin.c` (`default_decompress_parms`).
+// 12.3.0 runs. Translated to Swift, restructured to decode a whole image in memory and reduced to
+// the 8-bit Huffman-coded path by the OpenJevSwift contributors, 2026. This software is based in
+// part on the work of the Independent JPEG Group. Below are the files it draws on, each with its
+// copyright block as libjpeg-turbo has it. The README.ijg those blocks name is
+// ThirdPartyLicenses/libjpeg-turbo-README.ijg beside this file, next to libjpeg-turbo-LICENSE.md;
+// THIRD_PARTY.md lists the files.
 //
-// This file was derived from the Independent JPEG Group's software:
-// Copyright (C) 1991-2020, Thomas G. Lane, Guido Vollbeding.
-// libjpeg-turbo Modifications: Copyright (C) 2009-2026, D. R. Commander.
-// Translated to Swift, restructured to decode a whole image in memory and reduced to the 8-bit
-// Huffman-coded path by the OpenJevSwift contributors, 2026. For conditions of distribution and
-// use, see ThirdPartyLicenses/libjpeg-turbo-README.ijg and libjpeg-turbo-LICENSE.md beside this
-// file, and THIRD_PARTY.md. This software is based in part on the work of the Independent JPEG
-// Group.
+// jdmarker.c (the marker segments and the checks it makes of them):
+//   This file was part of the Independent JPEG Group's software:
+//   Copyright (C) 1991-1998, Thomas G. Lane.
+//   Lossless JPEG Modifications:
+//   Copyright (C) 1999, Ken Murchison.
+//   libjpeg-turbo Modifications:
+//   Copyright (C) 2012, 2015, 2022, 2024, D. R. Commander.
+//   For conditions of distribution and use, see the accompanying README.ijg
+//   file.
+//
+// jdinput.c (`initial_setup`'s and `per_scan_setup`'s checks, `latch_quant_tables`):
+//   This file was part of the Independent JPEG Group's software:
+//   Copyright (C) 1991-1997, Thomas G. Lane.
+//   Lossless JPEG Modifications:
+//   Copyright (C) 1999, Ken Murchison.
+//   libjpeg-turbo Modifications:
+//   Copyright (C) 2010, 2016, 2018, 2022, 2024, D. R. Commander.
+//   Copyright (C) 2015, Google, Inc.
+//   For conditions of distribution and use, see the accompanying README.ijg
+//   file.
+//
+// jdapimin.c (`default_decompress_parms`):
+//   This file was part of the Independent JPEG Group's software:
+//   Copyright (C) 1994-1998, Thomas G. Lane.
+//   Lossless JPEG Modifications:
+//   Copyright (C) 1999, Ken Murchison.
+//   libjpeg-turbo Modifications:
+//   Copyright (C) 2016, 2022, 2024, D. R. Commander.
+//   For conditions of distribution and use, see the accompanying README.ijg
+//   file.
+//
+// jdhuff.c (baseline Huffman decoding, `jpeg_make_d_derived_tbl`):
+//   This file was part of the Independent JPEG Group's software:
+//   Copyright (C) 1991-1997, Thomas G. Lane.
+//   Lossless JPEG Modifications:
+//   Copyright (C) 1999, Ken Murchison.
+//   libjpeg-turbo Modifications:
+//   Copyright (C) 2009-2011, 2016, 2018-2019, 2022, D. R. Commander.
+//   Copyright (C) 2018, Matthias Räncker.
+//   For conditions of distribution and use, see the accompanying README.ijg
+//   file.
+//
+// jdphuff.c (progressive Huffman decoding, `start_pass_phuff_decoder`'s checks):
+//   This file was part of the Independent JPEG Group's software:
+//   Copyright (C) 1995-1997, Thomas G. Lane.
+//   Lossless JPEG Modifications:
+//   Copyright (C) 1999, Ken Murchison.
+//   libjpeg-turbo Modifications:
+//   Copyright (C) 2015-2016, 2018-2022, D. R. Commander.
+//   For conditions of distribution and use, see the accompanying README.ijg
+//   file.
+//
+// jidctint.c (`jpeg_idct_islow`):
+//   This file was part of the Independent JPEG Group's software:
+//   Copyright (C) 1991-1998, Thomas G. Lane.
+//   Modification developed 2002-2018 by Guido Vollbeding.
+//   libjpeg-turbo Modifications:
+//   Copyright (C) 2015, 2020, 2022, 2026, D. R. Commander.
+//   For conditions of distribution and use, see the accompanying README.ijg
+//   file.
+//
+// jdsample.c (fancy upsampling and `jinit_upsampler`'s checks):
+//   This file was part of the Independent JPEG Group's software:
+//   Copyright (C) 1991-1996, Thomas G. Lane.
+//   libjpeg-turbo Modifications:
+//   Copyright 2009 Pierre Ossman <ossman@cendio.se> for Cendio AB
+//   Copyright (C) 2010, 2015-2016, 2022, 2024-2026, D. R. Commander.
+//   Copyright (C) 2014, MIPS Technologies, Inc., California.
+//   Copyright (C) 2015, Google, Inc.
+//   Copyright (C) 2019-2020, Arm Limited.
+//   For conditions of distribution and use, see the accompanying README.ijg
+//   file.
+//
+// jdcolor.c (`build_ycc_rgb_table`):
+//   This file was part of the Independent JPEG Group's software:
+//   Copyright (C) 1991-1997, Thomas G. Lane.
+//   Modified 2011 by Guido Vollbeding.
+//   libjpeg-turbo Modifications:
+//   Copyright 2009 Pierre Ossman <ossman@cendio.se> for Cendio AB
+//   Copyright (C) 2009, 2011-2012, 2014-2015, 2022, 2024, D. R. Commander.
+//   Copyright (C) 2013, Linaro Limited.
+//   For conditions of distribution and use, see the accompanying README.ijg
+//   file.
+//
+// jdcolext.c (`ycc_rgb_convert`):
+//   This file was part of the Independent JPEG Group's software:
+//   Copyright (C) 1991-1997, Thomas G. Lane.
+//   libjpeg-turbo Modifications:
+//   Copyright (C) 2009, 2011, 2015, 2022-2023, D. R. Commander.
+//   For conditions of distribution and use, see the accompanying README.ijg
+//   file.
+//
+// jdmaster.c (`prepare_range_limit_table`):
+//   This file was part of the Independent JPEG Group's software:
+//   Copyright (C) 1991-1997, Thomas G. Lane.
+//   Modified 2002-2009 by Guido Vollbeding.
+//   Lossless JPEG Modifications:
+//   Copyright (C) 1999, Ken Murchison.
+//   libjpeg-turbo Modifications:
+//   Copyright (C) 2009-2011, 2016, 2019, 2022-2024, 2026, D. R. Commander.
+//   Copyright (C) 2013, Linaro Limited.
+//   Copyright (C) 2015, Google, Inc.
+//   For conditions of distribution and use, see the accompanying README.ijg
+//   file.
+//
+// jutils.c (`jpeg_natural_order`):
+//   This file was part of the Independent JPEG Group's software:
+//   Copyright (C) 1991-1996, Thomas G. Lane.
+//   libjpeg-turbo Modifications:
+//   Copyright (C) 2022, D. R. Commander.
+//   For conditions of distribution and use, see the accompanying README.ijg
+//   file.
 
 /// Decodes the JPEGs Pillow decodes for upstream's image reads, sample for sample.
 ///

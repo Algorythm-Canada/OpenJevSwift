@@ -1,6 +1,8 @@
 // A port of mlx-vlm 0.6.15's `models/gemma4/processing_gemma4.py` (`Gemma4ImageProcessor`:
-// `aspect_ratio_preserving_resize` and `preprocess`), which `DiffusionGemma4Processor` inherits.
-// MIT. See THIRD_PARTY.md.
+// `aspect_ratio_preserving_resize` and `preprocess`), which `DiffusionGemma4Processor` inherits
+// (adapted from mlx-vlm, Copyright © 2025 Prince Canuma, MIT). mlx-vlm's file says it is adapted
+// from Hugging Face Transformers' `models/gemma4/processing_gemma4.py` (Apache-2.0). See
+// THIRD_PARTY.md.
 
 import Foundation
 import MLX
