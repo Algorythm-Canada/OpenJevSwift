@@ -218,15 +218,16 @@ var targets: [Target] = [
     ),
 ]
 
-// OpenJevDiffusionGemma runs on MLX, which needs Apple silicon, and OpenJevEncoders runs on Core
-// ML, which exists only on Apple platforms. SwiftPM evaluates this manifest on the host, and every
-// Apple platform build runs on a macOS host, so the MLX and swift-transformers packages and the
-// targets that use them are declared only there. A Linux build never loads their manifests or
-// builds them.
+// OpenJevDiffusionGemma and OpenJevLetterReadout run on MLX, which needs Apple silicon, and
+// OpenJevEncoders runs on Core ML, which exists only on Apple platforms. SwiftPM evaluates this
+// manifest on the host, and every Apple platform build runs on a macOS host, so the MLX and
+// swift-transformers packages and the targets that use them are declared only there. A Linux
+// build never loads their manifests or builds them.
 #if os(macOS)
     products += [
         .library(name: "OpenJevDiffusionGemma", targets: ["OpenJevDiffusionGemma"]),
         .library(name: "OpenJevEncoders", targets: ["OpenJevEncoders"]),
+        .library(name: "OpenJevLetterReadout", targets: ["OpenJevLetterReadout"]),
     ]
     dependencies += [
         .package(url: "https://github.com/ml-explore/mlx-swift", exact: "0.32.2"),
@@ -291,6 +292,40 @@ var targets: [Target] = [
             dependencies: ["OpenJevEncoders", "OpenJevCore", "OpenJevTestSupport"],
             swiftSettings: swiftSettings
         ),
+        // JevK5 (`jevk5-0.2`, issue #55): the jevk5 package's prompt and many-option readout,
+        // and the letter logits of mlx-swift-lm's Qwen3.5 text model. The checkpoint comes
+        // through OpenJevDiffusionGemma's ModelResolver, the downloader that shares the Hugging
+        // Face cache with Python (D-051).
+        .target(
+            name: "OpenJevLetterReadout",
+            dependencies: [
+                "OpenJevCore",
+                "OpenJevDiffusionGemma",
+                .product(name: "MLX", package: "mlx-swift"),
+                .product(name: "MLXNN", package: "mlx-swift"),
+                .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
+                .product(name: "MLXLLM", package: "mlx-swift-lm"),
+                .product(name: "Tokenizers", package: "swift-transformers"),
+                .product(name: "Hub", package: "swift-transformers"),
+            ],
+            swiftSettings: swiftSettings
+        ),
+        // The model-free tests (the prompt and readout against the jevk5 package's own output,
+        // the backend over a stub model, through the server as upstream's tests run it) and,
+        // behind OPENJEV_JEVK5_MODEL, the converted checkpoint's reads.
+        .testTarget(
+            name: "OpenJevLetterReadoutTests",
+            dependencies: [
+                "OpenJevLetterReadout", "OpenJevCore", "OpenJevTestSupport",
+                "OpenJevDiffusionGemma", "OpenJevServer",
+                .product(name: "Hummingbird", package: "hummingbird"),
+                .product(name: "HummingbirdTesting", package: "hummingbird"),
+                .product(name: "HTTPTypes", package: "swift-http-types"),
+                // GPU.metallib, which the live tests set before the first MLX call (issue #8).
+                .product(name: "MLX", package: "mlx-swift"),
+            ],
+            swiftSettings: swiftSettings
+        ),
         // The performance and memory baseline of DiffusionGemma reads (issue #32,
         // docs/benchmarks.md): the engine in process, or any /v1/systemone server over HTTP. Not
         // a product; it never ships. Its tests cover the model-free statistics through
@@ -313,11 +348,12 @@ var targets: [Target] = [
             swiftSettings: swiftSettings
         ),
     ]
-    // `openjev serve` with OPENJEV_BACKEND=verdict, laya or mlx, and its opt-in smoke test, which
-    // finds the converted package the way the store does.
+    // `openjev serve` with OPENJEV_BACKEND=verdict, laya, jevk5 or mlx, and its opt-in smoke
+    // test, which finds the converted package the way the store does.
     for target in targets where ["openjev", "OpenJevCLITests"].contains(target.name) {
         target.dependencies.append("OpenJevEncoders")
         target.dependencies.append("OpenJevDiffusionGemma")
+        target.dependencies.append("OpenJevLetterReadout")
     }
 #endif
 

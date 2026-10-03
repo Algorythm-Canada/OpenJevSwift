@@ -7,8 +7,8 @@ Jev-compatible "System One" decision server. Send it a state and typed questions
 `choice`, `score`); it reads every answer from a model's probabilities rather than generating
 text, so an answer cannot go off-schema: a noul's is the probability of yes, and a choice's or a
 score's the probability of every option, with a confidence. One `openjev` binary serves
-DiffusionGemma 26B-A4B on MLX, or Verdict or Laya on Core ML, on a Mac, with upstream's exact wire
-API, so TypeSafe's SDKs work against it unchanged; the same libraries answer requests inside an
+DiffusionGemma 26B-A4B or JevK5 on MLX, or Verdict or Laya on Core ML, on a Mac, with upstream's
+exact wire API, so TypeSafe's SDKs work against it unchanged; the same libraries answer requests inside an
 iPhone or Mac app.
 
 OpenJevSwift is an independent project. It is not affiliated with or endorsed by TypeSafe AI (the
@@ -58,11 +58,13 @@ loads the same models inside an app.
 | `verdict` | `verdict-1.4`, 151M parameters, Core ML | Apple silicon, macOS 15 or later | 1.6 GB with the functions one-question reads load, 2.8 GB with all six |
 | `laya` | `laya-1.0`, 421M parameters, Core ML | Apple silicon, macOS 15 or later | 4.7 GB with the functions one-question reads load, 8.9 GB with all eight and up to 9.7 GB at peak; with `OPENJEV_ENCODER_FUNCTIONS=2`, 2.1 GB for one-question reads and up to 4.4 GB at peak |
 | `mlx` | `openjev-0.1`, DiffusionGemma 26B-A4B, 4-bit, MLX | Apple silicon | about 16 GB to load, 17.3 GiB in service with short prompts and up to about 3.6 GB more for cached long prompts; 32 GB or more recommended |
+| `jevk5` | `jevk5-0.2`, JevK5 (Qwen3.5-4B), 4-bit, MLX, from a local conversion until it is published | Apple silicon | <<JEVK5_MEMORY_SHORT>> |
 
 Building needs Xcode 26.4 or later. The `mlx` backend also needs MLX's Metal shaders, which Swift
 Build compiles with the Metal Toolchain: Swift Build is the default with Xcode 27, and Xcode 26
 takes `--build-system swiftbuild`. In an app, `OpenJevCore` runs on macOS 14 and
-iOS 17 or later, and the Verdict and Laya backends on macOS 15 and iOS 18 or later. Linux builds the
+iOS 17 or later, the Verdict and Laya backends on macOS 15 and iOS 18 or later, and JevK5 on
+Apple silicon (it builds for iOS; it has not run on an iPhone yet). Linux builds the
 core, the server and the `openjev` tool for the tests, without any backend.
 
 ## Status
@@ -79,7 +81,7 @@ Not there yet:
 - Images in requests: #46, #47 and #48.
 - `think`, a thought before the read: #50, #51 and #52.
 - `POST /v1/chat/completions`: #53.
-- The JevK5 model: #55. The CLM model: #59.
+- The CLM model: #59. The JevK5 conversions' publication, the maintainer's choice (D-051).
 - Release 0.1.0, with a version tag a package can depend on: #65.
 
 [docs/08-implementation-plan.md](docs/08-implementation-plan.md) has the milestones and the issue
@@ -100,7 +102,7 @@ has the three tables and the matrix of what runs on macOS, iOS and Linux.
 ## Documentation
 
 - **API documentation.** The DocC catalogs of `OpenJevCore`, `OpenJevEncoders`,
-  `OpenJevDiffusionGemma` and `OpenJevServer`: getting started in an app, the request and answer
+  `OpenJevDiffusionGemma`, `OpenJevLetterReadout` and `OpenJevServer`: getting started in an app, the request and answer
   types, implementing a backend, running the server and the configuration reference. The
   Documentation workflow builds them whenever the sources change and, once GitHub Pages is enabled
   for the repository, publishes them to <https://algorythm-canada.github.io/OpenJevSwift/>.

@@ -1,19 +1,20 @@
 #!/usr/bin/env bash
-# Builds the DocC documentation of the four library modules into one static site, as the
+# Builds the DocC documentation of the five library modules into one static site, as the
 # Documentation workflow (.github/workflows/docs.yml) publishes it to GitHub Pages. See
 # docs/development.md, "API documentation".
 #
 #   Tools/docs/build-site.sh [output-directory]
 #
-# One plugin call builds the OpenJevCore, OpenJevServer, OpenJevDiffusionGemma and OpenJevEncoders
-# archives, each transformed for static hosting under /OpenJevSwift/, and merges them into one
+# One plugin call builds the OpenJevCore, OpenJevServer, OpenJevDiffusionGemma, OpenJevEncoders and
+# OpenJevLetterReadout archives, each transformed for static hosting under /OpenJevSwift/, and merges them into one
 # site with a shared navigator, so that a page can link to another module's symbols
 # (``/OpenJevCore/DecisionEngine``). Extended types are left out: OpenJevServer extends two core
 # types, and the page DocC would make for them shadows the OpenJevCore module in its links, so
 # Swift 6.2's DocC resolved none of them. Tools/docs/index.html becomes the site's front page. Any
 # DocC warning, such as a link that does not resolve, fails the build.
 #
-# macOS only: OpenJevDiffusionGemma and OpenJevEncoders exist only on a macOS host. The output
+# macOS only: OpenJevDiffusionGemma, OpenJevEncoders and OpenJevLetterReadout exist only on a macOS
+# host. The output
 # directory, .build/docs-site by default, is replaced; another directory must be empty, absent or
 # a site this script built, whose front page carries the generator line below.
 set -euo pipefail
@@ -22,7 +23,7 @@ root="$(cd "$(dirname "$0")/../.." && pwd)"
 default_output="$root/.build/docs-site"
 output="${1:-$default_output}"
 hosting_base_path="OpenJevSwift"
-modules=(OpenJevCore OpenJevServer OpenJevDiffusionGemma OpenJevEncoders)
+modules=(OpenJevCore OpenJevServer OpenJevDiffusionGemma OpenJevEncoders OpenJevLetterReadout)
 # Tools/docs/index.html's generator line. Only a site this script built has it in its index.html,
 # so a non-empty directory without it, another DocC site included, is never replaced.
 marker='<meta name="generator" content="OpenJevSwift Tools/docs/build-site.sh">'

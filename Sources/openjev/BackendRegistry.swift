@@ -10,12 +10,15 @@ import OpenJevServer
 #if canImport(OpenJevDiffusionGemma)
     import OpenJevDiffusionGemma
 #endif
+#if canImport(OpenJevLetterReadout)
+    import OpenJevLetterReadout
+#endif
 
 /// The backends `OPENJEV_BACKEND` may name, in upstream's order: `mlx`, then the encoder models.
 ///
-/// Upstream also has `vllm`, `clm` and `jevk5`, which this port does not: `vllm` because it has no
-/// vLLM backend (D-030), `clm` and `jevk5` until issues #59 and #55. They are unknown here, as any
-/// other name is. `mlx` needs MLX, and `verdict` and `laya` need Core ML.
+/// Upstream also has `vllm` and `clm`, which this port does not: `vllm` because it has no vLLM
+/// backend (D-030), `clm` until issue #59. They are unknown here, as any other name is. `mlx` and
+/// `jevk5` need MLX, and `verdict` and `laya` need Core ML.
 struct BackendRegistry: Sendable {
     /// One backend.
     struct Backend: Sendable {
@@ -23,8 +26,10 @@ struct BackendRegistry: Sendable {
         enum Kind: Sendable {
             /// ``DecisionEngine`` over a ``DecisionBackend``: DiffusionGemma.
             case diffusion
-            /// ``EncoderDecisionEngine`` over a ``QuestionReadBackend``.
+            /// ``EncoderDecisionEngine`` over a Core ML ``QuestionReadBackend``: Verdict, Laya.
             case encoder
+            /// ``EncoderDecisionEngine`` over JevK5's letter readout on MLX.
+            case letterReadout
         }
 
         /// How to load the backend, or why this build cannot.
@@ -114,7 +119,7 @@ struct BackendRegistry: Sendable {
         return registry
     }
 
-    /// The backends of this build: `mlx`, then `laya` and `verdict`.
+    /// The backends of this build: `mlx`, then `laya`, `verdict` and `jevk5`.
     static let standard = BackendRegistry(backends: [
         Backend(
             name: "mlx", modelName: ServedModels.diffusionGemmaVersion, kind: .diffusion,
@@ -125,6 +130,9 @@ struct BackendRegistry: Sendable {
         Backend(
             name: "verdict", modelName: KnownEncoderModels.verdict.name, kind: .encoder,
             servedModels: .encoder(KnownEncoderModels.verdict), availability: verdict),
+        Backend(
+            name: "jevk5", modelName: KnownEncoderModels.jevk5.name, kind: .letterReadout,
+            servedModels: .encoder(KnownEncoderModels.jevk5), availability: jevk5),
     ])
 
     /// DiffusionGemma on MLX (D-039): the checkpoint `OPENJEV_MLX_MODEL` names, a directory or a
@@ -192,6 +200,29 @@ struct BackendRegistry: Sendable {
             return .unavailable(
                 "OPENJEV_BACKEND=laya: Laya runs on Core ML, which this platform does not have; "
                     + "serve it from a Mac with macOS 15 or later")
+        #endif
+    }
+
+    /// JevK5 on MLX (D-051): the converted checkpoint `OPENJEV_JEVK5_MODEL` names, a folder or a
+    /// Hub repository resolved in the Hugging Face cache the environment names, with `HF_TOKEN`,
+    /// and MLX's buffer pool capped by `OPENJEV_MLX_CACHE_LIMIT_GB`. The engine warms it up with
+    /// upstream's warm-up questions when `OPENJEV_WARMUP` asks.
+    private static var jevk5: Backend.Availability {
+        #if canImport(OpenJevLetterReadout)
+            return .available { environment, willWarmUp in
+                QuestionReadBackendProvider(
+                    load: { settings in
+                        try await JevK5Backend.load(
+                            JevK5ModelFiles.source(setting: settings.jevk5Model),
+                            cache: HubCacheLocation(environment: environment),
+                            token: HubCacheLocation.token(environment: environment),
+                            cacheLimitGB: settings.mlxCacheLimitGB)
+                    }, willWarmUp: willWarmUp)
+            }
+        #else
+            return .unavailable(
+                "OPENJEV_BACKEND=jevk5: JevK5 runs on MLX, which needs Apple silicon; serve it "
+                    + "from a Mac")
         #endif
     }
 }

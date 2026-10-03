@@ -16,9 +16,10 @@ import harness
 from harness import markdown_table, num, pct
 
 LARGEST = 5
-# Models whose runs' timings the tables leave out, and why. The DiffusionGemma runs shared the Mac's
-# GPU with other work, so their timings are not a measurement; docs/benchmarks.md is (D-044).
-UNTIMED = {"openjev-0.1": "not reported"}
+# Models whose runs' timings the tables leave out, and why. The DiffusionGemma and JevK5 runs shared
+# the Mac's GPU with other work, so their timings are not a measurement; docs/benchmarks.md is
+# (D-044). JevK5's reference was timed on the author's GPU, which says nothing about a Mac either.
+UNTIMED = {"openjev-0.1": "not reported", "jevk5-0.2": "not reported"}
 # D-014's bounds on the aggregates the wire answers allow (the entropy bounds need the top-k
 # entropy of each read, which an answer does not carry). D-048 bounds the long prompts by each
 # read slot's largest difference, a measure of reads that an answer averages, so the long prompts'
@@ -39,6 +40,54 @@ def pairs(docs: list) -> list:
             for (dataset, model), runs in sorted(found.items(), key=lambda pair: (
                 pair[0][0] != "jevbench", pair[0][0], pair[0][1]))
             if "swift" in runs and "upstream" in runs]
+
+
+def author_pairs(docs: list) -> list:
+    """(dataset, model, swift run, the model author's run) for every model run on the Swift
+    server whose reference is its author's published run (harness.AUTHOR_RUNS)."""
+    found = {}
+    for doc in docs:
+        found.setdefault((doc["dataset"]["name"], doc["model"]), {})[doc["server"]["name"]] = doc
+    return [(dataset, model, runs["swift"], runs[harness.AUTHOR_SERVER])
+            for (dataset, model), runs in sorted(found.items())
+            if "swift" in runs and harness.AUTHOR_SERVER in runs]
+
+
+def author_tables(docs: list) -> list:
+    """Swift against the model author's published run: the top answers, the billed tokens, which
+    are equal exactly when the prompts are, and the probability differences, overall and by
+    question type, with the largest."""
+    rows, type_rows, largest_rows = [], [], []
+    for dataset, model, swift, author in author_pairs(docs):
+        result = harness.compare_docs(swift, author, top=LARGEST)
+        overall, flips, tokens = result["overall"], result["correctness"], result["input_tokens"]
+        rows.append([
+            model, dataset, str(overall["items"]), f"{overall['agree']} of {overall['items']}",
+            f"{tokens['equal']} of {tokens['items']}", num(overall["mean_abs_diff"]),
+            num(overall["median_max_abs_diff"]), num(overall["max_abs_diff"]),
+            f"{flips['a_only']} and {flips['b_only']}", f"{flips['mcnemar_p']:.3g}"])
+        for kind, group in result["per_type"].items():
+            type_rows.append([model, dataset, kind, str(group["items"]),
+                              f"{group['agree']} of {group['items']}", num(group["mean_abs_diff"]),
+                              num(group["max_abs_diff"]),
+                              f"{group['max_item']} ({group['max_label']})"])
+        for entry in result["largest"]:
+            largest_rows.append([model, dataset, entry["id"], entry["type"], entry["label"],
+                                 f"{entry['a']:.4f}", f"{entry['b']:.4f}", num(entry["diff"]),
+                                 "yes" if entry["agree"] else "no"])
+    if not rows:
+        return []
+    return [
+        markdown_table(["model", "dataset", "items", "top answer agrees", "input tokens equal",
+                        "mean abs diff", "median of each item's largest abs diff",
+                        "largest abs diff", "right only on Swift, only the author's",
+                        "McNemar p"], rows),
+        markdown_table(["model", "dataset", "type", "items", "top answer agrees",
+                        "mean abs diff", "largest abs diff", "largest at (label)"], type_rows),
+        f"The {LARGEST} largest deviations:",
+        markdown_table(["model", "dataset", "item", "type", "label", "Swift", "author",
+                        "abs diff", "top answer agrees"], largest_rows),
+    ]
 
 
 def is_diffusiongemma(doc: dict) -> bool:
@@ -285,6 +334,10 @@ def environment_rows(docs: list) -> list:
         if server.get("implementation") == "OpenJevSwift":
             code = f"OpenJevSwift {server.get('version')} at {str(server.get('commit'))[:7]}"
             runtime = server.get("runtime") or ""
+        elif server["name"] == harness.AUTHOR_SERVER:
+            code = (f"{server.get('implementation')} {server.get('version')} at "
+                    f"{str(server.get('commit'))[:7]}, published")
+            runtime = server.get("runtime") or ""
         else:
             packages = server.get("packages") or {}
             code = (f"openjev {server.get('version')} at {str(server.get('commit'))[:7]}, "
@@ -304,9 +357,10 @@ def environment_rows(docs: list) -> list:
         if key in seen:
             seen[key][0] += f", {doc['dataset']['name']}"
             continue
-        seen[key] = [doc["dataset"]["name"], doc["model"], server["name"], code, runtime,
-                     f"{hardware.get('cpu')}, {hardware.get('memory_gb')} GB, {hardware.get('os')}",
-                     doc["started_utc"][:10]]
+        machine = (f"{hardware.get('cpu')}, {hardware.get('memory_gb')} GB, {hardware.get('os')}"
+                   if hardware.get("cpu") else hardware.get("platform") or "not recorded")
+        seen[key] = [doc["dataset"]["name"], doc["model"], server["name"], code, runtime, machine,
+                     (doc["started_utc"] or "")[:10]]
         rows.append(seen[key])
     return rows
 
@@ -324,6 +378,12 @@ def render(results: Path, cache: Path) -> str:
     docs = harness.load_docs(result_files(results), cache)
     out = ["### The runs", markdown_table(harness.SUMMARY_HEADER, runs_rows(docs))]
     out += ["### Swift against upstream"] + agreement_tables(docs)
+    author = author_tables(docs)
+    if author:
+        out += ["### Swift against the model author's published run",
+                "JevK5's reference is its author's own published v0.2 run, as it is upstream's: "
+                "upstream's server reads JevK5's letters from vLLM, which needs an NVIDIA GPU "
+                "(D-051). Equal input tokens mean equal prompts."] + author
     published = published_tables(docs, cache)
     if published:
         out += ["### Against JevBench's published rows"] + published

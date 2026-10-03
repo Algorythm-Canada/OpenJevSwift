@@ -150,6 +150,21 @@ PUBLISHED_ROWS = {
     },
 }
 
+# A model author's own published run of the public items, for a model whose upstream server this
+# Mac cannot run: JevK5's, the reference the Swift `jevk5` backend is compared with, as upstream
+# compared its vLLM path with it (upstream's JevK5 server reads its letters from vLLM, which needs an
+# NVIDIA GPU; D-051). `author-run` turns the file into a result file whose server is AUTHOR_SERVER.
+AUTHOR_SERVER = "author"
+AUTHOR_RUNS = {
+    "jevk5-0.2": {
+        "repo": "allebee/jevk5", "commit": "0571ef373722dd10cace82c81580d7b675fe6b53",
+        "version": "0.2.2", "path": "results/public231/jevk5-v0.2.jsonl", "bytes": 221596,
+        "sha256": "571872b233bb48d26ebd735b4573aa8f28bd4828471bb89b4b9e1651dcb2e265",
+        "runtime": "the jevk5 package's own runtime (JevK5 0.2.2: transformers, the bf16 v0.2 "
+                   "weights, CUDA graphs) through JevBench's runner, as the author published it",
+    },
+}
+
 # What each model accepts per question (upstream's build_schema): an item outside this is skipped
 # for that model, never sent, and counted. Verdict's head has 25 logits, the last one for its
 # "insufficient evidence" option (encoders.py, VerdictEngine.max_choices).
@@ -283,6 +298,17 @@ def fetch_jevbench(cache: Path) -> None:
         download(github_raw(JEVBENCH_REPO, JEVBENCH_COMMIT, path), root / path, size, digest)
     for path, size, digest in (PUBLISHED_PER_TASK, PUBLISHED_BOARD):
         download(github_raw(JEVBENCH_REPO, JEVBENCH_COMMIT, path), root / path, size, digest)
+
+
+def author_run_path(cache: Path, model: str) -> Path:
+    run = AUTHOR_RUNS[model]
+    return cache / f"{run['repo'].replace('/', '--')}-{run['commit'][:7]}" / run["path"]
+
+
+def fetch_author_runs(cache: Path) -> None:
+    for model, run in AUTHOR_RUNS.items():
+        download(github_raw(run["repo"], run["commit"], run["path"]), author_run_path(cache, model),
+                 run["bytes"], run["sha256"])
 
 
 def fetch_typesafe(cache: Path) -> Path:
@@ -738,6 +764,82 @@ def run_dataset(dataset: Dataset, base_url: str, model: str, server: str, cache:
     return doc
 
 
+def author_run_doc(model: str, cache: Path, fetch: bool = True) -> dict:
+    """A model author's published run of JevBench's public items (AUTHOR_RUNS) as a result
+    document, so `compare`, `summary` and `report` read it as they read a run of this harness."""
+    run = AUTHOR_RUNS[model]
+    dataset = load_jevbench(cache, fetch=fetch)
+    path = author_run_path(cache, model)
+    if fetch:
+        fetch_author_runs(cache)
+    require_pinned(path, run["bytes"], run["sha256"])
+    rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip()]
+    return author_doc(dataset, rows, model, run)
+
+
+def author_doc(dataset: Dataset, rows: list, model: str, run: dict) -> dict:
+    """The result document of a published run's rows, JevBench's runner records.
+
+    Each item takes the distribution the author's server returned (`probs_as_returned`) and its
+    `usage`, scored again with JevBench's score_task as this harness scores its own runs; the
+    published record's own outcome is kept beside it. The run's requests were JevBench's typesafe
+    adapter's, as this harness sends them, so the token counts compare."""
+    by_id = {row["task_id"]: row for row in rows}
+    items = []
+    for task in dataset.tasks:
+        item = base_item(task, dataset, None)
+        row = by_id.get(task.id)
+        if row is None:
+            items.append({**item, "status": "unattempted"})
+            continue
+        probabilities = row.get("probs_as_returned") or row.get("probs")
+        answered = bool(row.get("ok")) and probabilities is not None
+        scored = jb_scoring.score_task(probabilities, task) if answered else FAILED_SCORE
+        item.update({
+            "status": "answered" if answered else "failed",
+            "http_status": row.get("status_code"),
+            "request": None, "answer": None,
+            "usage": row.get("usage"),
+            "probabilities": probabilities,
+            "valid": scored["valid"],
+            "strict_valid": scored.get("strict_valid", False),
+            "renormalized": scored.get("renormalized", False),
+            "predicted": scored.get("predicted"),
+            "correct": scored.get("correct"),
+            "error": row.get("error"),
+            "timing": {"wall_ms": round((row.get("latency_s") or 0) * 1000, 3), "http_ms": None,
+                       "server": None},
+            "request_id": None,
+            "author_record": {"predicted": row.get("predicted"), "correct": row.get("correct"),
+                              "raw_sha256": row.get("raw_sha256")},
+        })
+        items.append(item)
+    stamps = [row["ts"] for row in rows if isinstance(row.get("ts"), (int, float))]
+    started = (datetime.datetime.fromtimestamp(min(stamps), datetime.timezone.utc)
+               .isoformat(timespec="seconds") if stamps else None)
+    doc = {
+        "schema": SCHEMA,
+        "dataset": dataset.meta,
+        "model": model,
+        "server": {"name": AUTHOR_SERVER, "implementation": run["repo"],
+                   "version": run["version"], "commit": run["commit"], "runtime": run["runtime"],
+                   "source": f"{run['repo']}@{run['commit'][:7]}:{run['path']}",
+                   "source_bytes": run["bytes"], "source_sha256": run["sha256"], "models": None},
+        "client": {"harness": "Tools/jevbench/harness.py author-run",
+                   "harness_sha256": sha256_file(Path(__file__)),
+                   "python": platform.python_version(), "vendored": check_vendored()},
+        "hardware": {"platform": "not recorded by the published run"},
+        "published_row": None,
+        "started_utc": started,
+        "duration_s": None,
+        "stopped": None,
+        "items": items,
+    }
+    doc["summary"] = summarize_doc(doc, dataset if dataset.name == "typesafe102" else None)
+    return doc
+
+
 # Result files
 
 
@@ -957,11 +1059,20 @@ def compare_docs(a: dict, b: dict, top: int = 10) -> dict:
                 if usable(items_a.get(item_id)) != usable(items_b.get(item_id))]
     groups, disagreements, deviations, near_ties = {}, [], [], []
     flips = {"both_correct": 0, "both_wrong": 0, "a_only": 0, "b_only": 0}
+    # the prompt tokens each run billed, where both say: equal counts mean equal prompts
+    tokens = {"items": 0, "equal": 0, "differ": []}
     bounds = {"confident_items": 0, "confident_agree": 0, "long_items": 0, "long_sum": 0.0,
               "long_entries": 0, "long_max_sum": 0.0}
     for item_id in both:
         x, y = items_a[item_id], items_b[item_id]
         kind = x["type"]
+        billed = [(item.get("usage") or {}).get("input_tokens") for item in (x, y)]
+        if None not in billed:
+            tokens["items"] += 1
+            if billed[0] == billed[1]:
+                tokens["equal"] += 1
+            else:
+                tokens["differ"].append({"id": item_id, "a": billed[0], "b": billed[1]})
         group = groups.setdefault(kind, {"items": 0, "agree": 0, "identical": 0, "sum": 0.0,
                                          "entries": 0, "max": 0.0, "max_item": None,
                                          "max_label": None})
@@ -1014,7 +1125,10 @@ def compare_docs(a: dict, b: dict, top: int = 10) -> dict:
                "identical": sum(g["identical"] for g in groups.values()),
                "mean_abs_diff": (sum(g["sum"] for g in groups.values()) / total_entries
                                  if total_entries else None),
-               "max_abs_diff": max((g["max"] for g in groups.values()), default=None)}
+               "max_abs_diff": max((g["max"] for g in groups.values()), default=None),
+               # the median over items of each item's largest difference
+               "median_max_abs_diff": (statistics.median(entry["diff"] for entry in deviations)
+                                       if deviations else None)}
     deviations.sort(key=lambda entry: (-entry["diff"], entry["id"]))
     return {
         "model": a["model"], "dataset": a["dataset"]["name"],
@@ -1035,6 +1149,7 @@ def compare_docs(a: dict, b: dict, top: int = 10) -> dict:
                    "long_mean_max_abs_diff": (bounds["long_max_sum"] / bounds["long_items"]
                                               if bounds["long_items"] else None)},
         "answered_by_one_only": one_side,
+        "input_tokens": tokens,
     }
 
 
@@ -1171,6 +1286,12 @@ def compare_text(result: dict, items: int = 10) -> str:
                f"of each item's largest abs diff is {num(bounds['long_mean_max_abs_diff'])} and the "
                f"mean abs diff over their labels {num(bounds['long_mean_abs_diff'])} (informational: "
                f"D-048 bounds reads, which an answer averages)")
+    tokens = result["input_tokens"]
+    out.append(f"input tokens equal on {tokens['equal']} of the {tokens['items']} items both "
+               f"billed; the median of each item's largest abs diff is "
+               f"{num(overall['median_max_abs_diff'])}"
+               + ("" if not tokens["differ"] else "; they differ on " + ", ".join(
+                   f"{d['id']} ({d['a']} and {d['b']})" for d in tokens["differ"][:items])))
     flips = result["correctness"]
     out.append(f"correct in both {flips['both_correct']}, wrong in both {flips['both_wrong']}, "
                f"only {result['a']['server']} {flips['a_only']}, only {result['b']['server']} "
@@ -1233,6 +1354,12 @@ def command_fetch(args) -> int:
     for name in ("jevbench", "typesafe102") if args.dataset == "all" else (args.dataset,):
         dataset = load_dataset(name, cache, fetch=not args.offline)
         print(f"{name}: {len(dataset.tasks)} items in {cache}")
+    if args.dataset != "typesafe102":
+        if not args.offline:
+            fetch_author_runs(cache)
+        for model, run in AUTHOR_RUNS.items():
+            require_pinned(author_run_path(cache, model), run["bytes"], run["sha256"])
+            print(f"{model}: the author's published run, {run['repo']}@{run['commit'][:7]}")
     print("vendored files match their pins" + ("" if args.offline else " and their sources"))
     return 0
 
@@ -1319,6 +1446,19 @@ def command_published(args) -> int:
     return 0
 
 
+def command_author_run(args) -> int:
+    output = Path(args.output) if args.output else default_output("jevbench", args.model,
+                                                                  AUTHOR_SERVER)
+    if output.exists() and not args.force:
+        print(f"{output} exists; pass --force to replace it", file=sys.stderr)
+        return 2
+    doc = author_run_doc(args.model, Path(args.cache))
+    write_result(output, doc)
+    print(f"wrote {output} ({output.stat().st_size // 1024} KB)")
+    print(markdown_table(SUMMARY_HEADER, summary_rows([doc])))
+    return 0
+
+
 def command_report(args) -> int:
     from report import render  # the tables of docs/quality.md
 
@@ -1374,6 +1514,13 @@ def main(argv=None) -> int:
     published = commands.add_parser("published", help="a JevBench run against the published row")
     published.add_argument("files", nargs="+")
     published.set_defaults(func=command_published)
+
+    author = commands.add_parser(
+        "author-run", help="a model author's published JevBench run as a result file")
+    author.add_argument("--model", choices=tuple(AUTHOR_RUNS), default="jevk5-0.2")
+    author.add_argument("--output", help="the result file (default results/{model}-author.json)")
+    author.add_argument("--force", action="store_true", help="replace an existing result file")
+    author.set_defaults(func=command_author_run)
 
     report = commands.add_parser("report", help="the tables of docs/quality.md")
     report.add_argument("--results", default=str(RESULTS))

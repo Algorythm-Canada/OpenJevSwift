@@ -15,7 +15,7 @@ out or set to the empty string with the same effect.
 
 | Variable | Default | Backends | Meaning |
 |---|---|---|---|
-| `OPENJEV_BACKEND` | `mlx` | all | The backend to load: `mlx`, `verdict` or `laya`. Upstream's default, `vllm`, does not exist in this port, nor do `clm` and `jevk5` yet (issues #59 and #55); any other name is refused. |
+| `OPENJEV_BACKEND` | `mlx` | all | The backend to load: `mlx`, `verdict`, `laya` or `jevk5`. Upstream's default, `vllm`, does not exist in this port, nor does `clm` yet (issue #59); any other name is refused. |
 | `OPENJEV_HOST` | `127.0.0.1` | all | The address to bind. `0.0.0.0` serves the network. |
 | `OPENJEV_PORT` | `8080` | all | The port to bind. `0` picks a free one, which the `serving on` line names. |
 | `OPENJEV_LOG_LEVEL` | `info` | all | `trace`, `debug`, `info`, `notice`, `warning`, `error` or `critical`, case-sensitive. `notice` is this port's addition to uvicorn's names. |
@@ -30,7 +30,7 @@ out or set to the empty string with the same effect.
 | `OPENJEV_MLX_MODEL` | `mlx-community/diffusiongemma-26B-A4B-it-4bit` | mlx | The checkpoint: a directory, or a Hugging Face repository with an optional `@revision`. The default repository loads its pinned revision, `a7a81407`. |
 | `OPENJEV_MLX_MAX_PROMPT` | `32768` | mlx | The longest prompt in tokens; a longer one is a 400. |
 | `OPENJEV_MLX_PROMPT_CACHE` | `12` | mlx | The prefills kept for reuse, which together hold at most 16,384 prompt tokens. `0` turns the cache off. |
-| `OPENJEV_MLX_CACHE_LIMIT_GB` | unset | mlx | MLX's buffer pool limit in GB. Unset leaves MLX alone; `0` disables the pool. |
+| `OPENJEV_MLX_CACHE_LIMIT_GB` | unset | mlx, jevk5 | MLX's buffer pool limit in GB. Unset leaves MLX alone; `0` disables the pool. |
 | `OPENJEV_CANVAS` | `64` | mlx | The longest canvas in tokens. Questions are read in groups whose answer template fits it. |
 | `OPENJEV_CANVAS_STEP` | `16` | mlx | A canvas's width is its template's length plus one, rounded up to a multiple of this and capped at `OPENJEV_CANVAS`. |
 | `OPENJEV_MAX_INFLIGHT` | `64` | mlx | Reads in flight at once. The encoders make one call at a time whatever it says, as upstream's do. |
@@ -38,11 +38,12 @@ out or set to the empty string with the same effect.
 | `OPENJEV_AUTO_MAX` | `4` | mlx | The most reads of one group under those automatic re-reads. `1` turns them off. |
 | `OPENJEV_MAX_IMAGES` | `8` | mlx | Images per request. No backend reads images yet (issue #48), so a request with images is refused first and this has no effect. |
 | `OPENJEV_MAX_IMAGE_BYTES` | `5242880` | mlx | Bytes per decoded image, 5 MiB. No effect until images land (issue #48). |
-| `OPENJEV_ENCODER_BATCH` | `16` | encoders | Questions per backend call. On a Mac each Core ML call reads at most 16 questions. |
+| `OPENJEV_ENCODER_BATCH` | `16` | encoders | Questions per backend call. On a Mac each Core ML call reads at most 16 questions; JevK5 reads a call's questions concurrently, one pass at a time. |
 | `OPENJEV_ENCODER_FUNCTIONS` | unset | encoders | This port's: the most Core ML functions an encoder keeps loaded, at least 1. Unset keeps every function a read has needed, up to Verdict's 6 and Laya's 8 (D-042). |
 | `OPENJEV_ENCODER_MODELS` | unset | encoders | This port's: a folder of converted Core ML packages, used instead of downloading them (D-033). |
 | `OPENJEV_VERDICT_MODEL` | `heman10x/rlcd-modernbert-151m` | verdict | Read as upstream reads it, with no effect: the backend loads the package and the checkpoint revision its manifest pins (D-033). |
 | `OPENJEV_LAYA_MODEL` | `convaiinnovations/laya-typed-decisions` | laya | Read as upstream reads it, with no effect, for the same reason. |
+| `OPENJEV_JEVK5_MODEL` | `Algorythm-Canada/jevk5-0.2-mlx-4bit` | jevk5 | This port's: the JevK5 checkpoint converted to MLX, a directory (`Tools/jevk5/convert.py` writes one) or a Hugging Face repository with an optional `@revision`. A conversion's repository loads its pinned revision; the default is refused until the conversion is published (D-051). Upstream reads its vLLM server's `OPENJEV_MODEL` instead. |
 | `OPENJEV_DEVICE` | unset | encoders | Upstream's PyTorch device. Read, with no effect: Core ML picks the compute units for the platform (D-011). |
 | `OPENJEV_GEN_MAX_INFLIGHT` | `8` | none yet | Generations in flight at once. Read and checked; text generation arrives with issue #53. |
 | `OPENJEV_GEN_MAX_QUEUE` | `32` | none yet | Generations waiting before a 529. No effect until issue #53. |
@@ -81,8 +82,8 @@ too (D-030).
 
 | Variable | Read by | Meaning |
 |---|---|---|
-| `HF_HUB_CACHE`, `HF_HOME`, `XDG_CACHE_HOME` | `mlx`; `verdict` and `laya` with `OPENJEV_ENCODER_MODELS` | Where the Hugging Face cache is, as `huggingface_hub` finds it: `HF_HUB_CACHE`, else `HF_HOME/hub`, else `XDG_CACHE_HOME/huggingface/hub`, else `~/.cache/huggingface/hub`. DiffusionGemma's checkpoint is kept there, and a local encoder folder's tokenizer is looked for there. |
-| `HF_TOKEN` | `mlx` | A Hugging Face token for a gated or private repository; an empty value counts as unset. |
+| `HF_HUB_CACHE`, `HF_HOME`, `XDG_CACHE_HOME` | `mlx`, `jevk5`; `verdict` and `laya` with `OPENJEV_ENCODER_MODELS` | Where the Hugging Face cache is, as `huggingface_hub` finds it: `HF_HUB_CACHE`, else `HF_HOME/hub`, else `XDG_CACHE_HOME/huggingface/hub`, else `~/.cache/huggingface/hub`. DiffusionGemma's checkpoint is kept there, and a local encoder folder's tokenizer is looked for there. |
+| `HF_TOKEN` | `mlx`, `jevk5` | A Hugging Face token for a gated or private repository; an empty value counts as unset. |
 
 Upstream also reads variables for the backends this port does not have, which it ignores:
 `OPENJEV_UPSTREAM`, `OPENJEV_UPSTREAM_MODEL` and `OPENJEV_TOKENIZER` (the vLLM server), the

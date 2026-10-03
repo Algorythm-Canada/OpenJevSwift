@@ -292,6 +292,55 @@ class HarnessSmokeTest(unittest.TestCase):
         self.assertIn({"id": "t-extra", "a": "absent", "b": "answered"},
                       harness.compare_docs(self.doc_a, wider)["answered_by_one_only"])
 
+    def test_author_run_and_its_report(self):
+        import report
+
+        dataset = harness.load_item_file(ITEMS)
+        # The author's records of doc_b's answers, in JevBench's runner format: one bills another
+        # token count, and one item has no record.
+        rows = []
+        for item in self.doc_b["items"]:
+            if item["status"] != "answered" or item["id"] == "t-dict-state":
+                continue
+            rows.append({"task_id": item["id"], "ok": True,
+                         "probs_as_returned": item["probabilities"],
+                         "usage": {"input_tokens": 11 if item["id"] == "t-noul-1" else 10,
+                                   "output_tokens": 0},
+                         "latency_s": 0.02, "predicted": item["predicted"],
+                         "correct": item.get("correct"), "raw_sha256": "0" * 64,
+                         "ts": 1790103018.0, "status_code": None})
+        run = {"repo": "author/model", "commit": "0" * 40, "version": "1.0", "path": "run.jsonl",
+               "bytes": 0, "sha256": "0" * 64, "runtime": "the author's runtime"}
+        author = harness.author_doc(dataset, rows, MODEL, run)
+        self.assertEqual(author["server"]["name"], harness.AUTHOR_SERVER)
+        by_id = {item["id"]: item for item in author["items"]}
+        self.assertEqual(by_id["t-dict-state"]["status"], "unattempted")
+        reference = {item["id"]: item for item in self.doc_b["items"]}
+        for item_id, item in by_id.items():
+            if item["status"] == "answered":
+                self.assertEqual(item["predicted"], reference[item_id]["predicted"], item_id)
+                self.assertEqual(item["author_record"]["predicted"], reference[item_id]["predicted"])
+        self.assertEqual(author["started_utc"], "2026-09-22T18:50:18+00:00")
+        swift = json.loads(json.dumps(self.doc_a))
+        swift["server"]["name"] = "swift"
+        result = harness.compare_docs(swift, author)
+        tokens = result["input_tokens"]
+        self.assertEqual(tokens["differ"], [{"id": "t-noul-1", "a": 10, "b": 11}])
+        self.assertEqual(tokens["equal"], tokens["items"] - 1)
+        # the median of each item's largest difference, over the items both answered
+        largest = sorted(entry["diff"] for entry in result["largest"])
+        self.assertEqual(result["overall"]["median_max_abs_diff"],
+                         largest[len(largest) // 2] if len(largest) % 2
+                         else (largest[len(largest) // 2 - 1] + largest[len(largest) // 2]) / 2)
+        tables = report.author_tables([swift, author])
+        self.assertIn(f"| {MODEL} | items | {tokens['items']} | ", tables[0])
+        self.assertIn(f" | {tokens['equal']} of {tokens['items']} | ", tables[0])
+        self.assertEqual(report.author_tables([swift]), [])
+        # the machines table says the run was published, and that its machine was not recorded
+        row = report.environment_rows([author])[0]
+        self.assertTrue(row[3].endswith(", published"))
+        self.assertEqual(row[5], "not recorded by the published run")
+
     def test_command_line(self):
         a, b = self.tmp / "cli" / "a.json", self.tmp / "cli" / "b.json"
         with FakeServer(ANSWERS_A) as fake, contextlib.redirect_stdout(io.StringIO()):

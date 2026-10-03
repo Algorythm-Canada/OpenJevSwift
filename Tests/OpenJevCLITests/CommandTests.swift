@@ -47,14 +47,14 @@ struct CommandTests {
         "An unknown OPENJEV_BACKEND exits 2 with upstream's message and this port's backends",
         arguments: ["serve", "decide", "models"])
     func unknownBackend(subcommand: String) async {
-        for backend in ["vllm", "clm", "jevk5", "Verdict", ""] {
+        for backend in ["vllm", "clm", "JevK5", "Verdict", ""] {
             let outcome = await CommandHarness.run(
                 [subcommand], environment: ["OPENJEV_BACKEND": backend])
             #expect(outcome.status == 2, "\(backend)")
             #expect(
                 outcome.errors
-                    == "openjev: unknown backend '\(backend)'; use one of mlx, laya, verdict "
-                    + "(OPENJEV_BACKEND)\n", "\(backend)")
+                    == "openjev: unknown backend '\(backend)'; use one of mlx, laya, verdict, "
+                    + "jevk5 (OPENJEV_BACKEND)\n", "\(backend)")
         }
         let flagged = await CommandHarness.run([subcommand, "--backend", "nope"])
         #expect(flagged.status == 2)
@@ -112,11 +112,50 @@ struct CommandTests {
         #expect(await CommandHarness.run([subcommand], environment: environment).status == 3)
     }
 
+    @Test(
+        "jevk5 over its unpublished default exits 3 before any download; on Linux it is unavailable",
+        arguments: ["serve", "decide"])
+    func jevk5UnpublishedDefault(subcommand: String) async {
+        let outcome = await CommandHarness.run([subcommand, "--backend", "jevk5"])
+        #expect(outcome.status == 3)
+        if canImportLetterReadout {
+            #expect(
+                outcome.errors
+                    == "openjev: jevk5-0.2 failed to load (OPENJEV_BACKEND=jevk5): "
+                    + "Algorythm-Canada/jevk5-0.2-mlx-4bit is not published yet; convert the "
+                    + "checkpoint with Tools/jevk5/convert.py and set OPENJEV_JEVK5_MODEL to the "
+                    + "folder it writes (docs/deployment.md)\n")
+        } else {
+            #expect(outcome.errors.hasPrefix("openjev: OPENJEV_BACKEND=jevk5: "))
+            #expect(outcome.errors.contains("Apple silicon"))
+        }
+        // A folder that is not a conversion names what it lacks.
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("openjev-not-a-jevk5-\(UUID().uuidString)")
+        let missing = await CommandHarness.run(
+            [subcommand, "--backend", "jevk5"], environment: ["OPENJEV_JEVK5_MODEL": folder.path])
+        #expect(missing.status == 3)
+        if canImportLetterReadout {
+            #expect(missing.errors.contains("lacks config.json, model.safetensors.index.json"))
+        }
+    }
+
     /// Checked without a load: Laya's package is 1.7 GB and Verdict's 306 MB.
-    @Test("verdict and laya are this build's encoder backends, mlx its diffusion backend")
+    @Test("verdict and laya are this build's encoder backends, mlx and jevk5 its MLX backends")
     func standardBackends() throws {
         let registry = BackendRegistry.standard
-        #expect(registry.backends.map(\.name) == ["mlx", "laya", "verdict"])
+        #expect(registry.backends.map(\.name) == ["mlx", "laya", "verdict", "jevk5"])
+        let jevk5 = try registry.backend(named: "jevk5")
+        #expect(jevk5.kind == .letterReadout)
+        #expect(jevk5.modelName == "jevk5-0.2")
+        #expect(jevk5.servedModels == .encoder(KnownEncoderModels.jevk5))
+        switch jevk5.availability {
+        case .available:
+            #expect(canImportLetterReadout, "jevk5 is available without MLX")
+        case .unavailable(let message):
+            #expect(!canImportLetterReadout, "jevk5: \(message)")
+            #expect(message.hasPrefix("OPENJEV_BACKEND=jevk5: "))
+        }
         for name in ["laya", "verdict"] {
             let backend = try registry.backend(named: name)
             #expect(backend.kind == .encoder)
@@ -146,6 +185,15 @@ struct CommandTests {
     /// Whether this build has the DiffusionGemma backend.
     private var canImportDiffusionGemma: Bool {
         #if canImport(OpenJevDiffusionGemma)
+            return true
+        #else
+            return false
+        #endif
+    }
+
+    /// Whether this build has the JevK5 backend.
+    private var canImportLetterReadout: Bool {
+        #if canImport(OpenJevLetterReadout)
             return true
         #else
             return false
@@ -316,7 +364,7 @@ struct CommandTests {
     func modelsListings() async throws {
         let loads = LoadCounter()
         let backends = CommandHarness.backends(loads: loads)
-        for backend in ["mlx", "laya", "verdict"] {
+        for backend in ["mlx", "laya", "verdict", "jevk5"] {
             let outcome = await CommandHarness.run(
                 ["models", "--backend", backend], backends: backends)
             #expect(outcome.status == 0, "\(backend): \(outcome.errors)")
@@ -431,6 +479,25 @@ struct CommandTests {
         #expect(unset.contains(" encoder_functions=all "))
         let diffusion = SettingsSummary.line(capped, environment: [:], kind: .diffusion)
         #expect(!diffusion.contains("encoder_functions"))
+    }
+
+    @Test("The settings line gives jevk5's checkpoint and MLX cache limit, not the Core ML ones")
+    func settingsLineJevK5() throws {
+        let settings = try ServerSettings(environment: ["OPENJEV_BACKEND": "jevk5"])
+        let line = SettingsSummary.line(settings, environment: [:], kind: .letterReadout)
+        #expect(
+            line.contains(
+                " max_body_bytes=67108864 encoder_batch=16 "
+                    + "jevk5_model=Algorythm-Canada/jevk5-0.2-mlx-4bit mlx_cache_limit_gb=unset "
+                    + "api_key=unset "))
+        #expect(!line.contains("encoder_functions") && !line.contains("encoder_models"))
+        let capped = try ServerSettings(environment: [
+            "OPENJEV_JEVK5_MODEL": "~/models/jevk5", "OPENJEV_MLX_CACHE_LIMIT_GB": "4",
+        ])
+        let cappedLine = SettingsSummary.line(capped, environment: [:], kind: .letterReadout)
+        #expect(cappedLine.contains(" jevk5_model=~/models/jevk5 mlx_cache_limit_gb=4 "))
+        #expect(
+            !SettingsSummary.line(capped, environment: [:], kind: .encoder).contains("jevk5_model"))
     }
 
     @Test("serve logs a diffusion backend's MLX settings and re-read policy, at their defaults")

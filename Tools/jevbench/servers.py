@@ -5,11 +5,15 @@
     python3 Tools/jevbench/servers.py --server upstream --backend laya
     python3 Tools/jevbench/servers.py --server upstream --backend mlx --command \\
         openjev-bench reads --url {url} --server upstream
+    python3 Tools/jevbench/servers.py --server swift --backend jevk5 \\
+        --setting OPENJEV_MLX_CACHE_LIMIT_GB=4
 
 `swift` runs this repository's release build (`.build/release/openjev serve`). `upstream` runs
 razorback16/openjev at the commit the Makefile pins (`make upstream`) with `python -m openjev`,
 from the virtual environment README.md describes, upstream's checkout on PYTHONPATH and its
-checkpoint read from the pinned snapshot in the Hugging Face cache. Both listen on 127.0.0.1 on a
+checkpoint read from the pinned snapshot in the Hugging Face cache. Upstream's `jevk5` reads its
+letters from a vLLM server, which needs an NVIDIA GPU, so only the Swift server runs it here; its
+reference is the model author's published run (`harness.py author-run`). Both listen on 127.0.0.1 on a
 free port with warm-up on, as their defaults have it. The server's log goes beside the harness's
 cache; each dataset's result goes to results/ (README.md). Standard library only.
 """
@@ -36,7 +40,9 @@ UPSTREAM = ROOT / "Upstream" / "openjev"
 DEFAULT_PYTHON = harness.HERE / ".venv" / "bin" / "python"
 
 # backend -> the model it serves
-MODELS = {"verdict": "verdict-1.4", "laya": "laya-1.0", "mlx": "openjev-0.1"}
+MODELS = {"verdict": "verdict-1.4", "laya": "laya-1.0", "mlx": "openjev-0.1", "jevk5": "jevk5-0.2"}
+# The JevK5 conversion the Swift server reads by default: Tools/jevk5/convert.py --bits 4's folder.
+JEVK5_MODEL = Path.home() / "Library" / "Caches" / "OpenJevSwift" / "jevk5" / "jevk5-0.2-mlx-4bit"
 # The checkpoints upstream loads, at the revisions Fixtures/encoders and THIRD_PARTY.md pin, and
 # the files of each its loader reads (Tools/encoders/common.py).
 CHECKPOINTS = {
@@ -65,7 +71,8 @@ PACKAGE_PATHS = ("Sources", "Package.swift", "Package.resolved")
 # that the servers' defaults apply (and no API key is required).
 COMMON_SETTINGS = {"OPENJEV_HOST": "127.0.0.1", "OPENJEV_LOG_LEVEL": "info"}
 # What --setting may not replace: the settings this script chooses itself.
-RESERVED_SETTINGS = ({"OPENJEV_PORT", "OPENJEV_BACKEND", "OPENJEV_ENCODER_MODELS"}
+RESERVED_SETTINGS = ({"OPENJEV_PORT", "OPENJEV_BACKEND", "OPENJEV_ENCODER_MODELS",
+                      "OPENJEV_JEVK5_MODEL"}
                      | set(COMMON_SETTINGS) | {entry[3] for entry in CHECKPOINTS.values()})
 # What --setting refuses because it can hold a credential, which a result file would record: the
 # API key and origin secret, the model routes and upstream's vLLM URL (either URL can carry a user
@@ -131,7 +138,8 @@ def swift_binary(explicit: str | None) -> Path:
     return Path(folder or ROOT / ".build" / "release") / "openjev"
 
 
-def swift_server(backend: str, binary: Path, encoder_models: str | None) -> tuple:
+def swift_server(backend: str, binary: Path, encoder_models: str | None,
+                 jevk5_model: str | None = None) -> tuple:
     """The command, environment and version record of the Swift server for `backend`."""
     if not binary.is_file():
         sys.exit(f"{binary} is missing; run swift build -c release --product openjev")
@@ -176,13 +184,33 @@ def swift_server(backend: str, binary: Path, encoder_models: str | None) -> tupl
         info["runtime"] = "MLX on the GPU (D-039)"
         info["model_source"] = (f"OPENJEV_MLX_MODEL's default, {repo} at {revision[:7]}, through "
                                 "the Hugging Face cache")
-    info["settings"] = {key: harness.display_path(value) if key == "OPENJEV_ENCODER_MODELS"
-                        else value for key, value in settings.items()}
+    if backend == "jevk5":
+        folder = Path(jevk5_model or JEVK5_MODEL).expanduser()
+        settings["OPENJEV_JEVK5_MODEL"] = str(folder)
+        info["runtime"] = "MLX on the GPU, Qwen3.5 through mlx-swift-lm (D-051)"
+        info["model_source"] = f"OPENJEV_JEVK5_MODEL={harness.display_path(folder)}"
+        # the folder must be the pinned 4-bit conversion, which the published digests describe
+        check = subprocess.run(
+            [sys.executable, str(ROOT / "Tools" / "jevk5" / "convert.py"), "--check", str(folder),
+             "--bits", "4"], capture_output=True, text=True, cwd=ROOT)
+        lines = (check.stdout.strip() or check.stderr.strip()).splitlines()
+        info["model_check"] = (lines[-1].replace(str(folder), harness.display_path(folder))
+                               if lines else None)
+        if check.returncode != 0:
+            sys.exit(f"{harness.display_path(folder)} is not the pinned 4-bit conversion: "
+                     f"{info['model_check']}; run Tools/jevk5/convert.py --bits 4")
+    info["settings"] = {key: harness.display_path(value)
+                        if key in ("OPENJEV_ENCODER_MODELS", "OPENJEV_JEVK5_MODEL") else value
+                        for key, value in settings.items()}
     return [str(binary), "serve"], settings, info
 
 
 def upstream_server(backend: str, python: Path) -> tuple:
     """The command, environment and version record of upstream's server for `backend`."""
+    if backend == "jevk5":
+        sys.exit("upstream's jevk5 backend reads its letters from a vLLM server, which needs an "
+                 "NVIDIA GPU; compare the Swift run with the author's published run instead "
+                 "(python3 Tools/jevbench/harness.py author-run)")
     if not python.is_file():
         sys.exit(f"{python} is missing; create it as Tools/jevbench/README.md describes")
     head = output(["git", "-C", str(UPSTREAM), "rev-parse", "HEAD"])
@@ -285,6 +313,9 @@ def main(argv=None) -> int:
     parser.add_argument("--encoder-models",
                         help="OPENJEV_ENCODER_MODELS for the Swift server; unset downloads the "
                              "published packages")
+    parser.add_argument("--jevk5-model", default=str(JEVK5_MODEL),
+                        help="OPENJEV_JEVK5_MODEL for the Swift jevk5 server, the 4-bit "
+                             "conversion's folder (default %(default)s)")
     parser.add_argument("--python", default=str(DEFAULT_PYTHON),
                         help="the interpreter of upstream's environment (default %(default)s)")
     parser.add_argument("--cache", default=str(harness.default_cache()))
@@ -317,7 +348,7 @@ def main(argv=None) -> int:
 
     if args.server == "swift":
         command, settings, info = swift_server(args.backend, swift_binary(args.binary),
-                                               args.encoder_models)
+                                               args.encoder_models, args.jevk5_model)
     else:
         command, settings, info = upstream_server(args.backend, Path(args.python))
     settings.update(extra)

@@ -55,6 +55,17 @@ OpenJevSwift/                          Swift package, tools 6.2, strict concurre
                      CompiledEncoderModel, EncoderComputeUnits
       Store/         EncoderPackageManifest (Verdict's, Laya's five), EncoderPackageStore
                      (download on first use, SHA-256, the tokenizer alone, held packages)
+    OpenJevLetterReadout/              Apple silicon. JevK5 (jevk5-0.2) on MLX: depends on mlx-swift,
+                                       MLXLLM (Qwen3.5), MLXLMCommon, swift-transformers Tokenizers
+                                       and OpenJevDiffusionGemma's ModelResolver (D-051).
+      Prompt/        JevK5Prompt (prompt_text, byte for byte), JevK5Option (decision_options),
+                     Python's str() of JSON values
+      Readout/       JevK5Readout: the letter softmax, groups, spread, knockout and tree
+      Backend/       JevK5Backend actor (questions concurrent, passes one at a time), the
+                     model and tokenizer protocols, JevK5PromptLimit (vLLM's 400s), the calibration
+      MLX/           Qwen35LetterReadoutModel (last position only, chunked prefill),
+                     JevK5Tokenizer, the loader
+      Files/         JevK5Checkpoint (the conversions' digests), JevK5ModelFiles
     OpenJevServer/                     Hummingbird 2. ServerSettings, BackendProvider,
                                        OpenJevApplication (routes), SystemOneHandler, request id,
                                        server-timing, request log, authentication and body cap
@@ -72,6 +83,8 @@ OpenJevSwift/                          Swift package, tools 6.2, strict concurre
     OpenJevDiffusionGemmaTests/        Unit tests on synthetic shapes; opt-in live tests
     OpenJevEncodersTests/              Fixture-driven parity tests over recorded logits; opt-in
                                        tokenizer and Core ML parity tests
+    OpenJevLetterReadoutTests/         JevK5's prompts and readout against Fixtures/jevk5, upstream's
+                                       JevK5 tests over a stub model; opt-in MLX parity tests
     OpenJevServerTests/                Contract tests with a stub backend, capacity and model time
                                        among them; disconnects and shutdown on live sockets; the
                                        model routes against an in-process routed server
@@ -83,18 +96,21 @@ OpenJevSwift/                          Swift package, tools 6.2, strict concurre
     fixtures/                          Python: generate golden fixtures from pinned upstream
     encoders/                          Python and Swift: Verdict's and Laya's reference outputs,
                                        the Core ML converters and the package manifest
+    jevk5/                             Python: JevK5's MLX conversion and its reference reads
     sdk-compat/                        Python: TypeSafe's Python and TypeScript SDKs, and
                                        JevSwiftSDK, against openjev-stub-server
-    docs/                              Shell: the DocC site of the four library modules, whose
+    docs/                              Shell: the DocC site of the five library modules, whose
                                        catalogs are Sources/<module>/Documentation.docc
   Fixtures/                            Checked-in JSON fixtures (small)
 ```
 
 `OpenJevEncoders` holds the encoder backends on Core ML (D-011): Verdict (#57) and Laya (#58).
-A later milestone adds `OpenJevLetterReadout` (JevK5 style on `MLXLLM` models). Both are
-separate targets so that iOS consumers never link the 26B model code. Both implement
-`QuestionReadBackend` and run behind `EncoderDecisionEngine`, so the server holds either kind of
-engine as a `SystemOneService`.
+`OpenJevLetterReadout` holds JevK5 (#55): the `jevk5` package's prompt and readout over
+`MLXLLM`'s Qwen3.5 text model. Both implement `QuestionReadBackend` and run behind
+`EncoderDecisionEngine`, so the server holds either kind of engine as a `SystemOneService`. They
+are separate from `OpenJevDiffusionGemma` so that an app can take one model without the others;
+`OpenJevLetterReadout` still links `OpenJevDiffusionGemma` for its downloader, `ModelResolver`,
+until that moves to a target of its own (D-051).
 
 ## Module dependency graph
 
@@ -102,16 +118,19 @@ engine as a `SystemOneService`.
 openjev (CLI) ──► OpenJevServer ──► OpenJevCore
       │                                  ▲
       ├──► OpenJevEncoders (macOS) ──────┤──► Core ML, swift-transformers (Tokenizers)
-      └──► OpenJevDiffusionGemma (#29) ──┘──► mlx-swift, mlx-swift-lm (MLXLMCommon, MLXVLM),
-                                              swift-transformers (Tokenizers)
+      ├──► OpenJevDiffusionGemma (#29) ──┤──► mlx-swift, mlx-swift-lm (MLXLMCommon, MLXVLM),
+      │          ▲                        │    swift-transformers (Tokenizers)
+      └──► OpenJevLetterReadout (#55) ───┘──► mlx-swift, mlx-swift-lm (MLXLLM, MLXLMCommon),
+                 (ModelResolver)               swift-transformers (Tokenizers)
 ```
 
 `OpenJevCore` has no third-party dependencies (an `OrderedDictionary` from `swift-collections`
 is acceptable if it saves a hand-rolled type). `OpenJevServer` depends on Hummingbird,
 swift-http-types, swift-log, swift-nio's `NIOCore`, `NIOPosix` and `NIOHTTP1`,
 swift-service-lifecycle and AsyncHTTPClient, never on a backend. The CLI picks the backend and
-links it: `OpenJevEncoders` and `OpenJevDiffusionGemma` on macOS. Backends depend on the core,
-never the reverse.
+links it: `OpenJevEncoders`, `OpenJevDiffusionGemma` and `OpenJevLetterReadout` on macOS. Backends
+depend on the core, never the reverse; `OpenJevLetterReadout` also depends on
+`OpenJevDiffusionGemma` for `ModelResolver` (D-051).
 
 ## Core types (sketch)
 
@@ -454,7 +473,24 @@ QuestionReadBackendProvider { settings in
 ```
 
 On Linux, where `OpenJevEncoders` does not exist, `verdict` and `laya` are known backends that
-exit 3.
+exit 3. For `OPENJEV_BACKEND=jevk5`:
+
+```swift
+QuestionReadBackendProvider { settings in
+    try await JevK5Backend.load(
+        JevK5ModelFiles.source(setting: settings.jevk5Model),
+        cache: HubCacheLocation(environment: environment),
+        token: HubCacheLocation.token(environment: environment),
+        cacheLimitGB: settings.mlxCacheLimitGB)
+}
+```
+
+`OPENJEV_JEVK5_MODEL` (this port's setting) names a converted folder or a Hub repository; a
+conversion's repository takes its pinned revision, and the default, the 4-bit conversion's
+repository, is refused before any download until it is published (D-051). The loader reads the
+calibration temperature from `jevk5_config.json`, checks that the 16 letters are single tokens and
+caps MLX's pool with `OPENJEV_MLX_CACHE_LIMIT_GB`. Without MLX, `jevk5` is a known backend that
+exits 3, as `mlx` is.
 
 `EncoderPackageStore(environment:)` uses the folder `OPENJEV_ENCODER_MODELS` names when it is set,
 as the converters in `Tools/encoders` write it. Otherwise it downloads the model's package,
@@ -474,11 +510,11 @@ stays loaded, up to the package's six or eight, unless `OPENJEV_ENCODER_FUNCTION
 
 ## Platform support matrix
 
-| Target | `OpenJevCore` | `OpenJevDiffusionGemma` | `OpenJevServer` | `OpenJevEncoders` |
-|---|---|---|---|---|
-| macOS 14+ Apple silicon | yes | yes (32 GB+ recommended) | yes | yes, from macOS 15 (Core ML's multifunction packages) |
-| iOS 17+ | yes | no (memory) | no | yes, from iOS 18 |
-| Linux | yes (tests, tooling) | no | builds with a stub backend for contract tests and the SDK suite's stub server | no (Core ML) |
+| Target | `OpenJevCore` | `OpenJevDiffusionGemma` | `OpenJevServer` | `OpenJevEncoders` | `OpenJevLetterReadout` |
+|---|---|---|---|---|---|
+| macOS 14+ Apple silicon | yes | yes (32 GB+ recommended) | yes | yes, from macOS 15 (Core ML's multifunction packages) | yes |
+| iOS 17+ | yes | no (memory) | no | yes, from iOS 18 | builds; the 4-bit conversion is meant for recent iPhones and iPads, not yet run on one |
+| Linux | yes (tests, tooling) | no | builds with a stub backend for contract tests and the SDK suite's stub server | no (Core ML) | no (MLX) |
 
 ## Deliberately not in scope for 0.1
 
