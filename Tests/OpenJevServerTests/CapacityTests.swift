@@ -134,13 +134,23 @@
             }
         }
 
-        @Test("Parallel groups sum their reads' time, so model exceeds total")
+        @Test(
+            "Parallel groups sum their reads' time, so model exceeds total",
+            .timeLimit(.minutes(1)))
         func parallelGroups() async throws {
-            let stub = StubBackend(delay: .milliseconds(60))
+            // Two groups of sixteen samples: 32 reads at once. Each read waits in the stub until
+            // all 32 are there and then takes 100 ms, so the reads overlap however late the
+            // scheduler starts each one, and their times add up to at least 3.1 s (31 reads'
+            // delay) more than the span from the first read's start to the last one's end. model
+            // exceeds total whenever the request spends less than that outside its reads. That
+            // time is the scheduler's, which no stub controls; under heavy load it has reached a
+            // few hundred milliseconds. Reads that ran one at a time would never fill a round,
+            // and the time limit would fail the test.
+            let reads = 32
+            let stub = StubBackend(delay: .milliseconds(100), barrier: ReadBarrier(parties: reads))
             let service = try await ServerHarness.diffusionService(ServerSettings(), backend: stub)
-            // Two groups of three samples: six reads at once.
             var object = try #require(try request("parallel_groups_30_nouls").objectValue)
-            object["samples"] = 3
+            object["samples"] = 16
             let request = JSONValue.object(object)
             try await ServerHarness.withClient(service: service) { client in
                 // A first request loads the fixture tokenizer and fills the template cache, so
@@ -151,10 +161,13 @@
                 #expect(response.status == .ok)
                 let timing = try timing(response)
                 let times = Array(stub.callTimes.dropFirst(before))
-                #expect(times.count == 6)
+                #expect(times.count == reads)
                 #expect(timing.model >= spent(times) - rounding, "\(timing)")
-                // Each read lies inside the request, so the six add up to at most six totals.
-                #expect(timing.model <= 6 * (timing.total + rounding) + rounding, "\(timing)")
+                // Each read lies inside the request, so the reads add up to at most one total
+                // each.
+                #expect(
+                    timing.model <= Double(reads) * (timing.total + rounding) + rounding,
+                    "\(timing)")
                 #expect(timing.model > timing.total, "\(timing)")
                 #expect(timing.server == 0)
             }
