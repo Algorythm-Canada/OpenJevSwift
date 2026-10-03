@@ -50,6 +50,18 @@ struct VisionPreprocessingTests {
         #expect(processor["eoi_token_id"]?.intValue == 258_882)
     }
 
+    @Test("Image processor sizing parameters must be positive")
+    func invalidSizingConfiguration() {
+        for key in ["max_soft_tokens", "patch_size", "pooling_kernel_size"] {
+            for value in ["0", "-1"] {
+                let config = Data("{\"image_processor\":{\"\(key)\":\(value)}}".utf8)
+                #expect(throws: VisionError.self) {
+                    try Gemma4ImageProcessor(configuration: config)
+                }
+            }
+        }
+    }
+
     @Test("ImageIO decodes every synthetic image to the RGB bytes PIL gave")
     func decoding() throws {
         for image in try Self.syntheticImages() {
@@ -143,20 +155,6 @@ struct VisionPreprocessingTests {
         #expect(rows >= 24)
     }
 
-    @Test("pixel_values stack to (n, 3, H, W) only when the images share a size")
-    func stacking() throws {
-        MetalLibrary.configure()
-        let images = try Self.syntheticImages()
-        let gray = try Self.processed(#require(images.first { $0.name == "gray" }))
-        let small = try Self.processed(#require(images.first { $0.name == "small" }))
-        let gradients = try Self.processed(#require(images.first { $0.name == "gradients" }))
-        let same = Gemma4ImageProcessor.pixelValues([gray, small])
-        #expect(same.count == 1)
-        #expect(same[0].shape == [2, 3, 624, 1008])
-        let mixed = Gemma4ImageProcessor.pixelValues([gray, gradients])
-        #expect(mixed.map(\.shape) == [[3, 624, 1008], [3, 576, 1008]])
-    }
-
     @Test("Swapping the bicubic filter for bilinear breaks the bounds on every image")
     func plantedBilinear() throws {
         for image in try Self.syntheticImages() {
@@ -225,26 +223,6 @@ struct VisionPreprocessingTests {
                 == "a<|image><|image|><|image|><image|>b")
     }
 
-    @Test("MLXVLM's Gemma4Processor, on Core Image's bicubic, misses the bounds")
-    func coreImage() throws {
-        MetalLibrary.configure()
-        let processor = try CoreImageProcessor.make()
-        var largest: Float = 0
-        for image in try Self.syntheticImages() {
-            let ciImage = try #require(CIImage(data: image.data()))
-            let (pixels, frame) = try processor.preprocess(image: ciImage, processing: nil)
-            let values = pixels.asType(.float32).reshaped(-1).asArray(Float.self)
-            let comparison = VisionFixtures.compare(
-                values, width: frame.w, height: frame.h, with: image)
-            print("vision Core Image: \(comparison)")
-            SpikeReport.record("vision-core-image", "\(comparison)")
-            if comparison.shapeMatches {
-                largest = max(largest, comparison.maxSampleDifference)
-            }
-        }
-        // The decision rests on this: Core Image's resize is not within 1e-3 of Pillow's.
-        #expect(largest > VisionFixtures.bound)
-    }
 }
 
 /// MLXVLM's `Gemma4Processor` with the pinned checkpoint's image settings. Its tokenizer is
@@ -305,42 +283,6 @@ struct VisionUpstreamParityTests {
         #expect(comparison.withinBound, "\(comparison)")
     }
 
-    @Test(
-        "Every value of every image against the oracle's full tensors",
-        .enabled(if: VisionFixtures.tensorsAvailable, VisionFixtures.tensorsMessage))
-    func fullTensors() throws {
-        MetalLibrary.configure()
-        let ciProcessor = try CoreImageProcessor.make()
-        for image in try VisionFixtures.preprocessing().images {
-            let data = try image.data()
-            let rgb = try RGBImage(decoding: data)
-            let oracleRGB = try VisionFixtures.fullRGB(image.name)
-            let decodeDiff = zip(rgb.pixels, oracleRGB).reduce(0) {
-                max($0, abs(Int($1.0) - Int($1.1)))
-            }
-            let decodeDiffering = zip(rgb.pixels, oracleRGB).filter { $0 != $1 }.count
-            let processed = try Gemma4ImageProcessor().process(rgb)
-            let oracle = try VisionFixtures.fullTensor(image.name)
-            let pillow = VisionFixtures.difference(processed.values, oracle)
-            var line =
-                "\(image.name): decode max \(decodeDiff) levels at \(decodeDiffering) of "
-                + "\(oracleRGB.count) bytes; Pillow port max \(pillow.max) at \(pillow.differing) "
-                + "of \(oracle.count) values"
-            if let ciImage = CIImage(data: data) {
-                let (pixels, frame) = try ciProcessor.preprocess(image: ciImage, processing: nil)
-                let values = pixels.asType(.float32).reshaped(-1).asArray(Float.self)
-                if frame.w == processed.resized.width && frame.h == processed.resized.height {
-                    let ci = VisionFixtures.difference(values, oracle)
-                    line += "; Core Image max \(ci.max) at \(ci.differing) values"
-                } else {
-                    line += "; Core Image size \(frame.w) by \(frame.h) differs"
-                }
-            }
-            print("vision full tensors: \(line)")
-            SpikeReport.record("vision-full-tensors", line)
-            #expect(pillow.max <= VisionFixtures.bound, "\(line)")
-        }
-    }
 }
 
 /// The expanded prompt ids and `mm_token_type_ids`, which need the tokenizer files.
@@ -349,29 +291,6 @@ struct VisionUpstreamParityTests {
     .enabled(if: TokenizerFixtures.available, TokenizerFixtures.missingMessage),
     .enabled(if: VisionFixtures.hotdogAvailable, VisionFixtures.hotdogMessage))
 struct VisionPromptParityTests {
-    @Test("Every fixture prompt expands to the oracle's ids and mm_token_type_ids")
-    func prompts() async throws {
-        let tokenizer = try await TokenizerFixtures.tokenizer()
-        let fixture = try VisionFixtures.preprocessing()
-        #expect(fixture.prompts.count == 9)
-        for prompt in fixture.prompts {
-            let parts = try prompt.images.map { name in
-                let image = try #require(fixture.images.first { $0.name == name })
-                return ImagePart(
-                    contentType: image.contentType, base64: try image.data().base64EncodedString())
-            }
-            let inputs = try ImageReadInputs(
-                system: prompt.system, state: prompt.state, parts: parts, tokenizer: tokenizer)
-            #expect(inputs.prompt.softTokens == prompt.softTokens, "\(prompt.key)")
-            #expect(
-                inputs.prompt.ids == prompt.ids,
-                "\(prompt.key): \(ChatTemplateParityTests.firstDifference(expected: prompt.ids, actual: inputs.prompt.ids))"
-            )
-            #expect(inputs.prompt.mmTokenTypeIDs == prompt.mmTokenTypeIDs, "\(prompt.key)")
-            #expect(inputs.pixelValues.map(\.shape) == prompt.shapes, "\(prompt.key)")
-        }
-    }
-
     @Test("An image prompt's system turn ends in the space a text prompt's lacks")
     func systemSpace() async throws {
         let tokenizer = try await TokenizerFixtures.tokenizer()
@@ -386,5 +305,116 @@ struct VisionPromptParityTests {
         #expect(imageClose == textClose + 1)
         #expect(prompt.ids[imageClose - 1] == 236_743)
         #expect(Array(prompt.ids[..<textClose]) == Array(text[..<textClose]))
+    }
+}
+
+extension MLXTests {
+    @Suite("Vision preprocessing MLX checks")
+    struct VisionPreprocessingMLXTests {
+        @Test("pixel_values stack to (n, 3, H, W) only when the images share a size")
+        func stacking() throws {
+            MetalLibrary.configure()
+            let images = try VisionPreprocessingTests.syntheticImages()
+            let gray = try VisionPreprocessingTests.processed(
+                #require(images.first { $0.name == "gray" }))
+            let small = try VisionPreprocessingTests.processed(
+                #require(images.first { $0.name == "small" }))
+            let gradients = try VisionPreprocessingTests.processed(
+                #require(images.first { $0.name == "gradients" }))
+            let same = Gemma4ImageProcessor.pixelValues([gray, small])
+            #expect(same.count == 1)
+            #expect(same[0].shape == [2, 3, 624, 1008])
+            let mixed = Gemma4ImageProcessor.pixelValues([gray, gradients])
+            #expect(mixed.map(\.shape) == [[3, 624, 1008], [3, 576, 1008]])
+        }
+
+        @Test("MLXVLM's Gemma4Processor, on Core Image's bicubic, misses the bounds")
+        func coreImage() throws {
+            MetalLibrary.configure()
+            let processor = try CoreImageProcessor.make()
+            var largest: Float = 0
+            for image in try VisionPreprocessingTests.syntheticImages() {
+                let ciImage = try #require(CIImage(data: image.data()))
+                let (pixels, frame) = try processor.preprocess(image: ciImage, processing: nil)
+                let values = pixels.asType(.float32).reshaped(-1).asArray(Float.self)
+                let comparison = VisionFixtures.compare(
+                    values, width: frame.w, height: frame.h, with: image)
+                print("vision Core Image: \(comparison)")
+                SpikeReport.record("vision-core-image", "\(comparison)")
+                if comparison.shapeMatches {
+                    largest = max(largest, comparison.maxSampleDifference)
+                }
+            }
+            #expect(largest > VisionFixtures.bound)
+        }
+    }
+
+    @Suite(
+        "Vision parity with upstream's MLX files",
+        .enabled(if: VisionFixtures.hotdogAvailable, VisionFixtures.hotdogMessage))
+    struct VisionUpstreamMLXParityTests {
+        @Test(
+            "Every value of every image against the oracle's full tensors",
+            .enabled(if: VisionFixtures.tensorsAvailable, VisionFixtures.tensorsMessage))
+        func fullTensors() throws {
+            MetalLibrary.configure()
+            let ciProcessor = try CoreImageProcessor.make()
+            for image in try VisionFixtures.preprocessing().images {
+                let data = try image.data()
+                let rgb = try RGBImage(decoding: data)
+                let oracleRGB = try VisionFixtures.fullRGB(image.name)
+                let decodeDiff = zip(rgb.pixels, oracleRGB).reduce(0) {
+                    max($0, abs(Int($1.0) - Int($1.1)))
+                }
+                let decodeDiffering = zip(rgb.pixels, oracleRGB).filter { $0 != $1 }.count
+                let processed = try Gemma4ImageProcessor().process(rgb)
+                let oracle = try VisionFixtures.fullTensor(image.name)
+                let pillow = VisionFixtures.difference(processed.values, oracle)
+                var line =
+                    "\(image.name): decode max \(decodeDiff) levels at \(decodeDiffering) of "
+                    + "\(oracleRGB.count) bytes; Pillow port max \(pillow.max) at \(pillow.differing) "
+                    + "of \(oracle.count) values"
+                if let ciImage = CIImage(data: data) {
+                    let (pixels, frame) = try ciProcessor.preprocess(
+                        image: ciImage, processing: nil)
+                    let values = pixels.asType(.float32).reshaped(-1).asArray(Float.self)
+                    if frame.w == processed.resized.width && frame.h == processed.resized.height {
+                        let ci = VisionFixtures.difference(values, oracle)
+                        line += "; Core Image max \(ci.max) at \(ci.differing) values"
+                    } else {
+                        line += "; Core Image size \(frame.w) by \(frame.h) differs"
+                    }
+                }
+                print("vision full tensors: \(line)")
+                SpikeReport.record("vision-full-tensors", line)
+                #expect(pillow.max <= VisionFixtures.bound, "\(line)")
+            }
+        }
+
+        @Test(
+            "Every fixture prompt expands to the oracle's ids and mm_token_type_ids",
+            .enabled(if: TokenizerFixtures.available, TokenizerFixtures.missingMessage))
+        func prompts() async throws {
+            let tokenizer = try await TokenizerFixtures.tokenizer()
+            let fixture = try VisionFixtures.preprocessing()
+            #expect(fixture.prompts.count == 9)
+            for prompt in fixture.prompts {
+                let parts = try prompt.images.map { name in
+                    let image = try #require(fixture.images.first { $0.name == name })
+                    return ImagePart(
+                        contentType: image.contentType,
+                        base64: try image.data().base64EncodedString())
+                }
+                let inputs = try ImageReadInputs(
+                    system: prompt.system, state: prompt.state, parts: parts, tokenizer: tokenizer)
+                #expect(inputs.prompt.softTokens == prompt.softTokens, "\(prompt.key)")
+                #expect(
+                    inputs.prompt.ids == prompt.ids,
+                    "\(prompt.key): \(ChatTemplateParityTests.firstDifference(expected: prompt.ids, actual: inputs.prompt.ids))"
+                )
+                #expect(inputs.prompt.mmTokenTypeIDs == prompt.mmTokenTypeIDs, "\(prompt.key)")
+                #expect(inputs.pixelValues.map(\.shape) == prompt.shapes, "\(prompt.key)")
+            }
+        }
     }
 }

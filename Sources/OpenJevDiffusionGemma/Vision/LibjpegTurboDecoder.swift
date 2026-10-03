@@ -234,6 +234,7 @@ enum LibjpegTurboDecoder {
         var mcusPerColumn = 0
         var position = 2
         var scans = 0
+        var allocatedCoefficients = false
 
         func u16(_ at: Int) throws(Unsupported) -> Int {
             guard at + 1 < bytes.count else { throw Unsupported("the JPEG is cut short") }
@@ -307,6 +308,15 @@ enum LibjpegTurboDecoder {
                     guard at + 17 + total <= end else {
                         throw Unsupported("a Huffman table overruns")
                     }
+                    var code = 0
+                    for length in 1...16 {
+                        code <<= 1
+                        let count = counts[length - 1]
+                        guard code + count < (1 << length) else {
+                            throw Unsupported("a Huffman table has an invalid code tree")
+                        }
+                        code += count
+                    }
                     let values = Array(bytes[(at + 17)..<(at + 17 + total)])
                     // jpeg_make_d_derived_tbl: a DC symbol is a bit count of at most 15.
                     guard total <= 256, tableClass == 1 || values.allSatisfy({ $0 <= 15 }) else {
@@ -363,9 +373,6 @@ enum LibjpegTurboDecoder {
                     components[i].blocksPerColumn = mcusPerColumn * components[i].v
                     components[i].width = (width * components[i].h + maxH - 1) / maxH
                     components[i].height = (height * components[i].v + maxV - 1) / maxV
-                    components[i].coefficients = [Int16](
-                        repeating: 0,
-                        count: components[i].blocksPerLine * components[i].blocksPerColumn * 64)
                 }
             case 0xC3, 0xC5...0xC7, 0xC9...0xCB, 0xCD...0xCF:
                 throw Unsupported(
@@ -414,6 +421,27 @@ enum LibjpegTurboDecoder {
                     guard dcScan ? se == 0 : (ss <= se && se <= 63 && count == 1),
                         ah == 0 || al == ah - 1, al <= 13
                     else { throw Unsupported("a progressive scan's parameters are bad") }
+                }
+                for index in scan {
+                    let component = components[index]
+                    if !progressive || (ss == 0 && ah == 0) {
+                        guard !dcTables[component.dcTable].values.isEmpty else {
+                            throw Unsupported("a scan's DC Huffman table is missing")
+                        }
+                    }
+                    if !progressive || ss != 0 {
+                        guard !acTables[component.acTable].values.isEmpty else {
+                            throw Unsupported("a scan's AC Huffman table is missing")
+                        }
+                    }
+                }
+                if !allocatedCoefficients {
+                    for i in components.indices {
+                        components[i].coefficients = [Int16](
+                            repeating: 0,
+                            count: components[i].blocksPerLine * components[i].blocksPerColumn * 64)
+                    }
+                    allocatedCoefficients = true
                 }
                 var reader = BitReader(bytes: bytes, position: end)
                 try decodeScan(

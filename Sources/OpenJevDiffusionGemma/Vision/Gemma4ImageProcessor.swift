@@ -58,6 +58,11 @@ public struct Gemma4ImageProcessor: Sendable, Hashable {
         if let value = config["patch_size"]?.intValue { patchSize = value }
         if let value = config["pooling_kernel_size"]?.intValue { poolingKernelSize = value }
         if let value = config["rescale_factor"]?.doubleValue { rescaleFactor = value }
+        guard maxSoftTokens > 0, patchSize > 0, poolingKernelSize > 0 else {
+            throw VisionError(
+                "processor_config.json sizing parameters must be positive "
+                    + "(max_soft_tokens, patch_size, pooling_kernel_size)")
+        }
         for key in ["do_resize", "do_rescale", "do_convert_rgb"]
         where config[key]?.boolValue == false {
             throw VisionError(

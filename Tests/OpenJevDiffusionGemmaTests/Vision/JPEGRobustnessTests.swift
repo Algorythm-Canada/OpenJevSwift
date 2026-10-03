@@ -100,6 +100,23 @@ struct JPEGRobustnessTests {
         #expect(Self.outcome(many) == .refused)
     }
 
+    @Test("A header-only large frame is refused without allocating its coefficient grid")
+    func headerOnlyLargeFrame() {
+        let frame = Self.frame(
+            width: 13_376, height: 13_376, components: [(1, 1, 1), (2, 1, 1), (3, 1, 1)])
+        #expect(Self.outcome(Self.soi + frame + Self.eoi) == .unsupported)
+    }
+
+    @Test("Oversubscribed and all-ones Huffman code trees are refused")
+    func invalidHuffmanCodeTrees() {
+        let allOnes = Self.segment(
+            0xC4, [0x00, 2] + Array(repeating: 0, count: 15) + [0x00, 0x01])
+        let oversubscribed = Self.segment(
+            0xC4, [0x00, 3] + Array(repeating: 0, count: 15) + [0x00, 0x01, 0x02])
+        #expect(Self.outcome(Self.soi + allOnes + Self.eoi) == .unsupported)
+        #expect(Self.outcome(Self.soi + oversubscribed + Self.eoi) == .unsupported)
+    }
+
     @Test("Every truncation and every corrupted header byte of the fixture JPEGs throws or decodes")
     func mutations() throws {
         var outcomes: [Outcome: Int] = [:]

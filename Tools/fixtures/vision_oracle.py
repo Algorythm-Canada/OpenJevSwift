@@ -697,7 +697,8 @@ def main():
             problems.append(f"preprocessing differs from the committed file: {diff}")
     else:
         write_json(PREPROCESSING_OUT, payload)
-    write_tensors(tensors)
+    if same:
+        write_tensors(tensors)
 
     if args.only != "preprocessing":
         reads, deterministic = reads_payload(args, model_path, eng, settings, images, processor, run)
