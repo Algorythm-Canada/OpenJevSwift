@@ -27,12 +27,14 @@ struct VisionPreprocessingTests {
             RGBImage(decoding: image.data()), filter: filter, widen: widen)
     }
 
-    @Test("The fixture holds seven synthetic images, each under 5 KB, and the processor's settings")
+    @Test(
+        "The fixture holds eleven synthetic images, each under 5 KB, and the processor's settings")
     func fixtureShape() throws {
         let images = try Self.syntheticImages()
         #expect(
             images.map(\.name).sorted() == [
-                "baseline", "frames", "gradients", "gray", "pattern", "progressive", "small",
+                "baseline", "frames", "gradients", "gray", "interlaced", "local", "offset",
+                "pattern", "progressive", "small", "transparent",
             ])
         for image in images {
             #expect(image.bytes < 5000, "\(image.file) is \(image.bytes) bytes")
@@ -62,7 +64,7 @@ struct VisionPreprocessingTests {
         }
     }
 
-    @Test("ImageIO decodes every synthetic image to the RGB bytes PIL gave")
+    @Test("Every synthetic image decodes to the RGB bytes PIL gave")
     func decoding() throws {
         for image in try Self.syntheticImages() {
             let data = try image.data()
@@ -94,6 +96,50 @@ struct VisionPreprocessingTests {
             SpikeReport.record("vision-jpeg-decode", line)
             // ImageIO's figure is recorded, not bounded: it is Apple's to change.
             #expect(VisionFixtures.sha256(port.pixels) == image.decodedSHA256, "\(line)")
+        }
+    }
+
+    @Test("The GIF port decodes as Pillow does; how far ImageIO's first frame is is recorded")
+    func imageIOGIF() throws {
+        for image in try Self.syntheticImages() where image.contentType == "image/gif" {
+            let data = try image.data()
+            let port = try RGBImage(decoding: data)
+            let imageIO = try RGBImage(imageIO: data)
+            var line =
+                "\(image.name): ImageIO's first frame is \(imageIO.width) by \(imageIO.height)"
+            if imageIO.width == port.width && imageIO.height == port.height {
+                let largest = zip(port.pixels, imageIO.pixels).reduce(0) {
+                    max($0, abs(Int($1.0) - Int($1.1)))
+                }
+                let differing = zip(port.pixels, imageIO.pixels).filter { $0 != $1 }.count
+                line +=
+                    ", up to \(largest) levels from Pillow at \(differing) of \(port.pixels.count) samples"
+            }
+            print("vision GIF decode: \(line)")
+            SpikeReport.record("vision-gif-decode", line)
+            // ImageIO's figure is recorded, not bounded: it is Apple's to change.
+            #expect(VisionFixtures.sha256(port.pixels) == image.decodedSHA256, "\(line)")
+        }
+    }
+
+    @Test("Every small GIF case decodes as upstream's PIL did, or is refused where PIL raised")
+    func gifCases() throws {
+        let cases = try VisionFixtures.preprocessing().gifCases
+        #expect(cases.count >= 22)
+        #expect(cases.contains { $0.decoded == nil } && cases.contains { $0.decoded != nil })
+        for gif in cases {
+            #expect(VisionFixtures.sha256(gif.data) == gif.sha256, "\(gif.name)")
+            if let decoded = gif.decoded {
+                let rgb = try RGBImage(decoding: gif.data)
+                #expect(rgb.width == decoded.width && rgb.height == decoded.height, "\(gif.name)")
+                #expect(
+                    VisionFixtures.sha256(rgb.pixels) == decoded.sha256,
+                    "\(gif.name): the decoded RGB differs from PIL's")
+            } else {
+                #expect(throws: VisionError.self, "\(gif.name): PIL raised \(gif.error ?? "")") {
+                    try RGBImage(decoding: gif.data)
+                }
+            }
         }
     }
 
@@ -152,7 +198,7 @@ struct VisionPreprocessingTests {
                 }
             }
         }
-        #expect(rows >= 24)
+        #expect(rows >= 34)
     }
 
     @Test("Swapping the bicubic filter for bilinear breaks the bounds on every image")
@@ -397,7 +443,7 @@ extension MLXTests {
         func prompts() async throws {
             let tokenizer = try await TokenizerFixtures.tokenizer()
             let fixture = try VisionFixtures.preprocessing()
-            #expect(fixture.prompts.count == 9)
+            #expect(fixture.prompts.count == 13)
             for prompt in fixture.prompts {
                 let parts = try prompt.images.map { name in
                     let image = try #require(fixture.images.first { $0.name == name })
