@@ -66,6 +66,10 @@ them in agreement):
 ~/Library/Caches/OpenJevSwift/jevk5/venv/bin/python Tools/jevk5/convert.py --check ~/Library/Caches/OpenJevSwift/jevk5/jevk5-0.2-mlx-4bit --bits 4
 ```
 
+`--check` takes a snapshot of a published conversion too, such as the one the server downloads into
+the Hugging Face cache. The Hub adds a `.gitattributes` to every repository, which the check leaves
+out and says so; the commit pins it, and the server's downloader checks it as it checks every file.
+
 ## The fixture
 
 ```bash
@@ -85,4 +89,7 @@ logits in 16 cases (ties at every cut, more than 256 options, the tree method); 
 tokenizer's letter ids and longest entry. The model-free tests replay it bit for bit; the opt-in
 live tests (`OPENJEV_JEVK5_MODEL`) hold the Swift tokenizer and model to it.
 
-Nothing here uploads anything. Publishing the conversions is the maintainer's step (D-052).
+Nothing here uploads anything. The maintainer published the two quantized conversions on
+2026-10-03 as [Algorythm-Canada/jevk5-0.2-mlx-8bit](https://huggingface.co/Algorythm-Canada/jevk5-0.2-mlx-8bit)
+and [Algorythm-Canada/jevk5-0.2-mlx-4bit](https://huggingface.co/Algorythm-Canada/jevk5-0.2-mlx-4bit),
+byte for byte the pinned output, and `JevK5Checkpoint` pins their commits (D-052).

@@ -36,7 +36,9 @@ wrote is removed, and `README.md` (the attribution and how the files were made),
 deterministic: two conversions with the pinned versions gave the same bytes, and OUTPUTS holds
 their digests; the script says whether a new conversion matches them.
 
-Nothing is uploaded. Publishing the output is the maintainer's step (docs/06-decisions.md).
+Nothing is uploaded. The maintainer published the 4- and 8-bit outputs as the PUBLISHED_AS
+repositories on the Hugging Face Hub (D-052 in docs/06-decisions.md), and `--check` also takes a
+snapshot downloaded from there, whose `.gitattributes` it leaves out (HUB_FILES).
 Model weights never go into the repository: the default output folder is outside it.
 """
 
@@ -84,8 +86,14 @@ LEGAL_FILES = {
 # 0.32.2 builds; the quantized bytes depend on them and on mlx-lm.
 PINNED_VERSIONS = {"mlx": "0.32.2", "mlx-metal": "0.32.2", "mlx-lm": "0.32.0"}
 GROUP_SIZE = 64
-# The repositories the conversions are meant to be published as (docs/06-decisions.md).
+# The repositories the conversions are published as (D-052 in docs/06-decisions.md), at the
+# commits JevK5Checkpoint in Sources/OpenJevLetterReadout pins.
 PUBLISHED_AS = {4: "Algorythm-Canada/jevk5-0.2-mlx-4bit", 8: "Algorythm-Canada/jevk5-0.2-mlx-8bit"}
+# The Hub writes `.gitattributes` (its Git LFS rules) into every repository it creates, so a
+# snapshot of a published conversion holds it beside the conversion's files. It is left out of a
+# folder's listing: the commit pins it, and OpenJevSwift's downloader checks it against the
+# commit's tree as it checks every file.
+HUB_FILES = {".gitattributes"}
 # bits -> {name: (bytes, SHA-256)} of a conversion made with PINNED_VERSIONS.
 OUTPUTS: dict[int, dict[str, tuple[int, str]]] = {
     4: {
@@ -144,9 +152,12 @@ def sha256_file(path: Path) -> str:
 
 
 def listing(folder: Path) -> dict[str, tuple[int, str]]:
-    """{name: (bytes, SHA-256)} of every file in `folder`, which must hold no subfolder."""
+    """{name: (bytes, SHA-256)} of every file in `folder` but HUB_FILES; the folder must hold no
+    subfolder."""
     found = {}
     for path in sorted(folder.iterdir()):
+        if path.name in HUB_FILES:
+            continue
         if not path.is_file():
             sys.exit(f"{path} is not a file; a conversion holds files only")
         found[path.name] = (path.stat().st_size, sha256_file(path))
@@ -336,6 +347,9 @@ def report(folder: Path, bits: int) -> int:
     print(json.dumps({"folder": str(folder), "bits": bits,
                       "files": {name: {"bytes": size, "sha256": digest}
                                 for name, (size, digest) in found.items()}}, indent=1))
+    for name in sorted(HUB_FILES):
+        if (folder / name).exists():
+            print(f"{name} is the Hub's, not the conversion's; not compared")
     pinned = OUTPUTS.get(bits)
     if pinned is None:
         print(f"no pinned {bits}-bit conversion to compare with")

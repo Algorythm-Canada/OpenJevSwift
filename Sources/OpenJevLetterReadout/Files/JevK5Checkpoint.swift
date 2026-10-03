@@ -2,14 +2,13 @@ import Foundation
 import OpenJevDiffusionGemma
 
 /// A conversion of JevK5 v0.2 to MLX, as `Tools/jevk5/convert.py` writes it: the repository it is
-/// meant to be published as, its pinned revision once it is, and the size and SHA-256 of every
-/// file.
+/// published as, the commit pinned there, and the size and SHA-256 of every file.
 ///
-/// The conversions are not published yet (D-052): until the maintainer creates the repositories
-/// and pins their commits here, ``revision`` is `nil`, a download of the default is refused
-/// before any network access, and `OPENJEV_JEVK5_MODEL` names a local folder the script wrote.
-/// The digests are the script's output, which two runs reproduced byte for byte, so a local
-/// conversion can be checked against them (`convert.py --check`).
+/// Both conversions were published on the Hugging Face Hub on 2026-10-03 (D-052), so a
+/// conversion's repository downloads at its pinned ``revision``, and `OPENJEV_JEVK5_MODEL` can
+/// still name a local folder the script wrote. The digests are the script's output, which two runs
+/// reproduced byte for byte and the published files match, so a local conversion or a downloaded
+/// snapshot can be checked against them (`convert.py --check`).
 public struct JevK5Checkpoint: Sendable, Hashable {
     /// One file of the conversion.
     public struct File: Sendable, Hashable {
@@ -34,8 +33,8 @@ public struct JevK5Checkpoint: Sendable, Hashable {
     public var bits: Int
     /// The Hub repository the conversion is published as.
     public var repository: String
-    /// The published commit, or `nil` while the conversion is unpublished.
-    public var revision: String?
+    /// The published commit, which a download of ``repository`` is pinned to.
+    public var revision: String
     /// The checkpoint the conversion was made from.
     public var sourceRepository: String
     /// The source's commit: the author's `v0.2` tag.
@@ -43,10 +42,7 @@ public struct JevK5Checkpoint: Sendable, Hashable {
     /// The conversion's files.
     public var files: [File]
 
-    /// Whether the conversion can be downloaded: its revision is pinned.
-    public var isPublished: Bool { revision != nil }
-
-    /// The conversion's Hub source at its pinned revision.
+    /// The conversion's Hub source at its pinned commit.
     public var hubSource: ModelSource {
         .hub(repository: repository, revision: revision)
     }
@@ -86,7 +82,8 @@ public struct JevK5Checkpoint: Sendable, Hashable {
     /// The 4-bit conversion, 2.37 GB of weights, iOS's ``platformDefault``.
     public static let fourBit = JevK5Checkpoint(
         model: "jevk5-0.2", bits: 4, repository: "Algorythm-Canada/jevk5-0.2-mlx-4bit",
-        revision: nil, sourceRepository: source.repository, sourceRevision: source.revision,
+        revision: "e3807fbf27a8b8f7ad277e331935bbc4368513db", sourceRepository: source.repository,
+        sourceRevision: source.revision,
         files: sharedFiles + [
             File(
                 name: "README.md", bytes: 2190,
@@ -106,7 +103,8 @@ public struct JevK5Checkpoint: Sendable, Hashable {
     /// macOS's ``platformDefault``.
     public static let eightBit = JevK5Checkpoint(
         model: "jevk5-0.2", bits: 8, repository: "Algorythm-Canada/jevk5-0.2-mlx-8bit",
-        revision: nil, sourceRepository: source.repository, sourceRevision: source.revision,
+        revision: "d19a6f09b42fdd3b4ff7fc85b1ebbda2a79bfa4a", sourceRepository: source.repository,
+        sourceRevision: source.revision,
         files: sharedFiles + [
             File(
                 name: "README.md", bytes: 2190,
@@ -156,7 +154,12 @@ public enum JevK5ModelFiles {
     /// optionally followed by `@revision`. A conversion's repository without a revision takes the
     /// conversion's pinned one.
     public static func source(setting: String) -> ModelSource {
-        let source = ModelSource(setting: setting)
+        pinned(ModelSource(setting: setting))
+    }
+
+    /// `source`, with a conversion's repository named without a revision pinned to the
+    /// conversion's commit.
+    static func pinned(_ source: ModelSource) -> ModelSource {
         if case .hub(let repository, nil) = source,
             let checkpoint = JevK5Checkpoint.all.first(where: { $0.repository == repository })
         {
@@ -178,11 +181,12 @@ public enum JevK5ModelFiles {
     ///
     /// A folder is used as is once it holds ``requiredFiles``. A Hub source is resolved by
     /// ``/OpenJevDiffusionGemma/ModelResolver``, which pins a branch or tag to its commit, checks
-    /// every file it downloads and can use a cached snapshot offline. A conversion that is not
-    /// published yet (``JevK5Checkpoint/isPublished``) is refused before any request.
+    /// every file it downloads and can use a cached snapshot offline. A conversion's repository
+    /// named without a revision resolves at the conversion's pinned commit, as in
+    /// ``source(setting:)``, never at `main`.
     ///
-    /// - Throws: ``JevK5LoadError/notPublished(repository:)``,
-    ///   ``JevK5LoadError/missingFiles(_:in:)``, and ``/OpenJevDiffusionGemma/ModelResolverError``.
+    /// - Throws: ``JevK5LoadError/missingFiles(_:in:)`` and
+    ///   ``/OpenJevDiffusionGemma/ModelResolverError``.
     public static func resolve(
         _ source: ModelSource, cache: HubCacheLocation = .standard, token: String? = nil,
         resolver: ModelResolver = ModelResolver()
@@ -191,14 +195,8 @@ public enum JevK5ModelFiles {
         switch source {
         case .directory(let url):
             directory = url
-        case .hub(let repository, let revision):
-            if revision == nil,
-                let checkpoint = JevK5Checkpoint.all.first(where: { $0.repository == repository }),
-                !checkpoint.isPublished
-            {
-                throw JevK5LoadError.notPublished(repository: repository)
-            }
-            directory = try await resolver.resolve(source, cache: cache, token: token)
+        case .hub:
+            directory = try await resolver.resolve(pinned(source), cache: cache, token: token)
         }
         let missing = missingFiles(in: directory)
         guard missing.isEmpty else {

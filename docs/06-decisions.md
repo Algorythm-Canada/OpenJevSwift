@@ -2883,13 +2883,14 @@ Decision.
    and checking every file, so a published conversion needs no new download code; the
    openjev-models releases of D-033 cannot hold it, since GitHub caps a release asset at 2 GB; and
    converting on first use would need Python, mlx-lm and the 8.4 GB checkpoint on every machine,
-   with 6 to 8 GB of memory for a conversion, and cannot happen on an iPhone. Until the maintainer
-   decides, `OPENJEV_JEVK5_MODEL` (this port's setting; upstream names its vLLM server's weights
-   with `OPENJEV_MODEL`) defaults to the 8-bit repository, which is refused with a message before
-   any request because `JevK5Checkpoint.eightBit.revision` is nil, and a deployment converts the
-   checkpoint itself and names the folder. Publishing pins the uploaded commits there, with no
-   other change. If the maintainer chooses local conversion instead, the default becomes a folder
-   and the message says so.
+   with 6 to 8 GB of memory for a conversion, and cannot happen on an iPhone. The maintainer
+   published both on 2026-10-03, and `JevK5Checkpoint` pins the uploaded commits:
+   `OPENJEV_JEVK5_MODEL` (this port's setting; upstream names its vLLM server's weights with
+   `OPENJEV_MODEL`) defaults to the 8-bit repository, which downloads at its pinned commit, and a
+   deployment can name a folder the script wrote instead. A conversion's repository named without
+   a revision resolves at its pinned commit, never at `main`. The Hub adds a `.gitattributes` to
+   each repository; `convert.py --check` leaves it out, and the downloader checks it against the
+   commit's tree as it checks every file.
 4. **The server loads the 8-bit conversion; an iOS app the 4-bit one.** The issue names a 4-bit
    conversion, small enough for iPhones, and asks for the author's top answer on all 231 JevBench
    items. The same build ran JevBench on all three conversions against the author's published run
@@ -2986,4 +2987,8 @@ Decision.
     (`OPENJEV_MLX_METALLIB`), the largest difference was 0.625 and the mean 0.071, so the compiled
     kernels are not what differs.
 
-Status. Proposed with issue #55. Item 3 waits for the maintainer, and item 4's default with it.
+Status. Proposed with issue #55. Item 3 was settled on 2026-10-03: the maintainer published both
+conversions on the Hugging Face Hub, `Algorythm-Canada/jevk5-0.2-mlx-8bit` at commit
+`d19a6f09b42fdd3b4ff7fc85b1ebbda2a79bfa4a` and `Algorythm-Canada/jevk5-0.2-mlx-4bit` at commit
+`e3807fbf27a8b8f7ad277e331935bbc4368513db`, every file byte for byte the pinned output, and
+`JevK5Checkpoint` pins those commits, so item 4's default downloads.
