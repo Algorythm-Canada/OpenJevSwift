@@ -1,5 +1,5 @@
-# Builds the DocC documentation of OpenJevCore, OpenJevServer, OpenJevDiffusionGemma and
-# OpenJevEncoders into one static site and publishes it to GitHub Pages from main (issue #64).
+# Builds the DocC documentation of OpenJevCore, OpenJevServer, OpenJevDiffusionGemma,
+# OpenJevEncoders and OpenJevLetterReadout into one static site and publishes it to GitHub Pages from main (issue #64).
 # A pull request that changes the sources or the site's files builds it, so a link that does not
 # resolve fails there; a push to main or a manual run also deploys it. The deploy job runs only
 # when GitHub Pages is enabled with "GitHub Actions" as its source (Settings, Pages, Build and
@@ -42,8 +42,8 @@ defaults:
 jobs:
   build:
     name: Build the documentation
-    # The macOS job's runner and Xcode in ci.yml. OpenJevDiffusionGemma and OpenJevEncoders exist
-    # only on a macOS host, so the site cannot be built on Linux.
+    # The macOS job's runner and Xcode in ci.yml. OpenJevDiffusionGemma, OpenJevEncoders and
+    # OpenJevLetterReadout exist only on a macOS host, so the site cannot be built on Linux.
     runs-on: macos-26
     timeout-minutes: 60
     env:

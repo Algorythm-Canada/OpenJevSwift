@@ -1,9 +1,9 @@
 # Deployment: a Mac mini as a decision server
 
 `openjev serve` runs the Jev-compatible server on a Mac as one process, with no Docker and no
-Python. It serves DiffusionGemma (`openjev-0.1`, `OPENJEV_BACKEND=mlx`) on MLX and Verdict
-(`verdict-1.4`) and Laya (`laya-1.0`) on Core ML. This document follows upstream's README, "Run
-your own", where it applies to a Mac.
+Python. It serves DiffusionGemma (`openjev-0.1`, `OPENJEV_BACKEND=mlx`) and JevK5 (`jevk5-0.2`,
+`OPENJEV_BACKEND=jevk5`) on MLX, and Verdict (`verdict-1.4`) and Laya (`laya-1.0`) on Core ML. This
+document follows upstream's README, "Run your own", where it applies to a Mac.
 
 ## What the Mac needs
 
@@ -12,6 +12,7 @@ your own", where it applies to a Mac.
 | `verdict` | `verdict-1.4`, 151M parameters, Core ML | yes | Apple silicon, macOS 15 or later | 1.6 GB with the functions one-question reads load, 2.8 GB with all six (D-042) |
 | `mlx` | `openjev-0.1`, DiffusionGemma 26B-A4B, 4-bit, MLX | yes | Apple silicon | about 16 GB to load (MLX holds 14.35 GiB), 17.3 GiB of MLX memory in service with short prompts and up to about 3.6 GB more for cached long prompts ([benchmarks.md](benchmarks.md), R4); 32 GB or more recommended, not yet measured on a 32 or 48 GB Mac |
 | `laya` | `laya-1.0`, 421M parameters, Core ML | yes | Apple silicon, macOS 15 or later | 4.7 GB with the functions one-question reads load, 8.9 GB with all eight and up to 9.7 GB at peak (D-042); with `OPENJEV_ENCODER_FUNCTIONS=2`, 2.1 GB for one-question reads and up to 4.4 GB at peak |
+| `jevk5` | `jevk5-0.2`, JevK5 (Qwen3.5-4B), 8-bit, MLX | yes, from a local conversion until the conversion is published (D-052) | Apple silicon | 6.0 GB once loaded; with `OPENJEV_MLX_CACHE_LIMIT_GB=4`, 8.5 to 10.7 GB in service and up to 11.0 GB at peak on prompts up to 11,130 tokens. The 4-bit conversion: 3.6 GB, 6.8 to 8.5 GB and 8.9 GB ([JevK5](#jevk5)) |
 
 On an M3 Max, Verdict reads one question in 7.5 to 20.3 ms depending on its length, and a batch
 of 16 in 4.3 to 19.3 ms per question ([spikes/encoder-runtime.md](spikes/encoder-runtime.md)). Like
@@ -45,7 +46,7 @@ sudo install -m 755 "$(swift build -c release --show-bin-path)/openjev" /usr/loc
 ```
 
 `openjev --version` prints the package version. On Linux the same command builds the CLI
-without the encoder backends, so `verdict` exits 3 there.
+without the encoder and MLX backends, so `verdict`, `laya`, `mlx` and `jevk5` exit 3 there.
 
 ## The models' files
 
@@ -88,13 +89,14 @@ The server reads upstream's `OPENJEV_*` variables, with upstream's defaults and 
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `OPENJEV_BACKEND` | `mlx` | `mlx`, `verdict` or `laya`. Upstream's default, `vllm`, does not exist in this port (D-030). |
+| `OPENJEV_BACKEND` | `mlx` | `mlx`, `verdict`, `laya` or `jevk5`. Upstream's default, `vllm`, does not exist in this port (D-030). |
 | `OPENJEV_HOST` | `127.0.0.1` | The address to bind. `0.0.0.0` serves the network. |
 | `OPENJEV_PORT` | `8080` | The port to bind. `0` picks a free one, which the `serving on` line names. |
 | `OPENJEV_API_KEY` | unset | Require `Authorization: Bearer <key>` on `/v1/` routes. |
 | `OPENJEV_ORIGIN_SECRET` | unset | Require `X-Origin-Secret` (for a server behind a proxy). |
 | `OPENJEV_ENCODER_MODELS` | unset | A folder of converted Core ML packages, used instead of downloading (this port's, D-033). |
 | `OPENJEV_ENCODER_BATCH` | `16` | Questions per backend call. On a Mac, Verdict splits a call into Core ML calls of at most 16 questions. |
+| `OPENJEV_JEVK5_MODEL` | `Algorythm-Canada/jevk5-0.2-mlx-8bit` | The JevK5 conversion: a folder, or a Hub repository with an optional `@revision` (this port's, D-052). The default is refused until it is published; set the folder `Tools/jevk5/convert.py` writes ([JevK5](#jevk5)). |
 | `OPENJEV_ENCODER_FUNCTIONS` | unset | The most Core ML functions an encoder keeps loaded, at least 1 (this port's, D-042). Unset keeps every function a read has needed, up to Verdict's 6 and Laya's 8, and the settings line shows `encoder_functions=all`; a lower number releases the least recently used one first. |
 | `OPENJEV_MAX_QUEUE` | `512` | Decisions inside the server before a 529. `0` refuses every request, as upstream's does. |
 | `OPENJEV_MAX_QUESTIONS` | `256` | Questions per request before a 400. |
@@ -336,7 +338,7 @@ wait short.
 |---|---|---|
 | 0 | Success; for `serve`, a clean shutdown | SIGTERM with no request left |
 | 1 | Any other failure | the address is in use; a shutdown that cancelled requests; `decide` whose backend failed during the read (it prints the 503 body) |
-| 2 | Invalid settings or command line; the message names the variable | `openjev: OPENJEV_PORT='eighty' is not a int`; `openjev: unknown backend 'vllm'; use one of mlx, laya, verdict (OPENJEV_BACKEND)` |
+| 2 | Invalid settings or command line; the message names the variable | `openjev: OPENJEV_PORT='eighty' is not a int`; `openjev: unknown backend 'vllm'; use one of mlx, laya, verdict, jevk5 (OPENJEV_BACKEND)` |
 | 3 | The backend cannot run: not in this build, or it failed to load | `openjev: openjev-0.1 failed to load (OPENJEV_BACKEND=mlx): /models/dg is not a DiffusionGemma checkpoint: it lacks config.json, ...`; a download that fails its checksum |
 | 4 | `decide` only: the request was refused (a 4xx or the 529) | an unknown model, a malformed body |
 
@@ -384,3 +386,52 @@ takes about 0.3 s, and 1 to 16 concurrent callers share 3.0 to 3.4 requests per 
 ([benchmarks.md](benchmarks.md)). A state of 10,000 tokens takes about 13 s to prefill before its
 first read. Those figures were taken at the nominal thermal state; on the M3 Max laptop, sustained
 load raised the same read's latency by up to about 80% once the thermal state reached fair.
+
+## JevK5
+
+`OPENJEV_BACKEND=jevk5 openjev serve` runs JevK5 v0.2, Alibi Serikbay's Qwen3.5-4B with a
+distilled LoRA, in the process on MLX, and serves it as `jevk5-0.2` with upstream's listing and
+answers. Upstream runs it on vLLM and an NVIDIA GPU; here every question is one forward pass on
+the Mac's GPU, read from its 16 answer letters' logits, and the passes run one at a time.
+
+The model is an 8-bit MLX conversion of the checkpoint, which is not published yet (D-052). Until
+it is, convert it once, outside the repository, and name the folder:
+
+```bash
+/usr/local/bin/python3.12 -m venv ~/Library/Caches/OpenJevSwift/jevk5/venv
+~/Library/Caches/OpenJevSwift/jevk5/venv/bin/python -m pip install -r Tools/jevk5/requirements.txt
+~/Library/Caches/OpenJevSwift/jevk5/venv/bin/python Tools/jevk5/convert.py --bits 8
+OPENJEV_BACKEND=jevk5 OPENJEV_JEVK5_MODEL=~/Library/Caches/OpenJevSwift/jevk5/jevk5-0.2-mlx-8bit \
+    OPENJEV_MLX_CACHE_LIMIT_GB=4 openjev serve
+```
+
+The conversion downloads the checkpoint at its `v0.2` tag into the Hugging Face cache (8.4 GB),
+takes under a minute and writes 4.5 GB ([Tools/jevk5/README.md](../Tools/jevk5/README.md));
+`convert.py --check <folder> --bits 8` checks a folder against the pinned digests. Once the
+conversion is published, the default `OPENJEV_JEVK5_MODEL` downloads it on first start into the
+Hugging Face cache at its pinned revision, as DiffusionGemma's checkpoint is, and the folder is
+not needed.
+
+The 8-bit conversion is the default because it comes closest to JevK5's own answers: on
+JevBench's 231 items it gives the author's published top answer on 230, every item whose top two
+the author's run puts at least 0.05 apart among them. The 4-bit conversion (`--bits 4`, 2.4 GB) reads the same
+way in less memory, changes the top answer on 22 items, 18 of them clear ones, and loses about
+five points of accuracy on TypeSafe's rows ([quality.md](quality.md#jevk5)).
+
+On an M3 Max the server loads the 8-bit conversion in about 2 seconds and holds 6.0 GB once it
+has warmed up. A question costs one forward pass over its prompt, so its time grows with the
+state: in two runs of JevBench, whose prompts have 209 tokens at the median and up to 4,033, a
+question took 0.17 s at the median and 2.2 to 2.3 s at the 95th percentile, and on TypeSafe's rows,
+2,646 tokens at the median and up to 11,130, 2.5 to 2.8 s and 9.8 to 13.5 s, the longest 11 to
+18 s. Those runs were not taken under a benchmark's protocol, as the spread shows. With
+`OPENJEV_MLX_CACHE_LIMIT_GB=4` the footprint stayed between 8.5 and 10.7 GB in service, 11.0 GB at
+its peak. MLX does not fuse attention over Qwen3.5's 256-wide heads, so a prompt over 2,048 tokens
+is read in chunks of 2,048, which bounds its memory, not its time.
+
+A pass reads at most 16,383 prompt tokens: a longer one is refused with upstream's 400 (`the model
+rejected this request: This model's maximum context length is 16384 tokens. ...`), never cut, and
+`usage.input_tokens` counts the tokens of every pass. A question with more than 16 options takes
+ceil(n / 16) + 1 passes. Images, `steps` and `samples` above 1, `think` and `sequential` are
+refused as for the other encoder models. `OPENJEV_MLX_CACHE_LIMIT_GB` caps MLX's buffer pool, as
+for `mlx`; set it for a long-running server.
+

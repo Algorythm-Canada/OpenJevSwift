@@ -4,7 +4,8 @@ import ArgumentParser
 struct BackendOption: ParsableArguments {
     @Option(
         help: ArgumentHelp(
-            "The backend: mlx, laya or verdict. Overrides OPENJEV_BACKEND.", valueName: "name"))
+            "The backend: mlx, laya, verdict or jevk5. Overrides OPENJEV_BACKEND.",
+            valueName: "name"))
     var backend: String?
 
     /// `environment` with the flag over its variable.

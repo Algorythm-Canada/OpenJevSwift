@@ -70,7 +70,7 @@ jobs:
 
       - name: Test
         run: |
-          unset OPENJEV_TEST_MODEL OPENJEV_ENCODER_MODELS OPENJEV_LIVE_URL
+          unset OPENJEV_TEST_MODEL OPENJEV_ENCODER_MODELS OPENJEV_JEVK5_MODEL OPENJEV_LIVE_URL
           swift test --scratch-path .build/linux 2>&1 | tee "$RUNNER_TEMP/swift-test.log"
 
       - name: Check that only model tests were skipped
@@ -194,7 +194,7 @@ jobs:
 
       - name: Test
         run: |
-          unset OPENJEV_TEST_MODEL OPENJEV_ENCODER_MODELS OPENJEV_LIVE_URL
+          unset OPENJEV_TEST_MODEL OPENJEV_ENCODER_MODELS OPENJEV_JEVK5_MODEL OPENJEV_LIVE_URL
           swift test --build-system swiftbuild 2>&1 | tee "$RUNNER_TEMP/swift-test.log"
 
       - name: Check that only model tests were skipped
@@ -316,7 +316,7 @@ jobs:
 
       - name: Test on the simulator
         run: |
-          unset OPENJEV_TEST_MODEL OPENJEV_ENCODER_MODELS OPENJEV_LIVE_URL
+          unset OPENJEV_TEST_MODEL OPENJEV_ENCODER_MODELS OPENJEV_JEVK5_MODEL OPENJEV_LIVE_URL
           xcodebuild test \
             -scheme "$SCHEME" \
             -destination "platform=iOS Simulator,name=$SIMULATOR,OS=latest" \
@@ -344,5 +344,16 @@ jobs:
         run: |
           xcodebuild build -quiet \
             -scheme OpenJevDiffusionGemma \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$DERIVED_DATA"
+
+      # OpenJevLetterReadout (JevK5 on MLX) is meant for iPhones and iPads at 4 bits, so it must
+      # keep compiling for iOS too; its tests need the converted checkpoint, as DiffusionGemma's
+      # need the weights.
+      - name: Build OpenJevLetterReadout for the simulator
+        if: ${{ !cancelled() && steps.toolchain.outcome == 'success' }}
+        run: |
+          xcodebuild build -quiet \
+            -scheme OpenJevLetterReadout \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath "$DERIVED_DATA"

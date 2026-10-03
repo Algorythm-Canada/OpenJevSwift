@@ -2763,3 +2763,160 @@ evidence rather than code, posted when its maintainers choose. Issue #66's accep
 met by this record: no pull request for the port, and why.
 
 Status. Proposed with issue #66. The draft in upstream-log.md is not posted.
+
+## D-052 JevK5 backend: where the port goes beyond or differs from the issue text
+
+Context. Issue #55 asks for `jevk5-0.2` on mlx-swift-lm's Qwen3.5 with the `jevk5` package's prompt
+and readout, the checkpoint converted to MLX at 4 and 8 bits, and a decision on where the
+conversions live. Upstream reads JevK5's letters from a vLLM server; this port runs the model in
+the process, and some points needed choices the issue does not spell out.
+
+Decision.
+
+1. **The checkpoint is the author's `v0.2` tag, not `main`.** Since 2026-09-25 the repository's
+   `main` (`c4f7fdb`) holds JevK5 v0.3: other weights (`model.safetensors` SHA-256 `13824e47…`) and
+   `jevk5_config.json` `{"temperature": 1.22, "knockout_temperature": 0.93}`. Its `SHA256SUMS`,
+   which only v0.3 has, matches the files downloaded at that commit. The model upstream names
+   `jevk5-0.2`, its description, the issue's temperature of 1.532 and the published run the parity
+   is measured against are v0.2's, so the port pins the author's `v0.2` tag, `ea4804e`: a model card
+   on top of `27d2d6b`. Its weights (`0fba3bba…`) are those of every commit from `844e4d0` to
+   `27d2d6b`, and its weights, `config.json`, `jevk5_config.json`, tokenizer files and chat template
+   are byte for byte those of `3c67329`, the revision the author's published run read (item 11).
+   Upstream's `OPENJEV_MODEL` for `jevk5` names the bare repository, so its image now serves v0.3's
+   weights and temperature as `jevk5-0.2`, with jevk5 0.2.2's knockout temperature of 0.77 where
+   v0.3 ships 0.93.
+2. **The conversion is mlx-lm's, made reproducible.** `Tools/jevk5/convert.py` runs `mlx_lm.convert`
+   (mlx-lm 0.32.0 with MLX 0.32.2, the MLX mlx-swift 0.32.2 builds), affine quantization with a
+   group size of 64, at 4 and 8 bits. mlx-lm has no module for the checkpoint's model type,
+   `qwen3_5_text`, and the checkpoint stores its tensors under `model.language_model.`, the
+   multimodal model's prefix, although it declares `Qwen3_5ForCausalLM`; the script registers
+   mlx-lm's Qwen3.5 text model under that type with the prefix mapped, so the output keeps the model
+   type and the weight names mlx-swift-lm's `Qwen35TextModel` loads. `config.json` is the source's
+   as mlx-lm writes it back, indented its own way, with `rope_parameters.rope_type` named `type`
+   and the quantization entries added. The tokenizer files, the chat template,
+   `generation_config.json` and `jevk5_config.json` are copied unchanged over what transformers
+   wrote; a model card, JevK5's `LICENSE` and its `NOTICE` are added. Two conversions
+   gave identical bytes at each size, and the digests are pinned in the script and, for the two
+   quantized ones, in `JevK5Checkpoint`. `--bits 16` writes the unquantized bfloat16 weights, a
+   reference for item 4's measurements that is pinned in the script only and not meant for
+   publishing:
+
+   | Conversion | Weights | Bits per weight | SHA-256 |
+   |---|---|---|---|
+   | `jevk5-0.2-mlx-4bit` | 2,367,223,295 bytes | 4.503 | `3fd51710…` |
+   | `jevk5-0.2-mlx-8bit` | 4,469,618,681 bytes | 8.502 | `a928abc7…` |
+   | `jevk5-0.2-mlx-bf16` | 5,356,480,151 and 3,055,071,588 bytes, two shards | 16 | `00c61808…`, `52c27623…` |
+
+3. **Where the conversions live: publish them on the Hugging Face Hub (recommended); the choice is
+   the maintainer's.** The recommendation is to publish both quantized conversions under the
+   organisation's account as `Algorythm-Canada/jevk5-0.2-mlx-8bit` and `-4bit`, each with the
+   checkpoint's Apache-2.0 license, JevK5's `LICENSE` and `NOTICE`, and a model card that credits
+   Alibi Serikbay and says the weights were quantized and nothing else changed. `ModelResolver`
+   already downloads any Hub repository at a pinned commit into the Hugging Face cache, resuming
+   and checking every file, so a published conversion needs no new download code; the
+   openjev-models releases of D-033 cannot hold it, since GitHub caps a release asset at 2 GB; and
+   converting on first use would need Python, mlx-lm and the 8.4 GB checkpoint on every machine,
+   with 6 to 8 GB of memory for a conversion, and cannot happen on an iPhone. Until the maintainer
+   decides, `OPENJEV_JEVK5_MODEL` (this port's setting; upstream names its vLLM server's weights
+   with `OPENJEV_MODEL`) defaults to the 8-bit repository, which is refused with a message before
+   any request because `JevK5Checkpoint.eightBit.revision` is nil, and a deployment converts the
+   checkpoint itself and names the folder. Publishing pins the uploaded commits there, with no
+   other change. If the maintainer chooses local conversion instead, the default becomes a folder
+   and the message says so.
+4. **The server loads the 8-bit conversion; an iOS app the 4-bit one.** The issue names a 4-bit
+   conversion, small enough for iPhones, and asks for the author's top answer on all 231 JevBench
+   items. The same build ran JevBench on all three conversions against the author's published run
+   (`Tools/jevbench/results`, [quality.md](quality.md#jevk5)):
+
+   | Conversion | Top answer agrees | Where the author's top two are at least 0.05 apart | Mean difference | Largest | JevBench accuracy | TypeSafe accuracy |
+   |---|---|---|---|---|---|---|
+   | 8-bit | 230 of 231 | 219 of 219 | 0.0049 | 0.083 | 85.7% | 86.3% |
+   | bfloat16 | 228 of 231 | 219 of 219 | 0.0037 | 0.051 | 85.7% | 86.3% |
+   | 4-bit | 209 of 231 | 201 of 219 | 0.0440 | 0.530 | 85.3% | 81.4% |
+
+   The author's run scores 86.1% on JevBench, and every conversion bills the author's prompt token
+   count on all 231 items. The bfloat16 weights show what the port does without quantization: each
+   of its three changed answers is a near-tie in the author's run, two of them exact ties, and its
+   largest difference is close to the 0.055 upstream saw on vLLM. The 8-bit conversion's one change
+   is a near-tie too, its top two 0.040 apart. The 4-bit conversion changes 22 answers, 18 of them
+   clear ones and four where the author's margin is above 0.6, and loses about five points of
+   accuracy on TypeSafe's rows. So `JevK5Checkpoint.defaultSetting`, the server's default, is the
+   8-bit repository, and `JevK5Backend.load()` takes `JevK5Checkpoint.platformDefault`: the 8-bit
+   conversion on macOS and the 4-bit one on iOS, where memory is the limit and which has not run on
+   an iPhone yet. The 8-bit server holds 6.0 GB once loaded and 8.5 to 11.0 GB in service with
+   `OPENJEV_MLX_CACHE_LIMIT_GB=4`, against 3.6 and 6.8 to 8.9 GB for the 4-bit one. The criterion of
+   all 231 is not met on MLX by any conversion; the misses at 8 bits and in bfloat16 are where the
+   order of bfloat16 arithmetic decides a near-tie.
+5. **The downloader is OpenJevDiffusionGemma's `ModelResolver`, through a dependency.** A thin
+   equivalent would repeat about 900 lines (the Hub tree, resume, both digest kinds, the cache
+   layout, offline use of a cached snapshot) or drop them. The cost is that an app using JevK5 links
+   the DiffusionGemma module and MLXVLM, which 05-architecture.md's separation of the model targets
+   meant to avoid. Moving `Download/` into a target of its own removes that; it touches
+   `Sources/OpenJevDiffusionGemma`, which issue #46's work holds now, and is left for after it.
+6. **One process, one pass at a time.** Upstream's `fanout` sends a request's questions to vLLM at
+   once and vLLM batches them. Here `readBatch` reads a batch's questions concurrently, rendering
+   and tokenizing in parallel, and their passes queue on the backend actor, which runs them one at a
+   time; the engine keeps upstream's one in-flight call for an in-process model, and
+   `OPENJEV_JEVK5_WORKERS`, upstream's count of reads in flight to vLLM, is not read.
+   `OPENJEV_ENCODER_BATCH` bounds how many questions are read at once, where upstream's JevK5 reads
+   a whole request; the answers are the same. When several questions fail, the first in question
+   order is reported, as upstream's ordered `map` reports it. Each child task pairs its read with
+   the question's index only after the read has ended: built by Swift 6.4 at `-O`, a child that
+   returned `(index, .success(try await ...))` from inside its `do` returned index 0 from every
+   child, so a release server kept one read of a batch and failed the warm-up, while debug builds
+   and the tests passed.
+7. **A pass reads the last position only, in chunks past 2,048 tokens.** The head, the embeddings
+   JevK5 ties to it, is applied to the last position's post-norm hidden state, which mlx-swift-lm's
+   Qwen3.5 returns through its public hidden-state output, so a long prompt does not compute 248,320
+   logits per position. MLX does not fuse attention over Qwen3.5's 256-wide heads on this GPU, and a
+   single 16,000-token pass would hold about 9 GB of attention scores, so a prompt over 2,048 tokens
+   is prefilled in chunks of 2,048 through the model's caches, mlx-lm's prefill step; the recorded
+   reference does the same.
+8. **Upstream's 400, from vLLM's own checks.** A pass holds at most 16,383 prompt tokens: the
+   16,384-token context of upstream's `jevk5` image less the one token a read asks for
+   (`max_tokens: 1`). vLLM tokenizes with truncation one token past that and then refuses, so every
+   longer prompt gets the same text, which upstream passes on as
+   `the model rejected this request: This model's maximum context length is 16384 tokens. However,
+   you requested 1 output tokens and your prompt contains at least 16384 input tokens, for a total
+   of at least 16385 tokens. Please reduce the length of the input prompt or the number of requested
+   output tokens. (parameter=input_tokens, value=16384)`. Before tokenizing, vLLM refuses a prompt
+   of more than 16,383 times its vocabulary's longest entry in characters (128, so 2,097,024) with
+   its other message, and so does the port, which also keeps it from tokenizing a 64 MB state. A
+   prompt is never truncated. The texts come from vLLM's source at upstream's pinned commit
+   (`vllm/renderers/params.py`, `vllm/exceptions.py`, `vllm/entrypoints/serve/exception_handling`),
+   not from a run of it.
+9. **The prompt and the readout are the package's, to the last bit.** `decision_options` writes a
+   description that is not a string as Python's `str()` writes the value `json.loads` made of it
+   (`{'k': 'v'}`, `True`, `None`); a false one falls back as `v or k` does. The letter softmax is
+   upstream's, `softmax((v - max) / T)` in doubles, on the logits rather than vLLM's logprobs, from
+   which the vocabulary's normaliser cancels. `spread`, `groups`, `_knockout`, `_tree` and
+   `_combine` keep the package's order of operations, CPython 3.12's compensated sums
+   (`pythonSum`), `libm`'s `exp` and `pow`, and its stable sorts, so on the same logits every
+   distribution is the package's bit for bit: 204 questions in 324 passes and 16 generated
+   `spread` cases (`Fixtures/jevk5`).
+10. **`jevk5_config.json` is checked at load.** A missing, non-numeric or non-positive temperature
+    fails the load, where upstream fails at load for a missing key and at the first read for zero.
+    `knockout_temperature`, v0.3's key, is ignored, as jevk5 0.2.2 and upstream ignore it.
+11. **Parity is against the author's published run.** Upstream's server for `jevk5` needs vLLM on an
+    NVIDIA GPU. As upstream did, the Swift server's JevBench run is compared with the `jevk5`
+    package's published v0.2 run (`results/public231/jevk5-v0.2.jsonl`, added by the v0.2.0 commit
+    `85238d7`), which `harness.py author-run` turns into a result file; item 4 has the figures. The
+    author's `bench/SUBMISSION.md` there says the run used the package's in-process adapter,
+    transformers and the bf16 weights at checkpoint revision `3c67329`, whose weights, configuration
+    and tokenizer files are the `v0.2` tag's, byte for byte, on one H100, so the reference is the
+    model this port converts. The answers are deterministic: made a second time from a second build
+    of the same JevK5 code, all six runs gave their 999 answers bit for bit.
+12. **The live tests hold the Swift model to mlx-lm on the same conversion.** `Fixtures/jevk5`
+    records mlx-lm's letter logits for every pass on the 4-bit conversion; with
+    `OPENJEV_JEVK5_MODEL` the Swift tokenizer gives transformers' ids on all 324 passes, and the
+    Swift model's letter logits are mlx-lm's within 0.375, 0.068 on average, against the tests'
+    bounds of 1.0 and 0.1. They are identical on 51 passes, and the top letter is mlx-lm's on 321,
+    the other three where mlx-lm's top two logits are within 0.5. The four passes over 2,048 tokens,
+    prefilled in chunks, differ by 0.125 at most. Through the engine the 204 answers bill upstream's
+    tokens exactly and are within 0.062 of mlx-lm's, against a bound of 0.1; four top answers
+    differ, each where mlx-lm's top two are less than 0.1 apart. The two implementations order
+    bfloat16 arithmetic differently: with the Python wheel's Metal library in place of Swift's own
+    (`OPENJEV_MLX_METALLIB`), the largest difference was 0.625 and the mean 0.071, so the compiled
+    kernels are not what differs.
+
+Status. Proposed with issue #55. Item 3 waits for the maintainer, and item 4's default with it.

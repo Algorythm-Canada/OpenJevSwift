@@ -9,7 +9,7 @@ D-046 in [docs/06-decisions.md](../../docs/06-decisions.md).
 
 | Path | What it is |
 |---|---|
-| `harness.py` | The runner and scorer: `fetch`, `run`, `summary`, `compare`, `published`, `report`, `calibration`. Standard library only |
+| `harness.py` | The runner and scorer: `fetch`, `run`, `summary`, `compare`, `published`, `author-run`, `report`, `calibration`. Standard library only |
 | `servers.py` | Starts the Swift or upstream server for one backend on a free port, records its versions, runs `harness.py` against it and stops it with SIGTERM |
 | `report.py` | Renders the comparison tables of docs/quality.md from `results/` |
 | `calibration.py` | Renders its calibration tables (issue #62): JevBench's Brier score and ECE, reliability bins, `confidence` against accuracy by type and option count, and SemIf's temperature scaling fitted offline |
@@ -18,7 +18,7 @@ D-046 in [docs/06-decisions.md](../../docs/06-decisions.md).
 | `vendor/` | JevBench's and SemIf's scoring code, unchanged and pinned by SHA-256 ([vendor/README.md](vendor/README.md)) |
 | `requirements.txt` | Empty: the harness needs only Python's standard library |
 | `requirements-upstream.txt` | The complete lock of `.venv`, the environment upstream's server runs in |
-| `results/` | One file per run: `{model}-{server}.json` for JevBench, `typesafe102/{model}-{server}.json` for the TypeSafe rows |
+| `results/` | One file per run: `{model}-{server}.json` for JevBench, `typesafe102/{model}-{server}.json` for the TypeSafe rows; `jevk5-0.2-author.json` is JevK5's own published run, converted by `author-run`, and `jevk5-conversions/{4bit,bf16}/` JevK5's runs on its other conversions |
 
 ## The datasets
 
@@ -64,6 +64,25 @@ is a **refusal**: it is recorded with the server's detail and counts as a wrong 
 benchmark counts a failed decision. Three failures in a row, or a 401, 403 or 429, stop the run and
 leave the rest unattempted, as the benchmark's runner does, except that a refusal does not count
 towards the three (the runner exempts only a 422; D-041).
+
+## JevK5's reference: the author's published run
+
+Upstream's `jevk5` server reads its letters from a vLLM server, which needs an NVIDIA GPU, so this
+Mac cannot run it. The reference for the Swift `jevk5` backend is the one upstream used: the `jevk5`
+package's own published v0.2 run of the 231 public items
+([allebee/jevk5](https://github.com/allebee/jevk5) at `85238d7`, the v0.2.0 commit that added
+`results/public231/jevk5-v0.2.jsonl`, Apache-2.0). Its `bench/SUBMISSION.md` says how it was made:
+the package's in-process adapter, `jevk5_direct`, with transformers and the bf16 weights of
+`alibiserikbay/JevK5` at `3c67329` (whose weights, configuration and tokenizer files are the `v0.2`
+tag's), through JevBench's runner at `0caa1d0` on one H100. Its prompts were built in that process,
+not sent to a server. Equal token counts on an item show prompts of the same length, not the same
+prompts; `Fixtures/jevk5` checks the prompts byte for byte against the package. `fetch` downloads it
+into the cache and checks its size and SHA-256 (`AUTHOR_RUNS`), and `author-run` turns it into a
+result file whose server is `author`: each item takes the distribution the author's server returned
+and its `usage`, scored again with JevBench's `score_task` as this harness scores its own runs, the
+published record's own outcome kept beside it. `compare` then reads it as it reads any run, and also
+reports the items whose billed input tokens differ (equal counts mean prompts of the same length)
+and the median of each item's largest difference.
 
 ## Scoring
 
@@ -139,6 +158,21 @@ python3 Tools/jevbench/harness.py report
 downloads the published packages (D-033), which have the same bytes
 (`Tools/encoders/manifest.py --check`, which `servers.py` runs and records, and which stops the run
 before the server starts when a package differs). Add `--force` to replace earlier result files.
+
+JevK5, `--backend jevk5`, reads a conversion `Tools/jevk5/convert.py` writes (`--jevk5-model`, by
+default the 8-bit one, `~/Library/Caches/OpenJevSwift/jevk5/jevk5-0.2-mlx-8bit`, the server's
+default), which `servers.py` checks against the pinned digests of the 4-bit, 8-bit and bfloat16
+conversions (`convert.py --check`) before the server starts, and records. Only the Swift server
+runs it; its reference is the author's run. The main result files are the 8-bit conversion's, and
+`results/jevk5-conversions/` holds the other two, which the report's table of conversions reads:
+
+```bash
+python3 Tools/jevbench/harness.py author-run
+python3 Tools/jevbench/servers.py --server swift --backend jevk5 --setting OPENJEV_MLX_CACHE_LIMIT_GB=4
+python3 Tools/jevbench/servers.py --server swift --backend jevk5 --jevk5-model ~/Library/Caches/OpenJevSwift/jevk5/jevk5-0.2-mlx-4bit --setting OPENJEV_MLX_CACHE_LIMIT_GB=4 --output-dir Tools/jevbench/results/jevk5-conversions/4bit
+python3 Tools/jevbench/servers.py --server swift --backend jevk5 --jevk5-model ~/Library/Caches/OpenJevSwift/jevk5/jevk5-0.2-mlx-bf16 --setting OPENJEV_MLX_CACHE_LIMIT_GB=4 --output-dir Tools/jevbench/results/jevk5-conversions/bf16
+python3 Tools/jevbench/harness.py compare Tools/jevbench/results/jevk5-0.2-swift.json Tools/jevbench/results/jevk5-0.2-author.json
+```
 
 The DiffusionGemma runs, `--backend mlx`, read `mlx-community/diffusiongemma-26B-A4B-it-4bit` at
 `a7a81407` from the Hugging Face cache (both servers load about 16 GB; run them one after the
