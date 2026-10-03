@@ -178,6 +178,11 @@ enum SettingsSummary {
             parts.append("encoder_functions=\(settings.encoderFunctions.map(String.init) ?? "all")")
             let local = environment["OPENJEV_ENCODER_MODELS"].flatMap { $0.isEmpty ? nil : $0 }
             parts.append("encoder_models=\(local ?? "downloads")")
+        case .letterReadout:
+            parts += [
+                "encoder_batch=\(settings.encoderBatch)", "jevk5_model=\(settings.jevk5Model)",
+                "mlx_cache_limit_gb=\(settings.mlxCacheLimitGB.map(number) ?? "unset")",
+            ]
         }
         parts += [
             "api_key=\(settings.apiKey.isEmpty ? "unset" : "set")",

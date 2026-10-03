@@ -19,6 +19,11 @@ struct FixturePinTests {
     /// pins them (checked below). Those files use each checkpoint's own tokenizer.
     static let verdictRevision = "8af2496eb63c7fa66d7d234e1f62629380030eb4"
     static let layaRevision = "1a793eb568e6718f15941d08f85432581df534e3"
+    /// What Fixtures/jevk5 was recorded with, as Tools/jevk5's scripts pin it (checked below): the
+    /// JevK5 checkpoint at its `v0.2` tag and the `jevk5` package at its v0.2.2 tag.
+    static let jevk5Repository = "alibiserikbay/JevK5"
+    static let jevk5Revision = "ea4804e93a3db07c2250315c400f59683f54db6f"
+    static let jevk5PackageCommit = "0571ef373722dd10cace82c81580d7b675fe6b53"
 
     /// The repository root, found relative to this source file.
     static let root = URL(fileURLWithPath: #filePath)
@@ -74,6 +79,20 @@ struct FixturePinTests {
         #expect(common.contains("\nLAYA_REVISION = \"\(Self.layaRevision)\"\n"))
     }
 
+    @Test("The expected JevK5 pins are the ones Tools/jevk5 records and converts with")
+    func jevk5ScriptsAgree() throws {
+        let convert = try String(
+            contentsOf: Self.root.appendingPathComponent("Tools/jevk5/convert.py"), encoding: .utf8)
+        #expect(convert.contains("\nSOURCE_REPO = \"\(Self.jevk5Repository)\"\n"))
+        #expect(convert.contains("\nSOURCE_REVISION = \"\(Self.jevk5Revision)\"\n"))
+        #expect(convert.contains("\nJEVK5_COMMIT = \"\(Self.jevk5PackageCommit)\"\n"))
+        let reference = try String(
+            contentsOf: Self.root.appendingPathComponent("Tools/jevk5/reference.py"),
+            encoding: .utf8)
+        #expect(reference.contains("\nUPSTREAM_COMMIT = \"\(Self.upstreamCommit)\"\n"))
+        #expect(reference.contains("\nJEVK5_COMMIT = \"\(Self.jevk5PackageCommit)\"\n"))
+    }
+
     /// What is wrong with one file's generator object, if anything.
     ///
     /// python-json/ holds CPython reference tables, which involve neither upstream nor the
@@ -84,6 +103,9 @@ struct FixturePinTests {
     /// code, so it pins the checkpoint (the tokenizer's repository and revision) and not upstream.
     /// regression/ holds the Swift port's own answers, which RegressionTests records on the
     /// checkpoint, so it pins the checkpoint, MLX, macOS and the GPU and not upstream.
+    /// jevk5/ holds JevK5's reads, which Tools/jevk5 records through upstream's code and the
+    /// `jevk5` package with the JevK5 checkpoint's own tokenizer, so it pins upstream, the
+    /// package and the checkpoint.
     /// Every other file comes from upstream's code with the real tokenizer and records both pins
     /// and the version of the script that wrote it.
     static func problems(in generator: JSONValue, of file: String) -> [String] {
@@ -99,6 +121,24 @@ struct FixturePinTests {
             expect("model_repo", tokenizerRepository)
             expect("model_revision", tokenizerRevision)
             for key in ["mlx_swift", "macos", "gpu", "date"]
+            where generator[key]?.stringValue == nil {
+                out.append("\(file): generator.\(key) is missing")
+            }
+            if generator["version"]?.intValue == nil {
+                out.append("\(file): generator.version is missing")
+            }
+            return out
+        }
+        if file.hasPrefix("jevk5/") {
+            if generator["script"]?.stringValue?.hasPrefix("Tools/jevk5/") != true {
+                out.append("\(file): generator.script does not name a script in Tools/jevk5")
+            }
+            expect("upstream", "razorback16/openjev")
+            expect("upstream_commit", upstreamCommit)
+            expect("jevk5_commit", jevk5PackageCommit)
+            expect("checkpoint_repo", jevk5Repository)
+            expect("checkpoint_revision", jevk5Revision)
+            for key in ["python", "mlx", "conversion_sha256"]
             where generator[key]?.stringValue == nil {
                 out.append("\(file): generator.\(key) is missing")
             }

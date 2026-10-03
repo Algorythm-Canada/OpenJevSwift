@@ -134,6 +134,22 @@ tolerance is 0 (D-044). On another machine, or with the exact tier's `OPENJEV_ML
 holds the port to D-014's aggregate bounds, and on another machine it says to record that machine's
 own file (`OPENJEV_RECORD_REGRESSION=1`, which refuses the exact tier's kernels; D-048).
 
+JevK5 (`OpenJevLetterReadoutTests`, issue #55) takes its oracle from `Fixtures/jevk5/reads.json`,
+which `Tools/jevk5/reference.py` records through upstream's own `JevK5Engine.read_question` and the
+`jevk5` package, with the 4-bit conversion on MLX through mlx-lm in place of vLLM. Without any
+model the tests check every option text and every pass's prompt byte for byte (204 questions,
+324 passes), `spread` and the letter softmax bit for bit on recorded and generated logits, the
+corpus through `EncoderDecisionEngine` over a model that replays the recorded logits (every answer
+equal to upstream's, every request's billing upstream's), and upstream's three JevK5 tests
+(`test_jevk5_reads_letters_under_its_temperature`,
+`test_jevk5_reads_more_than_16_options_in_passes`, `test_jevk5_model_rejection_is_a_400`) over
+its stub model through the server. The live suite needs the converted checkpoint,
+`OPENJEV_JEVK5_MODEL=<folder>` (`Tools/jevk5/convert.py --bits 4`'s output), and skips naming that
+variable otherwise: the tokenizer's ids for every pass, the Swift model's letter logits against
+mlx-lm's on the same conversion (within 1.0 at most and 0.1 on average, the top letter mlx-lm's
+wherever its top two logits are more than 0.5 apart), and the corpus's billing exactly and answers
+within 0.1, the top answer mlx-lm's wherever its top two are at least 0.1 apart (D-052).
+
 The encoder backends (`OpenJevEncodersTests`, issues #57 and #58) take their oracle from
 `Fixtures/encoders`, PyTorch float32 reads through upstream's own code. Without any model they
 check every prompt byte for byte (Verdict's prompts; Laya's heads, options and states), the
@@ -301,8 +317,8 @@ identity.
   `main` once GitHub Pages is enabled. `ConfigurationReferenceTests`, in the server tests, holds the
   configuration reference to `ServerSettings` and to [deployment.md](deployment.md) (D-047).
 - Every job fails when a test skips for any reason other than an unset `OPENJEV_TEST_MODEL`,
-  `OPENJEV_ENCODER_MODELS`, `OPENJEV_LIVE_URL` or `OPENJEV_TEST_DOWNLOAD`, so a fixture test
-  cannot stop testing without failing.
+  `OPENJEV_ENCODER_MODELS`, `OPENJEV_JEVK5_MODEL`, `OPENJEV_LIVE_URL` or `OPENJEV_TEST_DOWNLOAD`, so
+  a fixture test cannot stop testing without failing.
 - `OPENJEV_TEST_DOWNLOAD=1` opts in to the one test that reaches the Hugging Face Hub: it
   downloads the pinned 4-bit revision's `tokenizer_config.json` and `chat_template.jinja` into a
   temporary cache in huggingface_hub's layout and checks their SHA-256 against
@@ -316,7 +332,8 @@ identity.
   tokenizer parity suite of `OpenJevDiffusionGemmaTests` needs the checkpoint's tokenizer files
   (`OPENJEV_TEST_TOKENIZER`, `OPENJEV_TEST_MODEL` or the Hugging Face cache) and is opt-in the
   same way until CI fetches those files (spikes/tokenizer-parity.md, follow-up E). So are the
-  tokenizer and Core ML suites of `OpenJevEncodersTests` (`OPENJEV_ENCODER_MODELS`).
+  tokenizer and Core ML suites of `OpenJevEncodersTests` (`OPENJEV_ENCODER_MODELS`), and the live
+  suite of `OpenJevLetterReadoutTests` (`OPENJEV_JEVK5_MODEL`).
 
 ## Test data hygiene
 

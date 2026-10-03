@@ -7,8 +7,9 @@ import OpenJevCore
 
 /// Upstream's `Settings`, for everything that is not vLLM-specific: the same names, defaults and
 /// startup validation, so deployment documentation and compose files transfer (decision D-013).
-/// One setting is this port's own, `OPENJEV_ENCODER_FUNCTIONS` (D-042), read and checked as
-/// upstream's `_env_num` settings are.
+/// Two settings are this port's own: `OPENJEV_ENCODER_FUNCTIONS` (D-042), read and checked as
+/// upstream's `_env_num` settings are, and `OPENJEV_JEVK5_MODEL` (D-052), the JevK5 checkpoint,
+/// which upstream reads from its vLLM server's `OPENJEV_MODEL`.
 ///
 /// The fields are constants, as upstream's frozen dataclass is: a value exists only once the
 /// checks have passed, so no later change can reach an engine's preconditions.
@@ -92,6 +93,10 @@ public struct ServerSettings: Sendable, Hashable {
     public let layaModel: String
     /// The Verdict checkpoint, `OPENJEV_VERDICT_MODEL`.
     public let verdictModel: String
+    /// The JevK5 checkpoint, `OPENJEV_JEVK5_MODEL`, this port's (D-052): a folder holding a
+    /// conversion (when it starts with `/`, `~` or `.`) or a Hub repository, optionally followed
+    /// by `@revision`. The default is the 8-bit conversion's repository.
+    public let jevk5Model: String
     /// The device an encoder runs on, `OPENJEV_DEVICE`; empty picks the default.
     public let device: String
     /// Questions per encoder batch, `OPENJEV_ENCODER_BATCH`.
@@ -142,6 +147,7 @@ public struct ServerSettings: Sendable, Hashable {
         warmup: Bool = true,
         layaModel: String = "convaiinnovations/laya-typed-decisions",
         verdictModel: String = "heman10x/rlcd-modernbert-151m",
+        jevk5Model: String = "Algorythm-Canada/jevk5-0.2-mlx-8bit",
         device: String = "",
         encoderBatch: Int = 16,
         encoderFunctions: Int? = nil,
@@ -174,6 +180,7 @@ public struct ServerSettings: Sendable, Hashable {
         self.warmup = warmup
         self.layaModel = layaModel
         self.verdictModel = verdictModel
+        self.jevk5Model = jevk5Model
         self.device = device
         self.encoderBatch = encoderBatch
         self.encoderFunctions = encoderFunctions
@@ -230,6 +237,8 @@ public struct ServerSettings: Sendable, Hashable {
                 "OPENJEV_LAYA_MODEL", default: "convaiinnovations/laya-typed-decisions"),
             verdictModel: env.string(
                 "OPENJEV_VERDICT_MODEL", default: "heman10x/rlcd-modernbert-151m"),
+            jevk5Model: env.string(
+                "OPENJEV_JEVK5_MODEL", default: "Algorythm-Canada/jevk5-0.2-mlx-8bit"),
             device: env.string("OPENJEV_DEVICE", default: ""),
             encoderBatch: env.integer("OPENJEV_ENCODER_BATCH", default: 16),
             encoderFunctions: env.optionalInteger("OPENJEV_ENCODER_FUNCTIONS", minimum: 1),

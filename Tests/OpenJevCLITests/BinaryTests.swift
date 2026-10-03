@@ -33,7 +33,7 @@ struct BinaryTests {
         #expect(backend.status == 2)
         #expect(
             backend.errors
-                == "openjev: unknown backend 'vllm'; use one of mlx, laya, verdict "
+                == "openjev: unknown backend 'vllm'; use one of mlx, laya, verdict, jevk5 "
                 + "(OPENJEV_BACKEND)\n")
 
         let usage = try await BuiltBinary.run(

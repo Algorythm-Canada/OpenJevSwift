@@ -1,0 +1,3 @@
+# JevK5's own package at its v0.2.2 tag, for its prompt and many-option readout (jevk5/prompt.py,
+# standard library only). Install with --no-deps (requirements.txt says why).
+jevk5 @ git+https://github.com/allebee/jevk5@0571ef373722dd10cace82c81580d7b675fe6b53

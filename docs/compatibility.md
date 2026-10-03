@@ -23,6 +23,7 @@ commit ([Fixtures/](../Fixtures/README.md)), and the tests compare with them exa
 | Read policies | The reads `samples`, `steps`, `sequential` and the automatic re-reads make, with their seeds and prefixes, and the billed tokens | `Fixtures/policies` |
 | Answers from probabilities | Each slot's distribution and entropy from the same log-probabilities, the confidence, the choice, the score, the averaging | `Fixtures/distributions` |
 | Encoder inputs | Verdict's prompts, Laya's heads, options, sequences and truncation, byte for byte; their calibration within 1e-6, Laya's bit for bit | `Fixtures/encoders` |
+| JevK5 prompts and readout | The `jevk5` package's option texts and prompts byte for byte and transformers' token ids for them, on 324 passes; its letter softmax and `spread` bit for bit on the same logits; the billed tokens of all 231 JevBench items against the author's published run | `Fixtures/jevk5`, `Tools/jevbench/results` |
 | Requests | Which bodies are accepted, pydantic's lax coercion of the extension fields, every 422 with its `loc`, `msg`, `input` and `ctx`, and CPython's `json_invalid` message and position for a body that is not JSON (728 recorded documents) | `Fixtures/wire/cases.json`, `Fixtures/python-json` |
 | Errors | The status, body and `retry-after` of the errors both answer: 400, 401, 403, 413, 422, 503 and 529, and the 404 of an unknown path | `Fixtures/wire`, `Fixtures/errors`; the 404 against FastAPI's body in the server's application tests |
 | Headers | `x-typesafe-request-id` and `x-request-id`, the same `req_` id with 32 hex digits, on every response; `server-timing` with its `model`, `server` and `total` spans | `Fixtures/wire`, the live suite |
@@ -34,7 +35,7 @@ commit ([Fixtures/](../Fixtures/README.md)), and the tests compare with them exa
 
 Upstream's own end-to-end file, `tests/test_live.py`, passes against the Swift server on Verdict
 and Laya, and the Swift port of it passes unchanged against both servers on all three backends
-(D-043).
+(D-043) and against the Swift server's `jevk5` backend, whose upstream counterpart needs vLLM.
 
 ## Within tolerance
 
@@ -64,6 +65,15 @@ bounded: D-048 bounds the reads there, and an answer averages up to four of them
 | `laya`, Core ML float16 against upstream's PyTorch float32 | Largest probability difference | 0.02, before laya's 4-decimal rounding (D-037) | 0.0026 over 333 items, between the rounded answers the servers sent; 0.0039 over spike #56's 200 questions, before rounding |
 | | Mean probability difference | 0.003, before rounding | 2.1e-4 on JevBench and 1.6e-4 on TypeSafe, between the rounded answers |
 | | Top answer, wherever upstream's top two are at least 0.01 apart | unchanged | unchanged on all 333 items |
+| `jevk5`, the 8-bit conversion against the author's published run (transformers, bfloat16, CUDA) | Top answer agreement on JevBench's 231 items | all 231 (issue #55) | 230; the other a near-tie in the author's run, its top two 0.040 apart |
+| | Top answer where the author's top two are at least 0.05 apart | unchanged | unchanged on all 219 |
+| | Billed input tokens | equal | equal on all 231 |
+| | Largest and mean probability difference | reported, not bounded; upstream measured 0.055 largest on vLLM | 0.083 and 0.0049 |
+| `jevk5`, the unquantized bfloat16 weights against the same run | Top answer agreement; largest and mean probability difference | reported | 228 of 231, each miss within 0.031 of a tie; 0.051 and 0.0037 |
+| `jevk5`, the 4-bit conversion against the same run | Top answer agreement; largest and mean probability difference | reported | 209 of 231; 0.53 and 0.044 |
+| `jevk5`, the Swift model against mlx-lm's on the same 4-bit conversion | Largest and mean letter-logit difference over the fixture's 324 passes | 1.0 and 0.1 | 0.375 and 0.068; 51 passes identical |
+| | Top letter, wherever mlx-lm's top two logits are more than 0.5 apart | unchanged | unchanged; 321 of all 324 passes keep it |
+| | Largest answer probability difference over the fixture's 204 questions; top answer where mlx-lm's top two are at least 0.1 apart | 0.1; unchanged | 0.062; four answers changed, each where mlx-lm's top two are less than 0.1 apart |
 
 The first `mlx` figures are D-014's bounds, with D-048's long-prompt rows, over `Fixtures/oracle`,
 measured on 2026-10-02 on an M3 Max with the pinned 4-bit checkpoint
@@ -78,6 +88,12 @@ differ more than TypeSafe's. Its section
 [A disagreement on DiffusionGemma](quality.md#a-disagreement-on-diffusiongemma) shows the difference
 is the kernels': in D-014's exact tier the port reads the four long-prompt items whose top answers
 differ at a wide margin as mlx-vlm does, bit for bit.
+
+The `jevk5` rows are quality.md's, from the 2026-10-03 UTC runs on the same Mac with MLX's buffer
+pool capped at 4 GB, and D-052's live tests. Upstream reached all 231 top answers on vLLM; on MLX
+no conversion does, and the misses at 8 bits and in bfloat16 are near-ties in the author's run,
+where the order of bfloat16 arithmetic decides. The 4-bit conversion changes clear answers too,
+which is why the server loads the 8-bit one ([quality.md](quality.md#jevk5)).
 
 ## Different, and why
 
@@ -94,7 +110,7 @@ differ at a wide margin as mlx-vlm does, bit for bit.
 | Error messages' `repr` | CPython's Unicode tables decide which characters are escaped | This platform's tables, which can differ for newly assigned characters | D-018 |
 | Settings errors | A bare `ValueError` naming only the text; any integer accepted | The message names the variable; an integer beyond `Int` is refused | D-030 |
 | `OPENJEV_LOG_LEVEL` | uvicorn's level names | The same and swift-log's `notice` | D-030 |
-| Backends | `vllm` by default, and `mlx`, `laya`, `verdict`, `clm`, `jevk5` | `mlx` by default, `laya` and `verdict`; `vllm`, `clm` and `jevk5` are unknown names (issues #59 and #55) | D-030, D-038 |
+| Backends | `vllm` by default, and `mlx`, `laya`, `verdict`, `clm`, `jevk5` | `mlx` by default, `laya`, `verdict` and `jevk5`; `vllm` and `clm` are unknown names (issue #59) | D-030, D-038, D-052 |
 | DiffusionGemma checkpoint | The newest revision of `OPENJEV_MLX_MODEL`'s repository | The default repository loads the pinned revision `a7a81407`; `repo@revision` picks another | D-039 |
 | `think` and `images` on `mlx` | Supported | `openjev-0.1 does not support think` and `does not support images` until issues #52 and #48 | D-039 |
 | `POST /v1/chat/completions` | Served by the `mlx` backend | A 404 until issue #53, though `/v1/models` still lists `diffusiongemma-26b` as upstream's does | D-012, D-043 |
@@ -108,6 +124,9 @@ differ at a wide margin as mlx-vlm does, bit for bit.
 | Shutdown and exit statuses | uvicorn's | Requests in flight get `--shutdown-timeout` (30 s); exit statuses 0 to 4 for scripts and launchd | D-038 |
 | Forwarded requests | httpx adds `accept`, `accept-encoding: gzip, deflate`, `connection` and `user-agent`, honours `HTTP_PROXY`, pools connections, and answers an unparsable route URL with a 500 | AsyncHTTPClient adds `host`, `content-length` and `accept-encoding: deflate, gzip`, ignores proxy variables, opens one connection per request, and answers an unparsable URL with the 503 `InvalidURL` | D-040 |
 | Checkpoint downloads | huggingface_hub, with file locks | The port's own downloader in the same cache layout, without locks: two processes must not download the same file at once | D-039 |
+| JevK5's runtime | A vLLM server on an NVIDIA GPU, `OPENJEV_MODEL`'s weights in bfloat16, up to `OPENJEV_JEVK5_WORKERS` reads in flight | The model in the process on MLX, an 8-bit conversion that `OPENJEV_JEVK5_MODEL` names (a folder until the conversion is published), the questions of a request read concurrently and their passes one at a time; `OPENJEV_JEVK5_WORKERS` is not read | D-052 |
+| JevK5's checkpoint | `alibiserikbay/JevK5` at its newest revision, which has held v0.3 since 2026-09-25, served under the name `jevk5-0.2` | The author's `v0.2` tag, `ea4804e`, with v0.2's temperature of 1.532 | D-052 |
+| JevK5's 400 | vLLM's own refusal of a prompt over its context, passed on | The same texts, from vLLM's source at upstream's pinned commit, not from a run of it | D-052 |
 
 ## What runs where
 
@@ -122,14 +141,17 @@ encoder engines do), from the `openjev` tool's `BackendRegistry`, and from the p
 | macOS 14 or later, Apple silicon | `mlx` | yes | yes | yes | yes | no, issue #48 | no, issue #52 | no, issue #53 |
 | macOS 15 or later | `verdict` | yes | n/a | n/a | n/a | n/a | n/a | n/a |
 | macOS 15 or later | `laya` | yes | n/a | n/a | n/a | n/a | n/a | n/a |
+| macOS 14 or later, Apple silicon | `jevk5` | yes | n/a | n/a | n/a | n/a | n/a | n/a |
 | macOS | routed models | yes | yes | yes | yes | yes | yes | n/a |
 | iOS 18 or later | `mlx` | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
 | iOS 18 or later | `verdict` | yes | n/a | n/a | n/a | n/a | n/a | n/a |
 | iOS 18 or later | `laya` | yes | n/a | n/a | n/a | n/a | n/a | n/a |
+| iOS 17 or later | `jevk5` | builds, not yet run on an iPhone | n/a | n/a | n/a | n/a | n/a | n/a |
 | iOS | routed models | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
 | Linux | `mlx` | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
 | Linux | `verdict` | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
 | Linux | `laya` | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+| Linux | `jevk5` | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
 | Linux | routed models | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
 
 - **The encoders' n/a** is upstream's own contract: its encoder engines refuse `steps` and
@@ -148,5 +170,7 @@ encoder engines do), from the `openjev` tool's `BackendRegistry`, and from the p
   suite's stub server, but no backend: MLX and Core ML are Apple's, so `serve` and `decide` exit
   with status 3 whatever the backend (`models` still prints a listing, which needs no model), and
   a server cannot start to forward routes.
-- **JevK5 and CLM**, upstream's other two models, are not served on any platform yet (issues #55
-  and #59).
+- **`jevk5`** runs wherever MLX does: the server on an Apple silicon Mac, and in an app through
+  `EncoderDecisionEngine`, which compiles for iOS but has not run on an iPhone yet. It is a reads-only
+  model like the encoders, so its other cells are upstream's n/a.
+- **CLM**, upstream's other model, is not served on any platform yet (issue #59).
