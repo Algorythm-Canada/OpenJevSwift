@@ -2789,7 +2789,9 @@ Decision.
    `LibjpegTurboDecoder` ports libjpeg-turbo 3.1.4.1's default decompression (Huffman baseline and
    progressive, the accurate integer IDCT, fancy upsampling, fixed-point YCbCr), the path Pillow
    runs, and decodes every fixture JPEG to Pillow's bytes. JPEGs it does not cover (arithmetic,
-   lossless, 12-bit, CMYK) fall back to ImageIO, unmeasured.
+   lossless, 12-bit, CMYK) or finds malformed fall back to ImageIO, unmeasured. It validates every
+   segment as libjpeg does and refuses more than 100 scans, so untrusted bytes make it throw,
+   never trap or spin.
 3. **The budget is always 280, and the token count follows from the size.** `size` 224 by 224 is
    never read, and 70, 140, 560 and 1,120 are only the video processor's allowed budgets. An image
    gets the largest sides that are multiples of 48 and fit 2,520 patches, which is 236 to 280 soft

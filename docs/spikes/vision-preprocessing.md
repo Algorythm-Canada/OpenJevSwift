@@ -150,6 +150,15 @@ the processor's ids, `mm_token_type_ids`, soft token counts and pixel shapes.
   over premultiplied). Other layouts (16-bit PNG, translucent premultiplied images, CMYK) are drawn
   into an 8-bit sRGB context, which colour-manages; none of the fixtures takes that path, so it is
   unmeasured, as are lossy WebP and CMYK JPEG.
+- A request's image bytes are untrusted, so the JPEG port checks every segment as libjpeg does
+  (lengths, a second frame, DC symbols above 15, progressive scan parameters, fractional sampling
+  ratios, more than 10 blocks per MCU) and throws rather than reads past its input; such a JPEG
+  goes to ImageIO. A frame of more than 178,956,970 pixels, or a JPEG of more than 100 scans, is
+  refused outright. `JPEGRobustnessTests` feeds it each of those cases and 6,799 truncations and
+  corruptions of the fixture JPEGs: 3,703 decode, 3,096 are refused, none traps. A truncated JPEG
+  has no EOI, so the port leaves it to ImageIO, which may decode what is there; Pillow's `load`
+  raises "image file is truncated" instead (read from Pillow's `ImageFile.load`, not run), so
+  upstream would answer 500 where the port may read a partial image.
 - No timing was measured: two other jobs shared the machine.
 - The Layr-Labs fork's `DiffusionGemmaProcessor.swift`, `DiffusionGemmaImagePixels.swift` and
   `DiffusionGemmaBicubicRGB.swift` were not used; nothing here derives from them.

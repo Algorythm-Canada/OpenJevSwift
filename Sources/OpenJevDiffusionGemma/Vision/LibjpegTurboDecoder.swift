@@ -25,10 +25,29 @@
 /// Anything else (arithmetic coding, lossless or 12-bit JPEGs, CMYK and YCCK) throws
 /// ``Unsupported`` so the caller can fall back to ImageIO.
 enum LibjpegTurboDecoder {
-    /// A JPEG this decoder does not cover, or one too damaged to decode.
+    /// A JPEG this decoder does not cover, or one too damaged to decode. The caller may try
+    /// another decoder.
     struct Unsupported: Error, CustomStringConvertible {
         let description: String
         init(_ description: String) { self.description = description }
+    }
+
+    /// A JPEG refused outright: one that declares more pixels than ``RGBImage/maxPixels``, or
+    /// more scans than ``maxScans``. No other decoder should be tried on it.
+    struct Refused: Error, CustomStringConvertible {
+        let description: String
+        init(_ description: String) { self.description = description }
+    }
+
+    /// The most scans a JPEG may have. Each scan walks the whole image, so a small file of empty
+    /// scans would otherwise cost time in proportion to its size times the image's. Encoders
+    /// write about 10 for a progressive JPEG and 1 for a baseline one.
+    static let maxScans = 100
+
+    /// Errors the decoder throws.
+    enum Failure: Error {
+        case unsupported(Unsupported)
+        case refused(Refused)
     }
 
     /// True when `bytes` start with a JPEG's SOI marker.
@@ -80,6 +99,9 @@ enum LibjpegTurboDecoder {
         var h: Int
         var v: Int
         var quantTable: Int
+        /// The quantization table as it stood at the component's first scan, which is when
+        /// libjpeg latches it (`latch_quant_tables`).
+        var quant: [Int]?
         /// Blocks per line and per column of the coefficient grid, padded to whole MCUs.
         var blocksPerLine = 0
         var blocksPerColumn = 0
@@ -182,7 +204,19 @@ enum LibjpegTurboDecoder {
 
     // MARK: Decoding
 
-    static func decode(_ bytes: [UInt8]) throws(Unsupported) -> RGBImage {
+    static func decode(_ bytes: [UInt8]) throws(Failure) -> RGBImage {
+        do {
+            return try decodeChecked(bytes)
+        } catch let error as Refused {
+            throw .refused(error)
+        } catch let error as Unsupported {
+            throw .unsupported(error)
+        } catch {
+            throw .unsupported(Unsupported("\(error)"))
+        }
+    }
+
+    static func decodeChecked(_ bytes: [UInt8]) throws -> RGBImage {
         guard isJPEG(bytes) else { throw Unsupported("not a JPEG") }
         var quantTables = [[Int]](repeating: [], count: 4)
         var dcTables = [HuffmanTable](repeating: HuffmanTable(), count: 4)
@@ -199,6 +233,7 @@ enum LibjpegTurboDecoder {
         var mcusPerLine = 0
         var mcusPerColumn = 0
         var position = 2
+        var scans = 0
 
         func u16(_ at: Int) throws(Unsupported) -> Int {
             guard at + 1 < bytes.count else { throw Unsupported("the JPEG is cut short") }
@@ -245,7 +280,12 @@ enum LibjpegTurboDecoder {
                     let precision = Int(bytes[at] >> 4)
                     let id = Int(bytes[at] & 15)
                     at += 1
-                    guard id < 4 else { throw Unsupported("a quantization table id is over 3") }
+                    guard id < 4, precision <= 1 else {
+                        throw Unsupported("a quantization table is bad")
+                    }
+                    guard at + 64 * (precision + 1) <= end else {
+                        throw Unsupported("a quantization table overruns its segment")
+                    }
                     var table = [Int](repeating: 0, count: 64)
                     for k in 0..<64 {
                         let value = precision == 0 ? Int(bytes[at]) : try u16(at)
@@ -259,7 +299,7 @@ enum LibjpegTurboDecoder {
                 while at < end {
                     let tableClass = Int(bytes[at] >> 4)
                     let id = Int(bytes[at] & 15)
-                    guard id < 4, at + 17 <= end else {
+                    guard id < 4, tableClass <= 1, at + 17 <= end else {
                         throw Unsupported("a Huffman table is bad")
                     }
                     let counts = (0..<16).map { Int(bytes[at + 1 + $0]) }
@@ -267,14 +307,21 @@ enum LibjpegTurboDecoder {
                     guard at + 17 + total <= end else {
                         throw Unsupported("a Huffman table overruns")
                     }
-                    let table = HuffmanTable(
-                        counts: counts, values: Array(bytes[(at + 17)..<(at + 17 + total)]))
+                    let values = Array(bytes[(at + 17)..<(at + 17 + total)])
+                    // jpeg_make_d_derived_tbl: a DC symbol is a bit count of at most 15.
+                    guard total <= 256, tableClass == 1 || values.allSatisfy({ $0 <= 15 }) else {
+                        throw Unsupported("a Huffman table has a bad value")
+                    }
+                    let table = HuffmanTable(counts: counts, values: values)
                     if tableClass == 0 { dcTables[id] = table } else { acTables[id] = table }
                     at += 17 + total
                 }
             case 0xDD:
+                guard length == 4 else { throw Unsupported("a DRI segment is bad") }
                 restartInterval = try u16(start)
             case 0xC0, 0xC1, 0xC2:
+                guard components.isEmpty else { throw Unsupported("the JPEG has two frames") }
+                guard length >= 8 else { throw Unsupported("a frame header is cut short") }
                 progressive = marker == 0xC2
                 guard bytes[start] == 8 else { throw Unsupported("only 8-bit JPEGs are covered") }
                 height = try u16(start + 1)
@@ -283,6 +330,13 @@ enum LibjpegTurboDecoder {
                 guard width > 0, height > 0 else { throw Unsupported("the JPEG has no size (DNL)") }
                 guard count == 1 || count == 3 else {
                     throw Unsupported("\(count)-component JPEGs are not covered")
+                }
+                guard length == 8 + 3 * count else {
+                    throw Unsupported("a frame header's length does not fit its components")
+                }
+                guard max(1, width) * max(1, height) <= RGBImage.maxPixels else {
+                    throw Refused(
+                        "the image is \(width * height) pixels; the limit is \(RGBImage.maxPixels)")
                 }
                 components = (0..<count).map { i in
                     let at = start + 6 + i * 3
@@ -294,6 +348,14 @@ enum LibjpegTurboDecoder {
                 maxV = components.map(\.v).max() ?? 1
                 guard components.allSatisfy({ (1...4).contains($0.h) && (1...4).contains($0.v) })
                 else { throw Unsupported("a sampling factor is out of range") }
+                // jinit_upsampler refuses fractional ratios; jdinput refuses more than 10 blocks
+                // per MCU (D_MAX_BLOCKS_IN_MCU).
+                guard components.allSatisfy({ maxH % $0.h == 0 && maxV % $0.v == 0 }) else {
+                    throw Unsupported("a sampling ratio is fractional")
+                }
+                guard count == 1 || components.reduce(0, { $0 + $1.h * $1.v }) <= 10 else {
+                    throw Unsupported("an MCU has more than 10 blocks")
+                }
                 mcusPerLine = (width + 8 * maxH - 1) / (8 * maxH)
                 mcusPerColumn = (height + 8 * maxV - 1) / (8 * maxV)
                 for i in components.indices {
@@ -312,7 +374,15 @@ enum LibjpegTurboDecoder {
                 guard !components.isEmpty else {
                     throw Unsupported("a scan comes before the frame")
                 }
+                scans += 1
+                guard scans <= maxScans else {
+                    throw Refused("the JPEG has more than \(maxScans) scans")
+                }
+                guard length >= 3 else { throw Unsupported("a scan header is cut short") }
                 let count = Int(bytes[start])
+                guard (1...4).contains(count), length == 6 + 2 * count else {
+                    throw Unsupported("a scan header's length does not fit its components")
+                }
                 var scan: [Int] = []
                 for i in 0..<count {
                     let at = start + 1 + i * 2
@@ -322,6 +392,13 @@ enum LibjpegTurboDecoder {
                     }
                     components[index].dcTable = Int(bytes[at + 1] >> 4) & 3
                     components[index].acTable = Int(bytes[at + 1] & 15) & 3
+                    if components[index].quant == nil {
+                        let table = quantTables[components[index].quantTable]
+                        guard table.count == 64 else {
+                            throw Unsupported("a component's quantization table is missing")
+                        }
+                        components[index].quant = table
+                    }
                     scan.append(index)
                 }
                 let at = start + 1 + count * 2
@@ -329,6 +406,15 @@ enum LibjpegTurboDecoder {
                 let se = Int(bytes[at + 1])
                 let ah = Int(bytes[at + 2] >> 4)
                 let al = Int(bytes[at + 2] & 15)
+                // The parameter checks of jdphuff.c's start_pass_phuff_decoder. (libjpeg only
+                // warns when a sequential scan's are off, and its decoder, like this one, never
+                // reads them.)
+                if progressive {
+                    let dcScan = ss == 0
+                    guard dcScan ? se == 0 : (ss <= se && se <= 63 && count == 1),
+                        ah == 0 || al == ah - 1, al <= 13
+                    else { throw Unsupported("a progressive scan's parameters are bad") }
+                }
                 var reader = BitReader(bytes: bytes, position: end)
                 try decodeScan(
                     &components, scan: scan, reader: &reader, dcTables: dcTables,
@@ -358,10 +444,10 @@ enum LibjpegTurboDecoder {
         }
 
         let planes = try components.map { component throws(Unsupported) in
-            guard quantTables[component.quantTable].count == 64 else {
-                throw Unsupported("a component's quantization table is missing")
+            guard let quant = component.quant else {
+                throw Unsupported("a component is in no scan")
             }
-            return inverseDCT(component, quant: quantTables[component.quantTable])
+            return inverseDCT(component, quant: quant)
         }
         let full = components.indices.map { i in
             upsample(

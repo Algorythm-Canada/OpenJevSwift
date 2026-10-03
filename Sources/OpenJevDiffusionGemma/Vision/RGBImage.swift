@@ -57,11 +57,19 @@ extension RGBImage {
     public init(decoding data: Data, frame: Int = 0) throws(VisionError) {
         try Self.checkSize(of: data)
         let bytes = [UInt8](data)
-        if frame == 0, LibjpegTurboDecoder.isJPEG(bytes),
-            let decoded = try? LibjpegTurboDecoder.decode(bytes)
-        {
-            self = decoded
-            return
+        if frame == 0, LibjpegTurboDecoder.isJPEG(bytes) {
+            do {
+                self = try LibjpegTurboDecoder.decode(bytes)
+                return
+            } catch {
+                switch error {
+                case .refused(let refusal):
+                    throw VisionError(refusal.description)
+                case .unsupported:
+                    // ImageIO may still decode it, if not as Pillow would.
+                    break
+                }
+            }
         }
         try self.init(imageIO: data, frame: frame)
     }
