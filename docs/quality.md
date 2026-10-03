@@ -666,6 +666,11 @@ it was for upstream.
   `original-routing-02-0` (the author's `coding` at 0.818, the Swift server's `coding_agent` at
   0.499). On TypeSafe's rows it loses five points of accuracy to the other two. It is half the
   8-bit conversion's size, the one an iPhone app would load, and a Mac server should not.
+- **The author's 86.1%.** Upstream's README says its run and the author's both scored 86.6%, 200 of
+  the 231 items. The author's records score 199: two items are exact ties in the author's run,
+  `original-policy-03-1`, a noul at exactly 0.5, and `hard-sol-a-multi_hop-12`, and the author's
+  runner broke both against the expected answer. A scorer that breaks either tie the other way
+  counts 200. These tables score every run from its own records.
 - **What is recorded.** `jevk5-0.2-swift.json` and `typesafe102/jevk5-0.2-swift.json` are the
   8-bit conversion's runs, the server's default; `jevk5-conversions/4bit/` and
   `jevk5-conversions/bf16/` hold the other two, each with its TypeSafe run; `jevk5-0.2-author.json`
