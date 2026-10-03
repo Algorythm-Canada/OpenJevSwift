@@ -10,9 +10,11 @@ writes two fixtures:
 - Fixtures/vision/preprocessing.json: per image, the decoded RGB size and digest, the size the
   processor resized to, its soft token count, and `pixel_values` (shape, dtype, the SHA-256 of
   its float32 bytes, per-channel mean, std, min and max, and 4,096 sampled values); per prompt,
-  the expanded ids, `mm_token_type_ids` and the soft tokens per image; and the processor's
-  resize rule on a table of image sizes. No weights are needed: the processor is loaded the way
-  `mlx_vlm.load` loads it, without the model.
+  the expanded ids, `mm_token_type_ids` and the soft tokens per image; the processor's resize
+  rule on a table of image sizes; and `gif_cases`, small GIFs (their bytes in base64) for the
+  rest of Pillow's GIF reader, with what upstream's `ImagePrompt.pil` decodes each to (the size
+  and the SHA-256 of the RGB bytes) or the exception it raises. No weights are needed: the
+  processor is loaded the way `mlx_vlm.load` loads it, without the model.
 - Fixtures/vision/reads.json: `MlxRuntime.read` for the hot dog request of upstream's
   tests/test_live.py (`Look at the photo.`, nouls `hotdog` and `cat`) and for the README's
   questions with the hot dog, built by upstream's API and `Engine` code: `prompt_tokens`, the
@@ -21,11 +23,14 @@ writes two fixtures:
   the two passes agree bit for bit, as in Tools/fixtures/mlx_vlm_oracle.py.
 
 The images are upstream's tests/data/hotdog.jpg, read from the pinned Upstream/openjev checkout
-and not committed, and four synthetic images this script draws and writes to Fixtures/vision/:
-a baseline 4:2:0 JPEG with restart markers and a progressive 4:2:2 JPEG, a non-square RGB PNG
-just over the token budget and a grayscale PNG well over it (so the resize shrinks them), a small
-noise PNG (so the resize enlarges it), a two-frame GIF whose frames differ, and a lossless WebP. The script
-draws them deterministically, so a second run writes the same bytes.
+and not committed, and eleven synthetic images this script draws and writes to
+Fixtures/vision/: a baseline 4:2:0 JPEG with restart markers and a progressive 4:2:2 JPEG, a
+non-square RGB PNG just over the token budget and a grayscale PNG well over it (so the resize
+shrinks them), a small noise PNG (so the resize enlarges it), a two-frame GIF whose frames
+differ, a lossless WebP, and four GIFs where ImageIO's first frame is not Pillow's: a transparent
+index whose colour is not black, a first frame offset on a larger logical screen, a local colour
+table that differs from the global one, and an interlaced frame. The script draws them
+deterministically, so a second run writes the same bytes.
 
 The full tensors (`pixel_values` as float32, and the decoded RGB as bytes, both C order) go to
 Tools/oracle/results/vision/, outside the fixtures, for the Swift test that compares every value
@@ -55,6 +60,8 @@ import io
 import json
 import os
 import platform
+import re
+import struct
 import sys
 import time
 import types
@@ -217,6 +224,222 @@ def frames_gif():
     return out.getvalue()
 
 
+def gif_frame_data(indices, interlace=False):
+    """The image data Pillow writes for a frame of palette indices: the LZW code size byte (8,
+    which Pillow always writes), the data sub-blocks and their terminator. The GIFs below are
+    put together from these around their own headers, so each shows one thing."""
+    frame = Image.fromarray(np.asarray(indices, np.uint8), "P")
+    frame.putpalette([0] * 768)
+    out = io.BytesIO()
+    frame.save(out, format="GIF", optimize=False, interlace=interlace)
+    data = out.getvalue()
+    flags = data[10]
+    pos = 13 + ((3 << ((flags & 7) + 1)) if flags & 0x80 else 0)
+    while data[pos] == 0x21:
+        pos += 2
+        while data[pos]:
+            pos += data[pos] + 1
+        pos += 1
+    if data[pos] != 0x2C or bool(data[pos + 9] & 0x40) != interlace:
+        raise SystemExit("Pillow wrote an unexpected GIF frame")
+    start = pos + 10 + ((3 << ((data[pos + 9] & 7) + 1)) if data[pos + 9] & 0x80 else 0)
+    end = start + 1
+    while data[end]:
+        end += data[end] + 1
+    return data[start:end + 1]
+
+
+def gif_table(colors):
+    """A colour table: the colours, padded with black to a power of two of at least 2 entries,
+    and the 3-bit size field that says how many."""
+    bits = max(1, (len(colors) - 1).bit_length())
+    padded = list(colors) + [(0, 0, 0)] * ((1 << bits) - len(colors))
+    return bytes(v for color in padded for v in color), bits - 1
+
+
+def gif_bytes(screen, frame, data, global_colors=None, local_colors=None, transparency=None,
+              interlace=False, before=b""):
+    """A one-frame GIF89a: the logical screen `(width, height)`, the frame `(x, y, width,
+    height)` and its image data, the global and local colour tables, a graphic control extension
+    when `transparency` is an index, and `before`, raw blocks ahead of the image."""
+    flags, table = 0, b""
+    if global_colors is not None:
+        table, size = gif_table(global_colors)
+        flags = 0x80 | 0x70 | size
+    out = b"GIF89a" + struct.pack("<HHBBB", screen[0], screen[1], flags, 0, 0) + table + before
+    if transparency is not None:
+        out += b"!\xf9\x04\x01\x00\x00" + bytes([transparency]) + b"\x00"
+    flags, table = (0x40 if interlace else 0), b""
+    if local_colors is not None:
+        table, size = gif_table(local_colors)
+        flags |= 0x80 | size
+    return out + b"," + struct.pack("<HHHHB", *frame, flags) + table + data + b";"
+
+
+# Eight colours, none of them black, for the GIFs.
+GIF_COLORS = [(230, 120, 40), (30, 160, 60), (40, 70, 220), (255, 255, 255), (250, 210, 30),
+              (150, 40, 170), (20, 200, 200), (120, 120, 120)]
+
+
+def gif_pattern(h, w, colors=8):
+    """Stripes, a checkerboard and rings of palette indices, so every resize has edges."""
+    y, x = np.mgrid[0:h, 0:w]
+    index = ((x + y) // 5) % colors
+    board = (x // 4 + y // 4) % 2 == 0
+    index[board & (y < h // 3)] = (index[board & (y < h // 3)] + 3) % colors
+    rings = (((x - w // 2) ** 2 + (y - h // 2) ** 2) // 40) % 3 == 0
+    index[rings & (y >= 2 * h // 3)] = 6 % colors
+    return index
+
+
+def transparent_gif():
+    """80 by 56, one frame whose transparent index (3) is white and fills the corners and two
+    bands. Pillow keeps a transparent pixel's palette colour; ImageIO hands it over as
+    (0, 0, 0, 0), which the port read as black before it decoded GIFs itself."""
+    h, w = 56, 80
+    y, x = np.mgrid[0:h, 0:w]
+    index = gif_pattern(h, w)
+    index[index == 3] = 2
+    index[((x - w // 2) ** 2) / (w // 2) ** 2 + ((y - h // 2) ** 2) / (h // 2) ** 2 > 1] = 3
+    index[(y // 6) % 4 == 1] = 3
+    return gif_bytes((w, h), (0, 0, w, h), gif_frame_data(index), GIF_COLORS, transparency=3)
+
+
+def offset_gif():
+    """A 72 by 40 first frame at (30, 20) on a 120 by 80 logical screen, with no transparency.
+    Pillow fills the screen around the frame with palette index 0 (orange); ImageIO leaves it
+    (0, 0, 0, 0)."""
+    index = gif_pattern(40, 72)
+    return gif_bytes((120, 80), (30, 20, 72, 40), gif_frame_data(index), GIF_COLORS)
+
+
+def local_gif():
+    """64 by 64 with a global colour table and a different local one, which the frame uses."""
+    local = [(255 - r, 255 - g, 255 - b) for r, g, b in GIF_COLORS]
+    global_colors = [(v, v, 0) for v in range(0, 256, 32)]
+    index = gif_pattern(64, 64)
+    return gif_bytes((64, 64), (0, 0, 64, 64), gif_frame_data(index), global_colors, local)
+
+
+def interlaced_gif():
+    """72 by 60, interlaced: the rows come in four passes, every eighth from row 0, every eighth
+    from row 4, every fourth from row 2, then every second from row 1."""
+    y, x = np.mgrid[0:60, 0:72]
+    index = (y % 8 + x // 9) % 8
+    return gif_bytes((72, 60), (0, 0, 72, 60), gif_frame_data(index, interlace=True), GIF_COLORS,
+                     interlace=True)
+
+
+def interlace_order(h):
+    """The rows of an interlaced frame in the order its data holds them."""
+    return [*range(0, h, 8), *range(4, h, 8), *range(2, h, 4), *range(1, h, 2)]
+
+
+def lzw_codes(codes):
+    """LZW data written by hand: `(code, width)` pairs packed least significant bit first, in
+    sub-blocks of at most 255 bytes, then the terminator."""
+    data, acc, n = bytearray(), 0, 0
+    for code, width in codes:
+        acc |= code << n
+        n += width
+        while n >= 8:
+            data.append(acc & 255)
+            acc >>= 8
+            n -= 8
+    if n:
+        data.append(acc)
+    return b"".join(bytes([len(data[i:i + 255])]) + data[i:i + 255]
+                    for i in range(0, len(data), 255)) + b"\0"
+
+
+def gif_cases():
+    """Small GIFs for the rest of Pillow's GIF reader, decoded only: name -> bytes. Each frame is
+    6 by 4 or smaller, so the records stay small."""
+    four = [(200, 30, 40), (30, 160, 60), (40, 70, 220), (250, 250, 250)]
+    ramp = [(i, i, i) for i in range(8)]
+    y, x = np.mgrid[0:4, 0:6]
+    base = (x + 2 * y) % 4
+    data = gif_frame_data(base)
+    wide = base.copy()
+    wide[0] = [4, 9, 17, 100, 200, 255]
+    wide_data = gif_frame_data(wide)
+    frame = (0, 0, 6, 4)
+    whole = gif_bytes((6, 4), frame, data, four)
+    return {
+        # The canvas grows to hold a frame that reaches past the screen, filled with index 0.
+        "grown_canvas": gif_bytes((4, 3), (2, 1, 6, 4), data, four),
+        # Around an offset frame, the transparent index's colour.
+        "transparent_around": gif_bytes((10, 7), (2, 2, 6, 4), data, four, transparency=3),
+        # Indices past the table's end are black.
+        "index_past_table": gif_bytes((6, 4), frame, wide_data, four),
+        # A global table that is the grey ramp is dropped: indices are grey levels, past its
+        # end too.
+        "ramp_global": gif_bytes((6, 4), frame, wide_data, ramp),
+        # A local ramp with a global table: the indices are looked up in the global table.
+        "ramp_local": gif_bytes((6, 4), frame, wide_data, four, ramp),
+        # A local ramp and no global table: grey levels.
+        "ramp_local_alone": gif_bytes((6, 4), frame, wide_data, None, ramp),
+        # No colour table at all: grey levels.
+        "no_table": gif_bytes((6, 4), frame, data),
+        # A local table and a transparent index, around an offset frame.
+        "local_transparent": gif_bytes((9, 6), (3, 1, 6, 4), data, four,
+                                       [color[::-1] for color in four], transparency=1),
+        # A transparent index past the table's end: black around the frame.
+        "transparent_past_table": gif_bytes((9, 6), (3, 1, 6, 4), data, four, transparency=200),
+        # Comment, looping, plain text and unknown extensions ahead of the image.
+        "extensions": gif_bytes((6, 4), frame, data, four, before=(
+            b"!\xfe\x05hello\x03abc\x00" + b"!\xff\x0bNETSCAPE2.0\x03\x01\x00\x00\x00"
+            + b"!\x01\x0c" + bytes(12) + b"\x00" + b"!\x77\x02xy\x00")),
+        # Stray bytes between blocks are skipped.
+        "stray_bytes": gif_bytes((6, 4), frame, data, four, before=b"\x00\x01\x99"),
+        # An extension whose first sub-block is the terminator: Pillow reads the next block's
+        # bytes as more sub-blocks.
+        "empty_extension": gif_bytes((6, 4), frame, data, four, before=b"!\x01\x00"),
+        # Interlaced and 3 rows high, under the 8 of the first pass.
+        "interlaced_short": gif_bytes((6, 3), (0, 0, 6, 3), gif_frame_data(base[interlace_order(3)]),
+                                      four, interlace=True),
+        # LZW code size 12: 13-bit codes, and an index is a code modulo 256 (300, 65, 1000).
+        "code_size_12": gif_bytes((3, 1), (0, 0, 3, 1), b"\x0c" + lzw_codes(
+            [(4096, 13), (300, 13), (65, 13), (1000, 13)])),
+        # Refused: an end code before the frame is full, after which Pillow reads on to the end
+        # of the file.
+        "early_end": gif_bytes((6, 4), frame, gif_frame_data(base[:2]), four),
+        # Refused: the image data cut short.
+        "truncated": whole[:-4],
+        # Refused: an LZW code size above 12.
+        "code_size_13": gif_bytes((6, 4), frame, b"\x0d" + data[1:], four),
+        # Refused: a frame 0 pixels wide.
+        "zero_width": gif_bytes((6, 4), (0, 0, 0, 4), data, four),
+        # Refused: a first code above the clear code.
+        "broken_code": gif_bytes((2, 1), (0, 0, 2, 1), b"\x02" + lzw_codes([(4, 3), (7, 3)]), four),
+        # Refused: a graphic control extension too short for its duration.
+        "short_control": gif_bytes((6, 4), frame, data, four, before=b"!\xf9\x02\x00\x00\x00"),
+        # Refused: a logical screen past the decompression bomb limit.
+        "screen_bomb": gif_bytes((65535, 65535), frame, data, four),
+        # Refused: no image before the trailer.
+        "no_image": b"GIF89a" + struct.pack("<HHBBB", 6, 4, 0, 0, 0) + b";",
+    }
+
+
+def gif_case_records(sys_text):
+    """What upstream's ImagePrompt.pil, the decode in MlxRuntime._inputs, makes of each case:
+    the decoded size and the SHA-256 of its RGB bytes, or the exception it raises."""
+    out = {}
+    for name, data in gif_cases().items():
+        record = {"bytes": len(data), "sha256": hashlib.sha256(data).hexdigest(),
+                  "base64": base64.b64encode(data).decode()}
+        try:
+            pil = ImagePrompt(sys_text, STATE, [data_url(data, "image/gif")]).pil()[0]
+            rgb = np.ascontiguousarray(np.array(pil), dtype=np.uint8)
+            record["decoded"] = {"width": pil.size[0], "height": pil.size[1],
+                                 "sha256": hashlib.sha256(rgb.tobytes()).hexdigest()}
+        except Exception as error:  # noqa: BLE001, upstream answers any of them with a 500
+            # Without the BytesIO's address, which changes from run to run.
+            record["error"] = f"{type(error).__name__}: {re.sub(r' at 0x[0-9a-f]+', '', str(error))}"
+        out[name] = record
+    return out
+
+
 def pattern_webp():
     """160 by 240 (portrait), lossless: a diagonal ramp, a vertical ramp and concentric rings."""
     h, w = 240, 160
@@ -271,16 +494,24 @@ IMAGES = {
     "small": ("small.png", "image/png", small_png),
     "frames": ("frames.gif", "image/gif", frames_gif),
     "pattern": ("pattern.webp", "image/webp", pattern_webp),
+    "transparent": ("transparent.gif", "image/gif", transparent_gif),
+    "offset": ("offset.gif", "image/gif", offset_gif),
+    "local": ("local.gif", "image/gif", local_gif),
+    "interlaced": ("interlaced.gif", "image/gif", interlaced_gif),
 }
 # Every image alone, and one prompt with two images of different sizes.
 PROMPTS = {name: [name] for name in IMAGES} | {"hotdog+small": ["hotdog", "small"]}
 # The sizes the budget table runs the processor's resize rule on, (width, height): the
 # images', square sides around the budget's edge (803 by 803 is the largest square under it),
-# photo and screen sizes, and aspect ratios past 280:1, where the rule's floor gives zero.
+# photo and screen sizes, aspect ratios past 280:1, where the rule's floor gives zero, and the
+# fewest soft tokens the rule gives: 701 by 10 floors its short side to one 48-pixel unit (140
+# soft tokens, where 700 by 10 gets 280), and at 1,190 by 17 float rounding puts both sides
+# just under whole units (139).
 BUDGET_SIZES = [
     (384, 188), (203, 141), (157, 99), (1040, 624), (1600, 1000), (32, 20), (96, 64), (160, 240), (1, 1), (16, 16), (48, 48), (224, 224),
     (640, 480), (803, 803), (804, 804), (1024, 768), (1920, 1080), (4032, 3024), (3000, 10), (10, 3000),
     (700, 1), (1, 700), (13440, 48), (100000, 1), (100, 3), (100, 2), (3, 100),
+    (80, 56), (120, 80), (64, 64), (72, 60), (700, 10), (701, 10), (1190, 17),
 ]
 
 
@@ -516,7 +747,9 @@ def preprocessing_payload(processor, eng, settings, images):
                         "ids": eng.chat_prompt_ids(sys_text, STATE)},
         "images": {name: a[0][name] for name in IMAGES},
         "prompts": {key: a[1][key] for key in PROMPTS},
+        "gif_cases": gif_case_records(sys_text),
     }
+    same = same and payload["gif_cases"] == gif_case_records(sys_text)
     return payload, a[2], same
 
 

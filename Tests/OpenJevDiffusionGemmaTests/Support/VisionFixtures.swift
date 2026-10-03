@@ -104,10 +104,22 @@ enum VisionFixtures {
         var target: (width: Int, height: Int, softTokens: Int)?
     }
 
+    /// One small GIF for the rest of Pillow's GIF reader, and what upstream decoded it to.
+    struct GIFCase {
+        var name: String
+        var data: Data
+        var sha256: String
+        /// The decoded width, height and the SHA-256 of the RGB bytes, or nil when upstream raised.
+        var decoded: (width: Int, height: Int, sha256: String)?
+        /// The exception upstream raised, when it did.
+        var error: String?
+    }
+
     struct Preprocessing {
         var images: [Image]
         var prompts: [Prompt]
         var budget: [BudgetRow]
+        var gifCases: [GIFCase]
         var textPromptIDs: [Int]
         var processor: JSONValue
     }
@@ -179,8 +191,25 @@ enum VisionFixtures {
                 width: try #require(row["width"]?.intValue),
                 height: try #require(row["height"]?.intValue), target: target)
         }
+        var gifCases: [GIFCase] = []
+        for (name, row) in try #require(root["gif_cases"]?.objectValue) {
+            let decoded: (Int, Int, String)? =
+                row["decoded"] == nil
+                ? nil
+                : (
+                    try #require(row["decoded"]?["width"]?.intValue),
+                    try #require(row["decoded"]?["height"]?.intValue),
+                    try #require(row["decoded"]?["sha256"]?.stringValue)
+                )
+            let base64 = try #require(row["base64"]?.stringValue)
+            gifCases.append(
+                GIFCase(
+                    name: name, data: try #require(Data(base64Encoded: base64)),
+                    sha256: try #require(row["sha256"]?.stringValue), decoded: decoded,
+                    error: row["error"]?.stringValue))
+        }
         return Preprocessing(
-            images: images, prompts: prompts, budget: budget,
+            images: images, prompts: prompts, budget: budget, gifCases: gifCases,
             textPromptIDs: try ints(root["text_prompt"]?["ids"]),
             processor: try #require(root["processor"]))
     }
