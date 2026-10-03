@@ -43,7 +43,7 @@ out or set to the empty string with the same effect.
 | `OPENJEV_ENCODER_MODELS` | unset | encoders | This port's: a folder of converted Core ML packages, used instead of downloading them (D-033). |
 | `OPENJEV_VERDICT_MODEL` | `heman10x/rlcd-modernbert-151m` | verdict | Read as upstream reads it, with no effect: the backend loads the package and the checkpoint revision its manifest pins (D-033). |
 | `OPENJEV_LAYA_MODEL` | `convaiinnovations/laya-typed-decisions` | laya | Read as upstream reads it, with no effect, for the same reason. |
-| `OPENJEV_JEVK5_MODEL` | `Algorythm-Canada/jevk5-0.2-mlx-8bit` | jevk5 | This port's: the JevK5 checkpoint converted to MLX, a directory (`Tools/jevk5/convert.py` writes one) or a Hugging Face repository with an optional `@revision`. A conversion's repository loads its pinned revision; the default is refused until the conversion is published (D-052). Upstream reads its vLLM server's `OPENJEV_MODEL` instead. |
+| `OPENJEV_JEVK5_MODEL` | `Algorythm-Canada/jevk5-0.2-mlx-8bit` | jevk5 | This port's: the JevK5 checkpoint converted to MLX, a directory (`Tools/jevk5/convert.py` writes one) or a Hugging Face repository with an optional `@revision`. A conversion's repository loads its pinned commit; the default, the published 8-bit conversion, is downloaded into the Hugging Face cache on first start (D-052). Upstream reads its vLLM server's `OPENJEV_MODEL` instead. |
 | `OPENJEV_DEVICE` | unset | encoders | Upstream's PyTorch device. Read, with no effect: Core ML picks the compute units for the platform (D-011). |
 | `OPENJEV_GEN_MAX_INFLIGHT` | `8` | none yet | Generations in flight at once. Read and checked; text generation arrives with issue #53. |
 | `OPENJEV_GEN_MAX_QUEUE` | `32` | none yet | Generations waiting before a 529. No effect until issue #53. |
@@ -82,7 +82,7 @@ too (D-030).
 
 | Variable | Read by | Meaning |
 |---|---|---|
-| `HF_HUB_CACHE`, `HF_HOME`, `XDG_CACHE_HOME` | `mlx`, `jevk5`; `verdict` and `laya` with `OPENJEV_ENCODER_MODELS` | Where the Hugging Face cache is, as `huggingface_hub` finds it: `HF_HUB_CACHE`, else `HF_HOME/hub`, else `XDG_CACHE_HOME/huggingface/hub`, else `~/.cache/huggingface/hub`. DiffusionGemma's checkpoint is kept there, and a local encoder folder's tokenizer is looked for there. |
+| `HF_HUB_CACHE`, `HF_HOME`, `XDG_CACHE_HOME` | `mlx`, `jevk5`; `verdict` and `laya` with `OPENJEV_ENCODER_MODELS` | Where the Hugging Face cache is, as `huggingface_hub` finds it: `HF_HUB_CACHE`, else `HF_HOME/hub`, else `XDG_CACHE_HOME/huggingface/hub`, else `~/.cache/huggingface/hub`. DiffusionGemma's checkpoint and JevK5's conversion are kept there, and a local encoder folder's tokenizer is looked for there. |
 | `HF_TOKEN` | `mlx`, `jevk5` | A Hugging Face token for a gated or private repository; an empty value counts as unset. |
 
 Upstream also reads variables for the backends this port does not have, which it ignores:
