@@ -24,8 +24,8 @@ extension JevK5Backend {
     ///
     /// - Parameters:
     ///   - source: the checkpoint, a converted folder or Hub repository; by default
-    ///     ``JevK5Checkpoint/platformDefault``'s repository, the 8-bit conversion on macOS and the
-    ///     4-bit one on iOS, which is refused until it is published (D-052).
+    ///     ``JevK5Checkpoint/platformDefault``'s repository at its pinned commit, the 8-bit
+    ///     conversion on macOS and the 4-bit one on iOS (D-052).
     ///   - cache: the Hugging Face cache a Hub source is kept in.
     ///   - token: the Hub access token, `HF_TOKEN`.
     ///   - cacheLimitGB: the MLX buffer pool's ceiling in GB, as upstream's `set_cache_limit`

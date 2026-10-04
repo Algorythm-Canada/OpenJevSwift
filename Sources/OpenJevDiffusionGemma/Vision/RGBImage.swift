@@ -36,27 +36,43 @@ extension RGBImage {
 
     /// Decodes JPEG, PNG, WebP or GIF bytes to 8-bit RGB without colour management.
     ///
-    /// A JPEG goes through `LibjpegTurboDecoder`, a port of the libjpeg-turbo that Pillow
-    /// runs, because decoders are free to differ in the inverse DCT and chroma upsampling and
-    /// ImageIO's does (by up to 30 levels on upstream's hot dog photo). A JPEG it does not cover
-    /// (arithmetic-coded, lossless, 12-bit, CMYK) falls back to ImageIO. Other formats are
-    /// decoded by ImageIO, whose PNG, GIF and lossless WebP samples are exact.
+    /// A GIF's first frame goes through `PillowGIFDecoder`, a port of Pillow's GIF reader,
+    /// because ImageIO leaves the pixels of the transparent index, and the logical screen around
+    /// the first frame, as (0, 0, 0, 0), where Pillow has a palette colour; it refuses every GIF
+    /// on which Pillow raises. A JPEG goes through `LibjpegTurboDecoder`, a port of the
+    /// libjpeg-turbo that Pillow runs, because decoders are free to differ in the inverse DCT and
+    /// chroma upsampling and ImageIO's does (by up to 30 levels on upstream's hot dog photo). A
+    /// JPEG it does not cover (arithmetic-coded, lossless, 12-bit, CMYK) falls back to ImageIO.
+    /// Other formats are decoded by ImageIO, whose samples of 8-bit PNGs and of lossless and
+    /// lossy WebPs, translucent ones included, equal PIL's (docs/spikes/vision-preprocessing.md).
     ///
     /// PIL's `convert("RGB")` copies the decoded samples: it ignores embedded colour profiles,
     /// copies a grey level into all three channels, looks palette indices up in the palette and
     /// drops alpha without compositing. This reads the samples ImageIO decoded in the same way
     /// for 8-bit RGB, grey and indexed images, with or without alpha, in either byte order. Any
     /// other layout (16-bit or floating-point samples, CMYK) is drawn into an 8-bit sRGB context
-    /// instead, which Core Graphics colour-manages, so it may differ from PIL.
+    /// instead, which Core Graphics colour-manages and composites over black, so it may differ
+    /// from PIL.
     ///
     /// - Parameters:
     ///   - data: The encoded image.
     ///   - frame: The frame to decode. Upstream reads the first (PIL opens at frame 0); the
-    ///     parameter exists so a test can show that the second frame of a GIF differs.
-    /// - Throws: A ``VisionError`` when ImageIO cannot decode the data or has no such frame.
+    ///     parameter exists so a test can show that the second frame of a GIF differs, and any
+    ///     other frame is ImageIO's.
+    /// - Throws: A ``VisionError`` when the image is one Pillow refuses, or one ImageIO cannot
+    ///   decode, or has no such frame.
     public init(decoding data: Data, frame: Int = 0) throws(VisionError) {
-        try Self.checkSize(of: data)
         let bytes = [UInt8](data)
+        if frame == 0, PillowGIFDecoder.isGIF(bytes) {
+            // Pillow sizes the canvas from the headers and checks it against its limit itself.
+            do {
+                self = try PillowGIFDecoder.decode(bytes)
+                return
+            } catch {
+                throw VisionError(error.description)
+            }
+        }
+        try Self.checkSize(of: data)
         if frame == 0, LibjpegTurboDecoder.isJPEG(bytes) {
             do {
                 self = try LibjpegTurboDecoder.decode(bytes)
@@ -167,9 +183,13 @@ extension RGBImage {
             return nil
         }
         let bytes = CFDataGetBytePtr(data)!
-        // Premultiplied samples equal the stored ones only where alpha is 255. ImageIO hands
-        // opaque GIFs and WebPs over premultiplied; any translucent pixel would have to be
-        // divided back, which PIL never does, so such images go to the drawn path.
+        // Premultiplied samples equal the stored ones only where alpha is 255, and PIL never
+        // divides alpha back out, so an image handed over premultiplied with any translucent
+        // pixel goes to the drawn path. On macOS 27.0.1 none of the images measured arrives
+        // premultiplied: ImageIO hands opaque GIFs and WebPs over as `noneSkipLast`, translucent
+        // PNGs and WebPs as `last` with their stored colour samples, and GIFs with a transparent
+        // index as `last` with (0, 0, 0, 0) for those pixels, which is why a GIF's first frame
+        // goes to `PillowGIFDecoder` instead.
         if [.premultipliedFirst, .premultipliedLast].contains(alpha) {
             let alphaOffset = (alphaFirst ? 0 : bytesPerPixel - 1)
             let alphaByte = reversed ? bytesPerPixel - 1 - alphaOffset : alphaOffset

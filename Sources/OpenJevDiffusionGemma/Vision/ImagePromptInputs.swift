@@ -1,7 +1,9 @@
 // A port of what upstream's `MlxRuntime._inputs` (razorback16/openjev at dcd2094,
 // `openjev/mlx_backend.py:95-114`, Apache-2.0) asks of mlx-vlm 0.6.15 for an image read:
 // `Gemma4Processor.apply_chat_template` through `prompt_utils.apply_chat_template`, then
-// `Gemma4Processor.__call__`'s placeholder expansion and `mm_token_type_ids` (MIT). See
+// `Gemma4Processor.__call__`'s placeholder expansion and `mm_token_type_ids` (adapted from
+// mlx-vlm, Copyright © 2025 Prince Canuma, MIT). mlx-vlm's `processing_gemma4.py`, which holds
+// `Gemma4Processor`, says it is adapted from Hugging Face Transformers (Apache-2.0). See
 // THIRD_PARTY.md.
 
 import Foundation

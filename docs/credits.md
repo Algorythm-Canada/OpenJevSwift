@@ -55,11 +55,12 @@ and credit the authors wherever the listing is shown.
 | Verdict | `verdict-m18-fp16`, a float16 Core ML conversion of the checkpoint (306 MB), release `verdict-m18-fp16-v1` | `tokenizer.json`, `tokenizer_config.json` and `calibrator.json` from the checkpoint at its pinned revision, not re-hosted | [Algorythm-Canada/openjev-models](https://github.com/Algorythm-Canada/openjev-models) releases |
 | Laya on a Mac | `laya-m18-fp16`, a float16 Core ML conversion (849 MB), release `laya-m18-fp16-v1` | The checkpoint's `tokenizer/` and `rl_agent_config.json` at its pinned revision, not re-hosted | openjev-models releases |
 | Laya on an iPhone | `laya-f18-b1s128-fp16`, `laya-f18-b1s256-fp16`, `laya-f18-b1s512-fp16` and `laya-f18-b1s1024-fp16` (843 to 845 MB each), releases `laya-f18-b1s128-fp16-v1` to `laya-f18-b1s1024-fp16-v1` | As on a Mac | openjev-models releases |
-| JevK5 | `jevk5-0.2-mlx-4bit` (2.37 GB of weights) and `jevk5-0.2-mlx-8bit` (4.47 GB), MLX conversions made by `Tools/jevk5/convert.py` with mlx-lm 0.32.0 | The checkpoint's `tokenizer.json`, `tokenizer_config.json`, `chat_template.jinja` and `jevk5_config.json`, copied unchanged into each conversion | Not yet published: until the maintainer creates `Algorythm-Canada/jevk5-0.2-mlx-4bit` and `-8bit` on the Hugging Face Hub (D-052), a deployment converts the checkpoint itself and names the folder in `OPENJEV_JEVK5_MODEL` |
+| JevK5 | `jevk5-0.2-mlx-4bit` (2.37 GB of weights) and `jevk5-0.2-mlx-8bit` (4.47 GB), MLX conversions made by `Tools/jevk5/convert.py` with mlx-lm 0.32.0 | The checkpoint's `tokenizer.json`, `tokenizer_config.json`, `chat_template.jinja` and `jevk5_config.json`, copied unchanged into each conversion | [Algorythm-Canada/jevk5-0.2-mlx-4bit](https://huggingface.co/Algorythm-Canada/jevk5-0.2-mlx-4bit) and [Algorythm-Canada/jevk5-0.2-mlx-8bit](https://huggingface.co/Algorythm-Canada/jevk5-0.2-mlx-8bit) on the Hugging Face Hub, at the commits `JevK5Checkpoint` pins (D-052) |
 
 The JevK5 conversions keep the checkpoint's Apache-2.0 license; each carries JevK5's own `LICENSE`
 and `NOTICE` and a model card that credits Alibi Serikbay and says what was changed (the weights
-quantized, nothing else).
+quantized, nothing else). They were published on 2026-10-03, and their files are byte for byte the
+ones `Tools/jevk5/convert.py` writes.
 
 The Core ML packages are conversions of the authors' checkpoints, made with
 [Tools/encoders](../Tools/encoders/README.md) and published under the checkpoints' Apache-2.0
@@ -86,14 +87,20 @@ server that serves them.
 | [ml-explore/mlx-swift-lm](https://github.com/ml-explore/mlx-swift-lm) | Model primitives: the switch layers and their quantized form, the experts' gather and scatter, weight loading with per-layer quantization, and the Gemma 4 vision configuration; the Qwen3.5 text model JevK5 runs on | 3.32.3 | MIT |
 | [ml-explore/mlx-lm](https://github.com/ml-explore/mlx-lm) | `mlx_lm.convert`, which converts JevK5 to MLX (`Tools/jevk5`); not linked | 0.32.0 | MIT |
 | [allebee/jevk5](https://github.com/allebee/jevk5) | JevK5's prompt and many-option readout (`jevk5/prompt.py`), and its published v0.2 JevBench run, the parity reference | v0.2.2 (`0571ef3`) | Apache-2.0 |
-| [Blaizzy/mlx-vlm](https://github.com/Blaizzy/mlx-vlm) | The DiffusionGemma implementation the Swift model follows, operation for operation, and the oracle its parity tests compare with | 0.6.15 | MIT |
+| [Blaizzy/mlx-vlm](https://github.com/Blaizzy/mlx-vlm) | The DiffusionGemma implementation the Swift model follows, operation for operation, and the oracle its parity tests compare with; the Gemma 4 image processor's resize rule, rescale and placeholder expansion | 0.6.15 | MIT |
+| [python-pillow/Pillow](https://github.com/python-pillow/Pillow) | The 8-bit bicubic resize mlx-vlm calls (`Resample.c`) and the reading of a GIF's first frame (`GifImagePlugin.py`, `GifDecode.c`), translated in `Sources/OpenJevDiffusionGemma/Vision` so images reach the model as upstream's do | 12.3.0 | MIT-CMU |
+| [libjpeg-turbo/libjpeg-turbo](https://github.com/libjpeg-turbo/libjpeg-turbo) | The JPEG decoder Pillow bundles: its default decompression path, translated in `LibjpegTurboDecoder.swift`. This software is based in part on the work of the Independent JPEG Group. | 3.1.4.1 | IJG License, with its Modified BSD and zlib parts |
 | [huggingface/swift-transformers](https://github.com/huggingface/swift-transformers) | The tokenizers and chat templates | 1.3.4 (researched at `af520cf`) | Apache-2.0 |
 
-Code ported from mlx-vlm keeps its copyright notice, Copyright © 2025 Prince Canuma, in each
-file's header. [Layr-Labs/mlx-swift-lm](https://github.com/Layr-Labs/mlx-swift-lm) (MIT), a fork
-with its own DiffusionGemma, was a second reference, not a dependency. The random number and
-`json.loads` ports follow CPython (PSF-2.0; the MT19937 reference code BSD-3-Clause), and the
-request reading follows FastAPI (MIT) and Starlette (BSD-3-Clause), behaviour only.
+Code ported from mlx-vlm keeps its copyright notice, Copyright © 2025 Prince Canuma, in each file's
+header; mlx-vlm's Gemma 4 processing file, which the image processor's port follows, says it is
+adapted from Hugging Face Transformers (Apache-2.0). The Pillow and libjpeg-turbo translations keep
+each source file's copyright notice in their headers, and their licence texts are in
+`Sources/OpenJevDiffusionGemma/Vision/ThirdPartyLicenses` ([NOTICE](../NOTICE)).
+[Layr-Labs/mlx-swift-lm](https://github.com/Layr-Labs/mlx-swift-lm) (MIT), a fork with its own
+DiffusionGemma, was a second reference, not a dependency. The random number and `json.loads` ports
+follow CPython (PSF-2.0; the MT19937 reference code BSD-3-Clause), and the request reading follows
+FastAPI (MIT) and Starlette (BSD-3-Clause), behaviour only.
 
 ## The Swift packages the build resolves
 
