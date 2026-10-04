@@ -82,8 +82,8 @@ server that serves them.
 | Project | What this port takes from it | Pinned | License |
 |---|---|---|---|
 | [razorback16/openjev](https://github.com/razorback16/openjev) | The compatibility target: the wire API, the engine, the MLX backend, the encoder backends and their tests, ported throughout | `dcd2094` (0.5.0) | Apache-2.0 |
-| [ml-explore/mlx-swift](https://github.com/ml-explore/mlx-swift) | The array framework DiffusionGemma runs on | 0.32.2 | MIT |
-| [ml-explore/mlx-swift-lm](https://github.com/ml-explore/mlx-swift-lm) | Model primitives: the switch layers and their quantized form, the experts' gather and scatter, weight loading with per-layer quantization, and the Gemma 4 vision configuration; the Qwen3.5 text model JevK5 runs on | `c043fb3` | MIT |
+| [ml-explore/mlx-swift](https://github.com/ml-explore/mlx-swift) | The array framework DiffusionGemma runs on | 0.32.3 | MIT |
+| [ml-explore/mlx-swift-lm](https://github.com/ml-explore/mlx-swift-lm) | Model primitives: the switch layers and their quantized form, the experts' gather and scatter, weight loading with per-layer quantization, and the Gemma 4 vision configuration; the Qwen3.5 text model JevK5 runs on | 3.32.3 | MIT |
 | [ml-explore/mlx-lm](https://github.com/ml-explore/mlx-lm) | `mlx_lm.convert`, which converts JevK5 to MLX (`Tools/jevk5`); not linked | 0.32.0 | MIT |
 | [allebee/jevk5](https://github.com/allebee/jevk5) | JevK5's prompt and many-option readout (`jevk5/prompt.py`), and its published v0.2 JevBench run, the parity reference | v0.2.2 (`0571ef3`) | Apache-2.0 |
 | [Blaizzy/mlx-vlm](https://github.com/Blaizzy/mlx-vlm) | The DiffusionGemma implementation the Swift model follows, operation for operation, and the oracle its parity tests compare with | 0.6.15 | MIT |

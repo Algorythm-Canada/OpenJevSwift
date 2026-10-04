@@ -8,7 +8,7 @@ How to build, test and format OpenJevSwift. The design lives in
 | Build | Minimum | Why |
 |---|---|---|
 | Linux: `OpenJevCore`, `OpenJevServer`, `openjev` and their tests | Swift 6.2 | The manifest declares `swift-tools-version: 6.2`, the minimum that mlx-swift-lm accepts. |
-| macOS: every target | Swift 6.3 (Xcode 26.4 or later) | mlx-swift 0.32.2 declares `swift-tools-version: 6.3`. Older toolchains cannot load its manifest. |
+| macOS: every target | Swift 6.3 (Xcode 26.4 or later) | mlx-swift 0.32.3 declares `swift-tools-version: 6.3`. Older toolchains cannot load its manifest. |
 
 The reference development machine is an Apple silicon Mac with macOS 27.0 and Xcode 27.0, which
 ships Swift 6.4.0.
@@ -96,8 +96,8 @@ The package declares macOS 14 and iOS 17 as minimum deployment targets.
 
 | Package | Requirement | Resolved | Products used | Declared on |
 |---|---|---|---|---|
-| [mlx-swift](https://github.com/ml-explore/mlx-swift) | exactly 0.32.2 | 0.32.2 | `MLX`, `MLXNN` | macOS hosts |
-| [mlx-swift-lm](https://github.com/ml-explore/mlx-swift-lm) | revision `c043fb3b1ccf00f54ef8882a1e8da45c6e32e6f8` | that revision | `MLXLMCommon`, `MLXVLM` | macOS hosts |
+| [mlx-swift](https://github.com/ml-explore/mlx-swift) | exactly 0.32.3 | 0.32.3 | `MLX`, `MLXNN` | macOS hosts |
+| [mlx-swift-lm](https://github.com/ml-explore/mlx-swift-lm) | exactly 3.32.3 | 3.32.3 (`3b339ad`) | `MLXLMCommon`, `MLXVLM` | macOS hosts |
 | [swift-transformers](https://github.com/huggingface/swift-transformers) | 1.3.0 up to the next minor | 1.3.4 | `Tokenizers` | macOS hosts |
 | [swift-jinja](https://github.com/huggingface/swift-jinja) | 2.4.2 or later | 2.5.1 | `Jinja` | macOS hosts |
 | [hummingbird](https://github.com/hummingbird-project/hummingbird) | 2.23.0 or later | 2.27.0 | `Hummingbird`, `HummingbirdCore` (server), `HummingbirdTesting` (server and CLI tests) | all hosts |
@@ -123,14 +123,12 @@ match [05-architecture.md](05-architecture.md).
   `af520cf` from `main`. The 1.3.x requirement resolves to the 1.3.4 tag, which lacks three later
   commits that change `byte_fallback` handling in the BPE and Unigram tokenizers. The tokenizer
   parity spike (#20) should test the resolved version.
-- **mlx-swift-lm is pinned by revision.** No release contained `c043fb3` when it was pinned: the
-  newest tag then, 3.31.4, was 154 commits older and required mlx-swift 0.31. Release 3.32.3
-  (2026-09-30) is the first that contains it, five commits later, and requires mlx-swift 0.32.3;
-  moving to it is #119 ([upstream-log.md](upstream-log.md)). Until then, SwiftPM refuses a
-  revision-pinned dependency inside a package that another package requires by version, so on
-  macOS a downstream package can depend on OpenJevSwift only by branch, revision or local path.
-  Linux is unaffected because its manifest has no MLX packages. Release 0.1.0 (#65) needs an
-  mlx-swift-lm tag at or after the pin, which 3.32.3 now is.
+- **mlx-swift-lm is pinned by version.** It was pinned by revision, `c043fb3` (2026-09-28),
+  which no release contained, and SwiftPM refuses a revision-pinned dependency inside a package
+  that another package requires by version. Release 3.32.3 (2026-09-30) is the first that contains
+  it, five commits later, and requires mlx-swift 0.32.3, which mlx-swift 0.32.2's launch failure
+  before macOS and iOS 26.4 needed anyway (#119, [upstream-log.md](upstream-log.md)). Both MLX
+  packages are now pinned by exact version, so release 0.1.0 (#65) can be required by version.
 - **Linux downloads the Apple-only pins.** When `Package.resolved` matches the manifest, SwiftPM
   checks out every pinned package before it computes the graph. A Linux build therefore downloads
   8 Apple-only packages, including mlx-swift and swift-syntax, without loading or building them.
