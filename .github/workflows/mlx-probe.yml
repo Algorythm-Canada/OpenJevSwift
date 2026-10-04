@@ -24,8 +24,8 @@ defaults:
     shell: bash
 
 env:
-  MLX_SWIFT_VERSION: 0.32.2
-  # mlx-swift 0.32.2 vendors MLX core at v0.32.2.
+  MLX_SWIFT_VERSION: 0.32.3
+  # mlx-swift 0.32.3 vendors MLX core at v0.32.2, as 0.32.2 did.
   MLX_PYTHON_VERSION: 0.32.2
 
 jobs:

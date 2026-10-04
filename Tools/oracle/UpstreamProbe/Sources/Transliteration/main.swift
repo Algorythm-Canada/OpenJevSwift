@@ -400,7 +400,7 @@ for (key, value) in memory.sorted(by: { $0.key < $1.key }) {
             Double(value["mlx_cache_bytes"] ?? 0) / gib, Double(value["mlx_peak_bytes"] ?? 0) / gib))
 }
 let summary: [String: Any] = [
-    "stack": "ml-explore/mlx-swift 0.32.2, ml-explore/mlx-swift-lm c043fb3",
+    "stack": "ml-explore/mlx-swift 0.32.3, ml-explore/mlx-swift-lm 3.32.3",
     "cache_limit_gb": cacheLimitGB as Any, "metallib": metallibRecord() as Any,
     "rope_frequencies_from": oracleRope ? "oracle" : (freqsFrom as Any),
     "load_seconds": loadSeconds, "memory": memory,

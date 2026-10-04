@@ -230,11 +230,11 @@ var targets: [Target] = [
         .library(name: "OpenJevLetterReadout", targets: ["OpenJevLetterReadout"]),
     ]
     dependencies += [
-        .package(url: "https://github.com/ml-explore/mlx-swift", exact: "0.32.2"),
-        .package(
-            url: "https://github.com/ml-explore/mlx-swift-lm",
-            revision: "c043fb3b1ccf00f54ef8882a1e8da45c6e32e6f8"
-        ),
+        // Exact versions: the read parity tests (D-014, D-048) and the regression file hold for
+        // these two releases only. A version, unlike a revision, lets another package depend
+        // on this one by version (#65).
+        .package(url: "https://github.com/ml-explore/mlx-swift", exact: "0.32.3"),
+        .package(url: "https://github.com/ml-explore/mlx-swift-lm", exact: "3.32.3"),
         .package(
             url: "https://github.com/huggingface/swift-transformers.git",
             .upToNextMinor(from: "1.3.0")

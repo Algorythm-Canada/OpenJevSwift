@@ -4262,10 +4262,10 @@
     }
   ],
   "generator" : {
-    "date" : "2026-10-02",
+    "date" : "2026-10-04",
     "gpu" : "Apple M3 Max",
     "macos" : "Version 27.0.1 (Build 26A434)",
-    "mlx_swift" : "0.32.2",
+    "mlx_swift" : "0.32.3",
     "model_repo" : "mlx-community/diffusiongemma-26B-A4B-it-4bit",
     "model_revision" : "a7a81407613811e8ba63af92ac0d852b809e191f",
     "script" : "Tests/OpenJevDiffusionGemmaTests/Runtime/RegressionTests.swift",
