@@ -16,7 +16,10 @@ port and against upstream's Python MLX backend on the same Mac and weights. The 
 Every figure on this page is from the M3 Max, on AC power, with the 4-bit checkpoint
 (`mlx-community/diffusiongemma-26B-A4B-it-4bit` at `a7a81407`), mlx-swift 0.32.2, the release build
 Xcode makes (a user scheme with a Release run configuration), and upstream at `dcd2094` on
-mlx-vlm 0.6.15 and MLX 0.32.2 from `Tools/jevbench/.venv`.
+mlx-vlm 0.6.15 and MLX 0.32.2 from `Tools/jevbench/.venv`. The package has since moved to
+mlx-swift 0.32.3 and mlx-swift-lm 3.32.3 (D-053), and nothing here was measured again: 0.32.3
+changes one logging call, the kernels are unchanged (the vendored MLX core is the same, and so is
+the SHA-256 of the compiled `default.metallib`), and the reads came out bit for bit the same.
 
 ## How it was measured
 

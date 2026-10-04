@@ -5,9 +5,9 @@ and one bidirectional decoder pass over a seeded canvas, in process, from Swift,
 tokenization; later, run the full generation loop; later still, run 150M to 420M ModernBERT
 encoders, ideally on iOS.
 
-## 1. MLX Swift (`ml-explore/mlx-swift` 0.32.2 and `ml-explore/mlx-swift-lm`)
+## 1. MLX Swift (`ml-explore/mlx-swift` 0.32.3 and `ml-explore/mlx-swift-lm`)
 
-`mlx-swift-lm` at `c043fb3` (2026-09-28): Swift tools 6.2, platforms macOS 14, iOS 17, tvOS 17,
+`mlx-swift-lm` 3.32.3 (`3b339ad`, 2026-09-30): Swift tools 6.2, platforms macOS 14, iOS 17, tvOS 17,
 visionOS 1. Products: `MLXLLM`, `MLXVLM`, `MLXLMCommon`, `MLXEmbedders`, `MLXRerankers`,
 `MLXHuggingFace`, `MLXFoundationModels`, `MLXGuidedGeneration`. Its only package dependencies are
 `mlx-swift` and `swift-syntax`; tokenizers and downloaders are integrated through protocols

@@ -74,7 +74,7 @@ let snapshot = URL(
             + "a7a81407613811e8ba63af92ac0d852b809e191f"))
 
 /// The default.metallib that Swift Build copies next to this executable, compiled from the same
-/// mlx-swift 0.32.2 sources by the same toolchain as the Swift server's.
+/// mlx-swift 0.32.3 sources by the same toolchain as the Swift server's.
 func bundledMetallib() -> URL {
     let executable = Bundle.main.executableURL ?? URL(fileURLWithPath: CommandLine.arguments[0])
     let directory = executable.resolvingSymlinksInPath().deletingLastPathComponent()

@@ -49,11 +49,11 @@ $PY Tools/oracle/item_reads.py long-slots
 ```
 
 `ItemReads` without `--metallib` loads the `default.metallib` that its own build ships, which is
-the Swift server's: the same mlx-swift 0.32.2 sources compiled by the same toolchain (SHA-256
-`282550b0…` with Xcode 27.0, as in a release build of `openjev`). Each result file records the
-library's SHA-256, and `compare` names a configuration by it. `long-slots` needs no model: it
-computes the long-prompt figures over the oracle fixture's few-label slots, and D-048's mean of each
-long slot's largest difference, from the committed runs in `Tools/oracle/results/d048`.
+the Swift server's: the same mlx-swift 0.32.3 sources compiled by the same toolchain (SHA-256
+`282550b0…` with Xcode 27.0, as in a release build of `openjev`, and as on 0.32.2). Each result
+file records the library's SHA-256, and `compare` names a configuration by it. `long-slots` needs no
+model: it computes the long-prompt figures over the oracle fixture's few-label slots, and D-048's
+mean of each long slot's largest difference, from the committed runs in `Tools/oracle/results/d048`.
 
 ## Rules
 

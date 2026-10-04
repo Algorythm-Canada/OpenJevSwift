@@ -1,7 +1,9 @@
 // swift-tools-version: 6.2
-// Scratch package for spike #22 on the stack the port will use: ml-explore/mlx-swift 0.32.2,
-// ml-explore/mlx-swift-lm c043fb3 and the main package by path. Not part of OpenJevSwift and not
-// built by its CI. Four executables, run from the repository root:
+// Scratch package for spike #22 on the stack the port uses: ml-explore/mlx-swift 0.32.3,
+// ml-explore/mlx-swift-lm 3.32.3 and the main package by path. Spike #22 ran on mlx-swift 0.32.2
+// and mlx-swift-lm c043fb3. The main package pins both exactly, so this one must name the same
+// versions, or SwiftPM cannot resolve it (#119). Not part of OpenJevSwift and not built by its
+// CI. Four executables, run from the repository root:
 //
 //     swift run --package-path Tools/oracle/UpstreamProbe -c release TokenizerCheck
 //     swift run --package-path Tools/oracle/UpstreamProbe -c release Transliteration
@@ -29,10 +31,8 @@ let package = Package(
     platforms: [.macOS(.v14)],
     dependencies: [
         .package(path: "../../.."),
-        .package(url: "https://github.com/ml-explore/mlx-swift", exact: "0.32.2"),
-        .package(
-            url: "https://github.com/ml-explore/mlx-swift-lm",
-            revision: "c043fb3b1ccf00f54ef8882a1e8da45c6e32e6f8"),
+        .package(url: "https://github.com/ml-explore/mlx-swift", exact: "0.32.3"),
+        .package(url: "https://github.com/ml-explore/mlx-swift-lm", exact: "3.32.3"),
     ],
     targets: [
         .executableTarget(

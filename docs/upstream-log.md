@@ -54,11 +54,15 @@ One pull request per move, with:
 
 1. **THIRD_PARTY.md and every other copy of the pin.** For upstream OpenJev: the Makefile's
    `UPSTREAM_OPENJEV_COMMIT`, the fixture scripts' pins, `FixturePinTests` and
-   `Tools/encoders/common.py`. For the Swift packages: `Package.swift` and `Package.resolved`. For
-   mlx-vlm: `Tools/oracle/requirements.txt` and `Tools/jevbench/requirements-upstream.txt`. For a
-   checkpoint: `ModelSource.swift` or the encoder manifests, and for the 4-bit one, which is also
-   the fixtures' tokenizer, `TOKENIZER_REVISION` in `Tools/fixtures/upstream_tables.py` and
-   `FixturePinTests`.
+   `Tools/encoders/common.py`. For the Swift packages: `Package.swift` and `Package.resolved`, which
+   `swift package resolve` writes from the old file (SwiftPM 6.4 leaves the file alone while its
+   pins stay the same, so a hand edit keeps a stale `originHash`). For mlx-swift and mlx-swift-lm
+   also `Tools/oracle/UpstreamProbe`'s manifest and resolved file, since that package depends on
+   this one by path and cannot resolve against other versions, and for mlx-swift `MLX_SWIFT_VERSION`
+   in [mlx-probe.yml](../.github/workflows/mlx-probe.yml). For mlx-vlm:
+   `Tools/oracle/requirements.txt` and `Tools/jevbench/requirements-upstream.txt`. For a checkpoint:
+   `ModelSource.swift` or the encoder manifests, and for the 4-bit one, which is also the fixtures'
+   tokenizer, `TOKENIZER_REVISION` in `Tools/fixtures/upstream_tables.py` and `FixturePinTests`.
 2. **`make upstream` and the fixtures.** Check out the new commit, then `make fixtures-venv` and
    `make fixtures`. The [Fixtures workflow](../.github/workflows/fixtures.yml) regenerates every
    fixture on the pull request and fails on any byte that differs from the committed files.
@@ -73,7 +77,38 @@ One pull request per move, with:
    fixtures and the reads, and what the port changed to match.
 6. **A note below,** and the tracking issue closed by the pull request.
 
+A move of a package whose code ends up in the binaries, mlx-swift above all, also checks that they
+still launch on the oldest systems the package declares, macOS 14 and iOS 17: `nm -m` on the built
+`openjev` lists what it imports, and a symbol imported strongly that those systems lack stops every
+binary at launch there, before any of its code runs (#119, D-053).
+
 ## Reviews
+
+### 2026-10-04: mlx-swift 0.32.3 and mlx-swift-lm 3.32.3
+
+Not a review: the pin move the 2026-10-02 review asked for in
+[#119](https://github.com/Algorythm-Canada/OpenJevSwift/issues/119), made by pull request
+[#126](https://github.com/Algorythm-Canada/OpenJevSwift/pull/126), which closes the issue. D-053
+records it.
+
+- **mlx-swift 0.32.2 to 0.32.3.** The one commit replaces `Logger.isEnabled(type:)` with
+  `os_log_type_enabled`. The vendored MLX core is untouched, and the compiled `default.metallib`
+  keeps its SHA-256 (`282550b0…`). Built from main, `openjev`, `openjev-bench` and the MLX test
+  bundles import the missing symbol strongly; built on 0.32.3, none does. In the iOS Simulator, test
+  bundles that link `OpenJevDiffusionGemma` or `OpenJevLetterReadout` stop at dyld on iOS 26.2 and
+  18.5 with 0.32.2 ("Symbol not found") and load with 0.32.3.
+- **mlx-swift-lm `c043fb3` to 3.32.3.** Of its five commits, two change library code: named image
+  attachments (MLXLMCommon's chat and user input, MLXVLM's processors and models) and tool
+  parameter booleans (MLXFoundationModels). Nothing the port takes from it changed, and MLXLLM,
+  whose Qwen3.5 JevK5 runs on, did not change at all.
+- **What the move checked, on the reference Mac.** Both tiers of `ReadOracleTests` give 0.32.2's
+  figures, the exact tier all 63 reads bit for bit; `RegressionTests` reproduced every recorded
+  value before the file was recorded again for 0.32.3; JevK5's live tests on the 4-bit conversion
+  give #122's figures; the Vision tests, full tensors included, pass as before. JevK5's 28 corpus
+  requests get byte-identical answers from main's build and this one's, at 8 and at 4 bits.
+- **Copies of the pin the move found:** `Tools/oracle/UpstreamProbe`, which depends on this package
+  by path and no longer resolved, and `mlx-probe.yml`. The process above now lists both, how to
+  write `Package.resolved`, and the launch check.
 
 ### 2026-10-02
 
@@ -167,7 +202,7 @@ naming #352.
 
 > OpenJevSwift (https://github.com/Algorythm-Canada/OpenJevSwift, Apache-2.0) ports DiffusionGemma's
 > read path to Swift for a decision server: the prompt prefill and decoder passes over a canvas, on
-> mlx-swift 0.32.2 and mlx-swift-lm `c043fb3`, with no generation loop. We are not opening a second
+> mlx-swift 0.32.3 and mlx-swift-lm 3.32.3, with no generation loop. We are not opening a second
 > DiffusionGemma pull request, since this one covers more (generation and vision) and is already in
 > review. What we can offer it is a comparison with mlx-vlm on the real checkpoint, which the unit
 > tests here cannot make.
