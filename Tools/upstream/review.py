@@ -164,14 +164,60 @@ GITHUB_PROJECTS = (
         "ml-explore/mlx-swift-lm",
         watches=(Watch("SwitchLinear, QuantizedSwitchLinear, gatherSort and scatterUnsort "
                        "(Experts.swift)", path="Libraries/MLXLMCommon/SwitchLayers.swift"),
-                 Watch("loadWeights (WeightLoading.swift)",
+                 Watch("loadWeights (WeightLoading.swift, Qwen35LetterReadoutModel.swift)",
                        path="Libraries/MLXLMCommon/Load.swift"),
-                 Watch("BaseConfiguration's quantization types (Configuration.swift)",
+                 Watch("BaseConfiguration's quantization types (Configuration.swift, "
+                       "Qwen35LetterReadoutModel.swift)",
                        path="Libraries/MLXLMCommon/BaseConfiguration.swift"),
-                 Watch("the BaseLanguageModel protocol (ModelTree.swift)",
+                 Watch("the BaseLanguageModel protocol (ModelTree.swift); LMInput, LMOutput and "
+                       "its state (Qwen35LetterReadoutModel.swift)",
                        path="Libraries/MLXLMCommon/LanguageModel.swift"),
                  Watch("Gemma4VisionConfiguration (Configuration.swift)",
                        path="Libraries/MLXVLM/Models/Gemma4.swift"),
+                 # JevK5 runs MLXLLM's Qwen3.5 text model whole (D-052): its file, then the files
+                 # its load and forward pass reach. JevK5 is dense, so the MoE block's SwitchGLU
+                 # and moeRouterTopK are not on its path.
+                 Watch("Qwen35TextModel and Qwen35TextConfiguration, JevK5's Qwen3.5 model "
+                       "(Qwen35LetterReadoutModel.swift)",
+                       path="Libraries/MLXLLM/Models/Qwen35.swift"),
+                 Watch("Qwen3NextMLP, Qwen3NextRMSNormGated and sigmoidMultiply, in Qwen3.5's "
+                       "layers (Qwen35LetterReadoutModel.swift)",
+                       path="Libraries/MLXLLM/Models/Qwen3Next.swift"),
+                 Watch("gatedDeltaUpdate and its Metal kernel, Qwen3.5's linear attention "
+                       "(Qwen35LetterReadoutModel.swift)",
+                       path="Libraries/MLXLMCommon/GatedDelta.swift"),
+                 Watch("FusedQuantizedLinearProjectionCache, which fuses Qwen3.5's linear "
+                       "attention input projections (Qwen35LetterReadoutModel.swift)",
+                       path="Libraries/MLXLMCommon/FusedQuantizedLinear.swift"),
+                 Watch("materializeModelForInference, through which loadWeights prepares "
+                       "Qwen3.5 (Qwen35LetterReadoutModel.swift)",
+                       path="Libraries/MLXLMCommon/InferenceState.swift"),
+                 Watch("MambaCache, KVCacheSimple, createAttentionMask and createSSMMask, "
+                       "Qwen3.5's caches and masks (Qwen35LetterReadoutModel.swift)",
+                       path="Libraries/MLXLMCommon/KVCache.swift"),
+                 Watch("makeAttentionKVCache, Qwen3.5's full attention caches "
+                       "(Qwen35LetterReadoutModel.swift)",
+                       path="Libraries/MLXLMCommon/CacheConfiguration.swift"),
+                 Watch("attentionWithCacheUpdate, Qwen3.5's full attention "
+                       "(Qwen35LetterReadoutModel.swift)",
+                       path="Libraries/MLXLMCommon/AttentionUtils.swift"),
+                 Watch("initializeRope, Qwen3.5's RoPE (Qwen35LetterReadoutModel.swift)",
+                       path="Libraries/MLXLMCommon/RoPEUtils.swift"),
+                 Watch("applyRotaryPosition, in Qwen3.5's full attention "
+                       "(Qwen35LetterReadoutModel.swift)",
+                       path="Libraries/MLXLMCommon/RoPEApplication.swift"),
+                 Watch("CompiledTrace, Qwen3.5's compiled one-token layers "
+                       "(Qwen35LetterReadoutModel.swift)",
+                       path="Libraries/MLXLMCommon/CompiledTrace.swift"),
+                 Watch("CompiledDecodeSegment and CompiledDecodeSegmentCache, Qwen3.5's compiled "
+                       "decode step (Qwen35LetterReadoutModel.swift)",
+                       path="Libraries/MLXLMCommon/CompiledDecodeSegments.swift"),
+                 Watch("mtpEmitFlagKey and mtpLastHiddenStatesKey, through which Qwen3.5 returns "
+                       "its hidden states (Qwen35LetterReadoutModel.swift)",
+                       path="Libraries/MLXLMCommon/MTPDrafterModel.swift"),
+                 Watch("StringOrNumber, which decodes Qwen3.5's rope_parameters "
+                       "(Qwen35LetterReadoutModel.swift)",
+                       path="Libraries/MLXLMCommon/JSONDecodingTypes.swift"),
                  Watch("a DiffusionGemma model upstream", pattern=r"(?i)diffusion"),
                  Watch("its mlx-swift requirement, which bounds this package's",
                        path="Package.swift")),
