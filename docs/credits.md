@@ -55,11 +55,12 @@ and credit the authors wherever the listing is shown.
 | Verdict | `verdict-m18-fp16`, a float16 Core ML conversion of the checkpoint (306 MB), release `verdict-m18-fp16-v1` | `tokenizer.json`, `tokenizer_config.json` and `calibrator.json` from the checkpoint at its pinned revision, not re-hosted | [Algorythm-Canada/openjev-models](https://github.com/Algorythm-Canada/openjev-models) releases |
 | Laya on a Mac | `laya-m18-fp16`, a float16 Core ML conversion (849 MB), release `laya-m18-fp16-v1` | The checkpoint's `tokenizer/` and `rl_agent_config.json` at its pinned revision, not re-hosted | openjev-models releases |
 | Laya on an iPhone | `laya-f18-b1s128-fp16`, `laya-f18-b1s256-fp16`, `laya-f18-b1s512-fp16` and `laya-f18-b1s1024-fp16` (843 to 845 MB each), releases `laya-f18-b1s128-fp16-v1` to `laya-f18-b1s1024-fp16-v1` | As on a Mac | openjev-models releases |
-| JevK5 | `jevk5-0.2-mlx-4bit` (2.37 GB of weights) and `jevk5-0.2-mlx-8bit` (4.47 GB), MLX conversions made by `Tools/jevk5/convert.py` with mlx-lm 0.32.0 | The checkpoint's `tokenizer.json`, `tokenizer_config.json`, `chat_template.jinja` and `jevk5_config.json`, copied unchanged into each conversion | Not yet published: until the maintainer creates `Algorythm-Canada/jevk5-0.2-mlx-4bit` and `-8bit` on the Hugging Face Hub (D-052), a deployment converts the checkpoint itself and names the folder in `OPENJEV_JEVK5_MODEL` |
+| JevK5 | `jevk5-0.2-mlx-4bit` (2.37 GB of weights) and `jevk5-0.2-mlx-8bit` (4.47 GB), MLX conversions made by `Tools/jevk5/convert.py` with mlx-lm 0.32.0 | The checkpoint's `tokenizer.json`, `tokenizer_config.json`, `chat_template.jinja` and `jevk5_config.json`, copied unchanged into each conversion | [Algorythm-Canada/jevk5-0.2-mlx-4bit](https://huggingface.co/Algorythm-Canada/jevk5-0.2-mlx-4bit) and [Algorythm-Canada/jevk5-0.2-mlx-8bit](https://huggingface.co/Algorythm-Canada/jevk5-0.2-mlx-8bit) on the Hugging Face Hub, at the commits `JevK5Checkpoint` pins (D-052) |
 
 The JevK5 conversions keep the checkpoint's Apache-2.0 license; each carries JevK5's own `LICENSE`
 and `NOTICE` and a model card that credits Alibi Serikbay and says what was changed (the weights
-quantized, nothing else).
+quantized, nothing else). They were published on 2026-10-03, and their files are byte for byte the
+ones `Tools/jevk5/convert.py` writes.
 
 The Core ML packages are conversions of the authors' checkpoints, made with
 [Tools/encoders](../Tools/encoders/README.md) and published under the checkpoints' Apache-2.0

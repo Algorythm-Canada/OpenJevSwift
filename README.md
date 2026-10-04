@@ -58,7 +58,7 @@ loads the same models inside an app.
 | `verdict` | `verdict-1.4`, 151M parameters, Core ML | Apple silicon, macOS 15 or later | 1.6 GB with the functions one-question reads load, 2.8 GB with all six |
 | `laya` | `laya-1.0`, 421M parameters, Core ML | Apple silicon, macOS 15 or later | 4.7 GB with the functions one-question reads load, 8.9 GB with all eight and up to 9.7 GB at peak; with `OPENJEV_ENCODER_FUNCTIONS=2`, 2.1 GB for one-question reads and up to 4.4 GB at peak |
 | `mlx` | `openjev-0.1`, DiffusionGemma 26B-A4B, 4-bit, MLX | Apple silicon | about 16 GB to load, 17.3 GiB in service with short prompts and up to about 3.6 GB more for cached long prompts; 32 GB or more recommended |
-| `jevk5` | `jevk5-0.2`, JevK5 (Qwen3.5-4B), 8-bit, MLX, from a local conversion until it is published | Apple silicon | 6.0 GB once loaded, up to 11.0 GB in service with `OPENJEV_MLX_CACHE_LIMIT_GB=4`; 3.6 and 8.9 GB with the 4-bit conversion |
+| `jevk5` | `jevk5-0.2`, JevK5 (Qwen3.5-4B), 8-bit, MLX | Apple silicon | 6.0 GB once loaded, up to 11.0 GB in service with `OPENJEV_MLX_CACHE_LIMIT_GB=4`; 3.6 and 8.9 GB with the 4-bit conversion |
 
 Building needs Xcode 26.4 or later. The `mlx` backend also needs MLX's Metal shaders, which Swift
 Build compiles with the Metal Toolchain: Swift Build is the default with Xcode 27, and Xcode 26
@@ -83,7 +83,7 @@ Not there yet:
 - Images in requests: #46, #47 and #48.
 - `think`, a thought before the read: #50, #51 and #52.
 - `POST /v1/chat/completions`: #53.
-- The CLM model: #59. The JevK5 conversions' publication, the maintainer's choice (D-052).
+- The CLM model: #59.
 - Release 0.1.0, with a version tag a package can depend on: #65.
 
 [docs/08-implementation-plan.md](docs/08-implementation-plan.md) has the milestones and the issue
