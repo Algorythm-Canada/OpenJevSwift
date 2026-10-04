@@ -3018,3 +3018,105 @@ conversions on the Hugging Face Hub, `Algorythm-Canada/jevk5-0.2-mlx-8bit` at co
 `d19a6f09b42fdd3b4ff7fc85b1ebbda2a79bfa4a` and `Algorythm-Canada/jevk5-0.2-mlx-4bit` at commit
 `e3807fbf27a8b8f7ad277e331935bbc4368513db`, every file byte for byte the pinned output, and
 `JevK5Checkpoint` pins those commits, so item 4's default downloads.
+
+## D-053 mlx-swift 0.32.3 and mlx-swift-lm 3.32.3, pinned by exact version
+
+Context. mlx-swift 0.32.2 calls `os.Logger.isEnabled(type:)`. The SDK gives that method no
+availability of its own, so it inherits `Logger`'s, macOS 11 and iOS 14, but
+`/usr/lib/swift/libswiftos.dylib` has it only from macOS and iOS 26.4
+(ml-explore/mlx-swift#491). Every binary that links mlx-swift 0.32.2 therefore imports it strongly,
+and dyld stops the binary at launch on any earlier system, before its own code runs. This package
+declares macOS 14 and iOS 17. The first upstream review found it (2026-10-02,
+[upstream-log.md](upstream-log.md)), and issue #119 asks to move to mlx-swift 0.32.3, which fixes
+it, and to consider mlx-swift-lm's 3.32.3 tag in the same change. What moved upstream:
+
+- **mlx-swift 0.32.2 (`2b5e877`) to 0.32.3 (`1960120`)** is one commit, ml-explore/mlx-swift#493.
+  Its `OSLogHandler` asks `os_log_type_enabled` through a new C target, `cLogSupport`, in place of
+  `Logger.isEnabled(type:)`; the rest is the manifest, `CMakeLists.txt`, the Xcode project and the
+  xcframework script. `Source/Cmlx`, the vendored MLX core that computes every kernel, is
+  unchanged (still MLX v0.32.2), and the `default.metallib` Swift Build compiles from it has the
+  same SHA-256 on both releases (`282550b0…` with Xcode 27.0).
+- **mlx-swift-lm `c043fb3` to 3.32.3 (`3b339ad`)** is five commits. Two change library code: named
+  image attachments (0493daf: MLXLMCommon's `Chat.swift`, `UserInput.swift` and
+  `UserInput+Audio.swift`, MLXVLM's `MediaProcessing.swift`, `VLMModelFactory.swift` and eleven of
+  its models, MLXFoundationModels) and tool parameter booleans (0dcfe2f, MLXFoundationModels). The
+  others require mlx-swift 0.32.3 (390c5fd) and change CI, the README and tests. Nothing the port
+  takes changed: `SwitchLayers.swift`, `Load.swift`, `BaseConfiguration.swift` and
+  `LanguageModel.swift` (with `LMInput`, which `Qwen35LetterReadoutModel` builds) are untouched, as
+  are MLXLLM's sources, Qwen3.5 among them. In `Gemma4.swift` only the message generator and
+  `Gemma4Processor.prepare(input:)` change, which now leave out an image's name that the tokenizer
+  reads as a special token; `Gemma4VisionConfiguration`, which the port decodes, and
+  `preprocess(image:processing:)`, which its Vision tests call, do not. `MediaProcessing.swift`
+  changes one line, for video.
+
+Decision.
+
+1. **Both packages move, each by exact version.** `Package.swift` requires mlx-swift
+   `exact: "0.32.3"` and mlx-swift-lm `exact: "3.32.3"`. 3.32.3 requires mlx-swift 0.32.3 itself
+   (`.upToNextMinor(from: "0.32.3")`, 390c5fd) and is the first tag that contains `c043fb3`, so the
+   port needs no change, and the revision pin becomes a version, which release 0.1.0 (#65) needs:
+   SwiftPM refuses a revision-pinned dependency inside a package that another package requires by
+   version ([development.md](development.md)).
+2. **Exact, not a range.** The read parity tiers (D-014, D-048) and the regression file (D-044) hold
+   for the releases they ran on. A patch release of mlx-swift can change the vendored core, and so
+   every kernel, and the exact tier rests on that core being the Python wheel's. With
+   `.upToNextMinor`, a package that depends on this one could resolve a release nobody here has
+   run. The cost: such a package cannot use another patch of either one beside this package until
+   this package moves too.
+3. **Every copy of the pin moves with it.** `Package.resolved` is the one `swift package resolve`
+   writes from main's file: SwiftPM moved the two pins and kept the other 33. Its `originHash` is
+   the SHA-256 of `Package.swift`, and SwiftPM 6.4 leaves the file alone while the pins it computes
+   are the ones it holds, so the hand-edited one had kept main's. `Tools/oracle/UpstreamProbe`
+   depends on this package by path and named 0.32.2 and `c043fb3`, so it no longer resolved ("root
+   depends on 'mlx-swift' 0.32.2 and ... depends on 'mlx-swift' 0.32.3"); it names the new versions,
+   and its four tools, ItemReads among them, build in release. `mlx-probe.yml` probes the release
+   this package pins. THIRD_PARTY.md, the credits,
+   [04-swift-inference-landscape.md](04-swift-inference-landscape.md) and
+   [development.md](development.md) name both. Mentions of 0.32.2 and `c043fb3` that describe past
+   spikes, probes and measured runs stay.
+4. **The binaries no longer import the symbol.** Built in debug with Xcode 27.0 for macOS 14, main
+   (`d173c8e`) gives `openjev`, `openjev-bench`, `OpenJevDiffusionGemmaTests` and
+   `OpenJevLetterReadoutTests` a strong import of
+   `_$s2os6LoggerV9isEnabled4typeSbSo0a5_log_E2_ta_tF` from libswiftos (`nm -m`); this change gives
+   none of them one, and `_os_log_type_enabled` from libSystem instead. In the iOS Simulator, a
+   throwaway package's XCTest bundles that link `OpenJevDiffusionGemma` and `OpenJevLetterReadout`,
+   built for iOS 17, show the launch: on 0.32.2 dyld refuses both on the iOS 26.2 and 18.5 runtimes
+   ("Symbol not found" for that symbol, expected in the runtime's `libswiftos.dylib`) and loads them
+   on 26.5; on 0.32.3 it loads them on all three. No Mac and no iPhone below 26.4 was available, so
+   the launch on hardware is not shown. The simulator cannot run MLX itself, on either release and
+   any runtime: MLX's first call aborts while it creates its Metal device, whose architecture name
+   the simulator leaves empty (a libc++ hardening assertion on a null string), and with
+   `MLX_METAL_GPU_ARCH` set the simulator's Metal refuses MLX's heap ("MTLStorageModePrivate is
+   required for heaps").
+5. **The reads did not move.** On the reference Mac (M3 Max, macOS 27.0.1, the pinned 4-bit
+   checkpoint, `OPENJEV_MLX_CACHE_LIMIT_GB=4`): natively, `ReadOracleTests` gives every figure
+   [09-conformance-and-testing.md](09-conformance-and-testing.md) lists for 0.32.2 (top label 176 of
+   192, 139 of 140 where the oracle's margin is at least 0.5, mean |dp| 0.0133, a long slot's
+   largest |dp| 0.1006 on average, mean |dH| 0.104, and 0.152 past 1,024 tokens, no read
+   bit-identical to the oracle); in the exact tier all 63 reads, all 126 cache digests and the 6
+   multi-step reads' written argmaxes are the oracle's, bit for bit. `RegressionTests` on 0.32.3
+   against the file recorded on 0.32.2 gives a largest change of 0 in every probability and entropy
+   of its 216 slots, and the file recorded again differs only in its `mlx_swift` and date. JevK5 on
+   the 4-bit conversion gives D-052's figures again: the tokenizer's ids on all 324 passes, the
+   letter logits within 0.375 of mlx-lm's and 0.068 apart on average, identical on 51 passes, the
+   top letter mlx-lm's on 321, the passes over 2,048 tokens within 0.125, and through the engine the
+   204 answers within 0.062 of mlx-lm's, the same four top answers apart. On the 8-bit conversion
+   the live suite runs only its tokenizer test, since the fixture's logits are the 4-bit
+   conversion's. Through `openjev decide --backend jevk5`, the fixture's 28 requests get
+   byte-identical responses from main's build and this one's, at 8 and at 4 bits. The Vision tests
+   ran in full, with the tokenizer, the hot dog and the oracle's full tensors: the Pillow port is
+   still 0 off on every value of all 12 images, and MLXVLM's `Gemma4Processor`, whose file changed,
+   still misses by 0.17 to 1.21 (D-051).
+
+Alternatives rejected. (a) Stay on 0.32.2 and raise the deployment targets to macOS and iOS 26.4:
+every system the package declares from 14 and 17 up to 26.3 would go. (b) Move mlx-swift alone:
+`c043fb3` accepts 0.32.3 (`.upToNextMinor(from: "0.32.2")`), but the revision pin would stay in the
+way of #65, and 3.32.3 changes nothing the port uses. (c) `.upToNextMinor` ranges: item 2. (d) A
+weak import of the symbol, or a shim: the fix is upstream's, and a release carries it.
+
+Consequences. Binaries and apps that link the MLX targets no longer import a symbol that macOS and
+iOS before 26.4 lack. Release 0.1.0 can be required by version. Moving a pin now also moves
+UpstreamProbe's and the probe workflow's, and checks what the binaries import
+([upstream-log.md](upstream-log.md)).
+
+Status. Proposed with issue #119.

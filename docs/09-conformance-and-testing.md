@@ -92,7 +92,9 @@ to 1.21 (D-051). The fixture's `reads.json` holds upstream's hot dog reads for #
 
 Measured on 2026-10-02 on the reference machine (M3 Max, 128 GB, macOS 27.0.1, the pinned 4-bit
 checkpoint, mlx-swift 0.32.2), native tier, through the model (`ReadOracleTests`) and through the
-runtime (`RuntimeLiveTests`), which agree bit for bit:
+runtime (`RuntimeLiveTests`), which agree bit for bit. On mlx-swift 0.32.3 and mlx-swift-lm 3.32.3
+(2026-10-04, D-053) `ReadOracleTests` gave every figure of this table again, and the regression
+file's 216 slots came out bit for bit the same:
 
 | Figure | Measured | Bound |
 |---|---|---|
