@@ -2775,27 +2775,47 @@ Decision.
 
 1. **Port, not reuse.** `MLXVLM.Gemma4Processor.preprocess(image:processing:)` resizes with Core
    Image's bicubic in float, and its `pixel_values` miss mlx-vlm's by 0.17 (`gray.png`) to 0.69
-   (`frames.gif`) at most, over 1.7 to 1.9 million values per image, on every fixture image. mlx-vlm
-   resizes with Pillow's 8-bit bicubic, whose fixed-point weights, kernel widening when shrinking
-   and byte result after each pass a float pipeline cannot reproduce. `PillowResample` ports
-   Pillow 12.3.0's `Resample.c` for 8-bit RGB and `Gemma4ImageProcessor` ports mlx-vlm's resize
-   rule and rescale: every value of every fixture image's `pixel_values` equals mlx-vlm's, bit for
-   bit. The package already links `MLXVLM`; only the tests use its processor, to keep the
-   comparison measured.
-2. **JPEG decodes through a port of libjpeg-turbo.** The issue assumed ImageIO and Core Graphics
-   decode. They do for PNG, GIF and lossless WebP, whose samples equal PIL's when read without
-   colour management. ImageIO's JPEG decode does not: on the hot dog it is up to 30 levels from
-   Pillow's at 74,176 of 216,576 samples, which alone puts the hot dog's `pixel_values` 0.110 off.
-   `LibjpegTurboDecoder` ports libjpeg-turbo 3.1.4.1's default decompression (Huffman baseline and
-   progressive, the accurate integer IDCT, fancy upsampling, fixed-point YCbCr), the path Pillow
-   runs, and decodes every fixture JPEG to Pillow's bytes. JPEGs it does not cover (arithmetic,
-   lossless, 12-bit, CMYK) or finds malformed fall back to ImageIO, unmeasured. It validates every
-   segment as libjpeg does and refuses more than 100 scans, so untrusted bytes make it throw,
-   never trap or spin.
+   (`frames.gif`, `interlaced.gif`) at most, and by up to 1.21 on the GIFs whose transparent or
+   uncovered pixels Core Image's decode leaves black (`transparent.gif`, `offset.gif`), over 1.7 to
+   1.9 million values per image, on every fixture image. mlx-vlm resizes with Pillow's 8-bit
+   bicubic, whose fixed-point weights, kernel widening when shrinking and byte result after each
+   pass a float pipeline cannot reproduce. `PillowResample` ports Pillow 12.3.0's `Resample.c` for
+   8-bit RGB and `Gemma4ImageProcessor` ports mlx-vlm's resize rule and rescale: every value of
+   every fixture image's `pixel_values` equals mlx-vlm's, bit for bit. The package already links
+   `MLXVLM`; only the tests use its processor, to keep the comparison measured.
+2. **JPEG and GIF decode through ports of libjpeg-turbo and of Pillow's GIF reader.** The issue
+   assumed ImageIO and Core Graphics decode. They do for 8-bit PNG and for lossless and lossy WebP,
+   translucent ones included, whose samples equal PIL's when read without colour management.
+   ImageIO's JPEG decode does not: on the hot dog it is up to 30 levels from Pillow's at 74,176 of
+   216,576 samples, which alone puts the hot dog's `pixel_values` 0.110 off. `LibjpegTurboDecoder`
+   ports libjpeg-turbo 3.1.4.1's default decompression (Huffman baseline and progressive, the
+   accurate integer IDCT, fancy upsampling, fixed-point YCbCr), the path Pillow runs, and decodes
+   every fixture JPEG to Pillow's bytes. JPEGs it does not cover (arithmetic, lossless, 12-bit,
+   CMYK) or finds malformed fall back to ImageIO, unmeasured. It validates every segment as libjpeg
+   does and refuses more than 100 scans, so untrusted bytes make it throw, never trap or spin. Nor
+   is ImageIO's GIF decode Pillow's, though #46 first took it for exact: it hands the first frame
+   over as RGBA with (0, 0, 0, 0) for the transparent index and for the logical screen around the
+   frame, where `convert("RGB")` gives the palette colour, so the port read black there, up to 1.000
+   off in `pixel_values` on GIFs that apps ship (found in PR #121's review). `PillowGIFDecoder`
+   translates Pillow 12.3.0's frame-0 path (`GifImagePlugin.py`, `ImageFile.load`, `GifDecode.c` and
+   `convert`'s palette lookup) instead of recolouring the pixels ImageIO leaves transparent, because
+   only a translation can be shown bit for bit: Pillow also grows the canvas to hold a frame that
+   reaches past the screen, drops a colour table that is the grey ramp (the indices become grey
+   levels, except that a frame whose local table is the ramp takes the global table), makes indices
+   past the table black, decodes past an LZW end code while the file has bytes it has not read, and
+   raises on broken or short LZW data, and none of that shows in ImageIO's RGBA. Of the 629 GIF
+   files on the development Mac, 625 decode to Pillow's bytes and 4, which are not GIFs, are refused
+   by both (the merged code differed on 348); 123,000 generated GIFs, broken ones included, are
+   decoded or refused as Pillow does them. The port refuses every GIF Pillow raises on.
 3. **The budget is always 280, and the token count follows from the size.** `size` 224 by 224 is
    never read, and 70, 140, 560 and 1,120 are only the video processor's allowed budgets. An image
-   gets the largest sides that are multiples of 48 and fit 2,520 patches, which is 236 to 280 soft
-   tokens over the table, 253 for the hot dog. docs/03 is corrected.
+   gets the largest sides that are multiples of 48 and fit 2,520 patches: at most 280 soft tokens,
+   253 for the hot dog, 256 for a square, 266 for 4:3 and 264 for 16:9. Extreme aspect ratios get
+   fewer, because a side that scales to just under two 48-pixel units floors to one: 3 by 100 gets
+   192, 701 by 10 gets 140 where 700 by 10 gets 280, and 1,190 by 17, where float rounding puts
+   both sides just under whole units, gets 139, the fewest the rule gives (every size up to 6,000
+   by 6,000 run through mlx-vlm's arithmetic; 4.9% of them get fewer than 236). Over the table's 34
+   sizes, the ones upstream processes correctly get 139 to 280. docs/03 is corrected.
 4. **The image prompt's system turn keeps mlx-vlm's extra space.** mlx-vlm makes the system
    message a list of text parts, and the template writes each as `trim + ' '`, so image prompts
    have one token (236743) more than text prompts before `<turn|>`. The port renders the same
@@ -2807,11 +2827,14 @@ Decision.
    pixels, where Pillow's `Image.open` raises `DecompressionBombError`: the port checks the size
    ImageIO reads from the header before decoding, so a small file cannot make it allocate a huge
    image.
-6. **More fixture images than the issue lists, and the full tensors outside it.** Seven synthetic
-   images instead of two (two JPEGs for the decoder in CI, a grey PNG large enough to widen the
-   kernel, beside the non-square PNG, the small PNG, the GIF and the WebP), all drawn by the
-   generator and each under 5 KB. The full tensors (62 MB) stay in `Tools/oracle/results/vision/`,
-   ignored by git; the fixture keeps digests, statistics and 4,096 samples per image.
+6. **More fixture images than the issue lists, and the full tensors outside it.** Eleven
+   synthetic images instead of two (two JPEGs for the decoder in CI, a grey PNG large enough to
+   widen the kernel, beside the non-square PNG, the small PNG, the two-frame GIF and the WebP, and
+   four GIFs for item 2: a white transparent index, a first frame offset on a larger screen, a
+   local colour table unlike the global one, an interlaced frame), all drawn by the generator and
+   each under 5 KB, and 22 small GIFs decoded only, for the rest of Pillow's GIF reader. The full
+   tensors (about 90 MB) stay in `Tools/oracle/results/vision/`, ignored by git; the fixture keeps
+   digests, statistics and 4,096 samples per image.
 7. **`pixel_values` follow mlx-vlm's shapes.** One `(n, 3, H, W)` array when the images share a
    size, else one `(3, H, W)` array per image, as `preprocess` stacks them; `MLXVLM` zero-pads
    instead.
@@ -2822,14 +2845,17 @@ curve, or with another filter: Core Image has no filter with Pillow's fixed-poin
 8-bit intermediate, so this could only narrow the gap. (c) Keeping ImageIO for JPEG and loosening
 the bound: the hot dog, upstream's own example, would be 0.110 off. (d) Decoding with the Layr-Labs
 fork's `DiffusionGemmaImagePixels.swift` and `DiffusionGemmaBicubicRGB.swift`: not used; nothing
-here derives from them.
+here derives from them. (e) Recolouring the pixels ImageIO leaves transparent in a GIF from the
+GIF's own tables: it would rest on ImageIO's canvas, palette choice and handling of broken data,
+which differ from Pillow's in the ways item 2 lists.
 
 Consequences. #47 has `ImageReadInputs` (ids, `mm_token_type_ids`, `pixel_values`) and an oracle,
 `Fixtures/vision/reads.json`, for the hot dog reads. The runtime still refuses images. R9 is
 resolved for preprocessing; the vision tower and the overlay remain #47's, and R18's tower
 question with them.
 
-Status. Proposed with issue #46.
+Status. Proposed with issue #46. Items 1 to 3 and 6 corrected on 2026-10-03 after PR #121's
+review: a GIF decodes through a port of Pillow's reader, and the soft token range is the rule's.
 
 ## D-052 JevK5 backend: where the port goes beyond or differs from the issue text
 

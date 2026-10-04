@@ -180,6 +180,20 @@ swift test --build-system native
 
 That works while no test runs MLX code, for the reason above.
 
+### The JPEG decoder's mutations
+
+`JPEGRobustnessTests` feeds the JPEG decoder truncations and corruptions of the fixture JPEGs, each
+of which must decode or throw, never trap. By default it runs a subset that keeps every kind of
+mutation on every marker segment: 459 cases, about 3 seconds in a debug build on an M3 Max. Set
+`OPENJEV_TEST_JPEG_MUTATIONS=1` to run all 6,799, which take about 3 minutes there and took 6 on
+CI:
+
+```bash
+OPENJEV_TEST_JPEG_MUTATIONS=1 swift test --filter JPEGRobustnessTests
+```
+
+Neither mode skips anything, so the test log check needs nothing for it.
+
 ### The CLI tests
 
 `OpenJevCLITests` imports the `openjev` executable's module to parse command lines and to run the

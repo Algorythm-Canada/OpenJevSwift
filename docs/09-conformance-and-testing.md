@@ -73,20 +73,22 @@ vision path (#48, upstream's `tests/data/hotdog.jpg` case).
 
 Image preprocessing (#46) has its own oracle, [Fixtures/vision](../Fixtures/vision/README.md),
 from `Tools/fixtures/vision_oracle.py`, which runs upstream's `MlxRuntime._inputs` with mlx-vlm's
-processor: for upstream's hot dog photo and seven synthetic images (two JPEGs, three PNGs, a
-two-frame GIF and a WebP, each under 5 KB and committed), the decoded RGB digest, the resized size,
-the soft tokens, and `pixel_values` (shape, digest, per-channel mean, std, min and max, 4,096
-sampled values); the expanded ids and `mm_token_type_ids` of nine prompts; and the resize rule on
-27 sizes. `VisionPreprocessingTests` holds the port to it within 1e-3. Without any model file, in
-CI: the synthetic images decode to PIL's bytes, resize and rescale to the recorded shape,
-statistics and samples (bit for bit, on 2026-10-02), the GIF's first frame is the one used, the
-resize rule gives every recorded size, and two planted bugs (Pillow's bilinear filter in place of
+processor: for upstream's hot dog photo and eleven synthetic images (two JPEGs, three PNGs, five
+GIFs and a WebP, each under 5 KB and committed), the decoded RGB digest, the resized size, the soft
+tokens, and `pixel_values` (shape, digest, per-channel mean, std, min and max, 4,096 sampled
+values); the expanded ids and `mm_token_type_ids` of 13 prompts; the resize rule on 34 sizes; and
+22 small GIFs, decoded or refused as upstream's `ImagePrompt.pil` does. `VisionPreprocessingTests`
+holds the port to it within 1e-3. Without any model file, in CI: the synthetic images decode to
+PIL's bytes, resize and rescale to the recorded shape, statistics and samples (bit for bit, on
+2026-10-02, and the GIFs added after PR #121's review on 2026-10-03), the small GIFs decode to
+PIL's bytes or are refused where PIL raised, the GIF's first frame is the one used, the resize
+rule gives every recorded size, and two planted bugs (Pillow's bilinear filter in place of
 bicubic, and a bicubic kernel that does not widen when shrinking) each break the bounds. With the
 pinned upstream checkout, the hot dog is checked as well; with `Tools/oracle/results/vision/`, the
 oracle's full tensors, every value is compared and the largest difference printed (0 for every
 image); with the tokenizer files, every prompt's ids and `mm_token_type_ids`. These skip naming
 `OPENJEV_TEST_MODEL`. The same tests measure `MLXVLM`'s Gemma 4 processor, which misses by 0.17
-to 0.69 (D-051). The fixture's `reads.json` holds upstream's hot dog reads for #47.
+to 1.21 (D-051). The fixture's `reads.json` holds upstream's hot dog reads for #47.
 
 Measured on 2026-10-02 on the reference machine (M3 Max, 128 GB, macOS 27.0.1, the pinned 4-bit
 checkpoint, mlx-swift 0.32.2), native tier, through the model (`ReadOracleTests`) and through the
