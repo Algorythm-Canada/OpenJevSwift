@@ -261,12 +261,12 @@ every figure below was rerun for this report on the same machine with the port's
   16-bit Display P3 PNG by 0.471; 16-bit translucent RGBA by 1.000 (the drawn path composites over
   black); CMYK and Adobe CMYK JPEGs, which go to the ImageIO fallback, by 0.525 to 0.529; an
   arithmetic-coded JPEG by 0.110.
-- Accepted by the port where upstream raises, for #47 to decide on the wire rather than here:
-  HEIC bytes labelled `image/jpeg` (Pillow's `UnidentifiedImageError`, which upstream answers with
-  a 500), which are no JPEG, so ImageIO decodes them. The review's other two kinds, JPEGs missing
-  only their EOI on which Pillow raises "image file is truncated" and JPEGs cut short (the same
-  error), went to ImageIO too; the JPEG port now refuses them (D-055, the fixture's `eof_` cases)
-  and still decodes `baseline.jpg` without its EOI, as Pillow does.
+- Accepted by the port where upstream raises, when the review ran: HEIC bytes labelled
+  `image/jpeg` (Pillow's `UnidentifiedImageError`, which upstream answers with a 500), JPEGs
+  missing only their EOI on which Pillow raises "image file is truncated", and JPEGs cut short
+  (the same error), all of which reached ImageIO. All three are refused now: the HEIC bytes by
+  their signature (D-054), the two JPEGs by the JPEG port (D-055, the fixture's `eof_` cases),
+  which still decodes `baseline.jpg` without its EOI, as Pillow does.
 
 ## The JPEG decoder after the review
 
