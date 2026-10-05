@@ -167,7 +167,8 @@ struct MLXTokenizerLoaderTests {
             SpikeReport.record(
                 "chat-template-trim",
                 "image \(prompt.key): upstream \(prompt.ids.count) ids, swift-jinja's trim "
-                    + "\(before.count + expanded)")
+                    + "\(before.count + expanded), before the expansion: "
+                    + ChatTemplateParityTests.firstDifference(expected: after, actual: before))
         }
         #expect(imageDeparting == departing)
     }

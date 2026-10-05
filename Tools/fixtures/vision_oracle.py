@@ -652,7 +652,7 @@ def trim_states():
     rows = [("trim_none", STATE)]
     rows += [(f"trim_u{ord(c):04x}_end", STATE + c) for c in "\x1c\x1d\x1e\x1f"]
     rows += [(f"trim_u{ord(c):04x}_start", c + STATE) for c in "\x1c\x1d\x1e\x1f"]
-    rows += [(f"trim_u{ord(c):04x}_end", STATE + c) for c in "\x0b\x85\xa0​"]
+    rows += [(f"trim_u{ord(c):04x}_end", STATE + c) for c in "\x0b\x85\xa0\u200b"]
     rows.append(("trim_whitespace_only", "".join(c for c in map(chr, range(sys.maxunicode + 1)) if c.isspace())))
     rows.append(("trim_empty", ""))
     return rows
