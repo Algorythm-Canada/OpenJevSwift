@@ -90,7 +90,12 @@ pinned upstream checkout, the hot dog is checked as well; with `Tools/oracle/res
 oracle's full tensors, every value is compared and the largest difference printed (0 for every
 image); with the tokenizer files, every prompt's ids and `mm_token_type_ids`. These skip naming
 `OPENJEV_TEST_MODEL`. The same tests measure `MLXVLM`'s Gemma 4 processor, which misses by 0.17
-to 1.21 (D-051). The fixture's `reads.json` holds upstream's hot dog reads for #47.
+to 1.21 (D-051). The fixture's `reads.json` holds upstream's hot dog reads for #47. Its
+`jpeg_cases.json` holds 185 damaged and unusual JPEGs built from the fixture JPEGs by
+`Tools/fixtures/jpeg_cases.py`, with what upstream's `ImagePrompt.pil` made of each:
+`JPEGParityTests` decodes each to Pillow's bytes or refuses it where Pillow raised, within a bound
+on decoding work counted in blocks, and `JPEGRobustnessTests` adds 866 truncations and
+corruptions of the fixture JPEGs in CI (7,650 with `OPENJEV_TEST_JPEG_MUTATIONS=1`) (D-055).
 
 Measured on 2026-10-02 on the reference machine (M3 Max, 128 GB, macOS 27.0.1, the pinned 4-bit
 checkpoint, mlx-swift 0.32.2), native tier, through the model (`ReadOracleTests`) and through the

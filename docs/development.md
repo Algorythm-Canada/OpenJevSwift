@@ -178,19 +178,23 @@ swift test --build-system native
 
 That works while no test runs MLX code, for the reason above.
 
-### The JPEG decoder's mutations
+### The JPEG decoder's tests
 
 `JPEGRobustnessTests` feeds the JPEG decoder truncations and corruptions of the fixture JPEGs, each
-of which must decode or throw, never trap. By default it runs a subset that keeps every kind of
-mutation on every marker segment: 459 cases, about 3 seconds in a debug build on an M3 Max. Set
-`OPENJEV_TEST_JPEG_MUTATIONS=1` to run all 6,799, which take about 3 minutes there and took 6 on
-CI:
+of which must decode or be refused within the bound on decoding work, never trap.
+`JPEGParityTests` holds it to what upstream's Pillow made of the 185 regression cases in
+`Fixtures/vision/jpeg_cases.json` (D-055). By default the mutations are a subset that keeps every
+kind of mutation on every marker segment, 866 cases, and the parity test decodes the entropy-coded
+data of its four 13,376 by 13,376 cases but not their pixels: about 5 seconds in a debug build on
+an M3 Max. Set `OPENJEV_TEST_JPEG_MUTATIONS=1` to run all 7,650 mutations and decode those four
+cases in full, which takes about 100 seconds there (under 2 seconds in a release build):
 
 ```bash
-OPENJEV_TEST_JPEG_MUTATIONS=1 swift test --filter JPEGRobustnessTests
+OPENJEV_TEST_JPEG_MUTATIONS=1 swift test --filter JPEG
 ```
 
-Neither mode skips anything, so the test log check needs nothing for it.
+Neither mode skips anything, so the test log check needs nothing for it. To regenerate the cases
+after a pin moves, run `Tools/fixtures/jpeg_cases.py` ([Fixtures/vision](../Fixtures/vision/README.md)).
 
 ### The CLI tests
 

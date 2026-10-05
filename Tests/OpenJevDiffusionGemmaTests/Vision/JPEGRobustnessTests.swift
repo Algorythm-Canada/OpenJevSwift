@@ -4,7 +4,8 @@ import Testing
 @testable import OpenJevDiffusionGemma
 
 /// The JPEG decoder on malformed input: a server decodes whatever a request sends, so every
-/// malformed JPEG must throw, never trap. A trap would end the test process.
+/// malformed JPEG must decode as Pillow does or be refused, never trap, and never cost work out of
+/// proportion to its size. A trap would end the test process.
 @Suite("JPEG decoder robustness")
 struct JPEGRobustnessTests {
     typealias Decoder = LibjpegTurboDecoder
@@ -31,13 +32,31 @@ struct JPEGRobustnessTests {
     static let quant = segment(0xDB, [0] + Array(repeating: 1, count: 64))
     static let soi: [UInt8] = [0xFF, 0xD8]
     static let eoi: [UInt8] = [0xFF, 0xD9]
+    /// DC and AC tables 0 of one 1-bit code each: a zero difference, and end of block.
+    static let tables =
+        segment(0xC4, [0x00, 1] + Array(repeating: 0, count: 15) + [0x00])
+        + segment(0xC4, [0x10, 1] + Array(repeating: 0, count: 15) + [0x00])
+
+    /// A scan of the given component ids on tables 0.
+    static func scan(_ ids: [Int], ss: Int = 0, se: Int = 63, ahal: Int = 0) -> [UInt8] {
+        segment(
+            0xDA,
+            [UInt8(ids.count)] + ids.flatMap { [UInt8($0), 0] } + [
+                UInt8(ss), UInt8(se), UInt8(ahal),
+            ])
+    }
 
     /// What decoding gives: decoded, unsupported or refused.
     enum Outcome: Equatable { case decoded, unsupported, refused }
 
     static func outcome(_ bytes: [UInt8]) -> Outcome {
+        var work = Decoder.Work()
+        return outcome(bytes, work: &work)
+    }
+
+    static func outcome(_ bytes: [UInt8], work: inout Decoder.Work) -> Outcome {
         do {
-            _ = try Decoder.decode(bytes)
+            _ = try Decoder.decode(bytes, work: &work)
             return .decoded
         } catch {
             switch error {
@@ -47,83 +66,97 @@ struct JPEGRobustnessTests {
         }
     }
 
+    @Test("A well-formed small JPEG decodes, so the cases below fail for their one fault")
+    func control() {
+        let bytes =
+            Self.soi + Self.quant + Self.frame() + Self.tables + Self.scan([1]) + [0, 0] + Self.eoi
+        #expect(Self.outcome(bytes) == .decoded)
+    }
+
     @Test("Headers that end early or lie about their length are refused, not read past")
     func shortSegments() {
         // A DQT whose 64 entries are not there.
-        #expect(Self.outcome([0xFF, 0xD8, 0xFF, 0xDB, 0x00, 0x03, 0x00]) == .unsupported)
+        #expect(Self.outcome([0xFF, 0xD8, 0xFF, 0xDB, 0x00, 0x03, 0x00]) == .refused)
         // A SOF that declares 3 components in a 6-byte body.
         #expect(
             Self.outcome([0xFF, 0xD8, 0xFF, 0xC0, 0x00, 0x08, 0x08, 0x00, 0x01, 0x00, 0x01, 0x03])
-                == .unsupported)
+                == .refused)
         // A SOS at the end of the file.
-        #expect(Self.outcome([0xFF, 0xD8, 0xFF, 0xDA, 0x00, 0x02]) == .unsupported)
-        // A SOS with no components.
+        #expect(Self.outcome([0xFF, 0xD8, 0xFF, 0xDA, 0x00, 0x02]) == .refused)
+        // A SOS with no components (JERR_BAD_LENGTH).
         let empty = Self.soi + Self.frame() + Self.quant + Self.segment(0xDA, [0, 0, 63, 0])
-        #expect(Self.outcome(empty + Self.eoi) == .unsupported)
+        #expect(Self.outcome(empty + Self.eoi) == .refused)
     }
 
-    @Test("A DC Huffman table with a symbol above 15 is refused")
+    @Test("A DC Huffman table with a symbol above 15 is refused when a scan uses it, not before")
     func dcSymbol() {
-        let table = Self.segment(0xC4, [0x00, 1] + Array(repeating: 0, count: 15) + [0x50])
-        let scan = Self.segment(0xDA, [1, 1, 0x00, 0, 63, 0])
-        let bytes = Self.soi + Self.frame() + Self.quant + table + scan + [0, 0] + Self.eoi
-        #expect(Self.outcome(bytes) == .unsupported)
+        let bad = Self.segment(0xC4, [0x01, 1] + Array(repeating: 0, count: 15) + [0x50])
+        let base = Self.soi + Self.quant + Self.frame() + Self.tables + bad
+        #expect(Self.outcome(base + Self.scan([1]) + [0, 0] + Self.eoi) == .decoded)
+        let uses = Self.segment(0xDA, [1, 1, 0x10, 0, 63, 0])
+        #expect(Self.outcome(base + uses + [0, 0] + Self.eoi) == .refused)
     }
 
     @Test("A progressive scan whose spectral range runs past 63 is refused")
     func spectralRange() {
-        let table = Self.segment(0xC4, [0x10, 1] + Array(repeating: 0, count: 15) + [0x01])
-        let scan = Self.segment(0xDA, [1, 1, 0x00, 200, 255, 0])
         let bytes =
-            Self.soi + Self.frame(0xC2) + Self.quant + table + scan + [0, 0] + Self.eoi
-        #expect(Self.outcome(bytes) == .unsupported)
+            Self.soi + Self.frame(0xC2) + Self.quant + Self.tables
+            + Self.scan([1], ss: 200, se: 255) + [0, 0] + Self.eoi
+        #expect(Self.outcome(bytes) == .refused)
     }
 
-    @Test("Fractional sampling ratios and a second frame are refused")
+    @Test("Fractional sampling ratios, a second frame and a second SOI are refused")
     func frames() {
         let fractional = Self.frame(
             width: 32, height: 32, components: [(1, 4, 4), (2, 3, 3), (3, 1, 1)])
-        #expect(Self.outcome(Self.soi + fractional + Self.quant + Self.eoi) == .unsupported)
-        let two = Self.frame() + Self.frame(width: 65_535, height: 65_535)
-        #expect(Self.outcome(Self.soi + two + Self.eoi) == .unsupported)
+        #expect(
+            Self.outcome(
+                Self.soi + fractional + Self.quant + Self.tables + Self.scan([1]) + Self.eoi)
+                == .refused)
+        let two = Self.frame() + Self.frame(width: 16, height: 16)
+        #expect(
+            Self.outcome(Self.soi + two + Self.quant + Self.tables + Self.scan([1]) + Self.eoi)
+                == .refused)
+        let soi = Self.soi + Self.quant + Self.soi + Self.frame() + Self.tables + Self.scan([1])
+        #expect(Self.outcome(soi + [0, 0] + Self.eoi) == .refused)
     }
 
-    @Test("A frame past the pixel limit, or more than 100 scans, is refused outright")
+    @Test("A frame past the pixel limit, or a side past 65,500, is refused outright")
     func limits() {
-        let huge = Self.frame(width: 65_535, height: 65_535)
-        #expect(Self.outcome(Self.soi + huge + Self.eoi) == .refused)
-        let table = Self.segment(0xC4, [0x00, 1] + Array(repeating: 0, count: 15) + [0x00])
-        let dcScan = Self.segment(0xDA, [1, 1, 0x00, 0, 0, 0]) + [0x00]
-        let many =
-            Self.soi + Self.frame(0xC2) + Self.quant + table
-            + Array([[UInt8]](repeating: dcScan, count: Decoder.maxScans + 1).joined()) + Self.eoi
-        #expect(Self.outcome(many) == .refused)
+        let huge = Self.frame(width: 65_000, height: 65_000)
+        #expect(
+            Self.outcome(Self.soi + huge + Self.quant + Self.tables + Self.scan([1]) + Self.eoi)
+                == .refused)
+        let wide = Self.frame(width: 65_501, height: 8)
+        #expect(
+            Self.outcome(Self.soi + wide + Self.quant + Self.tables + Self.scan([1]) + Self.eoi)
+                == .refused)
     }
 
     @Test("A header-only large frame is refused without allocating its coefficient grid")
     func headerOnlyLargeFrame() {
         let frame = Self.frame(
             width: 13_376, height: 13_376, components: [(1, 1, 1), (2, 1, 1), (3, 1, 1)])
-        #expect(Self.outcome(Self.soi + frame + Self.eoi) == .unsupported)
+        #expect(Self.outcome(Self.soi + frame + Self.eoi) == .refused)
     }
 
-    @Test("Oversubscribed and all-ones Huffman code trees are refused")
+    @Test("Oversubscribed and all-ones Huffman code trees are refused when a scan uses them")
     func invalidHuffmanCodeTrees() {
         let allOnes = Self.segment(
             0xC4, [0x00, 2] + Array(repeating: 0, count: 15) + [0x00, 0x01])
         let oversubscribed = Self.segment(
             0xC4, [0x00, 3] + Array(repeating: 0, count: 15) + [0x00, 0x01, 0x02])
-        #expect(Self.outcome(Self.soi + allOnes + Self.eoi) == .unsupported)
-        #expect(Self.outcome(Self.soi + oversubscribed + Self.eoi) == .unsupported)
+        for table in [allOnes, oversubscribed] {
+            let bytes =
+                Self.soi + Self.quant + Self.frame() + Self.tables + table + Self.scan([1])
+                + [0, 0] + Self.eoi
+            #expect(Self.outcome(bytes) == .refused)
+        }
     }
 
-    /// Set to `1` to run every mutation (6,799 cases, about 3 minutes in a debug build on an M3
-    /// Max and 6 on CI) rather than the subset CI runs.
+    /// Set to `1` to run every mutation (7,650 cases) rather than the subset CI runs, and to
+    /// decode the large parity cases in full: about 100 seconds in a debug build on an M3 Max.
     static let allMutationsVariable = "OPENJEV_TEST_JPEG_MUTATIONS"
-
-    /// The bytes the mutations corrupt: the first 700, which hold the headers before the first
-    /// scan's data.
-    static let headerEnd = 700
 
     /// The four values each corrupted byte takes.
     static func corruptions(of byte: UInt8) -> [UInt8] { [0x00, 0xFF, 0x7F, byte ^ 0x5A] }
@@ -149,91 +182,117 @@ struct JPEGRobustnessTests {
         return out
     }
 
-    /// The mutations of one JPEG: the lengths it is cut to and the `(index, value)` corruptions.
-    ///
-    /// All of them: every fifth length, and each of the first 700 bytes set to each of four
-    /// values. The subset keeps every kind (cuts, and each value) on every segment's structure:
-    /// cuts at each segment's start, inside its length and one byte short of its end, every
-    /// 211th length and the last two; corruptions of each header segment's marker code, the low
-    /// byte of its length, its first and last bytes, and the first data byte after a scan header.
-    static func mutations(of original: [UInt8], all: Bool) -> (
-        lengths: [Int], corruptions: [(index: Int, value: UInt8)]
-    ) {
-        let headerEnd = min(original.count, Self.headerEnd)
-        if all {
-            return (
-                Array(stride(from: 0, to: original.count, by: 5)),
-                (0..<headerEnd).flatMap { index in
-                    corruptions(of: original[index]).map { (index, $0) }
-                }
-            )
-        }
-        let segments = segments(original)
-        var lengths = Set(stride(from: 0, to: original.count, by: 211))
-        lengths.formUnion([original.count - 2, original.count - 1])
-        var indices: Set<Int> = [1]
-        for segment in segments {
-            lengths.formUnion([segment.start, segment.start + 3, segment.end - 1])
-            indices.formUnion([
-                segment.start + 1, segment.start + 3, segment.start + 4, segment.end - 1,
-            ])
-            if segment.marker == 0xDA { indices.insert(segment.end) }
-        }
-        return (
-            lengths.filter { $0 < original.count }.sorted(),
-            indices.filter { $0 < headerEnd }.sorted().flatMap { index in
-                corruptions(of: original[index]).map { (index, $0) }
+    /// One mutation: the JPEG cut to a length (with FF D9 appended when `eoi`), or one byte set.
+    enum Mutation: Hashable {
+        case cut(Int, eoi: Bool)
+        case corrupt(index: Int, value: UInt8)
+
+        func apply(to original: [UInt8]) -> [UInt8] {
+            switch self {
+            case .cut(let length, let eoi):
+                return Array(original.prefix(length)) + (eoi ? [0xFF, 0xD9] : [])
+            case .corrupt(let index, let value):
+                var bytes = original
+                bytes[index] = value
+                return bytes
             }
-        )
+        }
     }
 
-    @Test("Truncations and corrupted header bytes of the fixture JPEGs throw or decode, never trap")
+    /// The mutations of one JPEG.
+    ///
+    /// All of them: every fifth length, cut plainly (the data ends, as a truncated download does)
+    /// and with FF D9 appended (the scan's data runs out before a marker, libjpeg-turbo's
+    /// zero-fill path), and every byte of every marker segment, the SOI marker's and the first
+    /// data byte after each scan header set to each of four values, the headers of later scans
+    /// and the tables between them included. The subset keeps every kind on every segment: cuts,
+    /// both ways, at each segment's start, inside its length and one byte short of its end, every
+    /// 211th length and the last two; corruptions of each segment's marker code, the low byte of
+    /// its length, its first and last bytes, and the first data byte after a scan header.
+    static func mutations(of original: [UInt8], all: Bool) -> [Mutation] {
+        let segments = segments(original)
+        var lengths: Set<Int>
+        var indices: Set<Int>
+        if all {
+            lengths = Set(stride(from: 0, to: original.count, by: 5))
+            indices = Set(segments.flatMap { $0.start..<min($0.end, original.count) })
+            indices.formUnion(segments.filter { $0.marker == 0xDA }.map(\.end))
+            indices.insert(1)
+        } else {
+            lengths = Set(stride(from: 0, to: original.count, by: 211))
+            lengths.formUnion([original.count - 2, original.count - 1])
+            indices = [1]
+            for segment in segments {
+                lengths.formUnion([segment.start, segment.start + 3, segment.end - 1])
+                indices.formUnion([
+                    segment.start + 1, segment.start + 3, segment.start + 4, segment.end - 1,
+                ])
+                if segment.marker == 0xDA { indices.insert(segment.end) }
+            }
+        }
+        let cuts = lengths.filter { $0 < original.count }.sorted().flatMap {
+            [Mutation.cut($0, eoi: false), .cut($0, eoi: true)]
+        }
+        let corruptions = indices.filter { $0 < original.count }.sorted().flatMap { index in
+            corruptions(of: original[index]).map { Mutation.corrupt(index: index, value: $0) }
+        }
+        return cuts + corruptions
+    }
+
+    @Test("Truncations and corruptions of the fixture JPEGs decode or are refused, never trap")
     func mutations() throws {
         let all = ProcessInfo.processInfo.environment[Self.allMutationsVariable] == "1"
         var outcomes: [Outcome: Int] = [:]
         var cases = 0
+        var outside: [String] = []
         for name in ["baseline.jpg", "progressive.jpg"] {
             let original = [UInt8](
                 try Data(contentsOf: VisionFixtures.directory.appendingPathComponent(name)))
             #expect(Self.outcome(original) == .decoded)
-            let mutations = Self.mutations(of: original, all: all)
-            for length in mutations.lengths {
-                outcomes[Self.outcome(Array(original.prefix(length))), default: 0] += 1
+            for mutation in Self.mutations(of: original, all: all) {
+                let bytes = mutation.apply(to: original)
+                var work = Decoder.Work()
+                outcomes[Self.outcome(bytes, work: &work), default: 0] += 1
+                if !JPEGParityTests.withinBound(work, bytes: bytes.count) {
+                    outside.append("\(name) \(mutation): \(work)")
+                }
+                cases += 1
             }
-            for corruption in mutations.corruptions {
-                var bytes = original
-                bytes[corruption.index] = corruption.value
-                outcomes[Self.outcome(bytes), default: 0] += 1
-            }
-            cases += mutations.lengths.count + mutations.corruptions.count
         }
         print(
             "JPEG mutations (\(all ? "all" : "the subset; \(Self.allMutationsVariable)=1 runs all")): "
                 + "\(cases) cases, \(outcomes)")
-        if all { #expect(cases == 6_799) }
-        #expect((outcomes[.decoded] ?? 0) > 0 && (outcomes[.unsupported] ?? 0) > 0)
+        if all { #expect(cases > 7_000) }
+        #expect((outcomes[.decoded] ?? 0) > 0 && (outcomes[.refused] ?? 0) > 0)
+        #expect(outside.isEmpty, "work out of proportion to the input: \(outside.prefix(5))")
     }
 
-    @Test("The mutation subset keeps every kind of mutation on every header segment")
+    @Test("The mutation subset keeps every kind of mutation on every segment")
     func mutationSubset() throws {
         for name in ["baseline.jpg", "progressive.jpg"] {
             let original = [UInt8](
                 try Data(contentsOf: VisionFixtures.directory.appendingPathComponent(name)))
-            let all = Self.mutations(of: original, all: true)
+            let all = Set(Self.mutations(of: original, all: true))
             let subset = Self.mutations(of: original, all: false)
-            #expect(Set(subset.lengths).isSubset(of: Set(0..<original.count)))
-            #expect(subset.lengths.count + subset.corruptions.count < 300, "\(name)")
-            // Each corrupted byte takes all four values, as in the full run.
-            let byIndex = Dictionary(grouping: subset.corruptions, by: \.index)
-            #expect(byIndex.values.allSatisfy { $0.count == 4 }, "\(name)")
-            let allPairs = Set(all.corruptions.map { [$0.index, Int($0.value)] })
-            #expect(subset.corruptions.allSatisfy { allPairs.contains([$0.index, Int($0.value)]) })
-            // Every header segment's marker code and length are corrupted, and every segment is cut.
-            for segment in Self.segments(original) {
-                if segment.start + 3 < Self.headerEnd {
-                    #expect(byIndex[segment.start + 1] != nil && byIndex[segment.start + 3] != nil)
+            #expect(subset.count < 1_200, "\(name): \(subset.count)")
+            // Every subset corruption is one of the full run's, and each corrupted byte takes all
+            // four values.
+            var values: [Int: Int] = [:]
+            for mutation in subset {
+                if case .corrupt(let index, _) = mutation {
+                    #expect(all.contains(mutation), "\(name): \(mutation)")
+                    values[index, default: 0] += 1
                 }
-                #expect(subset.lengths.contains(segment.start), "\(name) at \(segment.start)")
+            }
+            #expect(values.values.allSatisfy { $0 == 4 }, "\(name)")
+            // Every segment, the later scan headers included, has its marker code and length
+            // corrupted, and is cut both ways at its start.
+            for segment in Self.segments(original) {
+                #expect(values[segment.start + 1] != nil && values[segment.start + 3] != nil)
+                #expect(
+                    subset.contains(.cut(segment.start, eoi: false)), "\(name) at \(segment.start)")
+                #expect(
+                    subset.contains(.cut(segment.start, eoi: true)), "\(name) at \(segment.start)")
             }
         }
     }
