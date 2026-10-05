@@ -300,7 +300,7 @@ struct TokenizerParityTests {
             }
         }
         let prompts = try replay.chatPrompts
-        #expect(prompts.count == 24)
+        #expect(prompts.count == 39)
         for prompt in prompts {
             for thinking in [false, true] {
                 let expected = try replay.chatPromptIDs(

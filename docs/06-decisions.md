@@ -198,7 +198,9 @@ Hugging Face cache) and otherwise skips as a model opt-in test, naming `OPENJEV_
 hosted CI builds it but does not run it until follow-up E in spikes/tokenizer-parity.md.
 
 Status. Accepted: swift-transformers for the tokenizer, the shipped template through
-swift-jinja for prompts. Decided by spikes #20 and #21.
+swift-jinja for prompts. Decided by spikes #20 and #21. The ids through `applyChatTemplate` are
+replaced by D-054 (issue #124): `chatPromptIDs` tokenizes the port's own rendering, whose `trim`
+is jinja2's.
 
 ## D-009 Hummingbird 2 for the server
 

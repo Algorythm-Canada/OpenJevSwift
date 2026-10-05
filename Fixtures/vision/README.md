@@ -35,6 +35,8 @@ stand-in runtime that holds the processor `mlx_vlm.load` builds for the checkpoi
 Pillow 12.3.0) and no model.
 
 - `generator` records the pins, as in [Fixtures/oracle](../oracle/README.md), with Pillow's version.
+  Its `version` is this file's own, 2 since `state_prompts` (issue #124); `reads.json` keeps its
+  own, 1, because only a run with the model rewrites it.
 - `processor` is what the processor was built with: `max_soft_tokens` 280, `patch_size` 16,
   `pooling_kernel_size` 3, `rescale_factor`, `do_normalize` false, `resample` 3 (bicubic), the
   `size` it ignores, and the image tokens and their ids.
@@ -54,6 +56,13 @@ Pillow 12.3.0) and no model.
   `Look at the photo.`: `ids`, `tokens`, `mm_token_type_ids`, `image_runs` (the `[start, end)`
   runs of soft image tokens), `soft_tokens` per image, and `pixel_values`, stacked with its shape
   or, for images of different sizes, a list of shapes.
+- `state_prompts` has the fifteen states of issue #124, the `trim_` rows of
+  [chat-prompts/prompts.json](../chat-prompts/README.md), each as the text of a prompt with
+  `gradients.png` and the same system text: `ids`, `tokens`, `mm_token_type_ids`, `image_runs` and
+  `soft_tokens`. mlx-vlm strips the user's text with Python's `str.strip()` before the template
+  trims it again, so the states come out as in the text prompts: U+001C to U+001F go at either
+  end, U+200B stays (354 tokens, 38834 last before `<turn|>`), and the whitespace-only state
+  gives the empty state's 349 tokens.
 - `gif_cases` maps a name to a small GIF for the rest of Pillow's GIF reader: its byte count,
   SHA-256 and the bytes in base64, and what upstream's `ImagePrompt.pil` (the decode in
   `MlxRuntime._inputs`) makes of it, `decoded` (the size and the SHA-256 of the RGB bytes) or

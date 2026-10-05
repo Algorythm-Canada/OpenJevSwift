@@ -4,8 +4,8 @@ import OpenJevDiffusionGemma
 import Testing
 
 /// Compares the chat prompts ``SwiftTransformersTokenizer`` renders with what Python's
-/// `apply_chat_template` recorded in Fixtures/chat-prompts/prompts.json (spike #21, decision
-/// D-008): the text, through swift-jinja, and the ids, through swift-transformers.
+/// `apply_chat_template` recorded in Fixtures/chat-prompts/prompts.json (spike #21, decisions
+/// D-008 and D-054): the text, through swift-jinja, and the ids, that text tokenized.
 @Suite(
     "Chat template parity with the Python fixtures",
     .enabled(if: TokenizerFixtures.available, TokenizerFixtures.missingMessage))
@@ -42,7 +42,7 @@ struct ChatTemplateParityTests {
     func prompts() async throws {
         let tokenizer = try await TokenizerFixtures.tokenizer()
         let rows = try TokenizerFixtures.cases("chat-prompts/prompts.json")
-        #expect(rows.count == 24)
+        #expect(rows.count == 39)
         var textMismatches: [String] = []
         var idMismatches: [String] = []
         var renderings = 0
@@ -85,6 +85,32 @@ struct ChatTemplateParityTests {
                 + "\(idMismatches.count) mismatched")
         #expect(textMismatches.isEmpty, "\(textMismatches)")
         #expect(idMismatches.isEmpty, "\(idMismatches)")
+    }
+
+    @Test("The states of issue #124 give upstream's ids: str.strip() strips U+001C, keeps U+200B")
+    func trimStates() async throws {
+        let tokenizer = try await TokenizerFixtures.tokenizer()
+        let rows = try TokenizerFixtures.cases("chat-prompts/prompts.json").filter {
+            $0["name"]?.stringValue?.hasPrefix("trim_") == true
+        }
+        #expect(rows.count == 15)
+        let plain = try tokenizer.chatPromptIDs(
+            system: "Answer.", user: "Look at the photo.", thinking: false)
+        #expect(plain.count == 21)
+        for row in rows {
+            let name = try #require(row["name"]?.stringValue)
+            let system = try #require(row["messages"]?[0]?["content"]?.stringValue)
+            let state = try #require(row["messages"]?[1]?["content"]?.stringValue)
+            #expect(system == "Answer.")
+            let expected = try TokenizerFixtures.ints(row["thinking_off"]?["ids"])
+            let ids = try tokenizer.chatPromptIDs(system: system, user: state, thinking: false)
+            #expect(
+                ids == expected,
+                "\(name): \(Self.firstDifference(expected: expected, actual: ids))")
+            // The state's ids are the plain state's exactly when str.strip() leaves it plain.
+            let strippedToPlain = TextOf.render(.string(state)) == "Look at the photo."
+            #expect((ids == plain) == strippedToPlain, "\(name)")
+        }
     }
 
     @Test("The prompt has the layout the fixtures describe")

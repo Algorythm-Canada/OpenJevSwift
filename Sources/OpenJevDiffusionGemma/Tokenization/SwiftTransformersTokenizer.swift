@@ -16,11 +16,14 @@ import Tokenizers
 /// is in Python's `transformers`, unless `tokenizer_config.json` turns it on.
 ///
 /// `chatPromptIDs` is upstream's `Engine.chat_prompt_ids`: `apply_chat_template` over
-/// `[system, user]` with the generation prompt and `enable_thinking`, through swift-transformers'
-/// `applyChatTemplate`, which renders the template and tokenizes the text without adding special
-/// tokens (the template writes `<bos>` itself). ``chatPromptText(system:user:thinking:)``
-/// renders the same template to text with the same context, which swift-transformers does not
-/// expose; the tests check that the two paths agree with each other and with the Python
+/// `[system, user]` with the generation prompt and `enable_thinking`.
+/// ``chatPromptText(system:user:thinking:)`` renders the template with swift-jinja and the
+/// context swift-transformers builds, and `chatPromptIDs` tokenizes that text without adding
+/// special tokens (the template writes `<bos>` itself), which is what swift-transformers'
+/// `applyChatTemplate` does. `applyChatTemplate` itself is not called: it renders in
+/// swift-jinja's own environment, whose `trim` strips Foundation's whitespace set, and the
+/// template here renders in `templateEnvironment()`, whose `trim` is jinja2's, Python's
+/// `str.strip()` (decision D-054). The tests check the text and the ids against the Python
 /// fixtures.
 ///
 /// Loading is asynchronous because swift-transformers' loader is. The value is immutable after
@@ -55,6 +58,77 @@ public struct SwiftTransformersTokenizer: DecisionTokenizer {
     /// The template options swift-transformers compiles chat templates with, which are also the
     /// options Python's `transformers` uses.
     static let templateOptions = Jinja.Template.Options(lstripBlocks: true, trimBlocks: true)
+
+    /// The environment a chat template renders in: swift-jinja's, with
+    /// ``pythonTrim(_:kwargs:env:)`` as `trim` (decision D-054).
+    ///
+    /// swift-jinja 2.5.1's own `trim` strips Foundation's `whitespacesAndNewlines`, which keeps
+    /// U+001C to U+001F and removes U+200B, where upstream's jinja2 strips what Python's
+    /// `str.strip()` strips. swift-jinja looks a filter up in the environment before its
+    /// built-in filters, so a `trim` function here takes the built-in's place without a change
+    /// to the package. A template that set a variable named `trim` would hide it; Gemma 4's
+    /// does not. Every render gets a new environment, since an environment holds the render's
+    /// variables.
+    static func templateEnvironment() -> Jinja.Environment {
+        let environment = Jinja.Environment()
+        environment["trim"] = .function(pythonTrim)
+        return environment
+    }
+
+    /// jinja2's `trim` filter, `soft_str(value).strip(chars)`, which is Python's `str.strip`.
+    ///
+    /// Without `chars`, or with `none`, it strips the scalars CPython's `str.isspace()` accepts
+    /// (``/OpenJevCore/TextOf/isPythonWhitespace(_:)``); with a string, the scalars the string
+    /// holds, so an empty string strips nothing. Scalars are compared one by one, as Python
+    /// compares code points. Any other `chars`, an undefined variable included, throws, where
+    /// Python raises `TypeError: strip arg must be None or str`. A value that is not a string is
+    /// written as swift-jinja writes it before it is stripped, as swift-jinja's own `trim` does;
+    /// Gemma 4's template trims only strings.
+    @Sendable static func pythonTrim(
+        _ args: [Jinja.Value], kwargs: [String: Jinja.Value], env: Jinja.Environment
+    ) throws -> Jinja.Value {
+        guard args.count <= 2, kwargs.keys.allSatisfy({ $0 == "chars" }),
+            args.count < 2 || kwargs.isEmpty
+        else {
+            throw Jinja.JinjaError.runtime("trim takes one argument, chars")
+        }
+        let text: String
+        switch args.first ?? .undefined {
+        case .string(let string):
+            text = string
+        case let other:
+            text = other.description
+        }
+        let strips: (Unicode.Scalar) -> Bool
+        switch args.count == 2 ? args[1] : kwargs["chars"] ?? .null {
+        case .null:
+            strips = TextOf.isPythonWhitespace
+        case .string(let chars):
+            let set = Set(chars.unicodeScalars)
+            strips = { set.contains($0) }
+        default:
+            throw Jinja.JinjaError.runtime("trim: strip arg must be None or str")
+        }
+        let scalars = text.unicodeScalars
+        guard let start = scalars.firstIndex(where: { !strips($0) }),
+            let end = scalars.lastIndex(where: { !strips($0) })
+        else {
+            return .string("")
+        }
+        return .string(String(scalars[start...end]))
+    }
+
+    /// Renders `source`, compiled with ``templateOptions``, over `context` in
+    /// ``templateEnvironment()``: the chat template's path, for a template of one's own. The
+    /// tests check the environment's filters with it, which needs none of the checkpoint's
+    /// files.
+    ///
+    /// - Throws: swift-jinja's error when the template does not compile or render.
+    static func renderTemplate(_ source: String, context: [String: any Sendable]) throws -> String {
+        let template = try Jinja.Template(source, with: templateOptions)
+        return try template.render(
+            context.mapValues { try Jinja.Value(any: $0) }, environment: templateEnvironment())
+    }
 
     /// Loads the tokenizer from `files`.
     ///
@@ -219,7 +293,7 @@ public struct SwiftTransformersTokenizer: DecisionTokenizer {
 
     /// The prompt ids of `[system, user]` with the generation prompt, the shipped chat template
     /// rendered with `enable_thinking` set to `thinking`, as upstream's `apply_chat_template` gives
-    /// them (D-008).
+    /// them (D-008, D-054).
     public func chatPromptIDs(system: String, user: String, thinking: Bool) throws -> [Int] {
         try applyChatTemplate(
             messages: Self.messages(system: system, user: user), thinking: thinking)
@@ -236,28 +310,27 @@ public struct SwiftTransformersTokenizer: DecisionTokenizer {
             thinking: thinking)
     }
 
-    /// The ids swift-transformers' `applyChatTemplate` gives for `messages` with the generation
-    /// prompt and `enable_thinking` set to `thinking`. `messages` are chat messages as
-    /// dictionaries, `role` and `content`, with `content` a string or a list of parts.
+    /// The ids of `messages` with the generation prompt and `enable_thinking` set to `thinking`,
+    /// upstream's `apply_chat_template(..., tokenize=True)`: the text
+    /// ``renderChatTemplate(messages:addGenerationPrompt:thinking:)`` renders, tokenized without
+    /// special tokens and without truncation. That is what swift-transformers'
+    /// `applyChatTemplate` does, in `templateEnvironment()` rather than swift-jinja's own,
+    /// whose `trim` is not Python's (D-054). `messages` are chat messages as dictionaries, `role`
+    /// and `content`, with `content` a string or a list of parts.
     ///
     /// - Throws: An ``/OpenJevCore/TokenizerError`` when the template does not render.
     public func applyChatTemplate(messages: [[String: any Sendable]], thinking: Bool) throws
         -> [Int]
     {
-        do {
-            return try tokenizer.applyChatTemplate(
-                messages: messages, chatTemplate: nil, addGenerationPrompt: true,
-                truncation: false, maxLength: nil, tools: nil,
-                additionalContext: ["enable_thinking": thinking])
-        } catch {
-            throw OpenJevCore.TokenizerError(
-                "swift-transformers could not apply the chat template: \(error)")
-        }
+        try encode(
+            renderChatTemplate(messages: messages, addGenerationPrompt: true, thinking: thinking),
+            addSpecialTokens: false)
     }
 
-    /// Renders `chat_template.jinja` over `messages` with swift-jinja, with the context
-    /// swift-transformers builds: `messages`, `add_generation_prompt`, `enable_thinking` and the
-    /// special token attributes of `tokenizer_config.json`.
+    /// Renders `chat_template.jinja` over `messages` with swift-jinja in
+    /// `templateEnvironment()`, with the context swift-transformers builds: `messages`,
+    /// `add_generation_prompt`, `enable_thinking` and the special token attributes of
+    /// `tokenizer_config.json`.
     ///
     /// `messages` are chat messages as dictionaries, `role` and `content`, with `content` a
     /// string or a list of parts such as `{"type": "image"}` and `{"type": "text", "text": ...}`.
@@ -271,7 +344,7 @@ public struct SwiftTransformersTokenizer: DecisionTokenizer {
             context["messages"] = try .array(messages.map { try Jinja.Value(any: $0) })
             context["add_generation_prompt"] = .boolean(addGenerationPrompt)
             context["enable_thinking"] = .boolean(thinking)
-            return try chatTemplate.render(context)
+            return try chatTemplate.render(context, environment: Self.templateEnvironment())
         } catch {
             throw OpenJevCore.TokenizerError(
                 "swift-jinja could not render the chat template: \(error)")

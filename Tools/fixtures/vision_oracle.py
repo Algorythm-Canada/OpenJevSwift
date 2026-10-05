@@ -10,7 +10,8 @@ writes two fixtures:
 - Fixtures/vision/preprocessing.json: per image, the decoded RGB size and digest, the size the
   processor resized to, its soft token count, and `pixel_values` (shape, dtype, the SHA-256 of
   its float32 bytes, per-channel mean, std, min and max, and 4,096 sampled values); per prompt,
-  the expanded ids, `mm_token_type_ids` and the soft tokens per image; the processor's resize
+  the expanded ids, `mm_token_type_ids` and the soft tokens per image, also for the states of
+  issue #124 as the text of a prompt with one image (`state_prompts`); the processor's resize
   rule on a table of image sizes; and `gif_cases`, small GIFs (their bytes in base64) for the
   rest of Pillow's GIF reader, with what upstream's `ImagePrompt.pil` decodes each to (the size
   and the SHA-256 of the RGB bytes) or the exception it raises. No weights are needed: the
@@ -76,7 +77,12 @@ READS_OUT = VISION / "reads.json"
 TENSORS_OUT = ROOT / "Tools" / "oracle" / "results" / "vision"
 RUN_OUT = ROOT / "Tools" / "oracle" / "results" / "vision_run.json"
 SCRIPT = "Tools/fixtures/vision_oracle.py"
-GENERATOR_VERSION = 1
+# Each file's version, bumped when the shape of that file changes. They are kept apart because
+# only a run with the model rewrites reads.json, which a change to preprocessing.json alone should
+# not mark as written by an older script. preprocessing.json 2: `state_prompts` (issue #124);
+# `gif_cases` (#125) came in at 1.
+PREPROCESSING_VERSION = 2
+READS_VERSION = 1
 UPSTREAM_COMMIT = "dcd2094"
 MODEL_REPO = "mlx-community/diffusiongemma-26B-A4B-it-4bit"
 MODEL_REVISION = "a7a81407613811e8ba63af92ac0d852b809e191f"
@@ -129,13 +135,14 @@ def device_info():
             "memory_size": info.get("memory_size")}
 
 
-def generator():
-    """What the fixtures depend on. Pillow decodes and resizes; the device matters only to the
-    reads, whose Metal kernels may round differently on another GPU family."""
+def generator(version):
+    """What the fixtures depend on, with the written file's `version`. Pillow decodes and resizes;
+    the device matters only to the reads, whose Metal kernels may round differently on another GPU
+    family."""
     metallib = Path(mx.__file__).parent / "lib" / "mlx.metallib"
     return {
         "script": SCRIPT,
-        "version": GENERATOR_VERSION,
+        "version": version,
         "upstream": "razorback16/openjev",
         "upstream_commit": UPSTREAM_COMMIT,
         "tokenizer_repo": MODEL_REPO,
@@ -639,6 +646,22 @@ REQUESTS = {
 }
 # (request, canvas index): index k is read k of upstream's default policy, at seed + 7919k.
 SELECTION = [("hotdog", 0), ("hotdog", 1), ("readme_hotdog", 0), ("readme_hotdog", 1)]
+# Issue #124: the states of upstream_tables.py's trim_states(), each the text of a prompt with
+# this image. mlx-vlm strips the user's text with Python's str.strip()
+# (prompt_utils.extract_text_from_content) and the template's `trim`, jinja2's, strips it again,
+# so the characters str.isspace() accepts (U+001C to U+001F among them) go at either end and
+# U+200B stays.
+TRIM_IMAGE = "gradients"
+
+
+def trim_states():
+    rows = [("trim_none", STATE)]
+    rows += [(f"trim_u{ord(c):04x}_end", STATE + c) for c in "\x1c\x1d\x1e\x1f"]
+    rows += [(f"trim_u{ord(c):04x}_start", c + STATE) for c in "\x1c\x1d\x1e\x1f"]
+    rows += [(f"trim_u{ord(c):04x}_end", STATE + c) for c in "\x0b\x85\xa0\u200b"]
+    rows.append(("trim_whitespace_only", "".join(c for c in map(chr, range(sys.maxunicode + 1)) if c.isspace())))
+    rows.append(("trim_empty", ""))
+    return rows
 
 
 def request_inputs(name, settings, eng, images):
@@ -721,6 +744,22 @@ def preprocess_all(processor, eng, settings, images, order):
     return image_records, prompt_records, tensors
 
 
+def state_prompt_records(processor, sys_text, images, order):
+    """Each of trim_states(), in the given order, as the text of a prompt with TRIM_IMAGE through
+    upstream's _inputs: the ids, mm_token_type_ids and soft tokens, recorded as `prompts` are."""
+    states = dict(trim_states())
+    records = {}
+    for name in order:
+        prompt = ImagePrompt(sys_text, states[name], [data_url(*images[TRIM_IMAGE])])
+        _, kwargs, n = upstream_inputs(processor, prompt)
+        ids = [int(t) for t in kwargs["input_ids"].tolist()[0]]
+        mm = [int(t) for t in np.array(kwargs["mm_token_type_ids"]).reshape(-1)]
+        records[name] = {"images": [TRIM_IMAGE], "system": sys_text, "state": states[name], "ids": ids,
+                         "tokens": n, "mm_token_type_ids": mm, "image_runs": runs(mm),
+                         "soft_tokens": [end - start for start, end in runs(mm)]}
+    return {name: records[name] for name, _ in trim_states()}
+
+
 def preprocessing_payload(processor, eng, settings, images):
     order = list(PROMPTS)
     a = preprocess_all(processor, eng, settings, images, order)
@@ -730,7 +769,7 @@ def preprocessing_payload(processor, eng, settings, images):
     tok = processor.tokenizer
     sys_text = a[1]["hotdog"]["system"]
     payload = {
-        "generator": generator(),
+        "generator": generator(PREPROCESSING_VERSION),
         "processor": {
             "class": type(processor).__name__, "image_processor": type(ip).__name__,
             "max_soft_tokens": ip.max_soft_tokens, "patch_size": ip.patch_size,
@@ -747,9 +786,12 @@ def preprocessing_payload(processor, eng, settings, images):
                         "ids": eng.chat_prompt_ids(sys_text, STATE)},
         "images": {name: a[0][name] for name in IMAGES},
         "prompts": {key: a[1][key] for key in PROMPTS},
+        "state_prompts": state_prompt_records(processor, sys_text, images, [n for n, _ in trim_states()]),
         "gif_cases": gif_case_records(sys_text),
     }
     same = same and payload["gif_cases"] == gif_case_records(sys_text)
+    same = same and payload["state_prompts"] == state_prompt_records(
+        processor, sys_text, images, [n for n, _ in reversed(trim_states())])
     return payload, a[2], same
 
 
@@ -825,7 +867,7 @@ def reads_payload(args, model_path, eng, settings, images, processor, run):
                       for r in reads]
     rt.close()
     payload = {
-        "generator": generator(),
+        "generator": generator(READS_VERSION),
         "settings": {"topk": TOPK, "vocab": VOCAB, "canvas": settings.canvas,
                      "canvas_step": settings.canvas_step, "mlx_max_prompt": settings.mlx_max_prompt,
                      "auto_threshold": settings.auto_threshold},
@@ -914,7 +956,8 @@ def main():
             path.write_bytes(images[name][0])
             print(f"wrote Fixtures/vision/{file}: {len(images[name][0])} bytes", file=sys.stderr)
 
-    run = {"generator": generator(), "cache_limit_gb": args.cache_limit_gb,
+    run = {"generator": generator({"preprocessing.json": PREPROCESSING_VERSION, "reads.json": READS_VERSION}),
+           "cache_limit_gb": args.cache_limit_gb,
            "machine": {"platform": platform.platform(), "machine": platform.machine(), **device_info()}}
     payload, tensors, same = preprocessing_payload(processor, eng, settings, images)
     run["preprocessing_passes_agree"] = same
