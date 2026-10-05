@@ -213,9 +213,11 @@ struct ImageRuntimeTests {
         case "TIFF bytes labelled image/png":
             bad = (try encoded(.tiff), "image/png", "not a JPEG, PNG, WebP or GIF")
         case "a JPEG missing only its EOI":
-            // Pillow decodes this one (libjpeg never reads past its end) but refuses the hot dog
-            // and progressive.jpg without theirs; the port refuses every JPEG without EOI (D-054).
-            bad = (baseline.dropLast(2), "image/jpeg", "truncated")
+            // Pillow refuses progressive.jpg without its EOI (libjpeg-turbo reads past the end)
+            // but decodes baseline.jpg without its own, and the port follows Pillow (D-055).
+            let progressive = try Data(
+                contentsOf: VisionFixtures.directory.appendingPathComponent("progressive.jpg"))
+            bad = (progressive.dropLast(2), "image/jpeg", "truncated")
         case "a JPEG cut in half":
             bad = (baseline.prefix(baseline.count / 2), "image/jpeg", "truncated")
         case "an image 1 pixel high":
@@ -223,15 +225,17 @@ struct ImageRuntimeTests {
         case "an image 3 pixels high":
             bad = (try encoded(.png, width: 40, height: 3), "image/png", "high")
         case "a JPEG declaring 180,000,000 pixels":
-            // SOI, a baseline frame header of 9,000 by 20,000 with one component, EOI.
+            // SOI, a baseline frame header of 9,000 by 20,000 with one component, a scan header
+            // and EOI: Pillow reads the headers to the scan, then refuses the size (D-055).
             bad = (
                 Data([
                     0xFF, 0xD8, 0xFF, 0xC0, 0x00, 0x0B, 0x08, 0x23, 0x28, 0x4E, 0x20, 0x01,
-                    0x01, 0x11, 0x00, 0xFF, 0xD9,
+                    0x01, 0x11, 0x00, 0xFF, 0xDA, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00, 0x3F,
+                    0x00, 0xFF, 0xD9,
                 ]), "image/jpeg", "pixels"
             )
         default:
-            // Pillow cannot identify it; the port finds no EOI.
+            // Pillow cannot identify it; the port's reading of Pillow's header walk refuses it.
             bad = (
                 Data([0xFF, 0xD8, 0xFF] + [UInt8](repeating: 0x13, count: 200)), "image/jpeg",
                 "JPEG"

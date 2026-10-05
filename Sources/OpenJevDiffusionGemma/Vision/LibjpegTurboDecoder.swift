@@ -1,12 +1,14 @@
 // A Swift translation of libjpeg-turbo 3.1.4.1's default decompression path, the one Pillow
-// 12.3.0 runs. Translated to Swift, restructured to decode a whole image in memory and reduced to
-// the 8-bit Huffman-coded path by the OpenJevSwift contributors, 2026. This software is based in
-// part on the work of the Independent JPEG Group. Below are the files it draws on, each with its
-// copyright block as libjpeg-turbo has it. The README.ijg those blocks name is
-// ThirdPartyLicenses/libjpeg-turbo-README.ijg beside this file, next to libjpeg-turbo-LICENSE.md;
-// THIRD_PARTY.md lists the files.
+// 12.3.0 runs, with the reading Pillow's JPEG decoder does around it. Translated to Swift,
+// restructured to decode a whole image in memory and reduced to the 8-bit Huffman-coded path by
+// the OpenJevSwift contributors, 2026. This software is based in part on the work of the
+// Independent JPEG Group. Below are the files it draws on, each with its copyright block as
+// libjpeg-turbo has it. The README.ijg those blocks name is ThirdPartyLicenses/libjpeg-turbo-README.ijg
+// beside this file, next to libjpeg-turbo-LICENSE.md; THIRD_PARTY.md lists the files. The inverse
+// DCT, a translation of the Arm Neon code, is in LibjpegTurboNEONIDCT.swift with its own notice.
 //
-// jdmarker.c (the marker segments and the checks it makes of them):
+// jdmarker.c (the marker segments, the checks it makes of them, restart markers and
+// `jpeg_resync_to_restart`):
 //   This file was part of the Independent JPEG Group's software:
 //   Copyright (C) 1991-1998, Thomas G. Lane.
 //   Lossless JPEG Modifications:
@@ -16,7 +18,7 @@
 //   For conditions of distribution and use, see the accompanying README.ijg
 //   file.
 //
-// jdinput.c (`initial_setup`'s and `per_scan_setup`'s checks, `latch_quant_tables`):
+// jdinput.c (`initial_setup`, `per_scan_setup`, `latch_quant_tables`, `consume_markers`):
 //   This file was part of the Independent JPEG Group's software:
 //   Copyright (C) 1991-1997, Thomas G. Lane.
 //   Lossless JPEG Modifications:
@@ -27,7 +29,7 @@
 //   For conditions of distribution and use, see the accompanying README.ijg
 //   file.
 //
-// jdapimin.c (`default_decompress_parms`):
+// jdapimin.c (`default_decompress_parms`, `jpeg_read_header`, `jpeg_finish_decompress`):
 //   This file was part of the Independent JPEG Group's software:
 //   Copyright (C) 1994-1998, Thomas G. Lane.
 //   Lossless JPEG Modifications:
@@ -37,7 +39,17 @@
 //   For conditions of distribution and use, see the accompanying README.ijg
 //   file.
 //
-// jdhuff.c (baseline Huffman decoding, `jpeg_make_d_derived_tbl`):
+// jdapistd.c (`jpeg_start_decompress`):
+//   This file was part of the Independent JPEG Group's software:
+//   Copyright (C) 1994-1996, Thomas G. Lane.
+//   libjpeg-turbo Modifications:
+//   Copyright (C) 2010, 2015-2020, 2022-2026, D. R. Commander.
+//   Copyright (C) 2015, Google, Inc.
+//   For conditions of distribution and use, see the accompanying README.ijg
+//   file.
+//
+// jdhuff.c (baseline Huffman decoding, its fast and slow paths, `jpeg_make_d_derived_tbl`,
+// `jpeg_fill_bit_buffer`):
 //   This file was part of the Independent JPEG Group's software:
 //   Copyright (C) 1991-1997, Thomas G. Lane.
 //   Lossless JPEG Modifications:
@@ -45,6 +57,55 @@
 //   libjpeg-turbo Modifications:
 //   Copyright (C) 2009-2011, 2016, 2018-2019, 2022, D. R. Commander.
 //   Copyright (C) 2018, Matthias Räncker.
+//   For conditions of distribution and use, see the accompanying README.ijg
+//   file.
+//
+// jdhuff.h (the bit-reading and Huffman-decoding macros):
+//   This file was part of the Independent JPEG Group's software:
+//   Copyright (C) 1991-1997, Thomas G. Lane.
+//   Lossless JPEG Modifications:
+//   Copyright (C) 1999, Ken Murchison.
+//   libjpeg-turbo Modifications:
+//   Copyright (C) 2010-2011, 2015-2016, 2021, D. R. Commander.
+//   Copyright (C) 2018, Matthias Räncker.
+//   For conditions of distribution and use, see the accompanying README.ijg
+//   file.
+//
+// jstdhuff.c (the standard Huffman tables of a sequential JPEG that defines none):
+//   This file was part of the Independent JPEG Group's software:
+//   Copyright (C) 1991-1998, Thomas G. Lane.
+//   libjpeg-turbo Modifications:
+//   Copyright (C) 2013, 2022, 2024, D. R. Commander.
+//   For conditions of distribution and use, see the accompanying README.ijg
+//   file.
+//
+// jdlhuff.c (the DC tables a lossless scan checks before its data):
+//   This file was part of the Independent JPEG Group's software:
+//   Copyright (C) 1991-1997, Thomas G. Lane.
+//   Lossless JPEG Modifications:
+//   Copyright (C) 1999, Ken Murchison.
+//   libjpeg-turbo Modifications:
+//   Copyright (C) 2022, D. R. Commander.
+//   For conditions of distribution and use, see the accompanying README.ijg
+//   file.
+//
+// jdlossls.c (`start_pass_lossless`'s checks of a lossless scan):
+//   This file was part of the Independent JPEG Group's software:
+//   Copyright (C) 1998, Thomas G. Lane.
+//   Lossless JPEG Modifications:
+//   Copyright (C) 1999, Ken Murchison.
+//   libjpeg-turbo Modifications:
+//   Copyright (C) 2022, 2024, 2026, D. R. Commander.
+//   For conditions of distribution and use, see the accompanying README.ijg
+//   file.
+//
+// jddiffct.c (the restart interval a lossless scan allows):
+//   This file was part of the Independent JPEG Group's software:
+//   Copyright (C) 1994-1997, Thomas G. Lane.
+//   Lossless JPEG Modifications:
+//   Copyright (C) 1999, Ken Murchison.
+//   libjpeg-turbo Modifications:
+//   Copyright (C) 2022, 2024, D. R. Commander.
 //   For conditions of distribution and use, see the accompanying README.ijg
 //   file.
 //
@@ -58,12 +119,25 @@
 //   For conditions of distribution and use, see the accompanying README.ijg
 //   file.
 //
-// jidctint.c (`jpeg_idct_islow`):
+// jdcoefct.c (`decompress_onepass`, `consume_data`, block smoothing: `smoothing_ok` and
+// `decompress_smooth_data`):
 //   This file was part of the Independent JPEG Group's software:
-//   Copyright (C) 1991-1998, Thomas G. Lane.
-//   Modification developed 2002-2018 by Guido Vollbeding.
+//   Copyright (C) 1994-1997, Thomas G. Lane.
 //   libjpeg-turbo Modifications:
-//   Copyright (C) 2015, 2020, 2022, 2026, D. R. Commander.
+//   Copyright 2009 Pierre Ossman <ossman@cendio.se> for Cendio AB
+//   Copyright (C) 2010, 2015-2016, 2019-2020, 2022-2024, D. R. Commander.
+//   Copyright (C) 2015, 2020, Google, Inc.
+//   For conditions of distribution and use, see the accompanying README.ijg
+//   file.
+//
+// jddctmgr.c (the multiplier tables, all zero for a component no scan has reached):
+//   This file was part of the Independent JPEG Group's software:
+//   Copyright (C) 1994-1996, Thomas G. Lane.
+//   Modified 2002-2010 by Guido Vollbeding.
+//   libjpeg-turbo Modifications:
+//   Copyright 2009 Pierre Ossman <ossman@cendio.se> for Cendio AB
+//   Copyright (C) 2010, 2015, 2022, 2026, D. R. Commander.
+//   Copyright (C) 2013, MIPS Technologies, Inc., California.
 //   For conditions of distribution and use, see the accompanying README.ijg
 //   file.
 //
@@ -76,6 +150,14 @@
 //   Copyright (C) 2014, MIPS Technologies, Inc., California.
 //   Copyright (C) 2015, Google, Inc.
 //   Copyright (C) 2019-2020, Arm Limited.
+//   For conditions of distribution and use, see the accompanying README.ijg
+//   file.
+//
+// jdmainct.c (the context rows the fancy upsamplers read at the image's edges):
+//   This file was part of the Independent JPEG Group's software:
+//   Copyright (C) 1994-1996, Thomas G. Lane.
+//   libjpeg-turbo Modifications:
+//   Copyright (C) 2010, 2016, 2022, 2024, 2026, D. R. Commander.
 //   For conditions of distribution and use, see the accompanying README.ijg
 //   file.
 //
@@ -98,7 +180,7 @@
 //   For conditions of distribution and use, see the accompanying README.ijg
 //   file.
 //
-// jdmaster.c (`prepare_range_limit_table`):
+// jdmaster.c (`master_selection`'s order of module set-up):
 //   This file was part of the Independent JPEG Group's software:
 //   Copyright (C) 1991-1997, Thomas G. Lane.
 //   Modified 2002-2009 by Guido Vollbeding.
@@ -111,6 +193,17 @@
 //   For conditions of distribution and use, see the accompanying README.ijg
 //   file.
 //
+// jerror.h (the errors, named in the refusals):
+//   This file was part of the Independent JPEG Group's software:
+//   Copyright (C) 1994-1997, Thomas G. Lane.
+//   Modified 1997-2009 by Guido Vollbeding.
+//   Lossless JPEG Modifications:
+//   Copyright (C) 1999, Ken Murchison.
+//   libjpeg-turbo Modifications:
+//   Copyright (C) 2014, 2017, 2021-2023, D. R. Commander.
+//   For conditions of distribution and use, see the accompanying README.ijg
+//   file.
+//
 // jutils.c (`jpeg_natural_order`):
 //   This file was part of the Independent JPEG Group's software:
 //   Copyright (C) 1991-1996, Thomas G. Lane.
@@ -118,45 +211,55 @@
 //   Copyright (C) 2022, D. R. Commander.
 //   For conditions of distribution and use, see the accompanying README.ijg
 //   file.
+//
+// It also follows Pillow 12.3.0's `src/libImaging/JpegDecode.c` (`ImagingJpegDecode` and its
+// suspending source manager; Copyright (c) 1998-2000 Secret Labs AB, Copyright (c) 1996-2000
+// Fredrik Lundh) and the 65,536-byte reads of `src/PIL/ImageFile.py`'s `ImageFile.load`
+// (Copyright (c) 1997-2004 by Secret Labs AB, Copyright (c) 1995-2004 by Fredrik Lundh): the
+// Python Imaging Library (PIL) is Copyright (c) 1997-2011 by Secret Labs AB and Copyright (c)
+// 1995-2011 by Fredrik Lundh and contributors, Pillow is Copyright (c) 2010 by Jeffrey 'Alex'
+// Clark and contributors, MIT-CMU licence: see ThirdPartyLicenses/Pillow-LICENSE.
 
-/// Decodes the JPEGs Pillow decodes for upstream's image reads, sample for sample.
+/// Decodes the JPEGs Pillow decodes for upstream's image reads, sample for sample, and refuses
+/// the ones on which Pillow raises.
 ///
 /// JPEG leaves the inverse DCT, chroma upsampling and colour conversion to the decoder, and
 /// decoders differ: ImageIO's decode of upstream's hot dog photo is up to 30 levels from Pillow's
-/// at a third of its samples, far outside issue #46's 1e-3. This reproduces libjpeg-turbo with
-/// Pillow's settings (the library defaults): the accurate integer IDCT, "fancy" triangle-filter
-/// upsampling, and its fixed-point YCbCr to RGB.
+/// at a third of its samples, far outside issue #46's 1e-3. This reproduces what
+/// `PIL.Image.open(...).convert("RGB")` does: Pillow's own reading of the headers
+/// (``PillowJPEGHeader``), then libjpeg-turbo with Pillow's settings (the library defaults) and
+/// Pillow's suspending input. That is the accurate integer IDCT as the Arm Neon code computes it,
+/// "fancy" triangle-filter upsampling, the fixed-point YCbCr to RGB, block smoothing for
+/// progressive JPEGs whose scans stop short of full precision, the standard Huffman tables for a
+/// sequential JPEG that defines none, restart-marker resynchronisation, and libjpeg-turbo's rule
+/// for scan data that runs out: the MCU being decoded is finished with zero bits and the rest of
+/// the segment is left as it is.
+///
+/// A JPEG on which Pillow or libjpeg-turbo raises is refused (``Refused``), never handed to
+/// another decoder: the errors of libjpeg-turbo's `jerror.h`, Pillow's own header errors, data
+/// that ends before libjpeg-turbo stops reading (Pillow's "image file is truncated"), and an
+/// image past Pillow's decompression bomb limit.
 ///
 /// Covered: 8-bit Huffman-coded baseline, extended sequential and progressive JPEGs with one
 /// (grey) or three (YCbCr or RGB) components, any sampling factors, and restart intervals.
-/// Anything else (arithmetic coding, lossless or 12-bit JPEGs, CMYK and YCCK) throws
-/// ``Unsupported`` so the caller can fall back to ImageIO.
+/// Pillow also decodes arithmetic-coded, lossless and 4-component (CMYK and YCCK) JPEGs; this
+/// throws ``Unsupported`` for those, so the caller may fall back to ImageIO, once it has made the
+/// checks it shares with them: a 4-component JPEG's scans are decoded, and an arithmetic-coded or
+/// lossless one's headers are checked up to its first scan's data.
 enum LibjpegTurboDecoder {
-    /// A JPEG this decoder does not cover, or one too damaged to decode. The caller may try
-    /// another decoder.
+    /// A JPEG Pillow decodes but this decoder does not cover: arithmetic-coded, lossless, CMYK or
+    /// YCCK. The caller may try another decoder.
     struct Unsupported: Error, CustomStringConvertible {
         let description: String
         init(_ description: String) { self.description = description }
     }
 
-    /// A JPEG refused outright: one that declares more pixels than ``RGBImage/maxPixels``, has
-    /// more scans than ``maxScans``, or ends before its EOI marker (``truncated``). No other
-    /// decoder should be tried on it.
+    /// A JPEG upstream's Pillow raises on, or past this decoder's work limit. No other decoder
+    /// should be tried on it.
     struct Refused: Error, CustomStringConvertible {
         let description: String
         init(_ description: String) { self.description = description }
     }
-
-    /// Why a JPEG that ends before its EOI marker is refused. libjpeg-turbo would decode it with
-    /// a warning, but Pillow's `ImageFile.load` raises `OSError("image file is truncated")` when
-    /// the decoder asks for data the file does not have, so upstream never reads such a JPEG.
-    static let truncated =
-        "the JPEG is truncated: it ends before its EOI marker (Pillow: image file is truncated)"
-
-    /// The most scans a JPEG may have. Each scan walks the whole image, so a small file of empty
-    /// scans would otherwise cost time in proportion to its size times the image's. Encoders
-    /// write about 10 for a progressive JPEG and 1 for a baseline one.
-    static let maxScans = 100
 
     /// Errors the decoder throws.
     enum Failure: Error {
@@ -164,9 +267,32 @@ enum LibjpegTurboDecoder {
         case refused(Refused)
     }
 
-    /// True when `bytes` start with a JPEG's SOI marker.
+    /// How much decoding a JPEG took, for the tests' bound on work.
+    struct Work: Equatable, Sendable {
+        /// Scans decoded.
+        var scans = 0
+        /// Blocks whose entropy-coded data the decoder read, or finished with zero bits when the
+        /// data ran out. A block left as it was (in an end-of-band run, or after the data ran
+        /// out) is not counted.
+        var blocks = 0
+        /// Restart markers looked for.
+        var restarts = 0
+        /// Blocks visited one at a time: those decoded, and those of a refinement scan's
+        /// end-of-band runs, checked for coefficients to refine. Blocks left as they are after
+        /// the data runs out, and in a first AC scan's end-of-band runs, are passed over in bulk.
+        var visits = 0
+    }
+
+    /// The most blocks the scans of one JPEG may visit one at a time: 100 passes over three
+    /// components of the largest image allowed. Pillow has no such limit, but a refinement scan
+    /// visits every block of an end-of-band run whether it reads a bit for it or not, so without
+    /// one a small file of many such scans over a large image would cost time in proportion to
+    /// its size times the image's. Well-formed JPEGs visit their blocks about 10 times.
+    static let maxVisits = 100 * 3 * (RGBImage.maxPixels / 64)
+
+    /// True when `bytes` start as a JPEG does for Pillow (`_accept`): FF D8 FF.
     static func isJPEG(_ bytes: [UInt8]) -> Bool {
-        bytes.count > 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF
+        bytes.count >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF
     }
 
     /// `jpeg_natural_order`: zigzag position to natural position, with libjpeg's 16 guard
@@ -174,464 +300,2033 @@ enum LibjpegTurboDecoder {
     static let naturalOrder: [Int] =
         [
             0, 1, 8, 16, 9, 2, 3, 10, 17, 24, 32, 25, 18, 11, 4, 5, 12, 19, 26, 33, 40, 48, 41, 34,
-            27,
-            20, 13, 6, 7, 14, 21, 28, 35, 42, 49, 56, 57, 50, 43, 36, 29, 22, 15, 23, 30, 37, 44,
-            51,
-            58, 59, 52, 45, 38, 31, 39, 46, 53, 60, 61, 54, 47, 55, 62, 63,
+            27, 20, 13, 6, 7, 14, 21, 28, 35, 42, 49, 56, 57, 50, 43, 36, 29, 22, 15, 23, 30, 37,
+            44, 51, 58, 59, 52, 45, 38, 31, 39, 46, 53, 60, 61, 54, 47, 55, 62, 63,
         ] + Array(repeating: 63, count: 16)
 
-    struct HuffmanTable {
-        var maxCode = [Int](repeating: -1, count: 18)
-        var valueOffset = [Int](repeating: 0, count: 17)
-        var values: [UInt8] = []
+    // MARK: Decoding
 
-        init() {}
+    static func decode(_ bytes: [UInt8]) throws(Failure) -> RGBImage {
+        var work = Work()
+        return try decode(bytes, work: &work)
+    }
 
-        /// `jpeg_make_d_derived_tbl`'s canonical codes from the 16 counts and the values.
-        init(counts: [Int], values: [UInt8]) {
-            self.values = values
-            var code = 0
-            var index = 0
-            for length in 1...16 {
-                let count = counts[length - 1]
-                if count > 0 {
-                    valueOffset[length] = index - code
-                    code += count
-                    index += count
-                    maxCode[length] = code - 1
-                } else {
-                    maxCode[length] = -1
-                }
-                code <<= 1
+    /// Decodes `bytes`, counting the work into `work`, refusing past `visitLimit` visits.
+    static func decode(
+        _ bytes: [UInt8], work: inout Work, visitLimit: Int = maxVisits
+    ) throws(Failure) -> RGBImage {
+        // Pillow reads the headers itself first; when libjpeg-turbo then succeeds, its frame is
+        // the one Pillow took its size and mode from.
+        do {
+            _ = try PillowJPEGHeader.read(bytes)
+        } catch {
+            throw .refused(error)
+        }
+        var decompressor = Decompressor(bytes: bytes)
+        decompressor.visitLimit = visitLimit
+        do {
+            let image = try decompressor.run()
+            work = decompressor.work
+            return image
+        } catch {
+            work = decompressor.work
+            switch error {
+            case .refused(let message): throw .refused(Refused(message))
+            case .unsupported(let message): throw .unsupported(Unsupported(message))
+            case .endOfData:
+                throw .refused(
+                    Refused(
+                        "the JPEG ends before libjpeg-turbo stops reading it (Pillow's \"image "
+                            + "file is truncated\")"))
             }
-            maxCode[17] = Int.max
         }
     }
+
+    /// Why decoding stopped.
+    enum Stop: Error {
+        /// Pillow or libjpeg-turbo raises.
+        case refused(String)
+        /// Pillow decodes it; this decoder does not.
+        case unsupported(String)
+        /// A read past the last byte: Pillow's `ImageFile.load` raises "image file is truncated",
+        /// unless the image is already complete. Once it is, also a read past the bytes Pillow
+        /// has handed over (`finishing`).
+        case endOfData
+    }
+
+    /// A refusal naming libjpeg-turbo's error.
+    static func error(_ code: String, _ message: String) -> Stop {
+        .refused("libjpeg-turbo stops with \(code): \(message)")
+    }
+
+    // MARK: Huffman tables
+
+    /// `JHUFF_TBL`: the code counts per length and the symbols, as a DHT segment defines them.
+    struct HuffmanTable {
+        /// `bits[1...16]`; index 0 is unused.
+        var counts: [Int]
+        /// `huffval`, zero past the defined symbols.
+        var values: [UInt8]
+
+        init(counts: [Int], values: [UInt8]) {
+            self.counts = counts
+            self.values = values + [UInt8](repeating: 0, count: 256 - values.count)
+        }
+    }
+
+    /// `std_huff_tables`: Annex K.3's tables, which a sequential JPEG gets in slots 0 and 1 when
+    /// it defines none there by the time decompression starts.
+    static let standardTables: (dc: [HuffmanTable], ac: [HuffmanTable]) = (
+        [
+            HuffmanTable(
+                counts: [0, 0, 1, 5, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0],
+                values: Array(0...11)),
+            HuffmanTable(
+                counts: [0, 0, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0],
+                values: Array(0...11)),
+        ],
+        [
+            HuffmanTable(
+                counts: [0, 0, 2, 1, 3, 3, 2, 4, 3, 5, 5, 4, 4, 0, 0, 1, 0x7D],
+                values: [
+                    0x01, 0x02, 0x03, 0x00, 0x04, 0x11, 0x05, 0x12, 0x21, 0x31, 0x41, 0x06, 0x13,
+                    0x51, 0x61, 0x07, 0x22, 0x71, 0x14, 0x32, 0x81, 0x91, 0xA1, 0x08, 0x23, 0x42,
+                    0xB1, 0xC1, 0x15, 0x52, 0xD1, 0xF0, 0x24, 0x33, 0x62, 0x72, 0x82, 0x09, 0x0A,
+                    0x16, 0x17, 0x18, 0x19, 0x1A, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x34, 0x35,
+                    0x36, 0x37, 0x38, 0x39, 0x3A, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4A,
+                    0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x63, 0x64, 0x65, 0x66, 0x67,
+                    0x68, 0x69, 0x6A, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x83, 0x84,
+                    0x85, 0x86, 0x87, 0x88, 0x89, 0x8A, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98,
+                    0x99, 0x9A, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7, 0xA8, 0xA9, 0xAA, 0xB2, 0xB3,
+                    0xB4, 0xB5, 0xB6, 0xB7, 0xB8, 0xB9, 0xBA, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7,
+                    0xC8, 0xC9, 0xCA, 0xD2, 0xD3, 0xD4, 0xD5, 0xD6, 0xD7, 0xD8, 0xD9, 0xDA, 0xE1,
+                    0xE2, 0xE3, 0xE4, 0xE5, 0xE6, 0xE7, 0xE8, 0xE9, 0xEA, 0xF1, 0xF2, 0xF3, 0xF4,
+                    0xF5, 0xF6, 0xF7, 0xF8, 0xF9, 0xFA,
+                ]),
+            HuffmanTable(
+                counts: [0, 0, 2, 1, 2, 4, 4, 3, 4, 7, 5, 4, 4, 0, 1, 2, 0x77],
+                values: [
+                    0x00, 0x01, 0x02, 0x03, 0x11, 0x04, 0x05, 0x21, 0x31, 0x06, 0x12, 0x41, 0x51,
+                    0x07, 0x61, 0x71, 0x13, 0x22, 0x32, 0x81, 0x08, 0x14, 0x42, 0x91, 0xA1, 0xB1,
+                    0xC1, 0x09, 0x23, 0x33, 0x52, 0xF0, 0x15, 0x62, 0x72, 0xD1, 0x0A, 0x16, 0x24,
+                    0x34, 0xE1, 0x25, 0xF1, 0x17, 0x18, 0x19, 0x1A, 0x26, 0x27, 0x28, 0x29, 0x2A,
+                    0x35, 0x36, 0x37, 0x38, 0x39, 0x3A, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49,
+                    0x4A, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x63, 0x64, 0x65, 0x66,
+                    0x67, 0x68, 0x69, 0x6A, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x82,
+                    0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89, 0x8A, 0x92, 0x93, 0x94, 0x95, 0x96,
+                    0x97, 0x98, 0x99, 0x9A, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7, 0xA8, 0xA9, 0xAA,
+                    0xB2, 0xB3, 0xB4, 0xB5, 0xB6, 0xB7, 0xB8, 0xB9, 0xBA, 0xC2, 0xC3, 0xC4, 0xC5,
+                    0xC6, 0xC7, 0xC8, 0xC9, 0xCA, 0xD2, 0xD3, 0xD4, 0xD5, 0xD6, 0xD7, 0xD8, 0xD9,
+                    0xDA, 0xE2, 0xE3, 0xE4, 0xE5, 0xE6, 0xE7, 0xE8, 0xE9, 0xEA, 0xF2, 0xF3, 0xF4,
+                    0xF5, 0xF6, 0xF7, 0xF8, 0xF9, 0xFA,
+                ]),
+        ]
+    )
+
+    /// `d_derived_tbl`, laid out in one array: the 256-entry lookahead table (code length << 8 |
+    /// symbol, or 9 << 8 for a longer code), `maxcode[0...17]`, `valoffset[0...17]` and the 256
+    /// symbols.
+    enum Derived {
+        static let lookup = 0
+        static let maxcode = 256
+        static let valoffset = 274
+        static let values = 292
+        static let size = 548
+
+        /// `jpeg_make_d_derived_tbl`, with its checks, appended to `tables`. A DC table's symbols
+        /// may go up to 15, or to 16 in a lossless JPEG.
+        static func append(
+            _ table: HuffmanTable?, isDC: Bool, slot: Int, to tables: inout [Int32],
+            largestDCSymbol: Int = 15
+        ) throws(Stop) {
+            guard (0..<4).contains(slot), let table else {
+                throw error(
+                    "JERR_NO_HUFF_TABLE",
+                    "a scan uses \(isDC ? "DC" : "AC") Huffman table \(slot), which is not defined")
+            }
+            var sizes: [Int] = []
+            for length in 1...16 {
+                let count = table.counts[length]
+                guard sizes.count + count <= 256 else {
+                    throw error("JERR_BAD_HUFF_TABLE", "a Huffman table has over 256 codes")
+                }
+                sizes += [Int](repeating: length, count: count)
+            }
+            // Figure C.2: the canonical codes; none may be all ones.
+            var codes = [Int](repeating: 0, count: sizes.count)
+            var code = 0
+            var p = 0
+            if var size = sizes.first {
+                while p < sizes.count {
+                    while p < sizes.count && sizes[p] == size {
+                        codes[p] = code
+                        p += 1
+                        code += 1
+                    }
+                    guard code < 1 << size else {
+                        throw error("JERR_BAD_HUFF_TABLE", "a Huffman table's codes do not fit")
+                    }
+                    code <<= 1
+                    size += 1
+                }
+            }
+            let base = tables.count
+            tables += [Int32](repeating: 0, count: size)
+            for i in 0..<256 { tables[base + lookup + i] = 9 << 8 }
+            p = 0
+            for length in 1...16 {
+                if table.counts[length] > 0 {
+                    tables[base + valoffset + length] = Int32(p - codes[p])
+                    p += table.counts[length]
+                    tables[base + maxcode + length] = Int32(codes[p - 1])
+                } else {
+                    tables[base + maxcode + length] = -1
+                }
+            }
+            tables[base + valoffset + 17] = 0
+            tables[base + maxcode + 17] = 0xFFFFF
+            p = 0
+            for length in 1...8 {
+                for _ in 0..<table.counts[length] {
+                    let first = codes[p] << (8 - length)
+                    for fill in 0..<(1 << (8 - length)) {
+                        tables[base + lookup + first + fill] =
+                            Int32(length << 8 | Int(table.values[p]))
+                    }
+                    p += 1
+                }
+            }
+            for i in 0..<256 { tables[base + values + i] = Int32(table.values[i]) }
+            if isDC, table.values.prefix(sizes.count).contains(where: { $0 > largestDCSymbol }) {
+                throw error(
+                    "JERR_BAD_HUFF_TABLE",
+                    "a DC Huffman table has a symbol above \(largestDCSymbol)")
+            }
+        }
+    }
+
+    // MARK: The decompressor
+
+    /// The colour space libjpeg-turbo takes the components to be in (`jpeg_color_space`).
+    enum ColorSpace { case grey, ycc, rgb, cmyk, ycck }
 
     struct Component {
         var id: Int
         var h: Int
         var v: Int
-        var quantTable: Int
-        /// The quantization table as it stood at the component's first scan, which is when
-        /// libjpeg latches it (`latch_quant_tables`).
-        var quant: [Int]?
-        /// Blocks per line and per column of the coefficient grid, padded to whole MCUs.
-        var blocksPerLine = 0
-        var blocksPerColumn = 0
-        /// Samples per line and column the component really has (`downsampled_width`, `_height`).
-        var width = 0
-        var height = 0
-        var coefficients: [Int16] = []
+        /// The quantization table selector as the frame header has it, a whole byte.
+        var quantSelector: Int
         var dcTable = 0
         var acTable = 0
-        var predictor = 0
-    }
-
-    /// Reads entropy-coded bits, undoing 0xFF00 stuffing and stopping at markers.
-    struct BitReader {
-        let bytes: [UInt8]
-        var position: Int
-        var buffer: UInt64 = 0
-        var count = 0
-        /// Set once a marker is reached; libjpeg then supplies zeros.
-        var hitMarker = false
-
-        init(bytes: [UInt8], position: Int) {
-            self.bytes = bytes
-            self.position = position
-        }
-
-        mutating func fill() {
-            while count <= 56 {
-                var byte: UInt64 = 0
-                if !hitMarker, position < bytes.count {
-                    let b = bytes[position]
-                    if b == 0xFF {
-                        let next = position + 1 < bytes.count ? bytes[position + 1] : 0xD9
-                        if next == 0x00 {
-                            byte = 0xFF
-                            position += 2
-                        } else {
-                            hitMarker = true
-                        }
-                    } else {
-                        byte = UInt64(b)
-                        position += 1
-                    }
-                }
-                buffer |= byte << UInt64(56 - count)
-                count += 8
-            }
-        }
-
-        mutating func bits(_ n: Int) -> Int {
-            if n == 0 { return 0 }
-            if count < n { fill() }
-            let value = Int(buffer >> UInt64(64 - n))
-            buffer <<= UInt64(n)
-            count -= n
-            return value
-        }
-
-        mutating func bit() -> Int { bits(1) }
-
-        mutating func decode(_ table: HuffmanTable) throws(Unsupported) -> Int {
-            var code = bit()
-            var length = 1
-            while code > table.maxCode[length] {
-                code = (code << 1) | bit()
-                length += 1
-                if length > 16 {
-                    throw Unsupported("a Huffman code is longer than 16 bits")
-                }
-            }
-            let index = table.valueOffset[length] + code
-            guard index >= 0, index < table.values.count else {
-                throw Unsupported("a Huffman code has no value")
-            }
-            return Int(table.values[index])
-        }
-
-        /// `HUFF_EXTEND`: an s-bit magnitude as a signed value.
-        mutating func received(_ s: Int) -> Int {
-            if s == 0 { return 0 }
-            let value = bits(s)
-            return value < (1 << (s - 1)) ? value - (1 << s) + 1 : value
-        }
-
-        /// Drops buffered bits and moves past the restart marker that must follow.
-        ///
-        /// - Throws: ``Refused`` (``LibjpegTurboDecoder/truncated``) when the data ends with
-        ///   neither the marker nor an EOI, as Pillow refuses a truncated file; ``Unsupported``
-        ///   when the marker is missing from a file that goes on.
-        mutating func restart() throws {
-            buffer = 0
-            count = 0
-            hitMarker = false
-            var sawEOI = false
-            while position + 1 < bytes.count {
-                if bytes[position] == 0xFF, (0xD0...0xD7).contains(bytes[position + 1]) {
-                    position += 2
-                    return
-                }
-                sawEOI = sawEOI || (bytes[position] == 0xFF && bytes[position + 1] == 0xD9)
-                position += 1
-            }
-            if !sawEOI {
-                throw Refused(LibjpegTurboDecoder.truncated)
-            }
-            throw Unsupported("a restart marker is missing")
-        }
-    }
-
-    // MARK: Decoding
-
-    static func decode(_ bytes: [UInt8]) throws(Failure) -> RGBImage {
-        do {
-            return try decodeChecked(bytes)
-        } catch let error as Refused {
-            throw .refused(error)
-        } catch let error as Unsupported {
-            throw .unsupported(error)
-        } catch {
-            throw .unsupported(Unsupported("\(error)"))
-        }
-    }
-
-    static func decodeChecked(_ bytes: [UInt8]) throws -> RGBImage {
-        guard isJPEG(bytes) else { throw Unsupported("not a JPEG") }
-        var quantTables = [[Int]](repeating: [], count: 4)
-        var dcTables = [HuffmanTable](repeating: HuffmanTable(), count: 4)
-        var acTables = [HuffmanTable](repeating: HuffmanTable(), count: 4)
-        var components: [Component] = []
+        /// The quantization table latched at the component's first scan (`latch_quant_tables`),
+        /// in natural order; nil until a scan reaches the component.
+        var quant: [UInt16]?
+        /// The component's blocks (`width_in_blocks`, `height_in_blocks`) and samples
+        /// (`downsampled_width`, `downsampled_height`).
+        var widthInBlocks = 0
+        var heightInBlocks = 0
         var width = 0
         var height = 0
-        var progressive = false
+        /// The coefficient grid, padded to whole MCUs: blocks per line and per column.
+        var gridWidth = 0
+        var gridHeight = 0
+        /// Where the component's blocks start in the shared coefficient storage, in blocks.
+        var gridOffset = 0
+        /// `coef_bits` and its copy from before the component's latest scan, for progressive
+        /// JPEGs: the successive-approximation bit of each coefficient so far, -1 before any.
+        var coefBits = [Int](repeating: -1, count: 64)
+        var previousCoefBits = [Int](repeating: 0, count: 64)
+    }
+
+    /// The scan being decoded: what `get_sos` read.
+    struct Scan {
+        var components: [Int] = []
+        var ss = 0
+        var se = 0
+        var ah = 0
+        var al = 0
+    }
+
+    /// What stops one MCU's decode: more of Pillow's buffer is needed (libjpeg-turbo suspends and
+    /// starts the MCU again with it), the data has ended, or a DC coefficient of a progressive
+    /// JPEG overflows (`JERR_BAD_DCT_COEF`).
+    enum Interrupt: Error { case chunk, end, overflow }
+
+    /// Pillow's `ImageFile.MAXBLOCK`: `ImageFile.load` hands the decoder 65,536 more bytes each
+    /// time it suspends, and libjpeg-turbo takes its fast path only with plenty of them at hand.
+    static let readSize = 65_536
+
+    /// libjpeg-turbo's bit buffer (`jdhuff.h`): a 64-bit register, refilled to at least 57 bits
+    /// on the slow path and by 48 bits on the fast one, over Pillow's suspending source.
+    struct BitReader {
+        let input: UnsafeBufferPointer<UInt8>
+        var position: Int
+        var chunkEnd: Int
+        var buffer: UInt64 = 0
+        var bitsLeft = 0
+        var unreadMarker: Int
+        var insufficient = false
+
+        /// The byte at `index`, or zero past the end (never read on the paths that use it).
+        @inline(__always) func peek(_ index: Int) -> Int {
+            index < input.count ? Int(input[index]) : 0
+        }
+
+        /// The suspension for a read at `position`.
+        @inline(__always) func suspension() -> Interrupt {
+            chunkEnd < input.count ? .chunk : .end
+        }
+
+        /// `jpeg_fill_bit_buffer`: loads bytes until 57 bits are held or a marker is met, undoing
+        /// FF 00 stuffing and swallowing the FF fill before a marker. Past the marker that ends
+        /// the segment, a request for more bits than are left gets zero bits and marks the data
+        /// as exhausted (`JWRN_HIT_MARKER`).
+        mutating func fill(_ nbits: Int) throws(Interrupt) {
+            if unreadMarker == 0 {
+                while bitsLeft < 57 {
+                    guard position < chunkEnd else { throw suspension() }
+                    var c = Int(input[position])
+                    position += 1
+                    if c == 0xFF {
+                        repeat {
+                            guard position < chunkEnd else { throw suspension() }
+                            c = Int(input[position])
+                            position += 1
+                        } while c == 0xFF
+                        if c == 0 {
+                            c = 0xFF
+                        } else {
+                            unreadMarker = c
+                            break
+                        }
+                    }
+                    buffer = buffer << 8 | UInt64(c)
+                    bitsLeft += 8
+                }
+                if unreadMarker == 0 { return }
+            }
+            if nbits > bitsLeft {
+                insufficient = true
+                buffer <<= UInt64(57 - bitsLeft)
+                bitsLeft = 57
+            }
+        }
+
+        /// `CHECK_BIT_BUFFER` and `GET_BITS`.
+        @inline(__always) mutating func bits(_ n: Int) throws(Interrupt) -> Int {
+            if bitsLeft < n { try fill(n) }
+            bitsLeft -= n
+            return Int(truncatingIfNeeded: buffer >> UInt64(bitsLeft)) & (1 << n - 1)
+        }
+
+        /// `HUFF_DECODE` and `jpeg_huff_decode`: a code longer than 16 bits gives symbol 0
+        /// (`JWRN_HUFF_BAD_CODE`).
+        @inline(__always) mutating func decode(_ t: UnsafePointer<Int32>) throws(Interrupt) -> Int {
+            var length = 1
+            if bitsLeft < 8 {
+                try fill(0)
+                if bitsLeft < 8 { return try decodeLong(t, length) }
+            }
+            let entry = Int(
+                t[Derived.lookup + Int(truncatingIfNeeded: buffer >> UInt64(bitsLeft - 8)) & 0xFF])
+            length = entry >> 8
+            if length <= 8 {
+                bitsLeft -= length
+                return entry & 0xFF
+            }
+            return try decodeLong(t, length)
+        }
+
+        mutating func decodeLong(_ t: UnsafePointer<Int32>, _ minimum: Int) throws(Interrupt) -> Int
+        {
+            var length = minimum
+            var code = try bits(length)
+            while code > Int(t[Derived.maxcode + length]) {
+                code = code << 1 | (try bits(1))
+                length += 1
+            }
+            if length > 16 { return 0 }
+            return Int(t[Derived.values + (code + Int(t[Derived.valoffset + length])) & 0xFF])
+        }
+
+        /// `GET_BYTE` of the fast path: a marker reads as zero bytes and is remembered, without
+        /// moving past it; so is FF FF, which the slow path reads differently.
+        @inline(__always) mutating func fastByte() {
+            let c0 = peek(position)
+            position += 1
+            let c1 = peek(position)
+            buffer = buffer << 8 | UInt64(c0)
+            bitsLeft += 8
+            if c0 == 0xFF {
+                position += 1
+                if c1 != 0 {
+                    unreadMarker = c1
+                    position -= 2
+                    buffer &= ~0xFF
+                }
+            }
+        }
+
+        /// `FILL_BIT_BUFFER_FAST`: six bytes when 16 bits or fewer are left.
+        @inline(__always) mutating func fastFill() {
+            if bitsLeft <= 16 {
+                fastByte()
+                fastByte()
+                fastByte()
+                fastByte()
+                fastByte()
+                fastByte()
+            }
+        }
+
+        /// `FILL_BIT_BUFFER_FAST` and `GET_BITS`.
+        @inline(__always) mutating func fastBits(_ n: Int) -> Int {
+            fastFill()
+            bitsLeft -= n
+            return Int(truncatingIfNeeded: buffer >> UInt64(bitsLeft)) & (1 << n - 1)
+        }
+
+        /// `HUFF_DECODE_FAST`.
+        @inline(__always) mutating func fastDecode(_ t: UnsafePointer<Int32>) -> Int {
+            fastFill()
+            let entry = Int(
+                t[Derived.lookup + Int(truncatingIfNeeded: buffer >> UInt64(bitsLeft - 8)) & 0xFF])
+            var length = entry >> 8
+            bitsLeft -= length
+            if length <= 8 { return entry & 0xFF }
+            var code = Int(truncatingIfNeeded: buffer >> UInt64(bitsLeft)) & (1 << length - 1)
+            while code > Int(t[Derived.maxcode + length]) {
+                bitsLeft -= 1
+                code = code << 1 | Int(truncatingIfNeeded: buffer >> UInt64(bitsLeft)) & 1
+                length += 1
+            }
+            if length > 16 { return 0 }
+            return Int(t[Derived.values + (code + Int(t[Derived.valoffset + length])) & 0xFF])
+        }
+    }
+
+    /// `HUFF_EXTEND`: an s-bit magnitude as a signed value.
+    @inline(__always) static func extend(_ x: Int, _ s: Int) -> Int {
+        x < 1 << (s - 1) ? x - (1 << s) + 1 : x
+    }
+
+    /// The state libjpeg-turbo and Pillow's decoder keep while reading one JPEG.
+    struct Decompressor {
+        let bytes: [UInt8]
+        var work = Work()
+
+        // The source manager and the marker reader.
+        var position = 0
+        var chunkEnd: Int
+        var unreadMarker = 0
+        var sawSOI = false
+        var sawSOF = false
+        /// Set once every row of a single-scan JPEG is out: Pillow's decoder then stops where the
+        /// bytes it has been handed end (`jpeg_finish_decompress` suspends there), and reads no
+        /// more of the file.
+        var finishing = false
+        var nextRestartNumber = 0
+        var inputScanNumber = 0
+
+        // Tables and markers that outlive a tables-only datastream.
+        var quantTables: [[UInt16]?] = [nil, nil, nil, nil]
+        var dcTables: [HuffmanTable?] = [nil, nil, nil, nil]
+        var acTables: [HuffmanTable?] = [nil, nil, nil, nil]
         var restartInterval = 0
         var sawJFIF = false
-        var adobeTransform: Int?
+        var sawAdobe = false
+        var adobeTransform = 0
+
+        // The frame.
+        var progressive = false
+        var lossless = false
+        var arithmetic = false
+        var precision = 0
+        var width = 0
+        var height = 0
+        var components: [Component] = []
         var maxH = 1
         var maxV = 1
         var mcusPerLine = 0
-        var mcusPerColumn = 0
-        var position = 2
-        var scans = 0
-        var allocatedCoefficients = false
+        var totalIMCURows = 0
+        var hasMultipleScans = false
+        var colorSpace = ColorSpace.grey
 
-        func u16(_ at: Int) throws -> Int {
-            guard at + 1 < bytes.count else { throw Refused(Self.truncated) }
-            return Int(bytes[at]) << 8 | Int(bytes[at + 1])
+        // The scan and the coefficients.
+        var scan = Scan()
+        var visitLimit = LibjpegTurboDecoder.maxVisits
+        /// Every component's blocks, 64 coefficients each, in natural order: the whole image for
+        /// a JPEG of several scans, one row of MCUs for a single-scan one.
+        var coefficients: [Int16] = []
+        /// Per block, which coefficients are nonzero (bit = natural position), for refinement
+        /// scans to pass over blocks with nothing to refine.
+        var nonzero: [UInt64] = []
+        /// `last_good_iMCU_row`: the last MCU row the latest scan reached before its data ran out.
+        var lastGoodIMCURow = 0
+        /// The samples of each component after the inverse DCT, `widthInBlocks * 8` per row.
+        var planes: [[UInt8]] = []
+
+        init(bytes: [UInt8]) {
+            self.bytes = bytes
+            chunkEnd = min(bytes.count, LibjpegTurboDecoder.readSize)
         }
 
-        markers: while true {
-            // Find the next marker, skipping fill bytes.
-            while position < bytes.count, bytes[position] != 0xFF { position += 1 }
-            while position < bytes.count, bytes[position] == 0xFF { position += 1 }
-            guard position < bytes.count else { throw Refused(Self.truncated) }
-            let marker = bytes[position]
-            position += 1
-            switch marker {
-            case 0xD9:
-                break markers
-            case 0xD0...0xD7, 0x01:
-                continue
-            default:
-                break
-            }
-            let length = try u16(position)
-            let start = position + 2
-            let end = position + length
-            guard length >= 2 else { throw Unsupported("a marker's length is below 2") }
-            guard end <= bytes.count else { throw Refused(Self.truncated) }
-            switch marker {
-            case 0xE0:
-                // examine_app0: "JFIF\0" with at least 14 bytes of data.
-                if length - 2 >= 14,
-                    Array(bytes[start..<(start + 5)]) == [0x4A, 0x46, 0x49, 0x46, 0]
-                {
-                    sawJFIF = true
+        /// What `ImagingJpegDecode` does with the whole file: read the header, start
+        /// decompression (which consumes every scan of a multi-scan JPEG), read the rows, then
+        /// finish, which reads the markers after a single scan up to EOI.
+        mutating func run() throws(Stop) -> RGBImage {
+            try readHeader()
+            try startDecompress()
+            if hasMultipleScans {
+                try consumeScans()
+                guard !arithmetic, !lossless, components.count != 4 else {
+                    throw unsupportedFeature()
                 }
-            case 0xEE:
-                // examine_app14: "Adobe" with at least 12 bytes; the transform is the last.
-                if length - 2 >= 12,
-                    Array(bytes[start..<(start + 5)]) == [0x41, 0x64, 0x6F, 0x62, 0x65]
-                {
-                    adobeTransform = Int(bytes[start + 11])
-                }
-            case 0xDB:
-                var at = start
-                while at < end {
-                    let precision = Int(bytes[at] >> 4)
-                    let id = Int(bytes[at] & 15)
-                    at += 1
-                    guard id < 4, precision <= 1 else {
-                        throw Unsupported("a quantization table is bad")
-                    }
-                    guard at + 64 * (precision + 1) <= end else {
-                        throw Unsupported("a quantization table overruns its segment")
-                    }
-                    var table = [Int](repeating: 0, count: 64)
-                    for k in 0..<64 {
-                        let value = precision == 0 ? Int(bytes[at]) : try u16(at)
-                        at += precision == 0 ? 1 : 2
-                        table[naturalOrder[k]] = value
-                    }
-                    quantTables[id] = table
-                }
-            case 0xC4:
-                var at = start
-                while at < end {
-                    let tableClass = Int(bytes[at] >> 4)
-                    let id = Int(bytes[at] & 15)
-                    guard id < 4, tableClass <= 1, at + 17 <= end else {
-                        throw Unsupported("a Huffman table is bad")
-                    }
-                    let counts = (0..<16).map { Int(bytes[at + 1 + $0]) }
-                    let total = counts.reduce(0, +)
-                    guard at + 17 + total <= end else {
-                        throw Unsupported("a Huffman table overruns")
-                    }
-                    var code = 0
-                    for length in 1...16 {
-                        code <<= 1
-                        let count = counts[length - 1]
-                        guard code + count < (1 << length) else {
-                            throw Unsupported("a Huffman table has an invalid code tree")
-                        }
-                        code += count
-                    }
-                    let values = Array(bytes[(at + 17)..<(at + 17 + total)])
-                    // jpeg_make_d_derived_tbl: a DC symbol is a bit count of at most 15.
-                    guard total <= 256, tableClass == 1 || values.allSatisfy({ $0 <= 15 }) else {
-                        throw Unsupported("a Huffman table has a bad value")
-                    }
-                    let table = HuffmanTable(counts: counts, values: values)
-                    if tableClass == 0 { dcTables[id] = table } else { acTables[id] = table }
-                    at += 17 + total
-                }
-            case 0xDD:
-                guard length == 4 else { throw Unsupported("a DRI segment is bad") }
-                restartInterval = try u16(start)
-            case 0xC0, 0xC1, 0xC2:
-                guard components.isEmpty else { throw Unsupported("the JPEG has two frames") }
-                guard length >= 8 else { throw Unsupported("a frame header is cut short") }
-                progressive = marker == 0xC2
-                guard bytes[start] == 8 else { throw Unsupported("only 8-bit JPEGs are covered") }
-                height = try u16(start + 1)
-                width = try u16(start + 3)
-                let count = Int(bytes[start + 5])
-                guard width > 0, height > 0 else { throw Unsupported("the JPEG has no size (DNL)") }
-                guard count == 1 || count == 3 else {
-                    throw Unsupported("\(count)-component JPEGs are not covered")
-                }
-                guard length == 8 + 3 * count else {
-                    throw Unsupported("a frame header's length does not fit its components")
-                }
-                guard max(1, width) * max(1, height) <= RGBImage.maxPixels else {
-                    throw Refused(
-                        "the image is \(width * height) pixels; the limit is \(RGBImage.maxPixels)")
-                }
-                components = (0..<count).map { i in
-                    let at = start + 6 + i * 3
-                    return Component(
-                        id: Int(bytes[at]), h: Int(bytes[at + 1] >> 4), v: Int(bytes[at + 1] & 15),
-                        quantTable: Int(bytes[at + 2] & 3))
-                }
-                maxH = components.map(\.h).max() ?? 1
-                maxV = components.map(\.v).max() ?? 1
-                guard components.allSatisfy({ (1...4).contains($0.h) && (1...4).contains($0.v) })
-                else { throw Unsupported("a sampling factor is out of range") }
-                // jinit_upsampler refuses fractional ratios; jdinput refuses more than 10 blocks
-                // per MCU (D_MAX_BLOCKS_IN_MCU).
-                guard components.allSatisfy({ maxH % $0.h == 0 && maxV % $0.v == 0 }) else {
-                    throw Unsupported("a sampling ratio is fractional")
-                }
-                guard count == 1 || components.reduce(0, { $0 + $1.h * $1.v }) <= 10 else {
-                    throw Unsupported("an MCU has more than 10 blocks")
-                }
-                mcusPerLine = (width + 8 * maxH - 1) / (8 * maxH)
-                mcusPerColumn = (height + 8 * maxV - 1) / (8 * maxV)
-                for i in components.indices {
-                    components[i].blocksPerLine = mcusPerLine * components[i].h
-                    components[i].blocksPerColumn = mcusPerColumn * components[i].v
-                    components[i].width = (width * components[i].h + maxH - 1) / maxH
-                    components[i].height = (height * components[i].v + maxV - 1) / maxV
-                }
-            case 0xC3, 0xC5...0xC7, 0xC9...0xCB, 0xCD...0xCF:
-                throw Unsupported(
-                    "lossless, hierarchical and arithmetic-coded JPEGs are not covered")
-            case 0xDA:
-                guard !components.isEmpty else {
-                    throw Unsupported("a scan comes before the frame")
-                }
-                scans += 1
-                guard scans <= maxScans else {
-                    throw Refused("the JPEG has more than \(maxScans) scans")
-                }
-                guard length >= 3 else { throw Unsupported("a scan header is cut short") }
-                let count = Int(bytes[start])
-                guard (1...4).contains(count), length == 6 + 2 * count else {
-                    throw Unsupported("a scan header's length does not fit its components")
-                }
-                var scan: [Int] = []
-                for i in 0..<count {
-                    let at = start + 1 + i * 2
-                    guard let index = components.firstIndex(where: { $0.id == Int(bytes[at]) })
-                    else {
-                        throw Unsupported("a scan names a component the frame lacks")
-                    }
-                    components[index].dcTable = Int(bytes[at + 1] >> 4) & 3
-                    components[index].acTable = Int(bytes[at + 1] & 15) & 3
-                    if components[index].quant == nil {
-                        let table = quantTables[components[index].quantTable]
-                        guard table.count == 64 else {
-                            throw Unsupported("a component's quantization table is missing")
-                        }
-                        components[index].quant = table
-                    }
-                    scan.append(index)
-                }
-                let at = start + 1 + count * 2
-                let ss = Int(bytes[at])
-                let se = Int(bytes[at + 1])
-                let ah = Int(bytes[at + 2] >> 4)
-                let al = Int(bytes[at + 2] & 15)
-                // The parameter checks of jdphuff.c's start_pass_phuff_decoder. (libjpeg only
-                // warns when a sequential scan's are off, and its decoder, like this one, never
-                // reads them.)
-                if progressive {
-                    let dcScan = ss == 0
-                    guard dcScan ? se == 0 : (ss <= se && se <= 63 && count == 1),
-                        ah == 0 || al == ah - 1, al <= 13
-                    else { throw Unsupported("a progressive scan's parameters are bad") }
-                }
-                for index in scan {
-                    let component = components[index]
-                    if !progressive || (ss == 0 && ah == 0) {
-                        guard !dcTables[component.dcTable].values.isEmpty else {
-                            throw Unsupported("a scan's DC Huffman table is missing")
-                        }
-                    }
-                    if !progressive || ss != 0 {
-                        guard !acTables[component.acTable].values.isEmpty else {
-                            throw Unsupported("a scan's AC Huffman table is missing")
-                        }
-                    }
-                }
-                if !allocatedCoefficients {
-                    for i in components.indices {
-                        components[i].coefficients = [Int16](
-                            repeating: 0,
-                            count: components[i].blocksPerLine * components[i].blocksPerColumn * 64)
-                    }
-                    allocatedCoefficients = true
-                }
-                var reader = BitReader(bytes: bytes, position: end)
-                try decodeScan(
-                    &components, scan: scan, reader: &reader, dcTables: dcTables,
-                    acTables: acTables, progressive: progressive, ss: ss, se: se, ah: ah, al: al,
-                    restartInterval: restartInterval, mcusPerLine: mcusPerLine,
-                    mcusPerColumn: mcusPerColumn)
-                position = reader.position
-                continue markers
-            default:
-                break
-            }
-            position = end
-        }
-        guard !components.isEmpty else { throw Unsupported("the JPEG has no frame") }
-
-        // default_decompress_parms: the colour space libjpeg guesses for three components.
-        var ycc = true
-        if components.count == 3 {
-            if sawJFIF {
-                ycc = true
-            } else if let adobeTransform {
-                ycc = adobeTransform != 0
+                makePlanesFromCoefficients()
             } else {
-                let ids = components.map(\.id)
-                ycc = ids != [82, 71, 66]
+                try decodeScan(singleScan: true)
+                // jpeg_finish_decompress reads to EOI. The image is complete, so Pillow takes the
+                // end of the bytes it has handed over as the end, without reading more of the
+                // file, but a broken marker before it still raises.
+                finishing = true
+                do throws(Stop) {
+                    if try readMarkers() == .sos {
+                        throw error("JERR_EOI_EXPECTED", "a scan follows a single-scan image")
+                    }
+                } catch {
+                    if case .endOfData = error {} else { throw error }
+                }
+                guard components.count != 4 else { throw unsupportedFeature() }
+            }
+            return output()
+        }
+
+        func unsupportedFeature() -> Stop {
+            if arithmetic { return .unsupported("arithmetic-coded JPEGs are not covered") }
+            if lossless { return .unsupported("lossless JPEGs are not covered") }
+            return .unsupported("4-component (CMYK and YCCK) JPEGs are not covered")
+        }
+
+        // MARK: Reading bytes
+
+        /// Makes `index` readable: Pillow hands the decoder another 65,536 bytes each time it
+        /// asks, until the file ends or the image is complete.
+        @inline(__always) mutating func need(_ index: Int) throws(Stop) {
+            guard index < bytes.count else { throw .endOfData }
+            while index >= chunkEnd {
+                if finishing { throw .endOfData }
+                chunkEnd = min(bytes.count, chunkEnd + readSize)
             }
         }
 
-        let planes = try components.map { component throws(Unsupported) in
-            guard let quant = component.quant else {
-                throw Unsupported("a component is in no scan")
-            }
-            return inverseDCT(component, quant: quant)
+        /// `INPUT_BYTE`.
+        mutating func byte() throws(Stop) -> Int {
+            try need(position)
+            defer { position += 1 }
+            return Int(bytes[position])
         }
-        let full = components.indices.map { i in
-            upsample(
-                planes[i], component: components[i], maxH: maxH, maxV: maxV, width: width,
-                height: height)
+
+        /// `INPUT_2BYTES`.
+        mutating func u16() throws(Stop) -> Int {
+            let high = try byte()
+            return high << 8 | (try byte())
         }
-        var pixels = [UInt8](repeating: 0, count: width * height * 3)
-        if components.count == 1 {
-            for index in 0..<(width * height) {
-                let level = full[0][index]
-                pixels[index * 3] = level
-                pixels[index * 3 + 1] = level
-                pixels[index * 3 + 2] = level
+
+        /// `skip_input_data`.
+        mutating func skip(_ count: Int) {
+            if count > 0 { position += count }
+        }
+
+        /// `next_marker`: skips anything but FF, FF fill, and FF 00.
+        mutating func nextMarker() throws(Stop) {
+            while true {
+                var c = try byte()
+                while c != 0xFF { c = try byte() }
+                repeat { c = try byte() } while c == 0xFF
+                if c != 0 {
+                    unreadMarker = c
+                    return
+                }
             }
-        } else if ycc {
+        }
+
+        /// `first_marker`: SOI, with nothing before it.
+        mutating func firstMarker() throws(Stop) {
+            let c = try byte()
+            let c2 = try byte()
+            guard c == 0xFF, c2 == 0xD8 else {
+                throw error("JERR_NO_SOI", "the datastream does not start with SOI")
+            }
+            unreadMarker = c2
+        }
+
+        // MARK: Markers
+
+        enum Reached: Equatable { case sos, eoi }
+
+        /// `read_markers`: processes markers up to SOS or EOI.
+        mutating func readMarkers() throws(Stop) -> Reached {
+            while true {
+                if unreadMarker == 0 {
+                    if !sawSOI { try firstMarker() } else { try nextMarker() }
+                }
+                let marker = unreadMarker
+                switch marker {
+                case 0xD8: try getSOI()
+                case 0xC0, 0xC1: try getSOF(progressive: false, lossless: false, arithmetic: false)
+                case 0xC2: try getSOF(progressive: true, lossless: false, arithmetic: false)
+                case 0xC3: try getSOF(progressive: false, lossless: true, arithmetic: false)
+                case 0xC9: try getSOF(progressive: false, lossless: false, arithmetic: true)
+                case 0xCA: try getSOF(progressive: true, lossless: false, arithmetic: true)
+                case 0xCB: try getSOF(progressive: false, lossless: true, arithmetic: true)
+                case 0xC5, 0xC6, 0xC7, 0xC8, 0xCD, 0xCE, 0xCF:
+                    throw error(
+                        "JERR_SOF_UNSUPPORTED",
+                        "SOF type 0x\(PillowJPEGHeader.hex(UInt8(marker))) is not supported")
+                case 0xDA:
+                    try getSOS()
+                    unreadMarker = 0
+                    return .sos
+                case 0xD9:
+                    unreadMarker = 0
+                    return .eoi
+                case 0xCC: try getDAC()
+                case 0xC4: try getDHT()
+                case 0xDB: try getDQT()
+                case 0xDD: try getDRI()
+                case 0xE0, 0xEE: try getInterestingAPPn(marker)
+                case 0xE1...0xED, 0xEF, 0xFE, 0xDC: try skipVariable()
+                case 0xD0...0xD7, 0x01: break
+                default:
+                    throw error(
+                        "JERR_UNKNOWN_MARKER",
+                        "marker 0x\(PillowJPEGHeader.hex(UInt8(marker))) is reserved or unknown")
+                }
+                unreadMarker = 0
+            }
+        }
+
+        mutating func getSOI() throws(Stop) {
+            guard !sawSOI else { throw error("JERR_SOI_DUPLICATE", "the JPEG has two SOI markers") }
+            restartInterval = 0
+            sawJFIF = false
+            sawAdobe = false
+            adobeTransform = 0
+            sawSOI = true
+        }
+
+        mutating func getSOF(progressive: Bool, lossless: Bool, arithmetic: Bool) throws(Stop) {
+            guard !sawSOF else { throw error("JERR_SOF_DUPLICATE", "the JPEG has two SOF markers") }
+            self.progressive = progressive
+            self.lossless = lossless
+            self.arithmetic = arithmetic
+            let length = try u16()
+            precision = try byte()
+            height = try u16()
+            width = try u16()
+            let count = try byte()
+            guard height > 0, width > 0, count > 0 else {
+                throw error("JERR_EMPTY_IMAGE", "the frame is empty (DNL is not supported)")
+            }
+            guard length - 8 == count * 3 else {
+                throw error(
+                    "JERR_BAD_LENGTH", "a frame header's length does not fit its components")
+            }
+            components = []
+            for _ in 0..<count {
+                let id = try byte()
+                let factors = try byte()
+                let table = try byte()
+                components.append(
+                    Component(id: id, h: factors >> 4, v: factors & 15, quantSelector: table))
+            }
+            sawSOF = true
+        }
+
+        mutating func getSOS() throws(Stop) {
+            guard sawSOF else { throw error("JERR_SOS_NO_SOF", "a scan comes before the frame") }
+            let length = try u16()
+            let count = try byte()
+            guard length == count * 2 + 6, (1...4).contains(count) else {
+                throw error("JERR_BAD_LENGTH", "a scan header's length does not fit its components")
+            }
+            // `cur_comp_info`, by scan position. libjpeg-turbo looks a component up only among
+            // the first four of the frame, and only while the scan slot numbered by its frame
+            // position is still empty, which also refuses some scans that list their components
+            // out of frame order (2 then 1, but not 3 then 2).
+            var slots = [Int](repeating: -1, count: 4)
+            for i in 0..<count {
+                let id = try byte()
+                let tables = try byte()
+                guard
+                    let index = (0..<min(components.count, 4)).first(where: {
+                        components[$0].id == id && slots[$0] < 0
+                    })
+                else {
+                    throw error(
+                        "JERR_BAD_COMPONENT_ID",
+                        "a scan names component \(id), which the frame lacks or the scan repeats")
+                }
+                slots[i] = index
+                components[index].dcTable = tables >> 4
+                components[index].acTable = tables & 15
+                guard !slots[0..<i].contains(index) else {
+                    throw error("JERR_BAD_COMPONENT_ID", "a scan names component \(id) twice")
+                }
+            }
+            scan.components = Array(slots.prefix(count))
+            scan.ss = try byte()
+            scan.se = try byte()
+            let approximation = try byte()
+            scan.ah = approximation >> 4
+            scan.al = approximation & 15
+            nextRestartNumber = 0
+            inputScanNumber += 1
+        }
+
+        mutating func getDHT() throws(Stop) {
+            var length = try u16() - 2
+            while length > 16 {
+                let index = try byte()
+                var counts = [0]
+                for _ in 1...16 { counts.append(try byte()) }
+                let count = counts.reduce(0, +)
+                length -= 17
+                guard count <= 256, count <= length else {
+                    throw error("JERR_BAD_HUFF_TABLE", "a Huffman table overruns its segment")
+                }
+                var values: [UInt8] = []
+                for _ in 0..<count { values.append(UInt8(try byte())) }
+                length -= count
+                let table = HuffmanTable(counts: counts, values: values)
+                if index & 0x10 != 0 {
+                    guard index - 0x10 < 4 else {
+                        throw error("JERR_DHT_INDEX", "a Huffman table's index \(index) is bad")
+                    }
+                    acTables[index - 0x10] = table
+                } else {
+                    guard index < 4 else {
+                        throw error("JERR_DHT_INDEX", "a Huffman table's index \(index) is bad")
+                    }
+                    dcTables[index] = table
+                }
+            }
+            guard length == 0 else {
+                throw error("JERR_BAD_LENGTH", "a DHT segment's length does not fit its tables")
+            }
+        }
+
+        mutating func getDQT() throws(Stop) {
+            var length = try u16() - 2
+            while length > 0 {
+                let n = try byte()
+                let precise = n >> 4 != 0
+                let index = n & 15
+                guard index < 4 else {
+                    throw error("JERR_DQT_INDEX", "a quantization table's index \(index) is bad")
+                }
+                var table = quantTables[index] ?? [UInt16](repeating: 0, count: 64)
+                for k in 0..<64 {
+                    table[naturalOrder[k]] = UInt16(precise ? try u16() : try byte())
+                }
+                quantTables[index] = table
+                length -= precise ? 129 : 65
+            }
+            guard length == 0 else {
+                throw error("JERR_BAD_LENGTH", "a DQT segment's length does not fit its tables")
+            }
+        }
+
+        mutating func getDRI() throws(Stop) {
+            guard try u16() == 4 else { throw error("JERR_BAD_LENGTH", "a DRI segment is bad") }
+            restartInterval = try u16()
+        }
+
+        /// `get_dac`: arithmetic conditioning values, checked even in a Huffman-coded JPEG.
+        mutating func getDAC() throws(Stop) {
+            var length = try u16() - 2
+            while length > 0 {
+                let index = try byte()
+                let value = try byte()
+                length -= 2
+                guard index < 32 else {
+                    throw error("JERR_DAC_INDEX", "an arithmetic table's index \(index) is bad")
+                }
+                if index < 16, value & 15 > value >> 4 {
+                    throw error("JERR_DAC_VALUE", "an arithmetic table's value \(value) is bad")
+                }
+            }
+            guard length == 0 else { throw error("JERR_BAD_LENGTH", "a DAC segment is bad") }
+        }
+
+        /// `get_interesting_appn`: JFIF in APP0 and Adobe's transform in APP14.
+        mutating func getInterestingAPPn(_ marker: Int) throws(Stop) {
+            var length = try u16() - 2
+            let count = length >= 14 ? 14 : max(length, 0)
+            var data: [Int] = []
+            for _ in 0..<count { data.append(try byte()) }
+            length -= count
+            if marker == 0xE0, count >= 14, data.prefix(5) == [0x4A, 0x46, 0x49, 0x46, 0] {
+                sawJFIF = true
+            } else if marker == 0xEE, count >= 12, data.prefix(5) == [0x41, 0x64, 0x6F, 0x62, 0x65]
+            {
+                sawAdobe = true
+                adobeTransform = data[11]
+            }
+            skip(length)
+        }
+
+        mutating func skipVariable() throws(Stop) {
+            skip(try u16() - 2)
+        }
+
+        // MARK: The header and the start of decompression
+
+        /// `jpeg_read_header`, called by Pillow until it is not a tables-only datastream.
+        mutating func readHeader() throws(Stop) {
+            while true {
+                // reset_input_controller and reset_marker_reader. Tables survive.
+                sawSOI = false
+                sawSOF = false
+                components = []
+                inputScanNumber = 0
+                unreadMarker = 0
+                if try readMarkers() == .sos { break }
+                guard !sawSOF else {
+                    throw error("JERR_SOF_NO_SOS", "the JPEG has a frame header but no scan")
+                }
+            }
+            try initialSetup()
+            // default_decompress_parms: the colour space libjpeg guesses.
+            switch components.count {
+            case 1:
+                colorSpace = .grey
+            case 3:
+                if sawJFIF {
+                    colorSpace = .ycc
+                } else if sawAdobe {
+                    colorSpace = adobeTransform == 0 ? .rgb : .ycc
+                } else {
+                    let ids = components.map(\.id)
+                    colorSpace =
+                        ids == [1, 2, 3]
+                        ? (lossless ? .rgb : .ycc)
+                        : ids == [82, 71, 66] ? .rgb : (lossless ? .rgb : .ycc)
+                }
+            default:
+                colorSpace = sawAdobe && adobeTransform != 0 ? .ycck : .cmyk
+            }
+        }
+
+        /// `initial_setup`, at the first SOS.
+        mutating func initialSetup() throws(Stop) {
+            guard height <= 65_500, width <= 65_500 else {
+                throw error(
+                    "JERR_IMAGE_TOO_BIG",
+                    "the image is \(width) by \(height); sides may be up to 65,500")
+            }
+            guard lossless ? (2...16).contains(precision) : precision == 8 || precision == 12 else {
+                throw error("JERR_BAD_PRECISION", "\(precision)-bit samples are not supported")
+            }
+            guard components.count <= 10 else {
+                throw error("JERR_COMPONENT_COUNT", "the frame has \(components.count) components")
+            }
+            guard components.allSatisfy({ (1...4).contains($0.h) && (1...4).contains($0.v) }) else {
+                throw error("JERR_BAD_SAMPLING", "a sampling factor is out of range")
+            }
+            maxH = components.map(\.h).max() ?? 1
+            maxV = components.map(\.v).max() ?? 1
+            let unit = lossless ? 1 : 8
+            func roundUp(_ a: Int, _ b: Int) -> Int { (a + b - 1) / b }
+            mcusPerLine = roundUp(width, maxH * unit)
+            totalIMCURows = roundUp(height, maxV * unit)
+            for i in components.indices {
+                components[i].widthInBlocks = roundUp(width * components[i].h, maxH * unit)
+                components[i].heightInBlocks = roundUp(height * components[i].v, maxV * unit)
+                components[i].width = roundUp(width * components[i].h, maxH)
+                components[i].height = roundUp(height * components[i].v, maxV)
+                components[i].gridWidth = mcusPerLine * components[i].h
+                components[i].gridHeight = totalIMCURows * components[i].v
+            }
+            hasMultipleScans = scan.components.count < components.count || progressive
+        }
+
+        /// `jpeg_start_decompress` up to the first scan's data: `master_selection`'s checks, in
+        /// its order, then `start_input_pass`.
+        mutating func startDecompress() throws(Stop) {
+            // jinit_color_deconverter: Pillow asks for L, RGB or CMYK from 1, 3 or 4 components,
+            // and a lossless JPEG may not be converted to any of them.
+            let output: ColorSpace =
+                components.count == 1 ? .grey : components.count == 3 ? .rgb : .cmyk
+            if lossless, colorSpace != output {
+                throw error(
+                    "JERR_CONVERSION_NOTIMPL", "a lossless JPEG cannot be converted for Pillow")
+            }
+            // jinit_upsampler.
+            for component in components {
+                guard maxH % component.h == 0, maxV % component.v == 0 else {
+                    throw error(
+                        "JERR_FRACT_SAMPLE_NOTIMPL", "a component's sampling ratio is fractional")
+                }
+            }
+            if lossless && arithmetic {
+                throw error(
+                    "JERR_ARITH_NOTIMPL", "arithmetic-coded lossless JPEGs are not supported")
+            }
+            if lossless {
+                try checkLosslessScan()
+                throw unsupportedFeature()
+            }
+            if arithmetic {
+                // jdarith.c checks the first scan as jdphuff.c does before any data is read; the
+                // arithmetic decoding itself is not covered.
+                try startInputPass()
+                throw unsupportedFeature()
+            }
+            if !progressive {
+                // jinit_huff_decoder: the standard tables fill slots no DHT has defined yet.
+                for slot in 0..<2 {
+                    if dcTables[slot] == nil { dcTables[slot] = standardTables.dc[slot] }
+                    if acTables[slot] == nil { acTables[slot] = standardTables.ac[slot] }
+                }
+            }
+            // The coefficient storage: the whole image for several scans, one MCU row for one.
+            var offset = 0
+            for i in components.indices {
+                components[i].gridOffset = offset
+                offset +=
+                    components[i].gridWidth
+                    * (hasMultipleScans ? components[i].gridHeight : components[i].v)
+            }
+            coefficients = [Int16](repeating: 0, count: offset * 64)
+            if progressive { nonzero = [UInt64](repeating: 0, count: offset) }
+            if !hasMultipleScans, components.count != 4 {
+                // 128 is what an all-zero block comes out as, so those need no inverse DCT.
+                planes = components.map {
+                    [UInt8](repeating: 128, count: $0.widthInBlocks * 64 * $0.heightInBlocks)
+                }
+            }
+            try startInputPass()
+        }
+
+        /// `per_scan_setup`'s check: an interleaved scan's MCU holds at most 10 blocks.
+        func checkMCUSize() throws(Stop) {
+            if scan.components.count > 1 {
+                let blocks = scan.components.reduce(0) { $0 + components[$1].h * components[$1].v }
+                guard blocks <= 10 else {
+                    throw error(
+                        "JERR_BAD_MCU_SIZE",
+                        "an interleaved scan's MCU has \(blocks) blocks; the most is 10")
+                }
+            }
+        }
+
+        /// `start_input_pass` for a lossless JPEG's first scan, up to its data, which this decoder
+        /// does not decode: per_scan_setup, no quantization tables, jdlhuff.c's DC tables (no
+        /// standard ones), then jdlossls.c's checks of the predictor, Se, Ah and the point
+        /// transform, and jddiffct.c's of the restart interval.
+        func checkLosslessScan() throws(Stop) {
+            try checkMCUSize()
+            for index in scan.components {
+                let slot = components[index].dcTable
+                var derived: [Int32] = []
+                try Derived.append(
+                    slot < 4 ? dcTables[slot] : nil, isDC: true, slot: slot, to: &derived,
+                    largestDCSymbol: 16)
+            }
+            guard (1...7).contains(scan.ss), scan.se == 0, scan.ah == 0, scan.al < precision else {
+                throw error(
+                    "JERR_BAD_PROGRESSION",
+                    "a lossless scan's parameters are bad (Ss \(scan.ss), Se \(scan.se), "
+                        + "Ah \(scan.ah), Al \(scan.al))")
+            }
+            let first = components[scan.components[0]]
+            let mcusPerRow = scan.components.count > 1 ? mcusPerLine : first.widthInBlocks
+            guard restartInterval % mcusPerRow == 0 else {
+                throw error(
+                    "JERR_BAD_RESTART",
+                    "a lossless JPEG's restart interval, \(restartInterval) MCUs, is not a whole "
+                        + "number of rows of \(mcusPerRow)")
+            }
+        }
+
+        /// `start_input_pass`: per_scan_setup, latch_quant_tables and the entropy decoder's
+        /// start_pass, each with its checks.
+        mutating func startInputPass() throws(Stop) {
+            try checkMCUSize()
+            for index in scan.components where components[index].quant == nil {
+                let selector = components[index].quantSelector
+                guard selector < 4, let table = quantTables[selector] else {
+                    throw error(
+                        "JERR_NO_QUANT_TABLE",
+                        "a component uses quantization table \(selector), which is not defined")
+                }
+                components[index].quant = table
+            }
+            if progressive {
+                let dc = scan.ss == 0
+                let bad =
+                    (dc
+                        ? scan.se != 0
+                        : scan.ss > scan.se || scan.se > 63
+                            || scan.components.count != 1)
+                    || (scan.ah != 0 && scan.al != scan.ah - 1) || scan.al > 13
+                guard !bad else {
+                    throw error(
+                        "JERR_BAD_PROGRESSION",
+                        "a progressive scan's parameters are bad (Ss \(scan.ss), Se \(scan.se), "
+                            + "Ah \(scan.ah), Al \(scan.al))")
+                }
+                for index in scan.components {
+                    for k in min(scan.ss, 1)...max(scan.se, 9) {
+                        components[index].previousCoefBits[k] =
+                            inputScanNumber > 1 ? components[index].coefBits[k] : 0
+                    }
+                    for k in scan.ss...scan.se { components[index].coefBits[k] = scan.al }
+                }
+            }
+        }
+
+        /// The derived Huffman tables of the scan, in `start_pass` order, and each scan
+        /// component's offsets into them (DC, AC; -1 where the scan uses none).
+        mutating func scanTables() throws(Stop) -> (tables: [Int32], dc: [Int], ac: [Int]) {
+            var tables: [Int32] = []
+            var dc: [Int] = []
+            var ac: [Int] = []
+            for index in scan.components {
+                let component = components[index]
+                if !progressive || (scan.ss == 0 && scan.ah == 0) {
+                    dc.append(tables.count)
+                    try Derived.append(
+                        component.dcTable < 4 ? dcTables[component.dcTable] : nil, isDC: true,
+                        slot: component.dcTable, to: &tables)
+                } else {
+                    dc.append(-1)
+                }
+                if !progressive || scan.ss != 0 {
+                    ac.append(tables.count)
+                    try Derived.append(
+                        component.acTable < 4 ? acTables[component.acTable] : nil, isDC: false,
+                        slot: component.acTable, to: &tables)
+                } else {
+                    ac.append(-1)
+                }
+            }
+            return (tables, dc, ac)
+        }
+
+        // MARK: Scans
+
+        /// `jpeg_start_decompress`'s loop for a JPEG of several scans: every scan, and the markers
+        /// between them, up to EOI.
+        mutating func consumeScans() throws(Stop) {
+            while true {
+                try decodeScan(singleScan: false)
+                if try readMarkers() == .eoi { return }
+                try startInputPass()
+            }
+        }
+
+        /// One scan's entropy-coded data: `decode_mcu` of jdhuff.c or jdphuff.c for every MCU,
+        /// in `consume_data`'s or `decompress_onepass`'s order, with restart markers, the MCUs
+        /// after the data runs out left as they are, and Pillow's suspensions. A single-scan
+        /// JPEG's MCU rows go to the inverse DCT as they are completed.
+        mutating func decodeScan(singleScan: Bool) throws(Stop) {
+            work.scans += 1
+            let (tables, dcOffsets, acOffsets) = try scanTables()
+            let interleaved = scan.components.count > 1
+            let first = components[scan.components[0]]
+            let mcusPerRow = interleaved ? mcusPerLine : first.widthInBlocks
+            let mcuRows = interleaved ? totalIMCURows : first.heightInBlocks
+            let totalMCUs = mcusPerRow * mcuRows
+            /// The iMCU row an MCU belongs to (`input_iMCU_row`).
+            func iMCURow(_ mcu: Int) -> Int {
+                interleaved ? mcu / mcusPerRow : mcu / mcusPerRow / first.v
+            }
+            var members: [Member] = []
+            for (slot, index) in scan.components.enumerated() {
+                let component = components[index]
+                let h = interleaved ? component.h : 1
+                let v = interleaved ? component.v : 1
+                for row in 0..<v {
+                    for column in 0..<h {
+                        members.append(
+                            Member(
+                                slot: slot, gridOffset: component.gridOffset,
+                                gridWidth: component.gridWidth, rowFactor: v, columnFactor: h,
+                                row: row, column: column,
+                                storageRows: singleScan ? component.v : Int.max,
+                                dcTable: dcOffsets[slot], acTable: acOffsets[slot]))
+                    }
+                }
+            }
+            let blocksInMCU = members.count
+            let kind: ScanKind =
+                !progressive
+                ? .sequential
+                : scan.ss == 0
+                    ? (scan.ah == 0 ? .dcFirst : .dcRefine) : (scan.ah == 0 ? .acFirst : .acRefine)
+            var bandMask: UInt64 = 0
+            if kind == .acRefine {
+                for k in scan.ss...scan.se { bandMask |= 1 << UInt64(naturalOrder[k]) }
+            }
+            let parameters = (ss: scan.ss, se: scan.se, al: scan.al)
+            var predictors = Predictors()
+            var eobrun = 0
+            var restartsToGo = restartInterval
+            // The iMCU row a single-scan JPEG is collecting, and whether any MCU of it was
+            // decoded.
+            var bufferedRow = 0
+            var rowDecoded = false
+            var newlyNonzero: [Int] = []
+            newlyNonzero.reserveCapacity(64)
+            var coefficients = self.coefficients
+            self.coefficients = []
+            var nonzero = self.nonzero
+            self.nonzero = []
+            defer {
+                self.coefficients = coefficients
+                self.nonzero = nonzero
+            }
+            let input = bytes
+            try input.withUnsafeBufferPointer { (raw) throws(Stop) in
+                var reader = BitReader(
+                    input: raw, position: position, chunkEnd: chunkEnd, unreadMarker: unreadMarker)
+                defer {
+                    position = reader.position
+                    chunkEnd = reader.chunkEnd
+                    unreadMarker = reader.unreadMarker
+                }
+                try tables.withUnsafeBufferPointer { (table) throws(Stop) in
+                    try naturalOrder.withUnsafeBufferPointer { (natural) throws(Stop) in
+                        try coefficients.withUnsafeMutableBufferPointer { (store) throws(Stop) in
+                            try nonzero.withUnsafeMutableBufferPointer { (masks) throws(Stop) in
+                                var mcu = 0
+                                while mcu < totalMCUs {
+                                    if singleScan, iMCURow(mcu) != bufferedRow {
+                                        flushRows(
+                                            bufferedRow..<iMCURow(mcu), decoded: rowDecoded,
+                                            store: store)
+                                        bufferedRow = iMCURow(mcu)
+                                        rowDecoded = false
+                                    }
+                                    // consume_data notes the last good row before decode_mcu
+                                    // processes a restart marker, which may reset the flag.
+                                    let good = !reader.insufficient
+                                    if restartInterval != 0 && restartsToGo == 0 {
+                                        // process_restart: the bits left are dropped, and the
+                                        // next restart marker is looked for (or resynchronised
+                                        // to).
+                                        position = reader.position
+                                        chunkEnd = reader.chunkEnd
+                                        unreadMarker = reader.unreadMarker
+                                        try readRestartMarker()
+                                        reader.position = position
+                                        reader.chunkEnd = chunkEnd
+                                        reader.unreadMarker = unreadMarker
+                                        reader.bitsLeft = 0
+                                        if unreadMarker == 0 { reader.insufficient = false }
+                                        predictors = Predictors()
+                                        eobrun = 0
+                                        restartsToGo = restartInterval
+                                    }
+                                    if reader.insufficient {
+                                        // The data ran out: this segment's MCUs stay as they
+                                        // are, and past a marker other than a restart marker,
+                                        // every later segment is empty too (resync's action 3).
+                                        let marker = reader.unreadMarker
+                                        let skip: Int
+                                        if restartInterval == 0
+                                            || (marker >= 0xC0 && !(0xD0...0xD7).contains(marker))
+                                        {
+                                            skip = totalMCUs - mcu
+                                        } else {
+                                            skip = restartsToGo
+                                            restartsToGo = 0
+                                        }
+                                        mcu += skip
+                                        continue
+                                    }
+                                    if good { lastGoodIMCURow = iMCURow(mcu) }
+                                    work.visits += blocksInMCU
+                                    guard work.visits <= visitLimit else {
+                                        throw Stop.refused(
+                                            "the JPEG's scans would visit more than "
+                                                + "\(visitLimit) blocks one at a time; this "
+                                                + "decoder's limit on work")
+                                    }
+                                    let mcuRow = mcu / mcusPerRow
+                                    let mcuColumn = mcu % mcusPerRow
+                                    if kind == .acRefine, eobrun > 0,
+                                        masks[members[0].offset(mcuRow, mcuColumn) / 64] & bandMask
+                                            == 0
+                                    {
+                                        // A block of an end-of-band run with nothing to refine
+                                        // reads no bits.
+                                        eobrun -= 1
+                                        if restartInterval != 0 { restartsToGo -= 1 }
+                                        mcu += 1
+                                        continue
+                                    }
+                                    work.blocks += blocksInMCU
+                                    rowDecoded = true
+                                    attempt: while true {
+                                        let saved = (reader, predictors, eobrun)
+                                        if singleScan {
+                                            for member in members {
+                                                (store.baseAddress!
+                                                    + member.offset(mcuRow, mcuColumn))
+                                                    .initialize(repeating: 0, count: 64)
+                                            }
+                                        }
+                                        newlyNonzero.removeAll(keepingCapacity: true)
+                                        do throws(Interrupt) {
+                                            switch kind {
+                                            case .sequential:
+                                                if restartInterval == 0 && reader.unreadMarker == 0
+                                                    && reader.chunkEnd - reader.position
+                                                        >= 512 * blocksInMCU
+                                                {
+                                                    try LibjpegTurboDecoder.sequentialMCU(
+                                                        members, mcuRow, mcuColumn, &reader,
+                                                        &predictors, table.baseAddress!,
+                                                        natural.baseAddress!, store.baseAddress!,
+                                                        fast: true)
+                                                    if reader.unreadMarker == 0 { break attempt }
+                                                    // The slow path decodes the MCU again, over
+                                                    // what the fast one wrote.
+                                                    reader = saved.0
+                                                    predictors = saved.1
+                                                }
+                                                try LibjpegTurboDecoder.sequentialMCU(
+                                                    members, mcuRow, mcuColumn, &reader,
+                                                    &predictors, table.baseAddress!,
+                                                    natural.baseAddress!, store.baseAddress!,
+                                                    fast: false)
+                                            case .dcFirst:
+                                                for member in members {
+                                                    var s = try reader.decode(
+                                                        table.baseAddress! + member.dcTable)
+                                                    if s != 0 { s = extend(try reader.bits(s), s) }
+                                                    let last = predictors[member.slot]
+                                                    let sum = last + s
+                                                    guard sum >= Int(Int32.min),
+                                                        sum <= Int(Int32.max)
+                                                    else { throw Interrupt.overflow }
+                                                    predictors[member.slot] = sum
+                                                    store[member.offset(mcuRow, mcuColumn)] =
+                                                        Int16(
+                                                            truncatingIfNeeded: sum << parameters.al
+                                                        )
+                                                }
+                                            case .dcRefine:
+                                                for member in members {
+                                                    if try reader.bits(1) != 0 {
+                                                        store[member.offset(mcuRow, mcuColumn)] |=
+                                                            Int16(1 << parameters.al)
+                                                    }
+                                                }
+                                            case .acFirst:
+                                                let offset = members[0].offset(mcuRow, mcuColumn)
+                                                try LibjpegTurboDecoder.acFirstBlock(
+                                                    store.baseAddress! + offset,
+                                                    mask: &masks[offset / 64], &reader,
+                                                    table.baseAddress! + members[0].acTable,
+                                                    natural.baseAddress!, parameters,
+                                                    eobrun: &eobrun)
+                                            case .acRefine:
+                                                let offset = members[0].offset(mcuRow, mcuColumn)
+                                                try LibjpegTurboDecoder.acRefineBlock(
+                                                    store.baseAddress! + offset,
+                                                    mask: &masks[offset / 64], &reader,
+                                                    table.baseAddress! + members[0].acTable,
+                                                    natural.baseAddress!, parameters,
+                                                    bandMask: bandMask, eobrun: &eobrun,
+                                                    newlyNonzero: &newlyNonzero)
+                                            }
+                                            break attempt
+                                        } catch {
+                                            switch error {
+                                            case .chunk:
+                                                // Pillow reads 65,536 more bytes, and
+                                                // libjpeg-turbo starts the MCU again; a
+                                                // refinement first undoes its new coefficients.
+                                                if kind == .acRefine {
+                                                    let offset = members[0].offset(
+                                                        mcuRow, mcuColumn)
+                                                    for position in newlyNonzero {
+                                                        store[offset + position] = 0
+                                                        masks[offset / 64] &=
+                                                            ~(1 << UInt64(position))
+                                                    }
+                                                }
+                                                let extended = min(
+                                                    raw.count, reader.chunkEnd + readSize)
+                                                (reader, predictors, eobrun) = saved
+                                                reader.chunkEnd = extended
+                                            case .end:
+                                                throw Stop.endOfData
+                                            case .overflow:
+                                                throw LibjpegTurboDecoder.error(
+                                                    "JERR_BAD_DCT_COEF",
+                                                    "a DC coefficient of a progressive scan "
+                                                        + "overflows 32 bits")
+                                            }
+                                        }
+                                    }
+                                    if restartInterval != 0 { restartsToGo -= 1 }
+                                    mcu += 1
+                                    // An end-of-band run of a first AC scan leaves the next
+                                    // blocks as they are, up to the next restart marker.
+                                    if kind == .acFirst, eobrun > 0, !reader.insufficient {
+                                        var skip = min(eobrun, totalMCUs - mcu)
+                                        if restartInterval != 0 { skip = min(skip, restartsToGo) }
+                                        if skip > 0 {
+                                            eobrun -= skip
+                                            mcu += skip
+                                            if restartInterval != 0 { restartsToGo -= skip }
+                                            lastGoodIMCURow = iMCURow(mcu - 1)
+                                        }
+                                    }
+                                }
+                                if singleScan {
+                                    flushRows(
+                                        bufferedRow..<(iMCURow(totalMCUs - 1) + 1),
+                                        decoded: rowDecoded, store: store)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        /// `read_restart_marker`: the expected restart marker, or `jpeg_resync_to_restart`'s
+        /// recovery when another marker is found.
+        mutating func readRestartMarker() throws(Stop) {
+            work.restarts += 1
+            if unreadMarker == 0 { try nextMarker() }
+            if unreadMarker == 0xD0 + nextRestartNumber {
+                unreadMarker = 0
+            } else {
+                // jpeg_resync_to_restart: discard a restart marker too far from the expected
+                // one, scan on past an earlier one or a code that is not a marker, and leave a
+                // later one, or any other marker, for the segments to come.
+                let desired = nextRestartNumber
+                while true {
+                    let marker = unreadMarker
+                    if marker < 0xC0 {
+                        try nextMarker()
+                    } else if marker < 0xD0 || marker > 0xD7 {
+                        break
+                    } else if marker == 0xD0 + ((desired + 1) & 7)
+                        || marker == 0xD0 + ((desired + 2) & 7)
+                    {
+                        break
+                    } else if marker == 0xD0 + ((desired - 1) & 7)
+                        || marker == 0xD0 + ((desired - 2) & 7)
+                    {
+                        try nextMarker()
+                    } else {
+                        unreadMarker = 0
+                        break
+                    }
+                }
+            }
+            nextRestartNumber = (nextRestartNumber + 1) & 7
+        }
+
+        /// The inverse DCT of a single-scan JPEG's completed MCU rows, as `decompress_onepass`
+        /// runs it: the blocks inside the image, dummy blocks skipped. A row no MCU of which was
+        /// decoded holds only zero blocks, which come out as 128.
+        mutating func flushRows(
+            _ rows: Range<Int>, decoded: Bool, store: UnsafeMutableBufferPointer<Int16>
+        ) {
+            guard !rows.isEmpty, components.count != 4 else { return }
+            var multipliers = [Int16](repeating: 0, count: 64)
+            var workspace = [Int16](repeating: 0, count: 64)
+            for c in components.indices {
+                let component = components[c]
+                let stride = component.widthInBlocks * 8
+                for (i, value) in (component.quant ?? []).enumerated() {
+                    multipliers[i] = Int16(truncatingIfNeeded: value)
+                }
+                // Only the first row can hold decoded MCUs; the others stay 128.
+                guard decoded else { continue }
+                let first = rows.lowerBound * component.v
+                let blockRows = first..<min(first + component.v, component.heightInBlocks)
+                planes[c].withUnsafeMutableBufferPointer { plane in
+                    multipliers.withUnsafeBufferPointer { m in
+                        workspace.withUnsafeMutableBufferPointer { w in
+                            for blockRow in blockRows {
+                                for column in 0..<component.widthInBlocks {
+                                    let block =
+                                        store.baseAddress!
+                                        + (component.gridOffset
+                                            + (blockRow % component.v) * component.gridWidth
+                                            + column) * 64
+                                    if LibjpegTurboDecoder.isZero(block) { continue }
+                                    LibjpegTurboDecoder.inverseDCT(
+                                        block, m.baseAddress!, w.baseAddress!,
+                                        plane.baseAddress! + blockRow * 8 * stride + column * 8,
+                                        stride: stride)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if decoded {
+                store.baseAddress!.initialize(repeating: 0, count: store.count)
+            }
+        }
+
+        // MARK: The inverse DCT of a multi-scan JPEG and block smoothing
+
+        /// `decompress_data`, or `decompress_smooth_data` when `smoothing_ok`: every component's
+        /// blocks to samples. A component no scan reached has an all-zero multiplier table
+        /// (jddctmgr.c) and comes out as 128.
+        mutating func makePlanesFromCoefficients() {
+            let latches = smoothingLatches()
+            let storage = coefficients
+            coefficients = []
+            nonzero = []
+            planes = []
+            var workspace = [Int16](repeating: 0, count: 64)
+            var smoothed = [Int16](repeating: 0, count: 64)
+            var registers = [Int](repeating: 0, count: 26)
+            for c in components.indices {
+                let component = components[c]
+                let stride = component.widthInBlocks * 8
+                var plane = [UInt8](repeating: 128, count: stride * component.heightInBlocks * 8)
+                guard let quant = component.quant else {
+                    planes.append(plane)
+                    continue
+                }
+                let multipliers = quant.map { Int16(truncatingIfNeeded: $0) }
+                // The rows past the last good one take coef_bits from before the last scan.
+                let smoothings = latches.map {
+                    (
+                        current: Smoothing(
+                            component: component, quant: quant, coefBits: $0.current[c]),
+                        previous: Smoothing(
+                            component: component, quant: quant, coefBits: $0.previous[c])
+                    )
+                }
+                storage.withUnsafeBufferPointer { store in
+                    plane.withUnsafeMutableBufferPointer { out in
+                        multipliers.withUnsafeBufferPointer { m in
+                            workspace.withUnsafeMutableBufferPointer { w in
+                                smoothed.withUnsafeMutableBufferPointer { s in
+                                    registers.withUnsafeMutableBufferPointer { d in
+                                        for blockRow in 0..<component.heightInBlocks {
+                                            let iMCURow = blockRow / component.v
+                                            let smoothing = smoothings.map {
+                                                iMCURow > lastGoodIMCURow ? $0.previous : $0.current
+                                            }
+                                            let neighbours =
+                                                smoothing == nil
+                                                ? nil
+                                                : Self.neighbourRows(
+                                                    blockRow, component: component,
+                                                    totalIMCURows: totalIMCURows)
+                                            let rowBase =
+                                                component.gridOffset + blockRow
+                                                * component.gridWidth
+                                            let rowOut = out.baseAddress! + blockRow * 8 * stride
+                                            for column in 0..<component.widthInBlocks {
+                                                var block =
+                                                    store.baseAddress! + (rowBase + column) * 64
+                                                if smoothing == nil,
+                                                    LibjpegTurboDecoder.isZero(block)
+                                                {
+                                                    continue
+                                                }
+                                                if let smoothing, let neighbours {
+                                                    smoothing.estimate(
+                                                        block, column: column, rows: neighbours,
+                                                        store: store.baseAddress!,
+                                                        into: s.baseAddress!,
+                                                        registers: d.baseAddress!)
+                                                    block = UnsafePointer(s.baseAddress!)
+                                                }
+                                                LibjpegTurboDecoder.inverseDCT(
+                                                    block, m.baseAddress!, w.baseAddress!,
+                                                    rowOut + column * 8, stride: stride)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                planes.append(plane)
+            }
+        }
+
+        /// `smoothing_ok`: whether block smoothing applies, and the latched `coef_bits` of each
+        /// component for coefficients 0 to 9, as of the last scan and before it.
+        func smoothingLatches() -> (current: [[Int]], previous: [[Int]])? {
+            guard progressive else { return nil }
+            var useful = false
+            var current: [[Int]] = []
+            var previous: [[Int]] = []
+            for component in components {
+                guard let quant = component.quant,
+                    [0, 1, 8, 16, 9, 2, 3, 10, 17, 24].allSatisfy({ quant[$0] != 0 }),
+                    component.coefBits[0] >= 0
+                else { return nil }
+                var latch = [Int](repeating: 0, count: 10)
+                var previousLatch = [Int](repeating: 0, count: 10)
+                latch[0] = component.coefBits[0]
+                for k in 1..<10 {
+                    previousLatch[k] = inputScanNumber > 1 ? component.previousCoefBits[k] : -1
+                    latch[k] = component.coefBits[k]
+                    if component.coefBits[k] != 0 { useful = true }
+                }
+                current.append(latch)
+                previous.append(previousLatch)
+            }
+            return useful ? (current, previous) : nil
+        }
+
+        /// The block rows `decompress_smooth_data` takes DC values from for a block row: two
+        /// above, two below, repeating the edge rows, with libjpeg-turbo's count of the image's
+        /// block rows (which, in the last iMCU row, uses that row's height for every row).
+        static func neighbourRows(
+            _ blockRow: Int, component: Component, totalIMCURows: Int
+        ) -> (Int, Int, Int, Int, Int) {
+            let v = component.v
+            let iMCURow = blockRow / v
+            let rowInIMCU = blockRow % v
+            var blockRows = v
+            if iMCURow == totalIMCURows - 1 {
+                blockRows = component.heightInBlocks % v
+                if blockRows == 0 { blockRows = v }
+            }
+            let imageBlockRow = iMCURow * blockRows + rowInIMCU
+            let imageBlockRows = blockRows * totalIMCURows
+            let previous = imageBlockRow > 0 ? blockRow - 1 : blockRow
+            let previousPrevious = imageBlockRow > 1 ? blockRow - 2 : previous
+            let next = imageBlockRow < imageBlockRows - 1 ? blockRow + 1 : blockRow
+            let nextNext = imageBlockRow < imageBlockRows - 2 ? blockRow + 2 : next
+            return (previousPrevious, previous, blockRow, next, nextNext)
+        }
+
+        // MARK: Output
+
+        /// Upsampling and colour conversion, a row at a time, into the image.
+        func output() -> RGBImage {
+            var pixels = [UInt8](repeating: 0, count: width * height * 3)
+            let methods = components.map { upsampling(for: $0) }
+            let count = components.count
+            var rowStorage = [UInt8](repeating: 0, count: width * count)
+            var scratch = [Int](repeating: 0, count: width / 2 + 3)
             let tables = ColorTables.shared
-            for index in 0..<(width * height) {
-                let y = Int(full[0][index])
-                let cb = Int(full[1][index])
-                let cr = Int(full[2][index])
-                pixels[index * 3] = clamp(y + tables.crR[cr])
-                pixels[index * 3 + 1] = clamp(y + ((tables.cbG[cb] + tables.crG[cr]) >> 16))
-                pixels[index * 3 + 2] = clamp(y + tables.cbB[cb])
+            let width = width
+            let height = height
+            let colorSpace = colorSpace
+            let components = components
+            withPlanes { planes in
+                pixels.withUnsafeMutableBufferPointer { out in
+                    rowStorage.withUnsafeMutableBufferPointer { rowBuffer in
+                        scratch.withUnsafeMutableBufferPointer { scratch in
+                            tables.crR.withUnsafeBufferPointer { crR in
+                                tables.cbB.withUnsafeBufferPointer { cbB in
+                                    tables.crG.withUnsafeBufferPointer { crG in
+                                        tables.cbG.withUnsafeBufferPointer { cbG in
+                                            var rows = [UnsafePointer<UInt8>](
+                                                repeating: UnsafePointer(rowBuffer.baseAddress!),
+                                                count: count)
+                                            for y in 0..<height {
+                                                for c in 0..<count {
+                                                    let stride = components[c].widthInBlocks * 8
+                                                    if methods[c] == .full {
+                                                        rows[c] =
+                                                            planes[c].baseAddress! + y * stride
+                                                    } else {
+                                                        let target =
+                                                            rowBuffer.baseAddress! + c * width
+                                                        LibjpegTurboDecoder.upsampleRow(
+                                                            y, methods[c], components[c],
+                                                            plane: planes[c].baseAddress!,
+                                                            width: width, into: target,
+                                                            scratch: scratch.baseAddress!)
+                                                        rows[c] = UnsafePointer(target)
+                                                    }
+                                                }
+                                                let o = out.baseAddress! + y * width * 3
+                                                switch colorSpace {
+                                                case .grey:
+                                                    let g = rows[0]
+                                                    for x in 0..<width {
+                                                        o[x * 3] = g[x]
+                                                        o[x * 3 + 1] = g[x]
+                                                        o[x * 3 + 2] = g[x]
+                                                    }
+                                                case .rgb:
+                                                    let (r, g, b) = (rows[0], rows[1], rows[2])
+                                                    for x in 0..<width {
+                                                        o[x * 3] = r[x]
+                                                        o[x * 3 + 1] = g[x]
+                                                        o[x * 3 + 2] = b[x]
+                                                    }
+                                                default:
+                                                    let (ys, cbs, crs) = (rows[0], rows[1], rows[2])
+                                                    for x in 0..<width {
+                                                        let luma = Int(ys[x])
+                                                        let cb = Int(cbs[x])
+                                                        let cr = Int(crs[x])
+                                                        o[x * 3] = clamp(luma + crR[cr])
+                                                        o[x * 3 + 1] = clamp(
+                                                            luma + ((cbG[cb] + crG[cr]) >> 16))
+                                                        o[x * 3 + 2] = clamp(luma + cbB[cb])
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
-        } else {
-            for index in 0..<(width * height) {
-                pixels[index * 3] = full[0][index]
-                pixels[index * 3 + 1] = full[1][index]
-                pixels[index * 3 + 2] = full[2][index]
+            return RGBImage(width: width, height: height, pixels: pixels)
+        }
+
+        /// Calls `body` with a pointer to every component's samples.
+        func withPlanes(
+            _ index: Int = 0, _ gathered: [UnsafeBufferPointer<UInt8>] = [],
+            _ body: ([UnsafeBufferPointer<UInt8>]) -> Void
+        ) {
+            if index == planes.count { return body(gathered) }
+            planes[index].withUnsafeBufferPointer { withPlanes(index + 1, gathered + [$0], body) }
+        }
+
+        /// `jinit_upsampler`'s choice of method for a component.
+        func upsampling(for component: Component) -> Upsampling {
+            let hSame = component.h == maxH
+            let vSame = component.v == maxV
+            if hSame && vSame { return .full }
+            if component.h * 2 == maxH && vSame {
+                return component.width > 2 ? .h2v1Fancy : .replicate(2, 1)
+            }
+            if hSame && component.v * 2 == maxV { return .h1v2Fancy }
+            if component.h * 2 == maxH && component.v * 2 == maxV {
+                return component.width > 2 ? .h2v2Fancy : .replicate(2, 2)
+            }
+            return .replicate(maxH / component.h, maxV / component.v)
+        }
+    }
+
+    /// The kinds of scan, by their decoding routine.
+    enum ScanKind { case sequential, dcFirst, dcRefine, acFirst, acRefine }
+
+    /// The last DC values of the scan's components (`last_dc_val`).
+    struct Predictors {
+        var values: (Int, Int, Int, Int) = (0, 0, 0, 0)
+
+        subscript(_ index: Int) -> Int {
+            get {
+                switch index {
+                case 0: values.0
+                case 1: values.1
+                case 2: values.2
+                default: values.3
+                }
+            }
+            set {
+                switch index {
+                case 0: values.0 = newValue
+                case 1: values.1 = newValue
+                case 2: values.2 = newValue
+                default: values.3 = newValue
+                }
             }
         }
-        return RGBImage(width: width, height: height, pixels: pixels)
+    }
+
+    /// One block of an MCU: its component's place in the scan, the storage and the tables.
+    struct Member {
+        var slot: Int
+        var gridOffset: Int
+        var gridWidth: Int
+        /// Blocks per MCU down and across (the sampling factors in an interleaved scan, else 1).
+        var rowFactor: Int
+        var columnFactor: Int
+        var row: Int
+        var column: Int
+        /// Block rows the storage holds: one MCU row for a single-scan JPEG, else all.
+        var storageRows: Int
+        var dcTable: Int
+        var acTable: Int
+
+        /// The block's first coefficient in the storage for MCU (`mcuRow`, `mcuColumn`).
+        @inline(__always) func offset(_ mcuRow: Int, _ mcuColumn: Int) -> Int {
+            let blockRow = (mcuRow * rowFactor + row) % storageRows
+            return (gridOffset + blockRow * gridWidth + mcuColumn * columnFactor + column) * 64
+        }
+    }
+
+    /// `decode_mcu_slow` and `decode_mcu_fast` of jdhuff.c: the same decoding, with the slow
+    /// path's or the fast path's refills.
+    @inline(__always)
+    static func sequentialMCU(
+        _ members: [Member], _ mcuRow: Int, _ mcuColumn: Int, _ reader: inout BitReader,
+        _ predictors: inout Predictors, _ tables: UnsafePointer<Int32>,
+        _ natural: UnsafePointer<Int>, _ store: UnsafeMutablePointer<Int16>, fast: Bool
+    ) throws(Interrupt) {
+        for member in members {
+            let block = store + member.offset(mcuRow, mcuColumn)
+            let dc = tables + member.dcTable
+            let ac = tables + member.acTable
+            var s = fast ? reader.fastDecode(dc) : try reader.decode(dc)
+            if s != 0 { s = extend(fast ? reader.fastBits(s) : try reader.bits(s), s) }
+            predictors[member.slot] += s
+            block[0] = Int16(truncatingIfNeeded: predictors[member.slot])
+            var k = 1
+            while k < 64 {
+                let rs = fast ? reader.fastDecode(ac) : try reader.decode(ac)
+                let r = rs >> 4
+                let size = rs & 15
+                if size != 0 {
+                    k += r
+                    let bits = fast ? reader.fastBits(size) : try reader.bits(size)
+                    block[natural[k]] = Int16(truncatingIfNeeded: extend(bits, size))
+                } else {
+                    if r != 15 { break }
+                    k += 15
+                }
+                k += 1
+            }
+        }
+    }
+
+    /// `decode_mcu_AC_first`, for one block.
+    @inline(__always)
+    static func acFirstBlock(
+        _ block: UnsafeMutablePointer<Int16>, mask: inout UInt64, _ reader: inout BitReader,
+        _ table: UnsafePointer<Int32>, _ natural: UnsafePointer<Int>,
+        _ parameters: (ss: Int, se: Int, al: Int), eobrun: inout Int
+    ) throws(Interrupt) {
+        if eobrun > 0 {
+            eobrun -= 1
+            return
+        }
+        var k = parameters.ss
+        while k <= parameters.se {
+            let rs = try reader.decode(table)
+            let r = rs >> 4
+            let s = rs & 15
+            if s != 0 {
+                k += r
+                let value = Int16(
+                    truncatingIfNeeded: extend(try reader.bits(s), s) << parameters.al)
+                let position = natural[k]
+                block[position] = value
+                if value != 0 {
+                    mask |= 1 << UInt64(position)
+                } else {
+                    mask &= ~(1 << UInt64(position))
+                }
+            } else if r == 15 {
+                k += 15
+            } else {
+                eobrun = 1 << r
+                if r != 0 { eobrun += try reader.bits(r) }
+                eobrun -= 1
+                break
+            }
+            k += 1
+        }
+    }
+
+    /// `decode_mcu_AC_refine`, for one block. A block of an end-of-band run with no nonzero
+    /// coefficient in the band reads nothing, which `mask` shows without looking.
+    @inline(__always)
+    static func acRefineBlock(
+        _ block: UnsafeMutablePointer<Int16>, mask: inout UInt64, _ reader: inout BitReader,
+        _ table: UnsafePointer<Int32>, _ natural: UnsafePointer<Int>,
+        _ parameters: (ss: Int, se: Int, al: Int), bandMask: UInt64, eobrun: inout Int,
+        newlyNonzero: inout [Int]
+    ) throws(Interrupt) {
+        let p1 = 1 << parameters.al
+        let m1 = -1 << parameters.al
+        let se = parameters.se
+        var k = parameters.ss
+        /// A correction bit for an already nonzero coefficient.
+        @inline(__always) func refine(_ position: Int) throws(Interrupt) {
+            let value = Int(block[position])
+            if try reader.bits(1) != 0, value & p1 == 0 {
+                block[position] = Int16(truncatingIfNeeded: value >= 0 ? value + p1 : value + m1)
+            }
+        }
+        if eobrun == 0 {
+            while k <= se {
+                let rs = try reader.decode(table)
+                var r = rs >> 4
+                var s = rs & 15
+                if s != 0 {
+                    // A newly nonzero coefficient is always of size 1 (JWRN_HUFF_BAD_CODE).
+                    s = try reader.bits(1) != 0 ? p1 : m1
+                } else if r != 15 {
+                    eobrun = 1 << r
+                    if r != 0 { eobrun += try reader.bits(r) }
+                    break
+                }
+                repeat {
+                    let position = natural[k]
+                    if block[position] != 0 {
+                        try refine(position)
+                    } else {
+                        r -= 1
+                        if r < 0 { break }
+                    }
+                    k += 1
+                } while k <= se
+                if s != 0 {
+                    let position = natural[k]
+                    block[position] = Int16(truncatingIfNeeded: s)
+                    mask |= 1 << UInt64(position)
+                    newlyNonzero.append(position)
+                }
+                k += 1
+            }
+        }
+        if eobrun > 0 {
+            if mask & bandMask != 0 {
+                while k <= se {
+                    let position = natural[k]
+                    if block[position] != 0 { try refine(position) }
+                    k += 1
+                }
+            }
+            eobrun -= 1
+        }
+    }
+
+    // MARK: Block smoothing
+
+    /// `decompress_smooth_data` for one component: estimates of the first nine AC coefficients
+    /// (and, while no AC data has arrived, the DC) from the DC values of the 5 by 5 blocks
+    /// around each block.
+    struct Smoothing {
+        var widthInBlocks: Int
+        var gridOffset: Int
+        var gridWidth: Int
+        /// `coef_bits` for coefficients 0 to 9 (zigzag order).
+        var coefBits: [Int]
+        var changeDC: Bool
+        var q: [Int]
+
+        init(component: Component, quant: [UInt16], coefBits: [Int]) {
+            widthInBlocks = component.widthInBlocks
+            gridOffset = component.gridOffset
+            gridWidth = component.gridWidth
+            self.coefBits = coefBits
+            changeDC = (1...9).allSatisfy { coefBits[$0] == -1 }
+            // Q00, Q01, Q10, Q20, Q11, Q02, Q03, Q12, Q21, Q30 at their natural positions.
+            q = [0, 1, 8, 16, 9, 2, 3, 10, 17, 24].map { Int(quant[$0]) }
+        }
+
+        /// The block at `column` of the current row with its estimates, into `workspace`.
+        func estimate(
+            _ block: UnsafePointer<Int16>, column: Int, rows: (Int, Int, Int, Int, Int),
+            store: UnsafePointer<Int16>, into workspace: UnsafeMutablePointer<Int16>,
+            registers d: UnsafeMutablePointer<Int>
+        ) {
+            workspace.update(from: block, count: 64)
+            let last = widthInBlocks - 1
+            /// The DC value of the block `dx` columns from `column` in neighbour row `row`, held
+            /// at the row's ends as libjpeg-turbo's sliding registers hold it.
+            func dc(_ row: Int, _ dx: Int) -> Int {
+                var x = column + dx
+                if dx < 0 { x = max(x, 0) }
+                if dx > 0 { x = min(x, last) }
+                return Int(store[(gridOffset + row * gridWidth + x) * 64])
+            }
+            // DC01...DC25 in d[1...25]: rows from two above to two below, columns from two left
+            // to two right.
+            func load(_ i: Int, _ row: Int) {
+                for j in 0..<5 { d[i * 5 + j + 1] = dc(row, j - 2) }
+            }
+            load(0, rows.0)
+            load(1, rows.1)
+            load(2, rows.2)
+            load(3, rows.3)
+            load(4, rows.4)
+            let q00 = q[0]
+            /// One estimate: `num` over `Q << 8`, rounded half away from zero, limited to the bits
+            /// not yet received, as libjpeg-turbo computes it in `JLONG` and stores it as `JCOEF`.
+            func predict(_ num: Int, _ qk: Int, _ al: Int, limit: Bool) -> Int16 {
+                var pred: Int32
+                if num >= 0 {
+                    pred = Int32(truncatingIfNeeded: ((qk << 7) + num) / (qk << 8))
+                    if limit, al > 0, pred >= Int32(1 << al) { pred = Int32(1 << al) - 1 }
+                } else {
+                    pred = Int32(truncatingIfNeeded: ((qk << 7) - num) / (qk << 8))
+                    if limit, al > 0, pred >= Int32(1 << al) { pred = Int32(1 << al) - 1 }
+                    pred = 0 &- pred
+                }
+                return Int16(truncatingIfNeeded: pred)
+            }
+            let changeDC = changeDC
+            // AC01
+            if coefBits[1] != 0 && workspace[1] == 0 {
+                let num =
+                    q00
+                    * (changeDC
+                        ? (-d[1] - d[2] + d[4] + d[5] - 3 * d[6] + 13 * d[7] - 13 * d[9] + 3 * d[10]
+                            - 3 * d[11] + 38 * d[12] - 38 * d[14] + 3 * d[15] - 3 * d[16]
+                            + 13 * d[17] - 13 * d[19] + 3 * d[20] - d[21] - d[22] + d[24] + d[25])
+                        : (-7 * d[11] + 50 * d[12] - 50 * d[14] + 7 * d[15]))
+                workspace[1] = predict(num, q[1], coefBits[1], limit: true)
+            }
+            // AC10
+            if coefBits[2] != 0 && workspace[8] == 0 {
+                let num =
+                    q00
+                    * (changeDC
+                        ? (-d[1] - 3 * d[2] - 3 * d[3] - 3 * d[4] - d[5] - d[6] + 13 * d[7]
+                            + 38 * d[8] + 13 * d[9] - d[10] + d[16] - 13 * d[17] - 38 * d[18]
+                            - 13 * d[19] + d[20] + d[21] + 3 * d[22] + 3 * d[23] + 3 * d[24]
+                            + d[25])
+                        : (-7 * d[3] + 50 * d[8] - 50 * d[18] + 7 * d[23]))
+                workspace[8] = predict(num, q[2], coefBits[2], limit: true)
+            }
+            // AC20
+            if coefBits[3] != 0 && workspace[16] == 0 {
+                let num =
+                    q00
+                    * (changeDC
+                        ? (d[3] + 2 * d[7] + 7 * d[8] + 2 * d[9] - 5 * d[12] - 14 * d[13]
+                            - 5 * d[14] + 2 * d[17] + 7 * d[18] + 2 * d[19] + d[23])
+                        : (-d[3] + 13 * d[8] - 24 * d[13] + 13 * d[18] - d[23]))
+                workspace[16] = predict(num, q[3], coefBits[3], limit: true)
+            }
+            // AC11
+            if coefBits[4] != 0 && workspace[9] == 0 {
+                let num =
+                    q00
+                    * (changeDC
+                        ? (-d[1] + d[5] + 9 * d[7] - 9 * d[9] - 9 * d[17] + 9 * d[19] + d[21]
+                            - d[25])
+                        : (d[10] + d[16] - 10 * d[17] + 10 * d[19] - d[2] - d[20] + d[22] - d[24]
+                            + d[4] - d[6] + 10 * d[7] - 10 * d[9]))
+                workspace[9] = predict(num, q[4], coefBits[4], limit: true)
+            }
+            // AC02
+            if coefBits[5] != 0 && workspace[2] == 0 {
+                let num =
+                    q00
+                    * (changeDC
+                        ? (2 * d[7] - 5 * d[8] + 2 * d[9] + d[11] + 7 * d[12] - 14 * d[13]
+                            + 7 * d[14] + d[15] + 2 * d[17] - 5 * d[18] + 2 * d[19])
+                        : (-d[11] + 13 * d[12] - 24 * d[13] + 13 * d[14] - d[15]))
+                workspace[2] = predict(num, q[5], coefBits[5], limit: true)
+            }
+            if changeDC {
+                // AC03
+                if coefBits[6] != 0 && workspace[3] == 0 {
+                    let num = q00 * (d[7] - d[9] + 2 * d[12] - 2 * d[14] + d[17] - d[19])
+                    workspace[3] = predict(num, q[6], coefBits[6], limit: true)
+                }
+                // AC12
+                if coefBits[7] != 0 && workspace[10] == 0 {
+                    let num = q00 * (d[7] - 3 * d[8] + d[9] - d[17] + 3 * d[18] - d[19])
+                    workspace[10] = predict(num, q[7], coefBits[7], limit: true)
+                }
+                // AC21
+                if coefBits[8] != 0 && workspace[17] == 0 {
+                    let num = q00 * (d[7] - d[9] - 3 * d[12] + 3 * d[14] + d[17] - d[19])
+                    workspace[17] = predict(num, q[8], coefBits[8], limit: true)
+                }
+                // AC30
+                if coefBits[9] != 0 && workspace[24] == 0 {
+                    let num = q00 * (d[7] + 2 * d[8] + d[9] - d[17] - 2 * d[18] - d[19])
+                    workspace[24] = predict(num, q[9], coefBits[9], limit: true)
+                }
+                // DC
+                let num =
+                    q00
+                    * (-2 * d[1] - 6 * d[2] - 8 * d[3] - 6 * d[4] - 2 * d[5] - 6 * d[6] + 6 * d[7]
+                        + 42 * d[8] + 6 * d[9] - 6 * d[10] - 8 * d[11] + 42 * d[12] + 152 * d[13]
+                        + 42 * d[14] - 8 * d[15] - 6 * d[16] + 6 * d[17] + 42 * d[18] + 6 * d[19]
+                        - 6 * d[20] - 2 * d[21] - 6 * d[22] - 8 * d[23] - 6 * d[24] - 2 * d[25])
+                workspace[0] = predict(num, q00, 0, limit: false)
+            }
+        }
+    }
+
+    // MARK: Upsampling and colour
+
+    /// A component's upsampling method (jdsample.c).
+    enum Upsampling: Equatable {
+        case full, h2v1Fancy, h1v2Fancy, h2v2Fancy
+        /// `int_upsample`, `h2v1_upsample` and `h2v2_upsample`: replication.
+        case replicate(Int, Int)
+    }
+
+    /// Output row `y` of a component at the full width: the triangle ("fancy") filters for 2:1
+    /// horizontally (when the component is more than 2 samples wide), vertically, or both, and
+    /// replication otherwise. Rows above the first and below the last are the first and last
+    /// rows, as libjpeg's context rows (jdmainct.c) repeat them.
+    static func upsampleRow(
+        _ y: Int, _ method: Upsampling, _ component: Component, plane: UnsafePointer<UInt8>,
+        width: Int, into out: UnsafeMutablePointer<UInt8>, scratch: UnsafeMutablePointer<Int>
+    ) {
+        let stride = component.widthInBlocks * 8
+        let cw = component.width
+        let ch = component.height
+        switch method {
+        case .full:
+            out.update(from: plane + y * stride, count: width)
+        case .h2v1Fancy:
+            let row = plane + y * stride
+            // Two samples per input sample, written to a full pair and trimmed to `width`.
+            for c in 0..<cw {
+                let value = Int(row[c]) * 3
+                let left = c == 0 ? Int(row[0]) : (value + Int(row[c - 1]) + 1) >> 2
+                let right = c == cw - 1 ? Int(row[c]) : (value + Int(row[c + 1]) + 2) >> 2
+                if 2 * c < width { out[2 * c] = UInt8(left) }
+                if 2 * c + 1 < width { out[2 * c + 1] = UInt8(right) }
+            }
+        case .h1v2Fancy:
+            let r = y >> 1
+            let below = y & 1 == 1
+            let near = plane + r * stride
+            let far = plane + (below ? min(r + 1, ch - 1) : max(r - 1, 0)) * stride
+            let bias = below ? 2 : 1
+            for x in 0..<width {
+                out[x] = UInt8((Int(near[x]) * 3 + Int(far[x]) + bias) >> 2)
+            }
+        case .h2v2Fancy:
+            let r = y >> 1
+            let near = plane + r * stride
+            let far = plane + (y & 1 == 1 ? min(r + 1, ch - 1) : max(r - 1, 0)) * stride
+            for c in 0..<cw { scratch[c] = Int(near[c]) * 3 + Int(far[c]) }
+            for c in 0..<cw {
+                let sum = scratch[c]
+                let left = c == 0 ? (sum * 4 + 8) >> 4 : (sum * 3 + scratch[c - 1] + 8) >> 4
+                let right = c == cw - 1 ? (sum * 4 + 7) >> 4 : (sum * 3 + scratch[c + 1] + 7) >> 4
+                if 2 * c < width { out[2 * c] = UInt8(left) }
+                if 2 * c + 1 < width { out[2 * c + 1] = UInt8(right) }
+            }
+        case .replicate(let hExpand, let vExpand):
+            let row = plane + (y / vExpand) * stride
+            for x in 0..<width { out[x] = row[x / hExpand] }
+        }
+    }
+
+    /// Whether a block's 64 coefficients are all zero.
+    @inline(__always)
+    static func isZero(_ block: UnsafePointer<Int16>) -> Bool {
+        let words = UnsafeRawPointer(block).assumingMemoryBound(to: UInt64.self)
+        var any: UInt64 = 0
+        for i in 0..<16 { any |= words[i] }
+        return any == 0
     }
 
     @inline(__always)
@@ -639,433 +2334,8 @@ enum LibjpegTurboDecoder {
         value < 0 ? 0 : value > 255 ? 255 : UInt8(value)
     }
 
-    // MARK: Entropy decoding
-
-    static func decodeScan(
-        _ components: inout [Component], scan: [Int], reader: inout BitReader,
-        dcTables: [HuffmanTable], acTables: [HuffmanTable], progressive: Bool, ss: Int, se: Int,
-        ah: Int, al: Int, restartInterval: Int, mcusPerLine: Int, mcusPerColumn: Int
-    ) throws {
-        for index in scan { components[index].predictor = 0 }
-        var eobrun = 0
-
-        // One block: decode it in place in the component's coefficients.
-        func block(_ c: Int, row: Int, column: Int) throws(Unsupported) {
-            let base = (row * components[c].blocksPerLine + column) * 64
-            if !progressive {
-                let s = try reader.decode(dcTables[components[c].dcTable])
-                components[c].predictor += reader.received(s)
-                components[c].coefficients[base] = Int16(
-                    truncatingIfNeeded: components[c].predictor)
-                let table = acTables[components[c].acTable]
-                var k = 1
-                while k < 64 {
-                    let rs = try reader.decode(table)
-                    let r = rs >> 4
-                    let s = rs & 15
-                    if s != 0 {
-                        k += r
-                        components[c].coefficients[base + naturalOrder[k]] = Int16(
-                            truncatingIfNeeded: reader.received(s))
-                    } else {
-                        if r != 15 { break }
-                        k += 15
-                    }
-                    k += 1
-                }
-                return
-            }
-            if ss == 0 {
-                if ah == 0 {
-                    let s = try reader.decode(dcTables[components[c].dcTable])
-                    components[c].predictor += reader.received(s)
-                    components[c].coefficients[base] = Int16(
-                        truncatingIfNeeded: components[c].predictor << al)
-                } else if reader.bit() != 0 {
-                    components[c].coefficients[base] |= Int16(truncatingIfNeeded: 1 << al)
-                }
-                return
-            }
-            let table = acTables[components[c].acTable]
-            if ah == 0 {
-                // decode_mcu_AC_first
-                if eobrun > 0 {
-                    eobrun -= 1
-                    return
-                }
-                var k = ss
-                while k <= se {
-                    let rs = try reader.decode(table)
-                    let r = rs >> 4
-                    let s = rs & 15
-                    if s != 0 {
-                        k += r
-                        components[c].coefficients[base + naturalOrder[k]] = Int16(
-                            truncatingIfNeeded: reader.received(s) << al)
-                    } else if r == 15 {
-                        k += 15
-                    } else {
-                        eobrun = 1 << r
-                        if r != 0 { eobrun += reader.bits(r) }
-                        eobrun -= 1
-                        break
-                    }
-                    k += 1
-                }
-                return
-            }
-            // decode_mcu_AC_refine
-            let p1 = 1 << al
-            let m1 = -1 << al
-            func refine(_ position: Int) {
-                let value = Int(components[c].coefficients[position])
-                if reader.bit() != 0, value & p1 == 0 {
-                    components[c].coefficients[position] = Int16(
-                        truncatingIfNeeded: value >= 0 ? value + p1 : value + m1)
-                }
-            }
-            var k = ss
-            if eobrun == 0 {
-                while k <= se {
-                    let rs = try reader.decode(table)
-                    var r = rs >> 4
-                    var s = rs & 15
-                    if s != 0 {
-                        s = reader.bit() != 0 ? p1 : m1
-                    } else if r != 15 {
-                        eobrun = 1 << r
-                        if r != 0 { eobrun += reader.bits(r) }
-                        break
-                    }
-                    repeat {
-                        let position = base + naturalOrder[k]
-                        if components[c].coefficients[position] != 0 {
-                            refine(position)
-                        } else {
-                            r -= 1
-                            if r < 0 { break }
-                        }
-                        k += 1
-                    } while k <= se
-                    if s != 0 {
-                        components[c].coefficients[base + naturalOrder[k]] = Int16(
-                            truncatingIfNeeded: s)
-                    }
-                    k += 1
-                }
-            }
-            if eobrun > 0 {
-                while k <= se {
-                    let position = base + naturalOrder[k]
-                    if components[c].coefficients[position] != 0 {
-                        refine(position)
-                    }
-                    k += 1
-                }
-                eobrun -= 1
-            }
-        }
-
-        var mcusToRestart = restartInterval
-        func restartIfDue() throws {
-            guard restartInterval > 0 else { return }
-            if mcusToRestart == 0 {
-                try reader.restart()
-                for index in scan { components[index].predictor = 0 }
-                eobrun = 0
-                mcusToRestart = restartInterval
-            }
-            mcusToRestart -= 1
-        }
-
-        if scan.count == 1 {
-            // A non-interleaved scan covers the component's own blocks, one per MCU.
-            let c = scan[0]
-            let columns = (components[c].width + 7) / 8
-            let rows = (components[c].height + 7) / 8
-            for row in 0..<rows {
-                for column in 0..<columns {
-                    try restartIfDue()
-                    try block(c, row: row, column: column)
-                }
-            }
-        } else {
-            for mcuRow in 0..<mcusPerColumn {
-                for mcuColumn in 0..<mcusPerLine {
-                    try restartIfDue()
-                    for c in scan {
-                        for by in 0..<components[c].v {
-                            for bx in 0..<components[c].h {
-                                try block(
-                                    c, row: mcuRow * components[c].v + by,
-                                    column: mcuColumn * components[c].h + bx)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        // Leave the reader at the marker that ends the scan.
-        reader.position = nextMarker(in: reader.bytes, from: reader.position)
-    }
-
-    /// The position of the next marker other than a restart, from `position`.
-    static func nextMarker(in bytes: [UInt8], from position: Int) -> Int {
-        var at = position
-        while at + 1 < bytes.count {
-            if bytes[at] == 0xFF {
-                let next = bytes[at + 1]
-                if next != 0x00 && next != 0xFF && !(0xD0...0xD7).contains(next) {
-                    return at
-                }
-            }
-            at += 1
-        }
-        return bytes.count
-    }
-
-    // MARK: Inverse DCT
-
-    /// `jpeg_idct_islow` over every block of a component: its samples on the padded grid,
-    /// `blocksPerLine * 8` per row.
-    static func inverseDCT(_ component: Component, quant: [Int]) -> [UInt8] {
-        let stride = component.blocksPerLine * 8
-        var plane = [UInt8](repeating: 0, count: stride * component.blocksPerColumn * 8)
-        var workspace = [Int](repeating: 0, count: 64)
-        var input = [Int](repeating: 0, count: 64)
-        for row in 0..<component.blocksPerColumn {
-            for column in 0..<component.blocksPerLine {
-                let base = (row * component.blocksPerLine + column) * 64
-                for i in 0..<64 { input[i] = Int(component.coefficients[base + i]) }
-                idctIslow(input, quant: quant, workspace: &workspace) { y, x, value in
-                    plane[(row * 8 + y) * stride + column * 8 + x] = value
-                }
-            }
-        }
-        return plane
-    }
-
-    static let constBits = 13
-    static let pass1Bits = 2
-
-    /// `range_limit[x & RANGE_MASK]` of the post-IDCT table: the value plus 128, clamped, with
-    /// the table's wraparound for the 10 low bits.
-    @inline(__always)
-    static func rangeLimit(_ x: Int) -> UInt8 {
-        let masked = x & 1023
-        let signed = masked < 512 ? masked : masked - 1024
-        return clamp(signed + 128)
-    }
-
-    @inline(__always)
-    static func descale(_ x: Int, _ n: Int) -> Int { (x + (1 << (n - 1))) >> n }
-
-    static func idctIslow(
-        _ input: [Int], quant: [Int], workspace: inout [Int],
-        store: (Int, Int, UInt8) -> Void
-    ) {
-        let fix0298631336 = 2446
-        let fix0390180644 = 3196
-        let fix0541196100 = 4433
-        let fix0765366865 = 6270
-        let fix0899976223 = 7373
-        let fix1175875602 = 9633
-        let fix1501321110 = 12299
-        let fix1847759065 = 15137
-        let fix1961570560 = 16069
-        let fix2053119869 = 16819
-        let fix2562915447 = 20995
-        let fix3072711026 = 25172
-        // Pass 1: columns.
-        for col in 0..<8 {
-            func q(_ row: Int) -> Int { input[row * 8 + col] * quant[row * 8 + col] }
-            if (1..<8).allSatisfy({ input[$0 * 8 + col] == 0 }) {
-                let dc = q(0) << pass1Bits
-                for row in 0..<8 { workspace[row * 8 + col] = dc }
-                continue
-            }
-            var z2 = q(2)
-            var z3 = q(6)
-            var z1 = (z2 + z3) * fix0541196100
-            var tmp2 = z1 + z3 * -fix1847759065
-            var tmp3 = z1 + z2 * fix0765366865
-            z2 = q(0)
-            z3 = q(4)
-            var tmp0 = (z2 + z3) << constBits
-            var tmp1 = (z2 - z3) << constBits
-            let tmp10 = tmp0 + tmp3
-            let tmp13 = tmp0 - tmp3
-            let tmp11 = tmp1 + tmp2
-            let tmp12 = tmp1 - tmp2
-            tmp0 = q(7)
-            tmp1 = q(5)
-            tmp2 = q(3)
-            tmp3 = q(1)
-            z1 = tmp0 + tmp3
-            z2 = tmp1 + tmp2
-            z3 = tmp0 + tmp2
-            var z4 = tmp1 + tmp3
-            let z5 = (z3 + z4) * fix1175875602
-            tmp0 *= fix0298631336
-            tmp1 *= fix2053119869
-            tmp2 *= fix3072711026
-            tmp3 *= fix1501321110
-            z1 *= -fix0899976223
-            z2 *= -fix2562915447
-            z3 *= -fix1961570560
-            z4 *= -fix0390180644
-            z3 += z5
-            z4 += z5
-            tmp0 += z1 + z3
-            tmp1 += z2 + z4
-            tmp2 += z2 + z3
-            tmp3 += z1 + z4
-            let shift = constBits - pass1Bits
-            workspace[0 * 8 + col] = descale(tmp10 + tmp3, shift)
-            workspace[7 * 8 + col] = descale(tmp10 - tmp3, shift)
-            workspace[1 * 8 + col] = descale(tmp11 + tmp2, shift)
-            workspace[6 * 8 + col] = descale(tmp11 - tmp2, shift)
-            workspace[2 * 8 + col] = descale(tmp12 + tmp1, shift)
-            workspace[5 * 8 + col] = descale(tmp12 - tmp1, shift)
-            workspace[3 * 8 + col] = descale(tmp13 + tmp0, shift)
-            workspace[4 * 8 + col] = descale(tmp13 - tmp0, shift)
-        }
-        // Pass 2: rows.
-        for row in 0..<8 {
-            let w = row * 8
-            if (1..<8).allSatisfy({ workspace[w + $0] == 0 }) {
-                let dc = rangeLimit(descale(workspace[w], pass1Bits + 3))
-                for x in 0..<8 { store(row, x, dc) }
-                continue
-            }
-            var z2 = workspace[w + 2]
-            var z3 = workspace[w + 6]
-            var z1 = (z2 + z3) * fix0541196100
-            var tmp2 = z1 + z3 * -fix1847759065
-            var tmp3 = z1 + z2 * fix0765366865
-            var tmp0 = (workspace[w] + workspace[w + 4]) << constBits
-            var tmp1 = (workspace[w] - workspace[w + 4]) << constBits
-            let tmp10 = tmp0 + tmp3
-            let tmp13 = tmp0 - tmp3
-            let tmp11 = tmp1 + tmp2
-            let tmp12 = tmp1 - tmp2
-            tmp0 = workspace[w + 7]
-            tmp1 = workspace[w + 5]
-            tmp2 = workspace[w + 3]
-            tmp3 = workspace[w + 1]
-            z1 = tmp0 + tmp3
-            z2 = tmp1 + tmp2
-            z3 = tmp0 + tmp2
-            var z4 = tmp1 + tmp3
-            let z5 = (z3 + z4) * fix1175875602
-            tmp0 *= fix0298631336
-            tmp1 *= fix2053119869
-            tmp2 *= fix3072711026
-            tmp3 *= fix1501321110
-            z1 *= -fix0899976223
-            z2 *= -fix2562915447
-            z3 *= -fix1961570560
-            z4 *= -fix0390180644
-            z3 += z5
-            z4 += z5
-            tmp0 += z1 + z3
-            tmp1 += z2 + z4
-            tmp2 += z2 + z3
-            tmp3 += z1 + z4
-            let shift = constBits + pass1Bits + 3
-            store(row, 0, rangeLimit(descale(tmp10 + tmp3, shift)))
-            store(row, 7, rangeLimit(descale(tmp10 - tmp3, shift)))
-            store(row, 1, rangeLimit(descale(tmp11 + tmp2, shift)))
-            store(row, 6, rangeLimit(descale(tmp11 - tmp2, shift)))
-            store(row, 2, rangeLimit(descale(tmp12 + tmp1, shift)))
-            store(row, 5, rangeLimit(descale(tmp12 - tmp1, shift)))
-            store(row, 3, rangeLimit(descale(tmp13 + tmp0, shift)))
-            store(row, 4, rangeLimit(descale(tmp13 - tmp0, shift)))
-        }
-    }
-
-    // MARK: Upsampling and colour
-
-    /// One component brought to the full `width` by `height`, as `jinit_upsampler` chooses:
-    /// unchanged at full size, the triangle ("fancy") filters for 2:1 horizontally (when the
-    /// component is more than 2 samples wide), vertically, or both, and replication otherwise.
-    /// Rows above the first and below the last are the first and last rows, as libjpeg's
-    /// context rows replicate them.
-    static func upsample(
-        _ plane: [UInt8], component: Component, maxH: Int, maxV: Int, width: Int, height: Int
-    ) -> [UInt8] {
-        let stride = component.blocksPerLine * 8
-        let cw = component.width
-        let ch = component.height
-        var out = [UInt8](repeating: 0, count: width * height)
-        func sample(_ y: Int, _ x: Int) -> Int { Int(plane[y * stride + x]) }
-        let h2 = component.h * 2 == maxH
-        let v2 = component.v * 2 == maxV
-        let hSame = component.h == maxH
-        let vSame = component.v == maxV
-        if hSame && vSame {
-            for y in 0..<height {
-                for x in 0..<width { out[y * width + x] = plane[y * stride + x] }
-            }
-        } else if h2 && vSame && cw > 2 {
-            var row = [UInt8](repeating: 0, count: cw * 2)
-            for y in 0..<height {
-                row[0] = UInt8(sample(y, 0))
-                row[1] = UInt8((sample(y, 0) * 3 + sample(y, 1) + 2) >> 2)
-                if cw > 2 {
-                    for c in 1..<(cw - 1) {
-                        let value = sample(y, c) * 3
-                        row[2 * c] = UInt8((value + sample(y, c - 1) + 1) >> 2)
-                        row[2 * c + 1] = UInt8((value + sample(y, c + 1) + 2) >> 2)
-                    }
-                }
-                let last = cw - 1
-                row[2 * last] = UInt8((sample(y, last) * 3 + sample(y, last - 1) + 1) >> 2)
-                row[2 * last + 1] = UInt8(sample(y, last))
-                for x in 0..<width { out[y * width + x] = row[x] }
-            }
-        } else if hSame && v2 {
-            for y in 0..<height {
-                let r = y >> 1
-                let below = y & 1 == 1
-                let other = below ? min(r + 1, ch - 1) : max(r - 1, 0)
-                let bias = below ? 2 : 1
-                for x in 0..<width {
-                    out[y * width + x] = UInt8((sample(r, x) * 3 + sample(other, x) + bias) >> 2)
-                }
-            }
-        } else if h2 && v2 && cw > 2 {
-            var sums = [Int](repeating: 0, count: cw)
-            var row = [UInt8](repeating: 0, count: cw * 2)
-            for y in 0..<height {
-                let r = y >> 1
-                let other = y & 1 == 1 ? min(r + 1, ch - 1) : max(r - 1, 0)
-                for c in 0..<cw { sums[c] = sample(r, c) * 3 + sample(other, c) }
-                row[0] = UInt8((sums[0] * 4 + 8) >> 4)
-                row[1] = UInt8((sums[0] * 3 + sums[1] + 7) >> 4)
-                for c in 1..<(cw - 1) {
-                    row[2 * c] = UInt8((sums[c] * 3 + sums[c - 1] + 8) >> 4)
-                    row[2 * c + 1] = UInt8((sums[c] * 3 + sums[c + 1] + 7) >> 4)
-                }
-                let last = cw - 1
-                row[2 * last] = UInt8((sums[last] * 3 + sums[last - 1] + 8) >> 4)
-                row[2 * last + 1] = UInt8((sums[last] * 4 + 7) >> 4)
-                for x in 0..<width { out[y * width + x] = row[x] }
-            }
-        } else {
-            // int_upsample (and h2v1_upsample, h2v2_upsample): replication.
-            let hExpand = maxH / component.h
-            let vExpand = maxV / component.v
-            for y in 0..<height {
-                for x in 0..<width {
-                    out[y * width + x] = plane[(y / vExpand) * stride + x / hExpand]
-                }
-            }
-        }
-        return out
-    }
-
-    /// `build_ycc_rgb_table`, 16-bit fixed point.
+    /// `build_ycc_rgb_table`, 16-bit fixed point. The Neon conversion libjpeg-turbo runs on
+    /// Apple silicon gives the same bytes for every input.
     struct ColorTables: Sendable {
         var crR = [Int](repeating: 0, count: 256)
         var cbB = [Int](repeating: 0, count: 256)

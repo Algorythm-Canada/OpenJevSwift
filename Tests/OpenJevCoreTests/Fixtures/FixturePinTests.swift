@@ -106,6 +106,9 @@ struct FixturePinTests {
     /// jevk5/ holds JevK5's reads, which Tools/jevk5 records through upstream's code and the
     /// `jevk5` package with the JevK5 checkpoint's own tokenizer, so it pins upstream, the
     /// package and the checkpoint.
+    /// vision/jpeg_cases.json holds what upstream's image decode (`ImagePrompt.pil`, which is
+    /// Pillow) makes of JPEGs built from the committed fixture images, with no tokenizer, so it
+    /// pins upstream, Pillow and the libjpeg-turbo Pillow bundles.
     /// Every other file comes from upstream's code with the real tokenizer and records both pins
     /// and the version of the script that wrote it.
     static func problems(in generator: JSONValue, of file: String) -> [String] {
@@ -139,6 +142,19 @@ struct FixturePinTests {
             expect("checkpoint_repo", jevk5Repository)
             expect("checkpoint_revision", jevk5Revision)
             for key in ["python", "mlx", "conversion_sha256"]
+            where generator[key]?.stringValue == nil {
+                out.append("\(file): generator.\(key) is missing")
+            }
+            if generator["version"]?.intValue == nil {
+                out.append("\(file): generator.version is missing")
+            }
+            return out
+        }
+        if file == "vision/jpeg_cases.json" {
+            expect("script", "Tools/fixtures/jpeg_cases.py")
+            expect("upstream", "razorback16/openjev")
+            expect("upstream_commit", upstreamCommit)
+            for key in ["python", "pillow", "libjpeg_turbo"]
             where generator[key]?.stringValue == nil {
                 out.append("\(file): generator.\(key) is missing")
             }

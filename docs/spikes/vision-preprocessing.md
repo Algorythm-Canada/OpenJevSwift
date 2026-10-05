@@ -153,6 +153,9 @@ Pillow's bytes on every fixture JPEG. Ten more JPEGs made for this spike with Pi
 colour conversion, two progressive 4:2:0 with a restart every MCU row, and images of 2 by 3 and 5
 by 2 pixels. They are not committed. An eleventh, arithmetic-coded, is one the port does not
 cover, so it goes to ImageIO (0.110 off, below).
+After PR #121's review the port also follows libjpeg-turbo on damaged and unusual data, and
+computes the IDCT as the Arm Neon code Pillow runs on Apple silicon does
+([below](#the-jpeg-decoder-after-the-review), D-055).
 
 The GIF test decodes frame 1 as well: it differs from frame 0, and processing it misses the
 fixture's bounds, so the bounds would catch a decoder that took the wrong frame.
@@ -225,18 +228,17 @@ be checked bit for bit (D-051).
   translucent PNGs and WebPs as `last`). Other layouts (16-bit PNG, translucent premultiplied
   images, CMYK) are drawn into an 8-bit sRGB context, which colour-manages and composites over
   black; none of the fixtures takes that path, and the review's measurements of it are below.
-- A request's image bytes are untrusted, so the JPEG port checks every segment as libjpeg does
-  (lengths, a second frame, DC symbols above 15, progressive scan parameters, fractional sampling
-  ratios, more than 10 blocks per MCU) and throws rather than reads past its input; such a JPEG
-  goes to ImageIO. A frame of more than 178,956,970 pixels, or a JPEG of more than 100 scans, is
-  refused outright. `JPEGRobustnessTests` feeds it each of those cases and 6,799 truncations and
-  corruptions of the fixture JPEGs: 3,703 decode, and the port reports the other 3,096 as
-  unsupported and hands them to ImageIO; none is refused outright, and none traps. CI runs a
-  subset of 459 that keeps every kind of mutation on every segment, and
-  `OPENJEV_TEST_JPEG_MUTATIONS=1` runs all 6,799 (docs/development.md). A truncated JPEG has no
-  EOI, so the port leaves it to ImageIO, which may decode what is there; Pillow's `load` raises
-  "image file is truncated" instead (the review confirmed it, below), so upstream would answer 500
-  where the port may read a partial image.
+- A request's image bytes are untrusted, so the JPEG port refuses, as a `VisionError`, the JPEGs on
+  which upstream's Pillow or its libjpeg-turbo raises, and hands to ImageIO only the
+  arithmetic-coded, lossless and 4-component JPEGs it does not cover, which Pillow decodes. Decoding
+  work stays in proportion to the input, and a JPEG whose scans would visit more than 838,860,600
+  blocks one at a time is refused (D-055, which lists the exceptions). `JPEGParityTests` holds it to
+  Pillow on 185 regression cases (`Fixtures/vision/jpeg_cases.json`), and `JPEGRobustnessTests`
+  feeds it truncations and corruptions of the fixture JPEGs, each of which must decode or be refused
+  within the bound on work: in CI a subset of 866 that keeps every kind of mutation on every
+  segment, and all 7,650 with `OPENJEV_TEST_JPEG_MUTATIONS=1` (docs/development.md). A truncated
+  JPEG is refused where Pillow's `load` raises "image file is truncated", and decoded where Pillow
+  decodes it, as when only the EOI is missing after a single scan.
 - No timing was measured: two other jobs shared the machine.
 - The Layr-Labs fork's `DiffusionGemmaProcessor.swift`, `DiffusionGemmaImagePixels.swift` and
   `DiffusionGemmaBicubicRGB.swift` were not used; nothing here derives from them.
@@ -259,12 +261,46 @@ every figure below was rerun for this report on the same machine with the port's
   16-bit Display P3 PNG by 0.471; 16-bit translucent RGBA by 1.000 (the drawn path composites over
   black); CMYK and Adobe CMYK JPEGs, which go to the ImageIO fallback, by 0.525 to 0.529; an
   arithmetic-coded JPEG by 0.110.
-- Accepted by the port where upstream raises, for #47 to decide on the wire rather than here: a
-  JPEG missing only its EOI, on which Pillow raises "image file is truncated" (on the review's two
-  such files; `baseline.jpg` without its EOI decodes on both sides), a JPEG cut in half (the same
-  error), and HEIC bytes labelled `image/jpeg` (Pillow's `UnidentifiedImageError`, which upstream
-  answers with a 500). All three reach ImageIO, which decodes what is there: the JPEG port hands
-  it the two JPEGs, and the HEIC bytes are no JPEG.
+- Accepted by the port where upstream raises, when the review ran: HEIC bytes labelled
+  `image/jpeg` (Pillow's `UnidentifiedImageError`, which upstream answers with a 500), JPEGs
+  missing only their EOI on which Pillow raises "image file is truncated", and JPEGs cut short
+  (the same error), all of which reached ImageIO. All three are refused now: the HEIC bytes by
+  their signature (D-054), the two JPEGs by the JPEG port (D-055, the fixture's `eof_` cases),
+  which still decodes `baseline.jpg` without its EOI, as Pillow does.
+
+## The JPEG decoder after the review
+
+The review's fuzzing ran the JPEG port and Pillow 12.3.0 over 211,936 generated JPEGs. The port gave
+Pillow's bytes for 33,286 of them; it gave other bytes for 15,799, decoded 2,584 on which Pillow
+raises, and handed 160,252 to ImageIO, 12,300 of them ones Pillow decodes. D-055 records what
+changed and why; in short, the port now follows libjpeg-turbo 3.1.4.1 and Pillow where the review
+found it did not (scan data that runs out, libjpeg-turbo's and Pillow's refusals, the standard
+Huffman tables, codes longer than 16 bits, restart resynchronisation, the limit of 10 blocks per MCU
+per scan), adds block smoothing, and holds less memory at the pixel limit. Three more things decide
+Pillow's bytes, and are ported too: the inverse DCT is libjpeg-turbo's Arm Neon code, whose 16-bit
+arithmetic differs from jidctint.c's on corrupt data; libjpeg-turbo's fast Huffman path leaves the
+coefficients it wrote when it meets a marker or FF FF and the slow path decodes the MCU again over
+them; and Pillow's 65,536-byte reads decide which MCUs take the fast path, and where reading stops
+after a single scan's last row.
+
+Method. Each corpus went through Pillow (`Image.open(...).convert("RGB")` in `Tools/oracle/.venv`,
+run afresh) and through a standalone optimized build of the decoder's three source files, and the
+outcomes were compared per file: the same RGB bytes, or a refusal where Pillow raises. Ablations
+showed that the files made for the fast path and the 65,536-byte reads tell those rules apart:
+without the fast path's stale coefficients 802 of those 3,973 files differ from Pillow, and without
+the 65,536-byte reads 219 do. The libjpeg-turbo sources were read for every rule, and its Homebrew
+build (3.1.4.1, linked into small C programs) settled questions about coefficients and
+`last_good_iMCU_row` where Pillow shows only pixels. Now every file of the review's corpora and of
+7,847 more made for this change decodes to Pillow's bytes or is refused where Pillow raises, except
+41 arithmetic-coded or lossless files, which go to ImageIO as D-051 decided (2 of them lossless
+files Pillow refuses, D-055 item 7); an AddressSanitizer build gives the same outcomes with no
+report.
+
+The review's recorded Pillow results for its batches `st1` to `st8` (JPEGs with random tables)
+did not reproduce: 2,275 files decode to the same size with other bytes when Pillow is run again.
+Every one of them equals the review's own run with libjpeg-turbo's SIMD code disabled, so those
+records came from the C inverse DCT, not the Neon one Pillow runs by default; the counts here use
+fresh runs, which repeat bit for bit.
 
 ## What #47 needs next
 

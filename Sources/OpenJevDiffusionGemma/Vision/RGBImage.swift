@@ -40,9 +40,11 @@ extension RGBImage {
     /// because ImageIO leaves the pixels of the transparent index, and the logical screen around
     /// the first frame, as (0, 0, 0, 0), where Pillow has a palette colour; it refuses every GIF
     /// on which Pillow raises. A JPEG goes through `LibjpegTurboDecoder`, a port of the
-    /// libjpeg-turbo that Pillow runs, because decoders are free to differ in the inverse DCT and
-    /// chroma upsampling and ImageIO's does (by up to 30 levels on upstream's hot dog photo). A
-    /// JPEG it does not cover (arithmetic-coded, lossless, 12-bit, CMYK) falls back to ImageIO.
+    /// libjpeg-turbo that Pillow runs and of Pillow's reading around it, because decoders are free
+    /// to differ in the inverse DCT and chroma upsampling and ImageIO's does (by up to 30 levels
+    /// on upstream's hot dog photo); it refuses every JPEG on which Pillow or libjpeg-turbo
+    /// raises. A JPEG Pillow decodes that it does not cover (arithmetic-coded, lossless, CMYK
+    /// and YCCK) falls back to ImageIO.
     /// Other formats are decoded by ImageIO, whose samples of 8-bit PNGs and of lossless and
     /// lossy WebPs, translucent ones included, equal PIL's (docs/spikes/vision-preprocessing.md).
     ///
@@ -83,8 +85,9 @@ extension RGBImage {
                 throw VisionError(error.description)
             }
         }
-        try Self.checkSize(of: data)
         if frame == 0, LibjpegTurboDecoder.isJPEG(bytes) {
+            // The decoder checks the size Pillow reads from the headers against Pillow's limit
+            // before it allocates anything; ImageIO's reading of them plays no part.
             do {
                 self = try LibjpegTurboDecoder.decode(bytes)
                 return
