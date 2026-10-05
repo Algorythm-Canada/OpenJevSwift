@@ -154,8 +154,151 @@ struct JPEGRobustnessTests {
         }
     }
 
-    /// Set to `1` to run every mutation (7,650 cases) rather than the subset CI runs, and to
-    /// decode the large parity cases in full: about 100 seconds in a debug build on an M3 Max.
+    // MARK: Arithmetic-coded and lossless JPEGs, read without decoding their scans (D-057)
+
+    /// What decoding gives, with the refusal's or the departure's reason.
+    static func answer(_ bytes: [UInt8]) -> String {
+        do {
+            _ = try Decoder.decode(bytes)
+            return "decoded"
+        } catch {
+            switch error {
+            case .refused(let refusal): return "refused: \(refusal)"
+            case .unsupported(let reason): return "unsupported: \(reason)"
+            }
+        }
+    }
+
+    /// A COM segment of `size` bytes in all, to move what follows it.
+    static func comment(size: Int) -> [UInt8] {
+        segment(0xFE, Array(repeating: 0x20, count: size - 4))
+    }
+
+    /// A DRI segment.
+    static func restartInterval(_ mcus: Int) -> [UInt8] { segment(0xDD, be16(mcus)) }
+
+    @Test("An arithmetic-coded scan's first two bytes past Pillow's first read are refused")
+    func arithmeticScanAtRead() {
+        // jdarith.c's first decision loads two bytes and cannot wait for more. The scan's data
+        // starts at `start` and runs on past 65,536 bytes.
+        func jpeg(start: Int) -> [UInt8] {
+            let head = Self.soi + Self.quant + Self.frame(0xC9, width: 64, height: 64)
+            let scan = Self.scan([1])
+            return head + Self.comment(size: start - head.count - scan.count) + scan
+                + Array(repeating: 0x55, count: 100) + Self.eoi
+        }
+        // With both in the read, only decoding would tell (Pillow raises on this one).
+        #expect(Self.answer(jpeg(start: 65_534)).hasPrefix("unsupported: an arithmetic-coded scan"))
+        #expect(Self.answer(jpeg(start: 65_535)).contains("JERR_CANT_SUSPEND"))
+        #expect(Self.answer(jpeg(start: 65_536)).contains("JERR_CANT_SUSPEND"))
+        // FF 00 is one byte of data, so the second is the one past the read.
+        var stuffed = jpeg(start: 65_534)
+        stuffed.replaceSubrange(65_534..<65_536, with: [0xFF, 0x00])
+        #expect(Self.answer(stuffed).contains("JERR_CANT_SUSPEND"))
+    }
+
+    @Test("A restart marker past Pillow's read is refused in an arithmetic-coded scan")
+    func arithmeticRestartAtRead() {
+        // Two MCUs with a restart between them: the first segment's data, RST0 at `restart`, and
+        // the second segment's data to 70,000 bytes.
+        func jpeg(restart: Int) -> [UInt8] {
+            let head =
+                Self.soi + Self.quant + Self.frame(0xC9, width: 16, height: 8)
+                + Self.restartInterval(1) + Self.scan([1])
+            let first = head + Array(repeating: 0x55, count: restart - head.count) + [0xFF, 0xD0]
+            return first + Array(repeating: 0x55, count: 70_000 - first.count) + Self.eoi
+        }
+        // process_restart reads to the marker and cannot suspend.
+        #expect(Self.answer(jpeg(restart: 65_535)).contains("JERR_CANT_SUSPEND"))
+        #expect(Self.answer(jpeg(restart: 66_000)).contains("JERR_CANT_SUSPEND"))
+        // The last segment may stop reading before the read's end: only decoding would tell
+        // (Pillow decodes this one).
+        #expect(
+            Self.answer(jpeg(restart: 60_000)).hasPrefix("unsupported: an arithmetic-coded scan"))
+        // Under the read, the file is handed over as one Pillow decodes.
+        let small = Array(jpeg(restart: 300).prefix(600)) + Self.eoi
+        #expect(Self.answer(small) == "unsupported: arithmetic-coded JPEGs are not covered")
+    }
+
+    @Test("A lossless scan cut shorter than its samples take at the fewest bits is refused")
+    func losslessShortScan() {
+        // 64 by 64 grey with one 1-bit code, a difference of 0: 4,096 samples read at least
+        // 4,096 bits, 512 bytes, before the last row is out.
+        let table = Self.segment(0xC4, [0x00, 1] + Array(repeating: 0, count: 15) + [0x00])
+        let head =
+            Self.soi + Self.frame(0xC3, width: 64, height: 64) + table
+            + Self.segment(0xDA, [1, 1, 0x00, 1, 0, 0])
+        #expect(Self.answer(head + Array(repeating: 0, count: 511)).contains("truncated"))
+        // At the bound, only decoding would tell (Pillow raises on this one: its fills read
+        // ahead).
+        #expect(
+            Self.answer(head + Array(repeating: 0, count: 512)).hasPrefix("unsupported: a lossless")
+        )
+        #expect(
+            Self.answer(head + Array(repeating: 0, count: 600) + Self.eoi)
+                == "unsupported: lossless JPEGs are not covered")
+    }
+
+    @Test("The fewest bits a lossless sample can take: its code and difference bits, or 17")
+    func fewestSampleBits() {
+        func table(_ codes: [(length: Int, symbol: UInt8)]) -> Decoder.HuffmanTable {
+            var counts = [Int](repeating: 0, count: 17)
+            for code in codes { counts[code.length] += 1 }
+            return Decoder.HuffmanTable(
+                counts: counts, values: codes.sorted { $0.length < $1.length }.map(\.symbol))
+        }
+        #expect(Decoder.fewestSampleBits(table([(1, 0)])) == 1)
+        #expect(Decoder.fewestSampleBits(table([(1, 9)])) == 10)
+        // Symbol 16 is a difference of 32,768 with no bits after it.
+        #expect(Decoder.fewestSampleBits(table([(2, 16), (3, 0)])) == 2)
+        #expect(Decoder.fewestSampleBits(table([(2, 5), (3, 0)])) == 3)
+        // A string that is no code costs 17 bits, fewer than the one code here.
+        #expect(Decoder.fewestSampleBits(table([(16, 15)])) == 17)
+    }
+
+    @Test("A component no scan of a multi-scan lossless JPEG reaches is refused")
+    func losslessComponentNeverScanned() {
+        let rgb = [(1, 1, 1), (2, 1, 1), (3, 1, 1)]
+        let table = Self.segment(0xC4, [0x00, 1] + Array(repeating: 0, count: 15) + [0x00])
+        let head = Self.soi + Self.frame(0xC3, width: 8, height: 8, components: rgb) + table
+        let scans = (1...3).map {
+            Self.segment(0xDA, [1, UInt8($0), 0x00, 1, 0, 0]) + Array(repeating: 0, count: 8)
+        }
+        #expect(
+            Self.answer(head + scans[0] + scans[1] + Self.eoi).contains("JERR_BAD_VIRTUAL_ACCESS"))
+        #expect(
+            Self.answer(head + scans.joined() + Self.eoi)
+                == "unsupported: lossless JPEGs are not covered")
+        // Not in an arithmetic-coded JPEG: jdcoefct.c has its arrays zeroed.
+        let arithmetic =
+            Self.soi + Self.quant + Self.frame(0xC9, width: 8, height: 8, components: rgb)
+            + Self.scan([1]) + [1, 2, 3, 4] + Self.eoi
+        #expect(Self.answer(arithmetic) == "unsupported: arithmetic-coded JPEGs are not covered")
+    }
+
+    @Test("Restart markers resynchronisation leaves twice keep the walk within the bound on work")
+    func restartMarkersLeftTwice() {
+        // 256 MCUs with a restart after each, and no data but restart markers, each two ahead of
+        // the one expected: jpeg_resync_to_restart leaves each for two restarts, then takes it.
+        let head =
+            Self.soi + Self.quant + Self.frame(0xC9, width: 2048, height: 8)
+            + Self.restartInterval(1) + Self.scan([1])
+        var data: [UInt8] = []
+        var number = 2
+        for _ in 0..<90 {
+            data += [0xFF, UInt8(0xD0 + number)]
+            number = (number + 3) % 8
+        }
+        let bytes = head + data + Self.eoi
+        var work = Decoder.Work()
+        #expect(Self.outcome(bytes, work: &work) == .unsupported)
+        #expect(work.restarts == 255, "\(work)")
+        #expect(JPEGParityTests.withinBound(work, bytes: bytes.count), "\(work)")
+    }
+
+    /// Set to `1` to run every mutation (7,650 cases of the fixture JPEGs, 2,224 of the
+    /// arithmetic-coded and lossless cases) rather than the subset CI runs, and to decode the
+    /// large parity cases in full: about 100 seconds in a debug build on an M3 Max.
     static let allMutationsVariable = "OPENJEV_TEST_JPEG_MUTATIONS"
 
     /// The four values each corrupted byte takes.
@@ -295,5 +438,32 @@ struct JPEGRobustnessTests {
                     subset.contains(.cut(segment.start, eoi: true)), "\(name) at \(segment.start)")
             }
         }
+    }
+
+    @Test("Truncations and corruptions of arithmetic-coded and lossless cases never trap")
+    func undecodedMutations() throws {
+        // Multi-scan and single-scan, with restart markers, from Fixtures/vision/jpeg_cases.json.
+        let names: Set = [
+            "arith_multiscan", "arith_restart_resync", "lossless_multiscan",
+            "lossless_restart_resync", "lossless_restart_changed_between_scans",
+        ]
+        let all = ProcessInfo.processInfo.environment[Self.allMutationsVariable] == "1"
+        var outcomes: [Outcome: Int] = [:]
+        var outside: [String] = []
+        let cases = try JPEGCases.all().filter { names.contains($0.name) }
+        #expect(cases.count == names.count)
+        for jpeg in cases {
+            for mutation in Self.mutations(of: jpeg.bytes, all: all) {
+                let bytes = mutation.apply(to: jpeg.bytes)
+                var work = Decoder.Work()
+                outcomes[Self.outcome(bytes, work: &work), default: 0] += 1
+                if !JPEGParityTests.withinBound(work, bytes: bytes.count) {
+                    outside.append("\(jpeg.name) \(mutation): \(work)")
+                }
+            }
+        }
+        print("Arithmetic-coded and lossless JPEG mutations: \(outcomes)")
+        #expect((outcomes[.unsupported] ?? 0) > 0 && (outcomes[.refused] ?? 0) > 0)
+        #expect(outside.isEmpty, "work out of proportion to the input: \(outside.prefix(5))")
     }
 }

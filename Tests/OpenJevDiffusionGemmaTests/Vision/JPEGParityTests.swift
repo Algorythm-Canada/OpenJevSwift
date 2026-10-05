@@ -12,9 +12,12 @@ import Testing
 /// bits, restart markers out of sequence or missing, blocks per MCU counted per scan, block
 /// smoothing, the Neon inverse DCT, libjpeg-turbo's fast Huffman path and Pillow's 65,536-byte
 /// reads. They also cover the end of a single-scan JPEG, where Pillow reads no further than the
-/// 65,536-byte reads it has made, and the checks of a lossless JPEG's first scan. Four of them declare 13,376 by 13,376 pixels from a few hundred
-/// bytes; the CI run decodes their entropy-coded data but not their pixels, which take minutes in
-/// a debug build; set `OPENJEV_TEST_JPEG_MUTATIONS=1` to decode them fully.
+/// 65,536-byte reads it has made, and arithmetic-coded and lossless JPEGs, which the port reads
+/// without decoding their scans' data: each scan's checks, the markers between and after the
+/// scans, restart markers, reads past Pillow's buffer in an arithmetic-coded scan, and the end of
+/// the file (D-057). Four of them declare 13,376 by 13,376 pixels from a few hundred bytes; the CI
+/// run decodes their entropy-coded data but not their pixels, which take minutes in a debug build;
+/// set `OPENJEV_TEST_JPEG_MUTATIONS=1` to decode them fully.
 @Suite("JPEG decoder parity with Pillow on the regression cases")
 struct JPEGParityTests {
     typealias Decoder = LibjpegTurboDecoder
@@ -30,14 +33,14 @@ struct JPEGParityTests {
     @Test("The cases are the recorded bytes, and cover decodes, refusals and departures")
     func cases() throws {
         let cases = try JPEGCases.all()
-        #expect(cases.count >= 185)
+        #expect(cases.count >= 213)
         for jpeg in cases {
             #expect(jpeg.bytes.count == jpeg.count, "\(jpeg.name)")
             #expect(VisionFixtures.sha256(jpeg.bytes) == jpeg.sha256, "\(jpeg.name)")
         }
-        #expect(cases.filter { $0.decoded != nil }.count >= 113)
-        #expect(cases.filter { $0.error != nil }.count >= 72)
-        #expect(cases.filter { $0.port == "unsupported" }.count == 5)
+        #expect(cases.filter { $0.decoded != nil }.count >= 122)
+        #expect(cases.filter { $0.error != nil }.count >= 91)
+        #expect(cases.filter { $0.port == "unsupported" }.count == 17)
     }
 
     @Test("Each case decodes to Pillow's bytes, or is refused where Pillow raised")
@@ -76,7 +79,7 @@ struct JPEGParityTests {
             }
             compared += 1
         }
-        #expect(compared >= (Self.everything ? 185 : 181))
+        #expect(compared >= (Self.everything ? 213 : 209))
     }
 
     /// The bound on decoding work: each block read costs at least a bit, and a block finished

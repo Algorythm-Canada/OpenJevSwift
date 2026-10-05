@@ -4,14 +4,17 @@ and unusual data, for LibjpegTurboDecoder's regression tests.
 The JPEG port (Sources/OpenJevDiffusionGemma/Vision/LibjpegTurboDecoder.swift) must decode every
 JPEG to the bytes upstream's `ImagePrompt.pil` gives (`PIL.Image.open(...).convert("RGB")`, with
 the libjpeg-turbo 3.1.4.1 that Pillow 12.3.0 bundles) and refuse every JPEG on which it raises.
-This script builds a set of small cases that pin the behaviour a fuzzing review of the port found
-it lacked: scan data that runs out, the refusals of libjpeg-turbo and of Pillow's own header
-reading, the standard Huffman tables, codes longer than 16 bits, restart markers out of sequence
-or missing, blocks per MCU counted per scan, block smoothing, the Arm Neon inverse DCT's 16-bit
-arithmetic, and libjpeg-turbo's fast Huffman path and Pillow's 65,536-byte reads. Six more pin
-the end of a single-scan JPEG, where Pillow reads no further than the 65,536-byte reads it has
-made, and seven the checks of a lossless JPEG's first scan. It runs each case through upstream's `ImagePrompt.pil` and writes
-Fixtures/vision/jpeg_cases.json.
+This script builds a set of small cases that pin the behaviour a fuzzing review of the port found it
+lacked: scan data that runs out, the refusals of libjpeg-turbo and of Pillow's own header reading,
+the standard Huffman tables, codes longer than 16 bits, restart markers out of sequence or missing,
+blocks per MCU counted per scan, block smoothing, the Arm Neon inverse DCT's 16-bit arithmetic, and
+libjpeg-turbo's fast Huffman path and Pillow's 65,536-byte reads. Six more pin the end of a
+single-scan JPEG, where Pillow reads no further than the 65,536-byte reads it has made, and seven
+the checks of a lossless JPEG's first scan. Twenty-eight (D-057) pin arithmetic-coded and lossless
+JPEGs past their first scan, which the port reads without decoding their scans' data: faults in
+later scans, restart markers, arithmetic-coded scans at the 65,536-byte reads (jdarith.c cannot
+suspend), single scans cut short or followed by a fault, and a lossless component no scan reaches.
+It runs each case through upstream's `ImagePrompt.pil` and writes Fixtures/vision/jpeg_cases.json.
 
 Each case is built from one of the committed JPEGs (Fixtures/vision/baseline.jpg and
 progressive.jpg, which Tools/fixtures/vision_oracle.py draws) or from bytes this script writes out
@@ -32,7 +35,8 @@ edits, checks the bytes' SHA-256, and compares its decode with the record: `deco
 the SHA-256 of the RGB bytes) or `error` (the exception upstream raises, which the port must answer
 with a refusal). A case with `port` set is one where the port knowingly departs: `unsupported`
 means it hands the JPEG to ImageIO (arithmetic coding, lossless, 4 components) after the checks
-it shares with libjpeg-turbo for those.
+it shares with libjpeg-turbo for those, either because Pillow decodes it or because only decoding
+its scans would tell whether Pillow raises (a `note` saying "undecided").
 
 With `--check` nothing is written: the run is compared with the committed file.
 
@@ -103,6 +107,11 @@ def sos(components, ss=0, se=63, ah=0, al=0):
 
 def dri(interval):
     return seg(0xDD, list(be16(interval)))
+
+
+def com(size):
+    """A COM segment of `size` bytes in all (4 to 65,537), to move what follows it."""
+    return seg(0xFE, [(i * 7 + 3) & 0x7F for i in range(size - 4)])
 
 
 ONE_CODE = [1] + [0] * 15  # one 1-bit code, 0
@@ -449,6 +458,104 @@ def define(cases, base, prog):
               port="unsupported")
     cases.raw("lossless_quant_table_3", SOI + sof(0xC3, 8, 8, [(1, 1, 1, 3)]) + one + sos([(1, 0, 0)], 1, 0, 0, 0) + body,
               port="unsupported")
+
+    # Arithmetic-coded and lossless JPEGs past their first scan (D-057). The port reads them as
+    # libjpeg-turbo does without decoding their scans' data: each scan's checks, restart markers,
+    # the markers between and after the scans, and the end of the file. jdarith.c cannot suspend,
+    # so a read past the 65,536-byte reads Pillow has made raises ("broken data stream"); where
+    # only decoding tells whether it reads that far, or whether jdlhuff.c reads past the end
+    # before the last row, the port hands the JPEG to ImageIO ("undecided" in the note).
+    rgb = [(1, 1, 1, 0), (2, 1, 1, 0), (3, 1, 1, 0)]
+    arith3 = SOI + dqt() + sof(0xC9, 16, 16, rgb)
+    scans3 = [sos([(c, 0, 0)]) + entropy(70 + c, 60) for c in (1, 2, 3)]
+    cases.raw("arith_multiscan", arith3 + b"".join(scans3) + EOI, port="unsupported")
+    cases.raw("arith_multiscan_cut", arith3 + scans3[0] + scans3[1][:30])
+    cases.raw("arith_multiscan_quant_table_1", SOI + dqt() + sof(0xC9, 16, 16, rgb[:2] + [(3, 1, 1, 1)])
+              + b"".join(scans3) + EOI, note="the third scan latches table 1, which is not defined")
+    dac_bad = seg(0xCC, [0x01, 0x2F])
+    cases.raw("arith_dac_between_scans", arith3 + scans3[0] + dac_bad + scans3[1] + scans3[2] + EOI)
+    prog = SOI + dqt() + sof(0xCA, 16, 16, [(1, 1, 1, 0)])
+    prog_scans = [sos([(1, 0, 0)], 0, 0, 0, 1) + entropy(80, 20), sos([(1, 0, 0)], 1, 63, 0, 1) + entropy(81, 40)]
+    cases.raw("arith_progressive_refine_bad", prog + b"".join(prog_scans)
+              + sos([(1, 0, 0)], 1, 63, 2, 0) + entropy(82, 20) + EOI, note="Ah 2 needs Al 1")
+    prog3 = SOI + dqt() + sof(0xCA, 16, 16, rgb)
+    cases.raw("arith_progressive_ac_two_components", prog3 + sos([(1, 0, 0), (2, 0, 0), (3, 0, 0)], 0, 0, 0, 0)
+              + entropy(83, 30) + sos([(1, 0, 0), (2, 0, 0)], 1, 63, 0, 0) + entropy(84, 30) + EOI)
+    grey_arith = SOI + dqt() + sof(0xC9, 8, 8, [(1, 1, 1, 0)]) + sos([(1, 0, 0)])
+    cases.raw("arith_second_scan", grey_arith + entropy(85, 20) + sos([(1, 0, 0)]) + entropy(86, 20) + EOI)
+    # Restart markers: misnumbered ones resynchronise as in a Huffman-coded scan.
+    eight = SOI + dqt() + sof(0xC9, 64, 8, [(1, 1, 1, 0)]) + dri(1) + sos([(1, 0, 0)])
+    order = (0, 2, 1, 3, 4, 6, 7)
+    cases.raw("arith_restart_resync", eight + b"".join(entropy(90 + i, 9) + bytes([0xFF, 0xD0 + r])
+                                                       for i, r in enumerate(order)) + entropy(99, 9) + EOI,
+              port="unsupported")
+    # The 65,536-byte reads. A restart marker past them is read by process_restart, which cannot
+    # suspend; a scan whose data starts at them reads its first byte there.
+    two = SOI + dqt() + sof(0xC9, 16, 8, [(1, 1, 1, 0)]) + dri(1) + sos([(1, 0, 0)])
+    cases.raw("arith_restart_marker_past_read", two, [["entropy", 87, 70000], ["append", "ffd0"],
+                                                      ["entropy", 88, 40], ["append", "ffd9"]])
+    head = SOI + dqt() + sof(0xC9, 8, 8, [(1, 1, 1, 0)])
+    start = sos([(1, 0, 0)])
+    cases.raw("arith_scan_data_at_read", head + com(65536 - len(head) - len(start)) + start,
+              [["entropy", 89, 50], ["append", "ffd9"]])
+    # A scan whose data runs on past the reads, with no restart marker: how far jdarith.c reads
+    # depends on decoding it, here on how many blocks there are to decode.
+    for side, outcome in ((64, "decodes"), (1024, "raises")):
+        head = SOI + dqt() + sof(0xC9, side, side, [(1, 1, 1, 0)])
+        cases.raw(f"arith_scan_open_{side}", head + com(65536 - 4000 - len(head) - len(start)) + start,
+                  [["entropy", 1, 30000], ["append", "ffd9"]], port="unsupported",
+                  note=f"undecided: Pillow {outcome}; whether jdarith.c reads past 65,536 bytes depends on decoding")
+    head = SOI + dqt() + sof(0xCA, 1024, 1024, [(1, 1, 1, 0)])
+    dc = sos([(1, 0, 0)], 0, 0, 0, 0)
+    cases.raw("arith_open_scan_then_bad_scan", head + com(65536 - 4000 - len(head) - len(dc)) + dc,
+              [["entropy", 1, 30000], ["append", sos([(1, 0, 0)], 1, 63, 3, 0).hex()], ["entropy", 2, 20],
+               ["append", "ffd9"]], note="the second scan raises whatever the first one reads")
+    # Work in proportion to the input: a restart every MCU of a 2,000 by 2,000 frame, and EOI after
+    # ten bytes, which every later segment leaves where it is.
+    cases.raw("arith_restart_every_mcu_large", SOI + dqt() + sof(0xC9, 2000, 2000, [(1, 1, 1, 0)]) + dri(1)
+              + sos([(1, 0, 0)]) + entropy(91, 10) + EOI, port="unsupported")
+
+    ll = dht(0, 0, counts(1, 2, 3, 4), [0, 1, 2, 3])
+    ll3 = SOI + sof(0xC3, 8, 8, rgb) + ll
+    ll_scans = [sos([(c, 0, 0)], 1, 0, 0, 0) + entropy(100 + c, 40) for c in (1, 2, 3)]
+    cases.raw("lossless_multiscan", ll3 + b"".join(ll_scans) + EOI, port="unsupported")
+    cases.raw("lossless_second_scan_predictor_0", ll3 + ll_scans[0] + sos([(2, 0, 0)], 0, 0, 0, 0)
+              + entropy(102, 40) + ll_scans[2] + EOI)
+    cases.raw("lossless_multiscan_cut", ll3 + ll_scans[0] + ll_scans[1][:30],
+              note="no EOI: libjpeg-turbo reads every scan before the first row")
+    cases.raw("lossless_component_never_scanned", ll3 + ll_scans[0] + ll_scans[1] + EOI,
+              note="jddiffct.c's arrays are not zeroed, so reading the third component raises")
+    cases.raw("lossless_second_scan_no_table", ll3 + ll_scans[0] + sos([(2, 1, 0)], 1, 0, 0, 0)
+              + entropy(102, 40) + ll_scans[2] + EOI)
+    rows = SOI + sof(0xC3, 8, 8, rgb) + ll + dri(8)
+    seg8 = b"".join(entropy(110 + r, 6) + bytes([0xFF, 0xD0 + r]) for r in range(7)) + entropy(117, 6)
+    cases.raw("lossless_restart_changed_between_scans", rows + sos([(1, 0, 0)], 1, 0, 0, 0) + seg8 + dri(3)
+              + sos([(2, 0, 0)], 1, 0, 0, 0) + seg8 + sos([(3, 0, 0)], 1, 0, 0, 0) + seg8 + EOI)
+    resync = b"".join(entropy(120 + i, 6) + bytes([0xFF, 0xD0 + r]) for i, r in enumerate((0, 1, 3, 2, 4, 5, 6)))
+    cases.raw("lossless_restart_resync", SOI + sof(0xC3, 8, 8, [(1, 1, 1, 0)]) + ll + dri(8)
+              + sos([(1, 0, 0)], 1, 0, 0, 0) + resync + entropy(127, 6) + EOI, port="unsupported")
+    # One scan, cut: the data is shorter than the samples take at the fewest bits each, so
+    # libjpeg-turbo reads past the end.
+    grey64 = SOI + sof(0xC3, 64, 64, [(1, 1, 1, 0)]) + ll + sos([(1, 0, 0)], 1, 0, 0, 0)
+    cases.raw("lossless_single_scan_cut", grey64, [["entropy", 103, 100]])
+    # One scan, cut, with more data than that: undecided.
+    for side, extra, outcome in ((8, 40, "decodes"), (16, 0, "raises")):
+        cases.raw(f"lossless_single_scan_open_{side}", SOI + sof(0xC3, side, side, [(1, 1, 1, 0)]) + ll
+                  + sos([(1, 0, 0)], 1, 0, 0, 0), [["entropy", 1, side * side // 8 + 8 + extra]], port="unsupported",
+                  note=f"undecided: Pillow {outcome}; whether libjpeg-turbo reads past the end depends on decoding")
+    # After one scan, Pillow reads markers only within the 65,536-byte reads it has made.
+    grey8 = SOI + sof(0xC3, 8, 8, [(1, 1, 1, 0)]) + ll + sos([(1, 0, 0)], 1, 0, 0, 0) + entropy(104, 50)
+    cases.raw("lossless_single_scan_reserved_after", grey8 + b"\xff\x02" + EOI)
+    cases.raw("lossless_single_scan_reserved_past_read", grey8 + com(65536 - len(grey8)) + b"\xff\x02" + EOI,
+              port="unsupported")
+    # A scan whose data runs on past the reads, then a fault: whether Pillow has read as far as the
+    # fault when the last row is out depends on how far jdlhuff.c reads.
+    grey512 = SOI + sof(0xC3, 512, 512, [(1, 1, 1, 0)]) + ll + sos([(1, 0, 0)], 1, 0, 0, 0)
+    cases.raw("lossless_single_scan_open_fault", grey512, [["entropy", 105, 70000], ["append", "ff02ffd9"]],
+              port="unsupported",
+              note="undecided: Pillow raises; whether it has read as far as the fault depends on decoding")
+    cases.raw("lossless_restart_every_row_large", SOI + sof(0xC3, 2000, 2000, [(1, 1, 1, 0)]) + ll + dri(2000)
+              + sos([(1, 0, 0)], 1, 0, 0, 0) + entropy(106, 10) + EOI, port="unsupported")
 
 
 # Recording -----------------------------------------------------------------------------------

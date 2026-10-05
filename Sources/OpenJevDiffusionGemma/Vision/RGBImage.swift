@@ -44,7 +44,9 @@ extension RGBImage {
     /// to differ in the inverse DCT and chroma upsampling and ImageIO's does (by up to 30 levels
     /// on upstream's hot dog photo); it refuses every JPEG on which Pillow or libjpeg-turbo
     /// raises. A JPEG Pillow decodes that it does not cover (arithmetic-coded, lossless, CMYK
-    /// and YCCK) falls back to ImageIO.
+    /// and YCCK) falls back to ImageIO, as does an arithmetic-coded or lossless one on which only
+    /// decoding its scans would tell whether Pillow raises, such as an arithmetic-coded JPEG whose
+    /// data runs past 65,536 bytes (D-057).
     /// Other formats are decoded by ImageIO, whose samples of 8-bit PNGs and of lossless and
     /// lossy WebPs, translucent ones included, equal PIL's (docs/spikes/vision-preprocessing.md).
     ///

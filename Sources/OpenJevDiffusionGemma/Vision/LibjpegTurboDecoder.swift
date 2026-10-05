@@ -1,6 +1,7 @@
 // A Swift translation of libjpeg-turbo 3.1.4.1's default decompression path, the one Pillow
 // 12.3.0 runs, with the reading Pillow's JPEG decoder does around it. Translated to Swift,
-// restructured to decode a whole image in memory and reduced to the 8-bit Huffman-coded path by
+// restructured to decode a whole image in memory and reduced to the 8-bit Huffman-coded path,
+// with how libjpeg-turbo reads arithmetic-coded and lossless JPEGs short of decoding them, by
 // the OpenJevSwift contributors, 2026. This software is based in part on the work of the
 // Independent JPEG Group. Below are the files it draws on, each with its copyright block as
 // libjpeg-turbo has it. The README.ijg those blocks name is ThirdPartyLicenses/libjpeg-turbo-README.ijg
@@ -49,7 +50,7 @@
 //   file.
 //
 // jdhuff.c (baseline Huffman decoding, its fast and slow paths, `jpeg_make_d_derived_tbl`,
-// `jpeg_fill_bit_buffer`):
+// `jpeg_fill_bit_buffer`, `jpeg_huff_decode`):
 //   This file was part of the Independent JPEG Group's software:
 //   Copyright (C) 1991-1997, Thomas G. Lane.
 //   Lossless JPEG Modifications:
@@ -79,7 +80,8 @@
 //   For conditions of distribution and use, see the accompanying README.ijg
 //   file.
 //
-// jdlhuff.c (the DC tables a lossless scan checks before its data):
+// jdlhuff.c (the DC tables a lossless scan checks before its data, and how `decode_mcus` and
+// `process_restart` read the data):
 //   This file was part of the Independent JPEG Group's software:
 //   Copyright (C) 1991-1997, Thomas G. Lane.
 //   Lossless JPEG Modifications:
@@ -99,7 +101,8 @@
 //   For conditions of distribution and use, see the accompanying README.ijg
 //   file.
 //
-// jddiffct.c (the restart interval a lossless scan allows):
+// jddiffct.c (the restart interval a lossless scan allows, its restarts by MCU row, and the
+// whole-image arrays it does not have zeroed):
 //   This file was part of the Independent JPEG Group's software:
 //   Copyright (C) 1994-1997, Thomas G. Lane.
 //   Lossless JPEG Modifications:
@@ -116,6 +119,15 @@
 //   Copyright (C) 1999, Ken Murchison.
 //   libjpeg-turbo Modifications:
 //   Copyright (C) 2015-2016, 2018-2022, D. R. Commander.
+//   For conditions of distribution and use, see the accompanying README.ijg
+//   file.
+//
+// jdarith.c (`start_pass`'s checks of an arithmetic-coded scan, and `get_byte` and
+// `process_restart`, which cannot suspend, and how far a segment's first decision reads):
+//   This file was part of the Independent JPEG Group's software:
+//   Developed 1997-2015 by Guido Vollbeding.
+//   libjpeg-turbo Modifications:
+//   Copyright (C) 2015-2020, 2022, D. R. Commander.
 //   For conditions of distribution and use, see the accompanying README.ijg
 //   file.
 //
@@ -193,6 +205,15 @@
 //   For conditions of distribution and use, see the accompanying README.ijg
 //   file.
 //
+// jmemmgr.c (`access_virt_sarray`, which refuses to read rows of an array not zeroed that
+// nothing wrote):
+//   This file was part of the Independent JPEG Group's software:
+//   Copyright (C) 1991-1997, Thomas G. Lane.
+//   libjpeg-turbo Modifications:
+//   Copyright (C) 2016, 2021-2022, 2024, D. R. Commander.
+//   For conditions of distribution and use, see the accompanying README.ijg
+//   file.
+//
 // jerror.h (the errors, named in the refusals):
 //   This file was part of the Independent JPEG Group's software:
 //   Copyright (C) 1994-1997, Thomas G. Lane.
@@ -245,10 +266,15 @@
 /// Pillow also decodes arithmetic-coded, lossless and 4-component (CMYK and YCCK) JPEGs; this
 /// throws ``Unsupported`` for those, so the caller may fall back to ImageIO, once it has made the
 /// checks it shares with them: a 4-component JPEG's scans are decoded, and an arithmetic-coded or
-/// lossless one's headers are checked up to its first scan's data.
+/// lossless one is read as libjpeg-turbo reads it short of decoding its scans' data: every scan's
+/// checks, the markers between and after the scans, and the end of the file. Where Pillow's
+/// answer depends on that data, which happens chiefly when an arithmetic-coded scan runs past
+/// one of Pillow's 65,536-byte reads (jdarith.c cannot wait for more, so Pillow often raises),
+/// ``Unsupported`` says so (D-057).
 enum LibjpegTurboDecoder {
     /// A JPEG Pillow decodes but this decoder does not cover: arithmetic-coded, lossless, CMYK or
-    /// YCCK. The caller may try another decoder.
+    /// YCCK; or an arithmetic-coded or lossless one on which only decoding its data would tell
+    /// whether Pillow raises. The caller may try another decoder.
     struct Unsupported: Error, CustomStringConvertible {
         let description: String
         init(_ description: String) { self.description = description }
@@ -269,7 +295,7 @@ enum LibjpegTurboDecoder {
 
     /// How much decoding a JPEG took, for the tests' bound on work.
     struct Work: Equatable, Sendable {
-        /// Scans decoded.
+        /// Scans decoded, or passed over without decoding (arithmetic-coded and lossless).
         var scans = 0
         /// Blocks whose entropy-coded data the decoder read, or finished with zero bits when the
         /// data ran out. A block left as it was (in an end-of-band run, or after the data ran
@@ -346,7 +372,8 @@ enum LibjpegTurboDecoder {
     enum Stop: Error {
         /// Pillow or libjpeg-turbo raises.
         case refused(String)
-        /// Pillow decodes it; this decoder does not.
+        /// Pillow decodes it and this decoder does not, or only decoding it would tell whether
+        /// Pillow raises.
         case unsupported(String)
         /// A read past the last byte: Pillow's `ImageFile.load` raises "image file is truncated",
         /// unless the image is already complete. Once it is, also a read past the bytes Pillow
@@ -705,6 +732,23 @@ enum LibjpegTurboDecoder {
         }
     }
 
+    /// The fewest bits jdlhuff.c's `decode_mcus` reads for one sample coded with `table`: a
+    /// symbol's code and the difference bits that follow it (none for 0 and 16), or the 17 bits
+    /// `jpeg_huff_decode` reads of a string that is no code, which every table has (no code is
+    /// all ones).
+    static func fewestSampleBits(_ table: HuffmanTable) -> Int {
+        var fewest = 17
+        var index = 0
+        for length in 1...16 {
+            for _ in 0..<table.counts[length] {
+                let symbol = Int(table.values[index])
+                fewest = min(fewest, length + (symbol == 0 || symbol == 16 ? 0 : symbol))
+                index += 1
+            }
+        }
+        return fewest
+    }
+
     /// `HUFF_EXTEND`: an s-bit magnitude as a signed value.
     @inline(__always) static func extend(_ x: Int, _ s: Int) -> Int {
         x < 1 << (s - 1) ? x - (1 << s) + 1 : x
@@ -725,6 +769,10 @@ enum LibjpegTurboDecoder {
         /// bytes it has been handed end (`jpeg_finish_decompress` suspends there), and reads no
         /// more of the file.
         var finishing = false
+        /// While an arithmetic-coded scan's data is read: the end of the bytes Pillow had handed
+        /// over when the scan started. jdarith.c cannot suspend (`get_byte`, `process_restart`),
+        /// so a read past it is `JERR_CANT_SUSPEND` rather than a request for more.
+        var readLimit = Int.max
         var nextRestartNumber = 0
         var inputScanNumber = 0
 
@@ -779,26 +827,28 @@ enum LibjpegTurboDecoder {
             try startDecompress()
             if hasMultipleScans {
                 try consumeScans()
-                guard !arithmetic, !lossless, components.count != 4 else {
-                    throw unsupportedFeature()
-                }
+                guard components.count != 4 else { throw unsupportedFeature() }
                 makePlanesFromCoefficients()
             } else {
                 try decodeScan(singleScan: true)
-                // jpeg_finish_decompress reads to EOI. The image is complete, so Pillow takes the
-                // end of the bytes it has handed over as the end, without reading more of the
-                // file, but a broken marker before it still raises.
-                finishing = true
-                do throws(Stop) {
-                    if try readMarkers() == .sos {
-                        throw error("JERR_EOI_EXPECTED", "a scan follows a single-scan image")
-                    }
-                } catch {
-                    if case .endOfData = error {} else { throw error }
-                }
+                try finishSingleScan()
                 guard components.count != 4 else { throw unsupportedFeature() }
             }
             return output()
+        }
+
+        /// `jpeg_finish_decompress` after a single scan's last row: the markers up to EOI. The
+        /// image is complete, so Pillow takes the end of the bytes it has handed over as the end,
+        /// without reading more of the file, but a broken marker before it still raises.
+        mutating func finishSingleScan() throws(Stop) {
+            finishing = true
+            do throws(Stop) {
+                if try readMarkers() == .sos {
+                    throw error("JERR_EOI_EXPECTED", "a scan follows a single-scan image")
+                }
+            } catch {
+                if case .endOfData = error {} else { throw error }
+            }
         }
 
         func unsupportedFeature() -> Stop {
@@ -810,8 +860,18 @@ enum LibjpegTurboDecoder {
         // MARK: Reading bytes
 
         /// Makes `index` readable: Pillow hands the decoder another 65,536 bytes each time it
-        /// asks, until the file ends or the image is complete.
+        /// asks, until the file ends or the image is complete. Inside an arithmetic-coded scan
+        /// libjpeg-turbo cannot ask (``readLimit``).
         @inline(__always) mutating func need(_ index: Int) throws(Stop) {
+            guard index < readLimit else {
+                let end =
+                    readLimit == bytes.count
+                    ? "the end of the file" : "the \(readLimit) bytes Pillow has read"
+                throw error(
+                    "JERR_CANT_SUSPEND",
+                    "an arithmetic-coded scan's data runs past \(end), and jdarith.c cannot "
+                        + "suspend for more (Pillow's \"broken data stream\")")
+            }
             guard index < bytes.count else { throw .endOfData }
             while index >= chunkEnd {
                 if finishing { throw .endOfData }
@@ -1152,7 +1212,9 @@ enum LibjpegTurboDecoder {
         }
 
         /// `jpeg_start_decompress` up to the first scan's data: `master_selection`'s checks, in
-        /// its order, then `start_input_pass`.
+        /// its order, then `start_input_pass`. An arithmetic-coded or lossless JPEG, which this
+        /// decoder does not decode, then has the rest of its reading walked, and never returns
+        /// (``walkUndecodedScans()``).
         mutating func startDecompress() throws(Stop) {
             // jinit_color_deconverter: Pillow asks for L, RGB or CMYK from 1, 3 or 4 components,
             // and a lossless JPEG may not be converted to any of them.
@@ -1175,13 +1237,13 @@ enum LibjpegTurboDecoder {
             }
             if lossless {
                 try checkLosslessScan()
-                throw unsupportedFeature()
+                try walkUndecodedScans()
             }
             if arithmetic {
-                // jdarith.c checks the first scan as jdphuff.c does before any data is read; the
-                // arithmetic decoding itself is not covered.
+                // jdarith.c's start_pass checks a scan as jdphuff.c does; the arithmetic decoding
+                // itself is not covered.
                 try startInputPass()
-                throw unsupportedFeature()
+                try walkUndecodedScans()
             }
             if !progressive {
                 // jinit_huff_decoder: the standard tables fill slots no DHT has defined yet.
@@ -1251,7 +1313,11 @@ enum LibjpegTurboDecoder {
         }
 
         /// `start_input_pass`: per_scan_setup, latch_quant_tables and the entropy decoder's
-        /// start_pass, each with its checks.
+        /// start_pass, each with its checks. jdarith.c's start_pass makes jdphuff.c's checks of a
+        /// progressive scan's parameters and updates `coef_bits` the same way (a sequential
+        /// scan's parameters only warn there); its one other check, a table number past 15
+        /// (`JERR_NO_ARITH_TABLE`), cannot fail, as a scan header gives 4-bit table numbers. The
+        /// Huffman tables of a Huffman-coded scan are derived when it is decoded (``scanTables()``).
         mutating func startInputPass() throws(Stop) {
             try checkMCUSize()
             for index in scan.components where components[index].quant == nil {
@@ -1634,6 +1700,193 @@ enum LibjpegTurboDecoder {
                 }
             }
             nextRestartNumber = (nextRestartNumber + 1) & 7
+        }
+
+        // MARK: Arithmetic-coded and lossless scans, walked without decoding
+
+        /// How far libjpeg-turbo reads a scan's data, as far as that is known without decoding it.
+        enum Reach: Equatable {
+            /// No further than the marker that ends the data, which lies within the bytes Pillow
+            /// has handed over.
+            case settled
+            /// The data runs on past the bytes Pillow has handed over, and how far into it the
+            /// entropy decoder reads depends on decoding it: at most to the marker whose code byte
+            /// is at `marker`, or to the end of the file when it is nil.
+            case open(marker: Int?)
+        }
+
+        /// The reading `ImagingJpegDecode` makes of an arithmetic-coded or lossless JPEG, which
+        /// this decoder does not decode, after the first scan's checks: every scan's data passed
+        /// over as ``walkScanData()`` reads it, the markers between scans with each later scan's
+        /// checks, up to EOI; or, after a single scan, the markers Pillow reads once the image is
+        /// complete.
+        ///
+        /// Neither jdarith.c nor jdlhuff.c raises on the content of scan data: a bad code is a
+        /// warning, and data that runs out is filled with zeros. What the data decides is how far
+        /// libjpeg-turbo reads. jdarith.c cannot suspend, so reading past the bytes Pillow has
+        /// handed over raises (``readLimit``); jdlhuff.c suspends, and a read past the end of the
+        /// file is Pillow's "image file is truncated"; and after a single scan's last row Pillow
+        /// reads no further than it has. Where that depends on decoding the data, this throws
+        /// ``Stop/unsupported(_:)`` saying so, unless something later raises whatever the data
+        /// holds. It throws a refusal where libjpeg-turbo or Pillow raises, and
+        /// ``Stop/unsupported(_:)`` where Pillow decodes the JPEG.
+        mutating func walkUndecodedScans() throws(Stop) -> Never {
+            if !hasMultipleScans {
+                switch try walkScanData() {
+                case .settled:
+                    try finishSingleScan()
+                case .open(let marker?) where lossless:
+                    // jdlhuff.c reads at most to the marker, so when the last row is out Pillow has
+                    // read at most the 65,536 bytes that hold it, and at least what it has now. A
+                    // fault after the scan raises only if Pillow has read that far.
+                    let fewest = chunkEnd
+                    chunkEnd = min(bytes.count, (marker / readSize + 1) * readSize)
+                    do throws(Stop) {
+                        try finishSingleScan()
+                    } catch {
+                        guard case .refused(let fault) = error else { throw error }
+                        throw .unsupported(
+                            "a lossless JPEG's scan ends past the \(fewest) bytes Pillow is sure "
+                                + "to have read by its last row, and a fault follows (\(fault)); "
+                                + "whether Pillow has read that far when the last row is out depends "
+                                + "on decoding the scan")
+                    }
+                case .open where lossless:
+                    throw .unsupported(
+                        "a lossless JPEG's scan runs to the end of the file without a marker; "
+                            + "whether libjpeg-turbo reads past the end before the last row is out "
+                            + "(Pillow's \"image file is truncated\") depends on decoding the scan")
+                case .open:
+                    throw .unsupported(openArithmeticScan)
+                }
+                throw unsupportedFeature()
+            }
+            // Every scan is read in jpeg_start_decompress, up to EOI.
+            var undecided: String?
+            var reached = Set(scan.components)
+            do throws(Stop) {
+                while true {
+                    if try walkScanData() != .settled, arithmetic, undecided == nil {
+                        undecided = openArithmeticScan
+                    }
+                    if try readMarkers() == .eoi { break }
+                    if lossless { try checkLosslessScan() } else { try startInputPass() }
+                    reached.formUnion(scan.components)
+                }
+            } catch {
+                if case .endOfData = error, undecided != nil {
+                    throw .refused(
+                        "the JPEG ends before its EOI (Pillow's \"image file is truncated\", or "
+                            + "\"broken data stream\" where the arithmetic decoder runs out first)")
+                }
+                throw error
+            }
+            // jddiffct.c keeps a lossless JPEG's samples in arrays it does not ask jmemmgr.c to
+            // zero (jdcoefct.c does), so the first output row reads a component no scan wrote:
+            // JERR_BAD_VIRTUAL_ACCESS.
+            if lossless, let missing = components.indices.first(where: { !reached.contains($0) }) {
+                throw error(
+                    "JERR_BAD_VIRTUAL_ACCESS",
+                    "no scan reaches component \(components[missing].id) of a lossless JPEG, whose "
+                        + "samples jddiffct.c then reads undefined")
+            }
+            throw undecided.map { .unsupported($0) } ?? unsupportedFeature()
+        }
+
+        /// Why an arithmetic-coded JPEG whose scan may read past Pillow's buffer goes to ImageIO.
+        var openArithmeticScan: String {
+            "an arithmetic-coded scan's data runs on past the bytes Pillow had read when the scan "
+                + "started, or to the end of the file without a marker; whether jdarith.c reads past "
+                + "them, which Pillow answers with \"broken data stream\" (JERR_CANT_SUSPEND), "
+                + "depends on decoding the scan"
+        }
+
+        /// One scan's entropy-coded data as libjpeg-turbo reads it, without decoding it: the
+        /// restart markers, which `read_restart_marker` and `jpeg_resync_to_restart` look for
+        /// every `restart_interval` MCUs (counted in MCU rows in a lossless scan, by jddiffct.c,
+        /// to the same effect), and the bytes the entropy decoder is sure to read of the last
+        /// segment. jdarith.c's first decision of a segment loads two bytes. jdlhuff.c's first
+        /// fill loads 57 bits, eight bytes, and its samples take at least so many bits each: their
+        /// Huffman code and the difference bits after it, or the 17 bits of a string that is no
+        /// code. Each stops early at a marker. The other segments are read to the restart marker
+        /// that ends them, whatever their data holds. In an arithmetic-coded scan, none of it may
+        /// lie past the bytes Pillow handed over before the scan (``readLimit``).
+        ///
+        /// A marker other than RST that `jpeg_resync_to_restart` leaves stays for every later
+        /// segment, which then reads nothing, so the work is in proportion to the bytes read.
+        mutating func walkScanData() throws(Stop) -> Reach {
+            work.scans += 1
+            let interleaved = scan.components.count > 1
+            let first = components[scan.components[0]]
+            let mcusPerRow = interleaved ? mcusPerLine : first.widthInBlocks
+            let totalMCUs = mcusPerRow * (interleaved ? totalIMCURows : first.heightInBlocks)
+            let segments = restartInterval > 0 ? (totalMCUs - 1) / restartInterval + 1 : 1
+            if arithmetic { readLimit = chunkEnd }
+            defer { readLimit = .max }
+            var segment = 1
+            while segment < segments {
+                segment += 1
+                try readRestartMarker()
+                if unreadMarker >= 0xC0 && !(0xD0...0xD7).contains(unreadMarker) { break }
+            }
+            if unreadMarker == 0 {
+                // The last segment, which is not empty.
+                if arithmetic {
+                    try readEntropyBytes(2)
+                } else {
+                    // checkLosslessScan made sure every table is there; a bit a sample is the
+                    // least any table can give.
+                    var bits = 0
+                    for index in scan.components {
+                        let component = components[index]
+                        let samples = interleaved ? component.h * component.v : 1
+                        let table = component.dcTable < 4 ? dcTables[component.dcTable] : nil
+                        bits += samples * (table.map(LibjpegTurboDecoder.fewestSampleBits) ?? 1)
+                    }
+                    let mcus = totalMCUs - (segments - 1) * restartInterval
+                    try readEntropyBytes(max(8, (mcus * bits + 7) / 8))
+                }
+            }
+            if unreadMarker != 0 { return .settled }
+            let marker = markerAhead()
+            if let marker, marker < chunkEnd { return .settled }
+            return .open(marker: marker)
+        }
+
+        /// Up to `count` bytes of entropy-coded data, read as the entropy decoders fetch them (FF
+        /// 00 is one byte, and FF fill before a marker is swallowed), stopping at a marker, which
+        /// is left in `unreadMarker`.
+        mutating func readEntropyBytes(_ count: Int) throws(Stop) {
+            var left = count
+            while left > 0 {
+                var c = try byte()
+                if c == 0xFF {
+                    repeat { c = try byte() } while c == 0xFF
+                    if c != 0 {
+                        unreadMarker = c
+                        return
+                    }
+                }
+                left -= 1
+            }
+        }
+
+        /// The index of the code byte of the marker `next_marker` would find from `position`,
+        /// without reading anything; nil when the file ends first.
+        func markerAhead() -> Int? {
+            var i = position
+            while i < bytes.count {
+                guard bytes[i] == 0xFF else {
+                    i += 1
+                    continue
+                }
+                var j = i + 1
+                while j < bytes.count && bytes[j] == 0xFF { j += 1 }
+                guard j < bytes.count else { return nil }
+                if bytes[j] != 0 { return j }
+                i = j + 1
+            }
+            return nil
         }
 
         /// The inverse DCT of a single-scan JPEG's completed MCU rows, as `decompress_onepass`
