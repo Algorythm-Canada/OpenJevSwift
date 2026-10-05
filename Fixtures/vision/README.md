@@ -96,7 +96,7 @@ seed) and 1 (seed + 7919), one step.
 
 ## jpeg_cases.json
 
-[Tools/fixtures/jpeg_cases.py](../../Tools/fixtures/jpeg_cases.py) builds 185 JPEGs and runs each
+[Tools/fixtures/jpeg_cases.py](../../Tools/fixtures/jpeg_cases.py) builds 213 JPEGs and runs each
 through upstream's `ImagePrompt.pil` at `dcd2094` (Pillow 12.3.0, with the libjpeg-turbo 3.1.4.1 it
 bundles). Each case is `baseline.jpg` or `progressive.jpg` from this directory, or bytes the script
 writes out (in base64), with a list of edits applied in order: cut, set, insert, delete, append,
@@ -106,14 +106,20 @@ out, libjpeg-turbo's and Pillow's refusals, the standard Huffman tables, codes l
 bits, restart markers out of sequence or missing, blocks per MCU counted per scan, block
 smoothing, quantization values for the Arm Neon inverse DCT, libjpeg-turbo's fast Huffman path,
 Pillow's 65,536-byte reads during and after a scan, the checks of a lossless JPEG's first scan,
-and four 13,376 by 13,376 frames from a few hundred bytes.
+and four 13,376 by 13,376 frames from a few hundred bytes. Since D-057 they also cover
+arithmetic-coded and lossless JPEGs past their first scan: faults in later scans, restart markers,
+arithmetic-coded scans at the 65,536-byte reads (which jdarith.c cannot read past), single scans
+cut short or followed by a fault, a lossless component no scan reaches, and large frames with a
+restart every MCU or row.
 
 - `generator` records the script, its version, the upstream commit, and the Python, Pillow and
   libjpeg-turbo versions, and the SHA-256 of the two source JPEGs.
 - `cases` maps a name to `from` (a source JPEG, or `bytes` with `base64`), `edits`, the built
   JPEG's byte count and SHA-256, and either `decoded` (the size and the SHA-256 of the RGB bytes)
-  or `error` (the exception upstream raised). `port: "unsupported"` marks the five cases the port
-  knowingly hands to ImageIO (arithmetic coding, lossless, CMYK), and `note` explains a few.
+  or `error` (the exception upstream raised). `port: "unsupported"` marks the 17 cases the port
+  knowingly hands to ImageIO (arithmetic coding, lossless, CMYK): 12 Pillow decodes, and 5 whose
+  outcome in Pillow only decoding their scans would tell, which their `note` calls undecided
+  (Pillow decodes 2 of them and raises on 3). `note` explains a few others.
 
 `Tests/OpenJevDiffusionGemmaTests/Vision/JPEGParityTests.swift` rebuilds each case with the same
 edits, checks its SHA-256, and holds the decoder to the record and to the bound on decoding work.
