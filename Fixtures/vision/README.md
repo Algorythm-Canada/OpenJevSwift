@@ -2,7 +2,7 @@
 
 What upstream's own image path gives DiffusionGemma on the pinned checkpoint: the images'
 `pixel_values`, the expanded prompts and `mm_token_type_ids` (issue #46), and upstream's reads of
-the hot dog photo (for #47). Layer 2 in
+the hot dog photo, which the image runtime (#47) is held to. Layer 2 in
 [docs/09-conformance-and-testing.md](../../docs/09-conformance-and-testing.md); the method and the
 findings are in [docs/spikes/vision-preprocessing.md](../../docs/spikes/vision-preprocessing.md).
 
@@ -111,4 +111,8 @@ preprocessing, so the reads' record stays.
 `Tests/OpenJevDiffusionGemmaTests/Vision/VisionPreprocessingTests.swift` compares the port with
 `preprocessing.json`: the synthetic images and the GIF cases everywhere, the hot dog when the
 upstream checkout is present, every value when `Tools/oracle/results/vision/` is, and the prompts
-when the tokenizer files are. `reads.json` waits for the image runtime (#47).
+when the tokenizer files are. `Tests/OpenJevDiffusionGemmaTests/Model/ImageReadOracleTests.swift`
+reads `reads.json`'s four reads through the image runtime: bit for bit in D-014's exact tier,
+within its bounds natively (D-054). `Tools/oracle/stage_dump.py --image hotdog` writes mlx-vlm's
+own stages of the hot dog prefill to `Tools/oracle/results/vision/hotdog.stages.safetensors` for
+`ImageStageTests`.

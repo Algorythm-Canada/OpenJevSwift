@@ -85,20 +85,30 @@ extension MLXTests {
         "DiffusionGemma checkpoint (opt-in)",
         .enabled(if: ModelFixtures.checkpointAvailable, ModelFixtures.missingCheckpointMessage))
     struct CheckpointTests {
-        @Test("The checkpoint loads strictly: no missing, no unexpected, 299 quantized modules")
+        @Test("The checkpoint loads strictly: no missing, no unexpected, 300 quantized modules")
         func loads() async throws {
             let live = try await LiveCheckpoint.shared()
             let metrics = live.loaded.metrics
             let weightMap = try ModelFixtures.checkpointWeightMap()
-            let kept = weightMap.keys.compactMap(DiffusionGemmaModel.sanitizedName)
+            let kept = weightMap.keys.compactMap {
+                DiffusionGemmaModel.sanitizedName($0, vision: true)
+            }
             #expect(metrics.shardCount == 4)
             // The index's total_size counts tensor bytes; the shards add their headers.
             #expect(metrics.mappedBytes >= 16_542_844_632)
             #expect(metrics.mappedBytes < 16_542_844_632 + 64 * 1024 * 1024)
             #expect(metrics.tensorCount == kept.count)
-            #expect(metrics.tensorCount == 1_289)
-            #expect(metrics.droppedTensorCount == 358)
-            #expect(metrics.quantizedModuleCount == 299)
+            // Every tensor loads, the vision tower's included (#47).
+            #expect(metrics.tensorCount == 1_647)
+            #expect(metrics.droppedTensorCount == 0)
+            #expect(metrics.quantizedModuleCount == 300)
+            #expect(live.loaded.model.readsImages)
+            let tower = try #require(live.loaded.model.encoder.visionTower)
+            #expect(tower.patchEmbedder.positionEmbeddingTable.dtype == .bfloat16)
+            #expect(tower.encoder.layers.count == 27)
+            let projection = try #require(
+                live.loaded.model.encoder.embedVision?.embeddingProjection as? QuantizedLinear)
+            #expect(projection.bits == 4)
             #expect(live.loaded.model.parameters().flattened().count == kept.count)
             let embedding = try #require(
                 live.loaded.model.decoder.embedTokens as? QuantizedEmbedding)
@@ -113,6 +123,8 @@ extension MLXTests {
                 shards: \(metrics.shardCount), \(metrics.mappedBytes) bytes (\(gib(metrics.mappedBytes)))
                 tensors: \(metrics.tensorCount) loaded, \(metrics.droppedTensorCount) dropped by sanitize
                 quantized modules: \(metrics.quantizedModuleCount)
+                vision tower and embed_vision: \(metrics.visionParameterCount) parameters \
+                (as stored), \(metrics.visionBytes) bytes (\(gib(metrics.visionBytes)))
                 resident before: \(gib(metrics.residentBytesBefore))
                 resident after: \(gib(metrics.residentBytesAfter))
                 resident added: \(gib(metrics.residentBytesAdded))

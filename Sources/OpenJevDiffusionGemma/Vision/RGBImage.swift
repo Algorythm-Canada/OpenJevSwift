@@ -59,10 +59,21 @@ extension RGBImage {
     ///   - frame: The frame to decode. Upstream reads the first (PIL opens at frame 0); the
     ///     parameter exists so a test can show that the second frame of a GIF differs, and any
     ///     other frame is ImageIO's.
-    /// - Throws: A ``VisionError`` when the image is one Pillow refuses, or one ImageIO cannot
-    ///   decode, or has no such frame.
+    /// - Throws: A ``VisionError`` when the bytes are not a JPEG, PNG, WebP or GIF by their
+    ///   signature, or the image is one Pillow refuses, or one ImageIO cannot decode, or has no
+    ///   such frame.
     public init(decoding data: Data, frame: Int = 0) throws(VisionError) {
         let bytes = [UInt8](data)
+        // Pillow identifies an image by its signature, whatever the declared type. Of what it
+        // opens, only these four are images the API accepts; anything else (a HEIC labelled
+        // image/jpeg, which ImageIO would decode and Pillow cannot identify) is refused here,
+        // before any of ImageIO's other decoders sees untrusted bytes (D-054).
+        guard
+            PillowGIFDecoder.isGIF(bytes) || LibjpegTurboDecoder.isJPEG(bytes)
+                || Self.isPNG(bytes) || Self.isWebP(bytes)
+        else {
+            throw VisionError("the image data is not a JPEG, PNG, WebP or GIF image")
+        }
         if frame == 0, PillowGIFDecoder.isGIF(bytes) {
             // Pillow sizes the canvas from the headers and checks it against its limit itself.
             do {
@@ -88,6 +99,22 @@ extension RGBImage {
             }
         }
         try self.init(imageIO: data, frame: frame)
+    }
+
+    /// True when `bytes` start with PNG's signature, as Pillow's `PngImagePlugin._accept` reads
+    /// it.
+    static func isPNG(_ bytes: [UInt8]) -> Bool {
+        bytes.starts(with: [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
+    }
+
+    /// True when `bytes` are a RIFF file of type `WEBP` whose first chunk is `VP8 `, `VP8L` or
+    /// `VP8X`, as Pillow's `WebPImagePlugin._accept` reads them.
+    static func isWebP(_ bytes: [UInt8]) -> Bool {
+        guard bytes.count >= 16, bytes.starts(with: Array("RIFF".utf8)),
+            Array(bytes[8..<12]) == Array("WEBP".utf8)
+        else { return false }
+        let chunk = Array(bytes[12..<16])
+        return ["VP8 ", "VP8L", "VP8X"].contains { Array($0.utf8) == chunk }
     }
 
     /// Decodes with ImageIO, reading the samples as ``init(decoding:frame:)`` describes.

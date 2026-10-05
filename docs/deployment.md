@@ -101,6 +101,8 @@ The server reads upstream's `OPENJEV_*` variables, with upstream's defaults and 
 | `OPENJEV_MAX_QUEUE` | `512` | Decisions inside the server before a 529. `0` refuses every request, as upstream's does. |
 | `OPENJEV_MAX_QUESTIONS` | `256` | Questions per request before a 400. |
 | `OPENJEV_MAX_BODY_BYTES` | `67108864` | Request body limit before a 413. |
+| `OPENJEV_MAX_IMAGES` | `8` | Images per request on the `mlx` backend before a 400. |
+| `OPENJEV_MAX_IMAGE_BYTES` | `5242880` | Decoded bytes per image before a 400, checked on the base64 text's length before anything is decoded. |
 | `OPENJEV_MODEL_ROUTES` | unset | `name=url,name=url`: other OpenJev servers whose models this one forwards ([One origin for several models](#one-origin-for-several-models)). |
 | `OPENJEV_FORWARD_TIMEOUT` | `300` | Seconds a forwarded request waits for each read and write of the other server before a 503. |
 | `OPENJEV_WARMUP` | `1` | `0` skips the warm-up read before the server opens. |
@@ -379,8 +381,20 @@ DiffusionGemma inside the process on MLX, with the `mlx-community/diffusiongemma
 weights (`OPENJEV_MLX_MODEL`) at their pinned revision. On first start they are downloaded into the
 Hugging Face cache in huggingface_hub's layout (13 files, 16.58 GB), resumed after an interruption
 and checked file by file, so a cache upstream or mlx-vlm filled is used as is. Loading the 4-bit
-weights takes about 16 GB of memory; `OPENJEV_MLX_CACHE_LIMIT_GB` bounds MLX's buffer pool
-(upstream's README, "MLX memory"; the figures are in docs/07 R4). Reads run one at a time on the
+weights takes about 17 GB of memory (MLX holds 15.41 GiB after load, 1.06 GiB of it the vision
+tower); `OPENJEV_MLX_CACHE_LIMIT_GB` bounds MLX's buffer pool (upstream's README, "MLX memory"; the
+figures are in docs/07 R4).
+
+Images are read on this backend, as upstream's MLX backend reads them (#47, #48): up to
+`OPENJEV_MAX_IMAGES` (8) per request, each a `data:image/...;base64,` URL or a
+`{content_type, base64}` object of JPEG, PNG, WebP or GIF, at most `OPENJEV_MAX_IMAGE_BYTES`
+(5 MiB) decoded, placed ahead of the state. Each image becomes up to 280 soft tokens, which count
+against `OPENJEV_MLX_MAX_PROMPT` and are billed in `usage.input_tokens` (355 for upstream's hot dog
+request). An image that does not decode, whose bytes are not one of the four formats whatever its
+declared type, that is truncated, 1 or 3 pixels high, or past 178,956,970 pixels is a 400 naming
+it at `["body", "images", i]`, where upstream answers a bare 500 (D-054). Images cannot be combined
+with `think` or `sequential`. The `verdict`, `laya` and `jevk5` backends refuse them with
+`"{model} does not support images"`, as upstream's do. Reads run one at a time on the
 GPU, so a Mac serves a few requests per second, not a fleet: on an M3 Max a three-question read
 takes about 0.3 s, and 1 to 16 concurrent callers share 3.0 to 3.4 requests per second
 ([benchmarks.md](benchmarks.md)). A state of 10,000 tokens takes about 13 s to prefill before its

@@ -70,10 +70,11 @@ prefill cache.
 
 ### What the runtime does not do yet
 
-The runtime's ``DiffusionGemmaRuntime/capabilities`` turn `think` and images off, so the engine
-answers `openjev-0.1 does not support think` and `openjev-0.1 does not support images` before
-any read. Images arrive with issues #46 to #48, and text generation, `think` and
-`POST /v1/chat/completions` with issues #50 to #53.
+The runtime's ``DiffusionGemmaRuntime/capabilities`` turn `think` off, so the engine answers
+`openjev-0.1 does not support think` before any read. Text generation, `think` and
+`POST /v1/chat/completions` arrive with issues #50 to #53. Images are read: the checkpoint's vision
+tower loads with the model (1.06 GiB more), and an image the decoder cannot read is a
+``/OpenJevCore/SchemaError`` naming it at `["body", "images", i]`.
 
 ## See Also
 

@@ -18,7 +18,7 @@ write ``JSONValue`` instead of using `Codable`.
 | `model` | `String` | Required. The server answers a name the loaded engine serves (``ServedModels``): `openjev-0.1` or `openjev-latest` for DiffusionGemma, the encoder's own name (`verdict-1.4`, `laya-1.0`), and the SDK aliases `jev-latest` and `jev-preview` everywhere. The engines do not check it. |
 | `state` | ``JSONValue`` | Required. A string, an object or an array. A string reaches the model as sent; anything else as `json.dumps(state, ensure_ascii=False)` with its key order kept (``StateText``). |
 | `questions` | ``OrderedMap`` of ``Question`` | Required, at least one. The order defines `q1` to `qN`, the answer order and how the questions are grouped into reads. |
-| `images` | `[ImageInput]` | Optional, an OpenJev extension: up to 8 data URLs or `{content_type, base64}` objects. No backend reads images yet (issue #48), so each refuses them. |
+| `images` | `[ImageInput]` | Optional, an OpenJev extension: up to 8 data URLs or `{content_type, base64}` objects of JPEG, PNG, WebP or GIF, read ahead of the state. The DiffusionGemma backend reads them; the encoder backends refuse them. |
 | `steps` | `Int` | Optional, 1 to 8: denoise passes per read. |
 | `samples` | `Int` | Optional, 1 to 32: a fixed number of noise draws, all billed, in place of the automatic re-reads. |
 | `think` | `Int` | Optional, 0 to 4096: a thought budget before the read. No backend generates yet (issue #52). |

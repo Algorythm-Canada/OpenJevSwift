@@ -1,16 +1,18 @@
 // The DiffusionGemma runtime (issue #29): upstream OpenJev's MlxRuntime and MlxEngine
-// (razorback16/openjev at dcd2094, openjev/mlx_backend.py lines 76 to 208 and 260 to 303,
-// Apache-2.0, see THIRD_PARTY.md) as one actor that conforms to the core's DecisionBackend.
+// (razorback16/openjev at dcd2094, openjev/mlx_backend.py lines 52 to 208 and 260 to 303,
+// Apache-2.0, see THIRD_PARTY.md) as one actor that conforms to the core's DecisionBackend. Image
+// prompts (#47) follow `ImagePrompt` and `MlxRuntime._inputs` and `_prefill`.
 
+import CryptoKit
 import Foundation
 import MLX
 import OpenJevCore
 
 /// Why the runtime refused a call.
 public enum DiffusionGemmaRuntimeError: Error, Sendable, Hashable, CustomStringConvertible {
-    /// A feature that arrives with a later milestone: `think` (generation, milestone 5) or
-    /// `images` (the vision milestone). ``DiffusionGemmaRuntime/capabilities`` flags both off, so
-    /// the engine refuses such requests before they get here.
+    /// A feature the runtime does not have: `think` (generation, milestone 5), or `images` for a
+    /// model loaded without its vision tower. ``DiffusionGemmaRuntime/capabilities`` flags them
+    /// off, so the engine refuses such requests before they get here.
     case unsupported(String)
     /// ``DiffusionGemmaRuntime/Configuration/cacheLimitGB`` is not a finite number of GB, 0 or
     /// more.
@@ -26,8 +28,8 @@ public enum DiffusionGemmaRuntimeError: Error, Sendable, Hashable, CustomStringC
             return "the DiffusionGemma runtime does not support think yet; generation arrives "
                 + "with milestone 5"
         case .unsupported("images"):
-            return "the DiffusionGemma runtime does not read image prompts yet; images arrive "
-                + "with the vision milestone"
+            return "the DiffusionGemma model was loaded without its vision tower, so it does not "
+                + "read images"
         case .unsupported(let feature):
             return "the DiffusionGemma runtime does not support \(feature)"
         }
@@ -59,6 +61,20 @@ public actor DiffusionGemmaRuntime: DecisionBackend {
                 _ canvas: [Int], _ slots: [SlotRequest], _ cache: PromptCache, _ steps: Int,
                 _ topK: Int
             ) throws -> ReadOutput
+        /// Decodes and expands an image prompt, upstream's `MlxRuntime._inputs` for an
+        /// `ImagePrompt`; nil when the model has no vision tower.
+        var imagePrompt: ImagePromptCall?
+
+        typealias ImagePromptCall =
+            (_ systemText: String, _ stateText: String, _ images: [ImagePart]) throws
+            -> ImagePrefill
+    }
+
+    /// An image prompt ready to prefill: its expanded length, image tokens included, and the
+    /// prefill.
+    struct ImagePrefill {
+        var promptTokens: Int
+        var prefill: () throws -> PromptCache
     }
 
     /// The checkpoint's tokenizer, a ``SwiftTransformersTokenizer``, which the engine encodes the
@@ -68,11 +84,10 @@ public actor DiffusionGemmaRuntime: DecisionBackend {
     public nonisolated let configuration: Configuration
     /// ``Configuration/maxPromptTokens``.
     public nonisolated var maxPromptTokens: Int { configuration.maxPromptTokens }
-    /// Steps, samples and sequential reads; not `think` until milestone 5, nor images until the
-    /// vision milestone, so the engine answers `"openjev-0.1 does not support think"` and its
-    /// image refusal.
-    public nonisolated let capabilities = BackendCapabilities(
-        steps: true, samples: true, think: false, sequential: true, images: false)
+    /// Steps, samples, sequential reads and images (when the model has its vision tower, as a
+    /// loaded checkpoint does); not `think` until milestone 5, so the engine answers
+    /// `"openjev-0.1 does not support think"`.
+    public nonisolated let capabilities: BackendCapabilities
     /// `openjev-0.1`, ``/OpenJevCore/ServedModels/diffusionGemmaVersion``.
     public nonisolated let modelName = ServedModels.diffusionGemmaVersion
 
@@ -97,6 +112,7 @@ public actor DiffusionGemmaRuntime: DecisionBackend {
     ) {
         self.tokenizer = tokenizer
         self.configuration = configuration
+        capabilities = Self.capabilities(images: calls.imagePrompt != nil)
         self.calls = calls
         self.setCacheLimit = setCacheLimit
         sharedLoadedModel = nil
@@ -113,16 +129,34 @@ public actor DiffusionGemmaRuntime: DecisionBackend {
         let model = loaded.model
         self.tokenizer = tokenizer
         self.configuration = configuration
+        var imagePrompt: ModelCalls.ImagePromptCall?
+        if model.readsImages, let transformers = tokenizer as? SwiftTransformersTokenizer {
+            imagePrompt = { system, state, images in
+                let inputs = try ImageReadInputs(
+                    system: system, state: state, parts: images, tokenizer: transformers)
+                return ImagePrefill(
+                    promptTokens: inputs.prompt.ids.count,
+                    prefill: { try model.prefill(image: inputs) })
+            }
+        }
+        capabilities = Self.capabilities(images: imagePrompt != nil)
         calls = ModelCalls(
             prefill: { try model.prefill(promptIDs: $0) },
             read: { canvas, slots, cache, steps, topK in
                 try model.read(canvas: canvas, slots: slots, cache: cache, steps: steps, topK: topK)
-            })
+            },
+            imagePrompt: imagePrompt)
         setCacheLimit = { Memory.cacheLimit = $0 }
         sharedLoadedModel = loaded
         prefills = PrefillCache(
             entryBudget: configuration.promptCacheEntries,
             tokenBudget: configuration.promptCacheTokens)
+    }
+
+    /// The runtime's capabilities: everything but `think`, and images when it reads them.
+    static func capabilities(images: Bool) -> BackendCapabilities {
+        BackendCapabilities(
+            steps: true, samples: true, think: false, sequential: true, images: images)
     }
 
     // MARK: Loading
@@ -236,10 +270,21 @@ public actor DiffusionGemmaRuntime: DecisionBackend {
     /// prefill or a cached one, `steps` decoder passes over the canvas, and each slot's top 20
     /// and labels through `slot_distribution`.
     ///
+    /// An image prompt is upstream's `ImagePrompt`: its prefill is cached under the system text,
+    /// the state text and the SHA-256 of each image's data URL (`ImagePrompt.key`), so it never
+    /// shares an entry with the same text with another image or with none. On a miss the images
+    /// are decoded, resized and expanded into soft tokens (``ImageReadInputs``) and the cap is
+    /// checked on the expanded prompt, as upstream's `_prefill` checks it after the processor;
+    /// a hit reuses the prefill and its count without decoding again. The prompt tokens a read
+    /// reports, which the engine bills, include the image tokens.
+    ///
     /// - Throws: ``/OpenJevCore/SchemaError`` `"the request is {n} tokens; the limit is {max}"`
-    ///   before anything runs when the prompt is longer than ``maxPromptTokens``;
-    ///   ``DiffusionGemmaRuntimeError/unsupported(_:)`` for an image prompt; ``ReadInputError`` for
-    ///   a canvas or slots the model refuses.
+    ///   before the prefill when the prompt, expanded for an image prompt, is longer than
+    ///   ``maxPromptTokens``; for an image that does not decode or that the processor cannot
+    ///   size, a ``/OpenJevCore/SchemaError`` `"image could not be read: {reason}"` at
+    ///   `["body", "images", i]` (upstream answers these with a bare 500, D-054);
+    ///   ``DiffusionGemmaRuntimeError/unsupported(_:)`` for an image prompt to a model without
+    ///   its vision tower; ``ReadInputError`` for a canvas or slots the model refuses.
     public func read(_ read: CanvasRead) async throws -> ReadResult {
         let (output, slots) = try modelRead(read)
         return output.readResult(for: slots)
@@ -247,24 +292,76 @@ public actor DiffusionGemmaRuntime: DecisionBackend {
 
     /// ``read(_:)`` before `slot_distribution`: the model's maps and the slots they are for.
     func modelRead(_ read: CanvasRead) throws -> (output: ReadOutput, slots: [SlotRequest]) {
-        guard case .tokens(let ids) = read.prompt else {
-            throw DiffusionGemmaRuntimeError.unsupported("images")
-        }
-        if ids.count > maxPromptTokens {
-            throw SchemaError(
-                "the request is \(ids.count) tokens; the limit is \(maxPromptTokens)")
-        }
         let slots = read.slots.map { SlotRequest(position: $0.position, labelIDs: $0.labelIDs) }
+        let cache: PromptCache
+        switch read.prompt {
+        case .tokens(let ids):
+            if ids.count > maxPromptTokens {
+                throw SchemaError(
+                    "the request is \(ids.count) tokens; the limit is \(maxPromptTokens)")
+            }
+            let clock = ContinuousClock()
+            let start = clock.now
+            defer { modelTime += clock.now - start }
+            let calls = calls
+            cache = try prefills.value(for: .tokens(ids), tokens: ids.count) {
+                try calls.prefill(ids)
+            }.value
+        case .image(let systemText, let stateText, let images):
+            let clock = ContinuousClock()
+            let start = clock.now
+            defer { modelTime += clock.now - start }
+            cache = try imageCache(systemText: systemText, stateText: stateText, images: images)
+        }
         let clock = ContinuousClock()
         let start = clock.now
         defer { modelTime += clock.now - start }
-        let calls = calls
-        let cache = try prefills.value(for: .tokens(ids), tokens: ids.count) {
-            try calls.prefill(ids)
-        }.value
         let output = try calls.read(read.canvas.tokens, slots, cache, read.steps, Self.topK)
         reads += 1
         return (output, slots)
+    }
+
+    /// The key of an image prompt's prefill, upstream's `ImagePrompt.key`: the system text, the
+    /// state text and the SHA-256 of each image's data URL.
+    static func imageKey(systemText: String, stateText: String, images: [ImagePart])
+        -> PrefillKey
+    {
+        .image(
+            systemText: systemText, stateText: stateText,
+            digests: images.map { Data(SHA256.hash(data: Data($0.dataURL.utf8))) })
+    }
+
+    /// An image prompt's prefill, cached or new, after the cap on its expanded length.
+    private func imageCache(systemText: String, stateText: String, images: [ImagePart]) throws
+        -> PromptCache
+    {
+        guard let imagePrompt = calls.imagePrompt else {
+            throw DiffusionGemmaRuntimeError.unsupported("images")
+        }
+        let key = Self.imageKey(systemText: systemText, stateText: stateText, images: images)
+        // A cached prompt was decoded and counted when it went in; only a miss decodes.
+        var prepared: ImagePrefill?
+        let tokens: Int
+        if let cached = prefills.peek(key) {
+            tokens = cached.promptTokens
+        } else {
+            do {
+                let made = try imagePrompt(systemText, stateText, images)
+                prepared = made
+                tokens = made.promptTokens
+            } catch let error as VisionError {
+                throw SchemaError(
+                    "image could not be read: \(error.message)",
+                    loc: ["body", "images"] + (error.imageIndex.map { [.index($0)] } ?? []))
+            }
+        }
+        // An image prompt's length is only known here, after the expansion.
+        if tokens > maxPromptTokens {
+            throw SchemaError("the request is \(tokens) tokens; the limit is \(maxPromptTokens)")
+        }
+        return try prefills.value(for: key, tokens: tokens) {
+            try (prepared ?? imagePrompt(systemText, stateText, images)).prefill()
+        }.value
     }
 
     /// Throws ``DiffusionGemmaRuntimeError/unsupported(_:)`` until generation arrives with

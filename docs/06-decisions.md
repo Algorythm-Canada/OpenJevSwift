@@ -3120,3 +3120,128 @@ UpstreamProbe's and the probe workflow's, and checks what the binaries import
 ([upstream-log.md](upstream-log.md)).
 
 Status. Proposed with issue #119.
+
+## D-054 Vision tower and the images field: where the port goes beyond or differs from the issue text
+
+Context. Issue #47 asks for the checkpoint's vision tower and `embed_vision`, the encoder's image
+path (the soft tokens' positions padded, then filled with the projected features, and each image's
+block attending to itself in both directions in the prompt prefill), upstream's `ImagePrompt.key`
+for the prefill cache and the prompt count after the expansion, with mlx-swift-lm's Gemma 4 tower
+reused if possible, else ported from mlx-vlm 0.6.15. Issue #48 asks for the `images` field end to
+end. Most of the wire half was already on main (`ImageValidation`, the refusals with `think` and
+`sequential`, the seed key, `ImageLimits` from `OPENJEV_MAX_IMAGES` and `OPENJEV_MAX_IMAGE_BYTES`,
+the encoder backends' refusal); what remained was the runtime and the answer to images the decoder
+cannot read, which upstream answers with a bare 500.
+
+Decision.
+
+1. **The tower is ported, and the library no longer links MLXVLM.** In mlx-swift-lm 3.32.3 only
+   `Gemma4VisionConfiguration` is public; the tower, its blocks and the embedder are `private`, and
+   the public `Gemma4` model reaches them only through its own text model's `prepare`. Its
+   arithmetic also departs from mlx-vlm's: it adds the two position embeddings by `take` in another
+   order where mlx-vlm sums one-hot products, it passes no attention mask where mlx-vlm passes an
+   additive one, and it pools with a transposed einsum. `VisionTower.swift` ports mlx-vlm's
+   `vision.py` and gemma4.py's `MultimodalEmbedder` and `masked_scatter` operation for operation,
+   and `DiffusionGemmaVisionConfiguration` replaces mlx-swift-lm's type with `VisionConfig`'s
+   defaults, so `OpenJevDiffusionGemma` drops its MLXVLM dependency; only the tests link it, to keep
+   D-051's processor comparison. This settles R18's tower half.
+2. **The tower's `pow` is the precise one.** With the port written, D-014's exact tier first gave
+   0 of the 4 hot dog reads of `Fixtures/vision/reads.json`. `Tools/oracle/stage_dump.py --image`
+   records mlx-vlm's own stages (the pixels, the patches, each block, the pool, the features, the
+   embeddings after the scatter, the masks, every encoder layer and the caches) and the first block
+   one operation at a time. The first difference was the first block's output; fed mlx-vlm's own
+   inputs, every operation of the block was bit for bit except the three RMS norms (`x ** 2`) and
+   the RoPE timescale (`100 ** exponents`), both MLX `power`, while `mean` and `rsqrt` were exact.
+   mlx-swift compiles `Power` from source at run time with fast math, so the wheel's metallib never
+   supplies it; the wheel's precompiled kernel calls the precise `pow` (on the hot dog's first
+   block a third of the wheel's `x ** 2` differ from `x * x`). A one-line Metal kernel calling
+   `metal::precise::pow` (`precisePow`) reproduces the wheel's values, and with it the four reads
+   are bit for bit in the exact tier, every stage included. It is used in the tower only; the text
+   path keeps its own and stays as it was.
+3. **A loaded checkpoint loads its tower.** `DiffusionGemmaModel.load` builds the tower and
+   `embed_vision` when `config.json` has a `vision_config`, as mlx-vlm's `load` does: the strict
+   check now covers all 1,647 tensors (none dropped, 300 quantized modules), and a missing or
+   unexpected tower tensor is named with its shard like any other. They hold 570,057,264 stored
+   parameters, 569,449,008 of them the tower's in bfloat16 and 608,256 the 4-bit projection's
+   packed weight, scales and biases (3,244,032 logical weights), 1,140,925,536 bytes (1.06 GiB).
+   On the reference Mac (M3 Max, macOS 27.0.1, 2026-10-05) MLX holds 15.41 GiB after load where R4
+   recorded 14.35 GiB without the tower, the same 1.06 GiB; the resident size after load was
+   15.75 GiB in this run, within the 15.08 to 15.92 GiB R4 recorded without it, so the run does not
+   isolate the resident cost. `load(from:configuration:vision:progress:)` takes `vision: false` for
+   a text-only tree; the runtime does not expose it.
+4. **The image prefill uses mlx-vlm's explicit masks; text prompts keep theirs.** mlx-vlm's
+   processor hands the prefill an attention mask of ones, so for an image prompt
+   `_make_encoder_masks` builds boolean masks for every layer (causal, cut to the window on a
+   sliding layer, or-ed with the overlay), and the port builds the same. A text prompt still gets
+   `.causal` or the window band, unchanged: `ReadOracleTests` gives 63 of 63 reads and 126 of 126
+   cache digests bit for bit in the exact tier, and `RegressionTests` passes. No read is ever
+   prefilled in chunks (D-036); `allowsChunkedPrefill(mmTokenTypeIDs:hasPixelValues:)` ports
+   `chunked_prefill_policy` for generation (milestone 5), which may chunk.
+5. **A cached image prompt is not decoded again.** The prefill key is `ImagePrompt.key` (the system
+   text, the state text and the SHA-256 of each image's data URL), so an image never shares an
+   entry with another image or with none. Upstream decodes and expands the images on every read,
+   before the cache lookup; the port does so only on a miss and reads the count from the entry on a
+   hit, which gives the same count, since the key fixes the bytes. The cap is checked on the
+   expanded prompt with upstream's message, and the prompt tokens a read reports include the image
+   tokens: 355 for the hot dog request and 411 for the README questions with the hot dog, upstream's
+   counts.
+6. **An image the port cannot read is a 400 naming it.** Upstream does not catch Pillow's or the
+   processor's errors, so FastAPI answers a bare 500 `Internal Server Error`. The runtime turns a
+   `VisionError` into a `SchemaError` `"image could not be read: {reason}"` at
+   `["body", "images", i]`, the plain-detail 400 of upstream's other image refusals. The input is
+   the client's to fix, a 500 tells it the server failed, and Jev's Python SDK retries every 5xx
+   twice by default ([02-jev-wire-api.md](02-jev-wire-api.md)), sending the same image again; the
+   400 names the image and why. Each case, against Pillow 12.3.0 in the oracle's venv:
+
+   | Image | Pillow and upstream | The port |
+   |---|---|---|
+   | HEIC bytes labelled `image/jpeg` | `UnidentifiedImageError`, 500 | 400, not a JPEG, PNG, WebP or GIF (ImageIO would decode it) |
+   | TIFF or BMP bytes labelled `image/png` | decoded, 200 | 400, as above |
+   | A JPEG cut short | `OSError: image file is truncated`, 500 | 400, truncated (ImageIO would decode it) |
+   | A JPEG missing only its EOI | truncated, 500, when libjpeg reads past the end (the hot dog, `progressive.jpg`); decoded, 200, when it does not (`baseline.jpg`) | 400, truncated, in every case |
+   | 1 pixel high | the processor raises, 500 | 400 (D-051) |
+   | 3 pixels high | read as channels first, a wrong answer, 200 | 400 (D-051) |
+   | Past 178,956,970 pixels | `DecompressionBombError`, 500 | 400 |
+   | A JPEG of garbage after its SOI | `UnidentifiedImageError`, 500 | 400, truncated |
+
+   The port accepts an image by its signature only when it is one of the four types the API
+   accepts, whatever the declared type, as Pillow ignores it; a TIFF or BMP under another label is
+   the one input refused where upstream answers, so that untrusted bytes never reach ImageIO's
+   other decoders. `LibjpegTurboDecoder` now refuses a JPEG that ends before its EOI marker
+   (no EOI, a marker or segment that runs past the end, a restart marker missing at the end of the
+   data) instead of handing it to ImageIO, which decoded such files. Pillow refuses such a file only
+   when libjpeg asks for data past its end, which depends on how far its bit reader looks ahead, so
+   a JPEG missing only its EOI is a 400 here where upstream sometimes reads it; following Pillow
+   exactly there is the JPEG hardening's to do. Other malformed JPEGs the port
+   does not cover still fall back to ImageIO, unmeasured (D-051); the JPEG decoder's hardening
+   against libjpeg-turbo's refusals is its own change.
+7. **`think` with images is refused as unsupported until #52.** Upstream answers `"think needs a
+   text state; send images without it"`; the runtime has no `think` yet, so the engine answers
+   `"openjev-0.1 does not support think"` first, also a 400 at `["body", "think"]`. `sequential`
+   with images gets upstream's message.
+8. **The stub tests draw 64 by 64 PNGs.** Upstream's stub tests send a 1 by 1 PNG, which upstream's
+   stub never decodes; the port's stub decodes for real, so the decode failures above are tested
+   without weights, and a 1-pixel-high image is one it refuses.
+
+Measured on the reference Mac with the pinned 4-bit checkpoint and `OPENJEV_MLX_CACHE_LIMIT_GB=4`.
+Exact tier (the wheel's `mlx.metallib`, SHA-256 `dc59d1cc…`, and the oracle's RoPE table): the four
+reads of `reads.json` bit for bit, and every recorded stage of the hot dog prefill equal. Native:
+mean |dp| 0.0012 over the 24 labels, mean |dH| 0.146 over the 10 slots, the top label on 10 of 10,
+the largest |dp| of a read 0.0048, 0.0002, 0.0028 and 0.0054; natively the first block's only
+differing operations are MLX's `rms_norm` kernel, as for text. Live: solid red and blue read 0.99993
+and 0.99952 with 369 input tokens; the hot dog request answers hotdog 0.99921 and cat 0.00013 with
+355 input tokens. Upstream's `tests/test_live.py` against `openjev serve --backend mlx`: 9 passed
+(`test_image` among them), 3 failed (`test_think`, `test_chat` and `test_chat_stream`, milestone 5)
+and 4 skipped (the encoder models); the Swift live suite: 9 passed and 7 skipped.
+
+Alternatives rejected. (a) Reusing mlx-swift-lm's tower: it is private, and its arithmetic is not
+mlx-vlm's (item 1). (b) Accepting the exact tier's miss as kernel drift: the stage dump showed the
+cause is one op whose precise form is available. (c) Answering undecodable images with upstream's
+500: item 6. (d) Decoding any format ImageIO reads: it widens what untrusted input reaches and
+decodes files Pillow refuses.
+
+Consequences. The `mlx` backend reads images: the engine's capability check passes, the runtime
+builds `ImageReadInputs` and prefills through the tower. The model holds 1.06 GiB more. Library
+consumers no longer build MLXVLM. A bad image is a 400 that names it.
+
+Status. Proposed with issues #47 and #48.

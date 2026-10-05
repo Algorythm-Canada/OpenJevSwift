@@ -136,19 +136,34 @@ public struct ImageReadInputs {
     /// size, else one `(3, H, W)` array per image.
     public let pixelValues: [MLXArray]
 
+    /// Decodes, resizes and rescales each image, upstream's `ImagePrompt.pil` and the
+    /// processor's resize, in order.
+    ///
+    /// - Throws: A ``VisionError`` with the failing image's ``VisionError/imageIndex``.
+    public static func process(
+        _ parts: [ImagePart], processor: Gemma4ImageProcessor = Gemma4ImageProcessor()
+    ) throws(VisionError) -> [Gemma4ImageProcessor.ProcessedImage] {
+        var images: [Gemma4ImageProcessor.ProcessedImage] = []
+        for (index, part) in parts.enumerated() {
+            do throws(VisionError) {
+                images.append(try processor.process(RGBImage(decoding: part)))
+            } catch {
+                throw error.image(index)
+            }
+        }
+        return images
+    }
+
     /// Decodes, resizes and rescales `parts` and builds the prompt that reads them ahead of
     /// `state`, as upstream's `MlxRuntime._inputs` does for an `ImagePrompt`.
     ///
-    /// - Throws: A ``VisionError`` for an image that does not decode or that the processor
-    ///   cannot size, or the tokenizer's error.
+    /// - Throws: A ``VisionError`` with the image's ``VisionError/imageIndex`` for an image that
+    ///   does not decode or that the processor cannot size, or the tokenizer's error.
     public init(
         system: String, state: String, parts: [ImagePart], tokenizer: SwiftTransformersTokenizer,
         processor: Gemma4ImageProcessor = Gemma4ImageProcessor()
     ) throws {
-        var images: [Gemma4ImageProcessor.ProcessedImage] = []
-        for part in parts {
-            images.append(try processor.process(RGBImage(decoding: part)))
-        }
+        let images = try Self.process(parts, processor: processor)
         self.images = images
         self.prompt = try ImagePromptInputs(
             system: system, state: state, softTokens: images.map(\.softTokens),

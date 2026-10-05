@@ -284,8 +284,8 @@ Upstream/.venv/bin/python -m pip install pytest httpx==0.28.1
 OPENJEV_LIVE_URL=http://127.0.0.1:8080 Upstream/.venv/bin/python -m pytest Upstream/openjev/tests/test_live.py -v
 ```
 
-Against the Swift server's `mlx` backend, its image, `think`, chat and stream tests fail until
-#48, #52 and #53 land, while the Swift suite skips them. The chat tests run there rather than
+Against the Swift server's `mlx` backend, its `think`, chat and stream tests fail until #52 and
+#53 land, while the Swift suite skips them. The chat tests run there rather than
 skip because the listing already names `diffusiongemma-26b`, as upstream's does.
 
 ### MLX in tests

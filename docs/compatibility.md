@@ -112,7 +112,11 @@ which is why the server loads the 8-bit one ([quality.md](quality.md#jevk5)).
 | `OPENJEV_LOG_LEVEL` | uvicorn's level names | The same and swift-log's `notice` | D-030 |
 | Backends | `vllm` by default, and `mlx`, `laya`, `verdict`, `clm`, `jevk5` | `mlx` by default, `laya`, `verdict` and `jevk5`; `vllm` and `clm` are unknown names (issue #59) | D-030, D-038, D-052 |
 | DiffusionGemma checkpoint | The newest revision of `OPENJEV_MLX_MODEL`'s repository | The default repository loads the pinned revision `a7a81407`; `repo@revision` picks another | D-039 |
-| `think` and `images` on `mlx` | Supported | `openjev-0.1 does not support think` and `does not support images` until issues #52 and #48 | D-039 |
+| `think` on `mlx` | Supported | `openjev-0.1 does not support think` until issue #52; with images, that refusal comes before upstream's `think needs a text state` | D-039, D-054 |
+| An image that cannot be read on `mlx` | Pillow's or the processor's exception, answered as a bare 500 | The 400 `image could not be read: {reason}` at `["body", "images", i]` | D-054 |
+| Image formats on `mlx` | Whatever Pillow identifies by its bytes, whatever the declared type | JPEG, PNG, WebP or GIF by their bytes, whatever the declared type; a TIFF or BMP under another label is a 400 | D-054 |
+| Truncated JPEGs and images 3 pixels high on `mlx` | A truncated JPEG is a 500, though one missing only its EOI is read when libjpeg does not look past its end; an image 3 pixels high is read as channels first and answered | All are 400s | D-051, D-054 |
+| A cached image prefill on `mlx` | The images are decoded again for every read | Decoded once per prefill; a cached one reuses its count, so the answers and the billing are the same | D-054 |
 | `POST /v1/chat/completions` | Served by the `mlx` backend | A 404 until issue #53, though `/v1/models` still lists `diffusiongemma-26b` as upstream's does | D-012, D-043 |
 | `server-timing` `model` on `mlx` | `0.0`: the MLX engine does not time its reads | The time spent in reads, summed over reads that ran at once, so it can exceed `total` | D-038, D-044 |
 | Encoder arithmetic | PyTorch, on CUDA when present, else in float32 on the CPU | Core ML packages in float16 on the GPU or the Neural Engine, within the bounds above | D-011, D-034, D-037 |
@@ -138,7 +142,7 @@ encoder engines do), from the `openjev` tool's `BackendRegistry`, and from the p
 
 | Platform | Backend | Reads | `steps` | `samples` | `sequential` | Images | `think` | Chat |
 |---|---|---|---|---|---|---|---|---|
-| macOS 14 or later, Apple silicon | `mlx` | yes | yes | yes | yes | no, issue #48 | no, issue #52 | no, issue #53 |
+| macOS 14 or later, Apple silicon | `mlx` | yes | yes | yes | yes | yes | no, issue #52 | no, issue #53 |
 | macOS 15 or later | `verdict` | yes | n/a | n/a | n/a | n/a | n/a | n/a |
 | macOS 15 or later | `laya` | yes | n/a | n/a | n/a | n/a | n/a | n/a |
 | macOS 14 or later, Apple silicon | `jevk5` | yes | n/a | n/a | n/a | n/a | n/a | n/a |
