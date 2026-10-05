@@ -259,6 +259,18 @@ struct VisionPreprocessingTests {
         #expect(RGBImage.maxPixels == 2 * 89_478_485)
     }
 
+    @Test("The image prompts' states are the text fixture's states of issue #124")
+    func stateList() throws {
+        let image = try VisionFixtures.preprocessing().statePrompts
+        let text = try TokenizerFixtures.cases("chat-prompts/prompts.json").filter {
+            $0["name"]?.stringValue?.hasPrefix("trim_") == true
+        }
+        #expect(image.count == 15)
+        #expect(image.map(\.key) == text.map { $0["name"]?.stringValue ?? "" })
+        #expect(image.map(\.state) == text.map { $0["messages"]?[1]?["content"]?.stringValue })
+        #expect(image.allSatisfy { $0.images == ["gradients"] && $0.softTokens == [252] })
+    }
+
     @Test("A state that spells out more image placeholders than there are images is refused")
     func extraPlaceholder() throws {
         #expect(throws: VisionError.self) {
@@ -351,6 +363,30 @@ struct VisionPromptParityTests {
         #expect(imageClose == textClose + 1)
         #expect(prompt.ids[imageClose - 1] == 236_743)
         #expect(Array(prompt.ids[..<textClose]) == Array(text[..<textClose]))
+    }
+}
+
+/// The states of issue #124 as the text of an image prompt, against upstream's processor. The
+/// recorded soft tokens stand in for the image, so only the tokenizer files are needed.
+@Suite(
+    "Image prompt states trimmed as upstream's processor trims them",
+    .enabled(if: TokenizerFixtures.available, TokenizerFixtures.missingMessage))
+struct VisionStatePromptTests {
+    @Test("Every recorded state expands to the oracle's ids and mm_token_type_ids")
+    func states() async throws {
+        let tokenizer = try await TokenizerFixtures.tokenizer()
+        let prompts = try VisionFixtures.preprocessing().statePrompts
+        #expect(prompts.count == 15)
+        for prompt in prompts {
+            let inputs = try ImagePromptInputs(
+                system: prompt.system, state: prompt.state, softTokens: prompt.softTokens,
+                tokenizer: tokenizer)
+            #expect(
+                inputs.ids == prompt.ids,
+                "\(prompt.key): \(ChatTemplateParityTests.firstDifference(expected: prompt.ids, actual: inputs.ids))"
+            )
+            #expect(inputs.mmTokenTypeIDs == prompt.mmTokenTypeIDs, "\(prompt.key)")
+        }
     }
 }
 

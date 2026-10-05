@@ -96,6 +96,17 @@ enum VisionFixtures {
         var shapes: [[Int]]
     }
 
+    /// One state of issue #124 as the text of a prompt with one image, from `state_prompts`.
+    struct StatePrompt {
+        var key: String
+        var images: [String]
+        var system: String
+        var state: String
+        var ids: [Int]
+        var mmTokenTypeIDs: [Int]
+        var softTokens: [Int]
+    }
+
     /// One row of the resize rule.
     struct BudgetRow {
         var width: Int
@@ -118,6 +129,7 @@ enum VisionFixtures {
     struct Preprocessing {
         var images: [Image]
         var prompts: [Prompt]
+        var statePrompts: [StatePrompt]
         var budget: [BudgetRow]
         var gifCases: [GIFCase]
         var textPromptIDs: [Int]
@@ -179,6 +191,16 @@ enum VisionFixtures {
                     mmTokenTypeIDs: try ints(row["mm_token_type_ids"]),
                     softTokens: try ints(row["soft_tokens"]), stacked: stacked, shapes: shapes))
         }
+        var statePrompts: [StatePrompt] = []
+        for (key, row) in try #require(root["state_prompts"]?.objectValue) {
+            statePrompts.append(
+                StatePrompt(
+                    key: key, images: try TokenizerFixtures.strings(row["images"]),
+                    system: try #require(row["system"]?.stringValue),
+                    state: try #require(row["state"]?.stringValue), ids: try ints(row["ids"]),
+                    mmTokenTypeIDs: try ints(row["mm_token_type_ids"]),
+                    softTokens: try ints(row["soft_tokens"])))
+        }
         let budget = try #require(root["budget_rule"]?.arrayValue).map { row in
             let target: (Int, Int, Int)? =
                 row["error"] == nil
@@ -209,7 +231,8 @@ enum VisionFixtures {
                     error: row["error"]?.stringValue))
         }
         return Preprocessing(
-            images: images, prompts: prompts, budget: budget, gifCases: gifCases,
+            images: images, prompts: prompts, statePrompts: statePrompts, budget: budget,
+            gifCases: gifCases,
             textPromptIDs: try ints(root["text_prompt"]?["ids"]),
             processor: try #require(root["processor"]))
     }

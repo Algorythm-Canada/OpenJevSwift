@@ -1500,6 +1500,26 @@ def long_state():
     return " ".join(words)
 
 
+# Issue #124: the template trims each message with jinja2's `trim`, Python's str.strip(), which
+# removes every character str.isspace() accepts (U+001C to U+001F among them, U+200B not), and
+# Engine.decide hands the state over unstripped. The states, under the system text of the issue's
+# evidence: the photo request's state alone, with each of U+001C to U+001F after it and before
+# it, with U+000B, U+0085, U+00A0 and U+200B after it, every character str.isspace() accepts,
+# and nothing.
+TRIM_SYSTEM = "Answer."
+TRIM_STATE = "Look at the photo."
+
+
+def trim_states():
+    rows = [("trim_none", TRIM_STATE)]
+    rows += [(f"trim_u{ord(c):04x}_end", TRIM_STATE + c) for c in "\x1c\x1d\x1e\x1f"]
+    rows += [(f"trim_u{ord(c):04x}_start", c + TRIM_STATE) for c in "\x1c\x1d\x1e\x1f"]
+    rows += [(f"trim_u{ord(c):04x}_end", TRIM_STATE + c) for c in "\x0b\x85\xa0\u200b"]
+    rows.append(("trim_whitespace_only", "".join(c for c in map(chr, range(sys.maxunicode + 1)) if c.isspace())))
+    rows.append(("trim_empty", ""))
+    return rows
+
+
 def prompt_row(tok, eng, name, sys_text, user, source_name):
     messages = [{"role": "system", "content": sys_text}, {"role": "user", "content": user}]
     row = {"name": name, "source": source_name, "messages": messages}
@@ -1539,7 +1559,7 @@ def chat_prompt_cases(tok, eng):
         ("multiline_state", quick, "First line\n\n\nSecond\tline\r\nthird  \n  last"),
         ("emoji_state", quick, "Great service 👍🏽 👨\u200d👩\u200d👧 ✨ 🇨🇦"),
         ("long_state", quick, long_state()),
-    ]
+    ] + [(name, TRIM_SYSTEM, state) for name, state in trim_states()]
     rows, seen = [], set()
     RECORDING[0] = False
     try:

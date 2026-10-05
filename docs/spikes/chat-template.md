@@ -9,6 +9,11 @@ recorded text and the recorded ids, thinking off and on. No builder is needed. T
 recorded in D-008 of [../06-decisions.md](../06-decisions.md) and risk R2 in
 [../07-risks-and-unknowns.md](../07-risks-and-unknowns.md).
 
+Later (issue #124, 2026-10-03): one difference no row held. swift-jinja's `trim` strips
+Foundation's `whitespacesAndNewlines`, and jinja2's strips what Python's `str.strip()` strips, so a
+state that starts or ends with U+001C to U+001F or U+200B rendered differently. The port renders
+the template with jinja2's `trim` since D-054, and `prompts.json` holds those states.
+
 Versions the result holds for: swift-transformers 1.3.4, swift-jinja 2.5.1, swift-huggingface
 0.11.0, mlx-swift-lm `c043fb3`; tokenizer `mlx-community/diffusiongemma-26B-A4B-it-4bit` at
 `a7a81407613811e8ba63af92ac0d852b809e191f`; fixtures from transformers 5.17.0, tokenizers

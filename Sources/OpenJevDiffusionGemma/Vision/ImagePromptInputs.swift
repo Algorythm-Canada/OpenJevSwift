@@ -17,11 +17,15 @@ import OpenJevCore
 /// by the state text. mlx-vlm turns every message's content into a list of parts on the way
 /// (`prompt_utils.apply_chat_template`), the system message included, and Gemma 4's template
 /// writes each system text part as `trim + " "`: an image prompt's system turn ends in a space
-/// (token 236743) before `<turn|>`, which a text prompt's does not. The template writes one
-/// `<|image|>` per image part; the processor then replaces the n-th `<|image|>` of the whole
-/// text with `<|image>`, that image's soft tokens of `<|image|>`, and `<image|>`, and tokenizes
-/// the result without adding special tokens (the template writes `<bos>`). `mm_token_type_ids`
-/// is 1 where an id is the image token, 2 for the video token and 3 for the audio token, else 0.
+/// (token 236743) before `<turn|>`, which a text prompt's does not. On the way mlx-vlm also
+/// strips the user's text with Python's `str.strip()` (`extract_text_from_content`), and the
+/// template trims it again; the port renders the state as given, and the template's `trim`,
+/// which is Python's here (the tokenizer's `templateEnvironment()`, D-054), gives the same text.
+/// The template writes one `<|image|>` per image part; the processor then replaces the n-th
+/// `<|image|>` of the whole text with `<|image>`, that image's soft tokens of `<|image|>`, and
+/// `<image|>`, and tokenizes the result without adding special tokens (the template writes
+/// `<bos>`). `mm_token_type_ids` is 1 where an id is the image token, 2 for the video token and 3
+/// for the audio token, else 0.
 public struct ImagePromptInputs: Sendable, Hashable {
     /// The expanded prompt ids.
     public let ids: [Int]
