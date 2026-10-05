@@ -540,6 +540,39 @@ class GitHubAPITests(unittest.TestCase):
         self.assertIn("[#352](https://github.com/owner/lib/pull/352) Base Gemma diffusion "
                       "implementation (by aleroot, opened 2026-06-15, updated 2026-10-02)", text)
 
+    def test_a_qwen35_commit_is_listed_under_its_watch(self):
+        # JevK5 runs mlx-swift-lm's Qwen3.5 text model (D-052), so a commit to Qwen35.swift, such
+        # as 1830ae4, is listed under that file's watch and under no other.
+        lm = next(p for p in review.GITHUB_PROJECTS if p.repo == "ml-explore/mlx-swift-lm")
+        path = "Libraries/MLXLLM/Models/Qwen35.swift"
+        sha, date = "1830ae4f3fbeabff69850cbf906c62a12ea825af", "2026-10-02T16:22:13Z"
+        subject = ("Declare the fused GDN projection as compile state so it frees with the model "
+                   "(#631)")
+        compare = {"ahead_by": 1, "behind_by": 0, "total_commits": 1,
+                   "commits": [api_item(sha, date, subject)],
+                   "files": [{"filename": path, "status": "modified", "additions": 28,
+                              "deletions": 8},
+                             {"filename": "Tests/MLXLMTests/Qwen35FusedGDNProjectionTests.swift",
+                              "status": "modified", "additions": 41, "deletions": 0}]}
+        repo = lm.repo
+        github = FakeGitHub(
+            {f"repos/{repo}/commits/c043fb3": api_item(self.pin, PIN_DATE, "pin"),
+             f"repos/{repo}/commits/{self.head}": api_item(self.head, "2026-10-02T20:02:02Z",
+                                                          "head"),
+             f"repos/{repo}/compare/{self.pin}...{self.head}": compare},
+            {f"repos/{repo}/commits?sha=": [api_item(sha, date, subject)]})
+        record = review.review_github(lm, "`c043fb3` (2026-09-28)", github)
+        self.assertIsNone(record["error"])
+        watched = {w["what"]: [c["sha"] for c in w["commits"]] for w in record["watched"]}
+        self.assertEqual({what: shas for what, shas in watched.items() if shas}, {path: [sha]})
+        queries = [c for c in github.calls if c.startswith(f"repos/{repo}/commits?")]
+        self.assertEqual(queries, [f"repos/{repo}/commits?sha={self.head}&path={path}"
+                                   f"&since={date}"])
+        why = next(w.why for w in lm.watches if w.path == path)
+        self.assertIn("Qwen3.5", why)
+        self.assertIn(f"- `{path}`, {why}:\n  - `1830ae4` 2026-10-02 {subject}",
+                      "\n".join(review.render_github(record)))
+
     def test_a_missing_pin_is_an_error_of_that_project(self):
         github = FakeGitHub({"repos/owner/lib/commits/": review.NotFound("No commit found")})
         record = review.review_github(review.GitHubProject("owner/lib"), "`c043fb3`", github)
