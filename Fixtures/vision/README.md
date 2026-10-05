@@ -35,6 +35,8 @@ stand-in runtime that holds the processor `mlx_vlm.load` builds for the checkpoi
 Pillow 12.3.0) and no model.
 
 - `generator` records the pins, as in [Fixtures/oracle](../oracle/README.md), with Pillow's version.
+  Its `version` is this file's own, 2 since `state_prompts` (issue #124); `reads.json` keeps its
+  own, 1, because only a run with the model rewrites it.
 - `processor` is what the processor was built with: `max_soft_tokens` 280, `patch_size` 16,
   `pooling_kernel_size` 3, `rescale_factor`, `do_normalize` false, `resample` 3 (bicubic), the
   `size` it ignores, and the image tokens and their ids.

@@ -77,7 +77,12 @@ READS_OUT = VISION / "reads.json"
 TENSORS_OUT = ROOT / "Tools" / "oracle" / "results" / "vision"
 RUN_OUT = ROOT / "Tools" / "oracle" / "results" / "vision_run.json"
 SCRIPT = "Tools/fixtures/vision_oracle.py"
-GENERATOR_VERSION = 1
+# Each file's version, bumped when the shape of that file changes. They are kept apart because
+# only a run with the model rewrites reads.json, which a change to preprocessing.json alone should
+# not mark as written by an older script. preprocessing.json 2: `state_prompts` (issue #124);
+# `gif_cases` (#125) came in at 1.
+PREPROCESSING_VERSION = 2
+READS_VERSION = 1
 UPSTREAM_COMMIT = "dcd2094"
 MODEL_REPO = "mlx-community/diffusiongemma-26B-A4B-it-4bit"
 MODEL_REVISION = "a7a81407613811e8ba63af92ac0d852b809e191f"
@@ -130,13 +135,14 @@ def device_info():
             "memory_size": info.get("memory_size")}
 
 
-def generator():
-    """What the fixtures depend on. Pillow decodes and resizes; the device matters only to the
-    reads, whose Metal kernels may round differently on another GPU family."""
+def generator(version):
+    """What the fixtures depend on, with the written file's `version`. Pillow decodes and resizes;
+    the device matters only to the reads, whose Metal kernels may round differently on another GPU
+    family."""
     metallib = Path(mx.__file__).parent / "lib" / "mlx.metallib"
     return {
         "script": SCRIPT,
-        "version": GENERATOR_VERSION,
+        "version": version,
         "upstream": "razorback16/openjev",
         "upstream_commit": UPSTREAM_COMMIT,
         "tokenizer_repo": MODEL_REPO,
@@ -763,7 +769,7 @@ def preprocessing_payload(processor, eng, settings, images):
     tok = processor.tokenizer
     sys_text = a[1]["hotdog"]["system"]
     payload = {
-        "generator": generator(),
+        "generator": generator(PREPROCESSING_VERSION),
         "processor": {
             "class": type(processor).__name__, "image_processor": type(ip).__name__,
             "max_soft_tokens": ip.max_soft_tokens, "patch_size": ip.patch_size,
@@ -861,7 +867,7 @@ def reads_payload(args, model_path, eng, settings, images, processor, run):
                       for r in reads]
     rt.close()
     payload = {
-        "generator": generator(),
+        "generator": generator(READS_VERSION),
         "settings": {"topk": TOPK, "vocab": VOCAB, "canvas": settings.canvas,
                      "canvas_step": settings.canvas_step, "mlx_max_prompt": settings.mlx_max_prompt,
                      "auto_threshold": settings.auto_threshold},
@@ -950,7 +956,8 @@ def main():
             path.write_bytes(images[name][0])
             print(f"wrote Fixtures/vision/{file}: {len(images[name][0])} bytes", file=sys.stderr)
 
-    run = {"generator": generator(), "cache_limit_gb": args.cache_limit_gb,
+    run = {"generator": generator({"preprocessing.json": PREPROCESSING_VERSION, "reads.json": READS_VERSION}),
+           "cache_limit_gb": args.cache_limit_gb,
            "machine": {"platform": platform.platform(), "machine": platform.machine(), **device_info()}}
     payload, tensors, same = preprocessing_payload(processor, eng, settings, images)
     run["preprocessing_passes_agree"] = same

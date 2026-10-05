@@ -3172,7 +3172,9 @@ Decision.
    `isspace()` characters. The whitespace-only state the file already had (`" \n\t "`) is ASCII,
    which both sets strip, so the issue's "a state of only whitespace" is the new one. `make
    fixtures` changes nothing else. `vision/preprocessing.json` gains the same fifteen as the text
-   of a prompt with one image (`gradients.png`).
+   of a prompt with one image (`gradients.png`). That is a new member, so the file's generator
+   version goes to 2. `vision_oracle.py` now versions its two files apart: `reads.json`, whose
+   shape did not change and which only a run with the model rewrites, stays at 1.
 5. **No other prompt-path text is stripped with Foundation's set.** Where upstream applies Python's
    string methods to text a model reads, the port follows Python already: `text_of`'s `strip()` of
    instructions and descriptions is `TextOf.render`, with CPython's set, and the state goes in
