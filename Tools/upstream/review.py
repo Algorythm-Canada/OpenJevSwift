@@ -172,7 +172,8 @@ GITHUB_PROJECTS = (
                  Watch("the BaseLanguageModel protocol (ModelTree.swift); LMInput, LMOutput and "
                        "its state (Qwen35LetterReadoutModel.swift)",
                        path="Libraries/MLXLMCommon/LanguageModel.swift"),
-                 Watch("Gemma4VisionConfiguration (Configuration.swift)",
+                 Watch("Gemma4Processor, which the Vision tests compare with Pillow's "
+                       "(VisionPreprocessingTests.swift); the library ports its own (D-051, D-054)",
                        path="Libraries/MLXVLM/Models/Gemma4.swift"),
                  # JevK5 runs MLXLLM's Qwen3.5 text model whole (D-052): its file, then the files
                  # its load and forward pass reach. JevK5 is dense, so the MoE block's SwitchGLU
@@ -230,7 +231,9 @@ GITHUB_PROJECTS = (
         watches=(Watch("DiffusionGemma itself, the port's reference",
                        path="mlx_vlm/models/diffusion_gemma"),
                  Watch("the diffusion generation loop", path="mlx_vlm/generate/diffusion.py"),
-                 Watch("the Gemma 4 modules the read imports", path="mlx_vlm/models/gemma4"),
+                 Watch("the Gemma 4 modules the read imports, and the vision tower and "
+                       "embedder the port translates (VisionTower.swift)",
+                       path="mlx_vlm/models/gemma4"),
                  Watch("KVCache and RotatingKVCache", path="mlx_vlm/models/cache.py"),
                  Watch("SwitchLinear, _gather_sort and _scatter_unsort",
                        path="mlx_vlm/models/switch_layers.py"),

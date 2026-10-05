@@ -304,6 +304,11 @@ fresh runs, which repeat bit for bit.
 
 ## What #47 needs next
 
+Done by #47 and #48 (D-054): the runtime builds `ImageReadInputs`, keys the prefill by
+`ImagePrompt.key`, checks the cap after the expansion and prefills in one piece through a port of
+mlx-vlm's tower (MLXVLM's is private), the four hot dog reads are bit for bit in the exact tier, and
+a `VisionError` is a 400 at `["body", "images", i]`. The list below is as the spike left it.
+
 - The runtime still refuses images (`unsupported("images")`). #47 builds `ImageReadInputs` from the
   `ImagePart`s on the runtime's side, checks the expanded length against the prompt limit after the
   expansion (upstream checks it in `_prefill`), keys the prefill cache by the text and the images'

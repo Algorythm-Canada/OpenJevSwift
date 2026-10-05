@@ -18,9 +18,9 @@ which CI checks, but no iPhone holds the model.
 
 The port matches mlx-vlm bit for bit on all 63 recorded oracle reads when it runs on the oracle's
 Metal library, and stays within the bounds of decisions D-014 and D-048 on mlx-swift's own kernels,
-which is how it runs in production. `steps`, `samples` and `sequential` work; images
-(issues #46 to #48) and `think` with text generation (issues #50 to #53) do not yet, and the engine
-refuses them with upstream's messages.
+which is how it runs in production; reads with images match the oracle's four image reads bit for
+bit there too (D-054). `steps`, `samples`, `sequential` and images work; `think` with text
+generation (issues #50 to #53) does not yet, and the engine refuses it with upstream's message.
 
 <doc:ReadingWithDiffusionGemma> loads the model and covers its settings, memory and downloads.
 

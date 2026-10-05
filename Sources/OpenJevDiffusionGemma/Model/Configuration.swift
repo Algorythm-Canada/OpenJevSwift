@@ -5,7 +5,6 @@
 import Foundation
 import MLX
 import MLXLMCommon
-import MLXVLM
 
 /// A DiffusionGemma checkpoint's `config.json`.
 ///
@@ -45,10 +44,7 @@ public struct DiffusionGemmaConfiguration: Codable, Equatable, Sendable {
     /// `text_config`, the language model.
     public let text: DiffusionGemmaTextConfiguration
     /// `vision_config`, the vision tower, when the checkpoint has one.
-    public var vision: Gemma4VisionConfiguration? { visionStorage?.value }
-
-    /// Holds ``vision`` so that equality can be synthesized: mlx-swift-lm's type is not Equatable.
-    private let visionStorage: VisionStorage?
+    public let vision: DiffusionGemmaVisionConfiguration?
 
     /// The only `model_type` accepted.
     public static let expectedModelType = "diffusion_gemma"
@@ -107,8 +103,7 @@ public struct DiffusionGemmaConfiguration: Codable, Equatable, Sendable {
         quantization = try c.decodeIfPresent(DiffusionGemmaQuantization.self, forKey: .quantization)
         generation = try c.decodeIfPresent(
             DiffusionGemmaGenerationConfiguration.self, forKey: .generation)
-        visionStorage = try c.decodeIfPresent(Gemma4VisionConfiguration.self, forKey: .vision)
-            .map(VisionStorage.init)
+        vision = try c.decodeIfPresent(DiffusionGemmaVisionConfiguration.self, forKey: .vision)
     }
 
     /// Encodes the configuration under config.json's keys.
@@ -177,25 +172,6 @@ public struct DiffusionGemmaConfiguration: Codable, Equatable, Sendable {
             return try JSONDecoder().decode(type, from: data)
         } catch let error as DecodingError {
             throw DiffusionGemmaConfigurationError(error)
-        }
-    }
-
-    /// Compares the fields of mlx-swift-lm's vision configuration, which is not Equatable.
-    private struct VisionStorage: Equatable, Sendable {
-        let value: Gemma4VisionConfiguration
-
-        static func == (lhs: Self, rhs: Self) -> Bool {
-            let a = lhs.value
-            let b = rhs.value
-            return a.modelType == b.modelType && a.hiddenLayers == b.hiddenLayers
-                && a.hiddenSize == b.hiddenSize && a.intermediateSize == b.intermediateSize
-                && a.attentionHeads == b.attentionHeads && a.keyValueHeads == b.keyValueHeads
-                && a.headDim == b.headDim && a.patchSize == b.patchSize
-                && a.rmsNormEps == b.rmsNormEps && a.defaultOutputLength == b.defaultOutputLength
-                && a.positionEmbeddingSize == b.positionEmbeddingSize
-                && a.poolingKernelSize == b.poolingKernelSize
-                && a.useClippedLinears == b.useClippedLinears && a.standardize == b.standardize
-                && a.ropeParameters == b.ropeParameters
         }
     }
 }

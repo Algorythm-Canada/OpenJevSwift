@@ -28,27 +28,28 @@ struct RuntimeTests {
         #expect(DiffusionGemmaRuntime.stub().maxPromptTokens == 32_768)
     }
 
-    @Test("An image prompt is refused as unsupported before the model is touched")
+    @Test("A runtime without a vision tower refuses an image prompt before the model is touched")
     func imagePrompt() async {
         let log = StubModelLog()
-        let runtime = DiffusionGemmaRuntime.stub(log: log)
+        let runtime = DiffusionGemmaRuntime.stub(log: log, images: false)
         let read = stubCanvasRead(
             prompt: .image(systemText: "system", stateText: "state", images: []))
         await #expect(throws: DiffusionGemmaRuntimeError.unsupported("images")) {
             try await runtime.read(read)
         }
         #expect(!log.touched)
+        #expect(runtime.capabilities.images == false)
         #expect(
-            DiffusionGemmaRuntimeError.unsupported("images").description.contains("vision"))
+            DiffusionGemmaRuntimeError.unsupported("images").description.contains("vision tower"))
     }
 
-    @Test("Steps, samples and sequential are on; think and images are off; the name is openjev-0.1")
+    @Test("Steps, samples, sequential and images are on; think is off; the name is openjev-0.1")
     func capabilities() {
         let runtime = DiffusionGemmaRuntime.stub()
         #expect(
             runtime.capabilities
                 == BackendCapabilities(
-                    steps: true, samples: true, think: false, sequential: true, images: false))
+                    steps: true, samples: true, think: false, sequential: true, images: true))
         #expect(runtime.modelName == "openjev-0.1")
         #expect(runtime.modelName == ServedModels.diffusionGemmaVersion)
     }

@@ -30,18 +30,22 @@ OpenJevSwift/                          Swift package, tools 6.2, strict concurre
                      QuestionReadBackend protocol, EncoderEngineConfiguration,
                      EncoderDecisionEngine (batched reads); SystemOneService, ServedModels
       Images/        Data-URL and {content_type, base64} validation (no decoding of pixels)
-    OpenJevDiffusionGemma/             Apple silicon only. Depends on mlx-swift, MLXLMCommon,
-                                       MLXVLM (Gemma 4 vision), swift-transformers Tokenizers.
+    OpenJevDiffusionGemma/             Apple silicon only. Depends on mlx-swift, MLXLMCommon and
+                                       swift-transformers Tokenizers (not MLXVLM, D-054).
       Model/         Configuration (config.json decoding, #23); Norms, Attention, DenseMLP,
                      Router, Experts, DecoderLayer, LayerCache, Softcap (text blocks, #24);
                      ModelTree (decoder, encoder scalars, root with sanitize and a one-piece
                      prefill) and WeightLoading (strict coverage, loadWeights, metrics) (#27);
                      SelfConditioning (#28); Prefill (PromptCache, prefill(promptIDs:), cache
                      digests, #25); DecoderPass (decoder masks, logits, self-conditioning
-                     signal, #26 and #28); Read (SlotRequest, ReadOutput, read(), #26 and #28)
+                     signal, #26 and #28); Read (SlotRequest, ReadOutput, read(), #26 and #28);
+                     VisionConfiguration, VisionTower (the Gemma 4 tower, embed_vision,
+                     masked_scatter, precisePow) and ImagePrefill (embedding with images, the
+                     block overlay and masks, the chunking policy) (#47)
       Runtime/       DiffusionGemmaRuntime actor: prefill cache, read(), think(), generate()
       Tokenization/  Tokenizer adapter, chat prompt builder, label discovery hookup
-      Vision/        Processor parity, pixel embedding, block ids (later milestone)
+      Vision/        RGBImage and the JPEG and GIF ports, Gemma4ImageProcessor (Pillow's bicubic),
+                     ImagePromptInputs and ImageReadInputs (expansion, mm_token_type_ids), #46
       Generation/    Sampler, stopping rules, block loop, streaming detokenizer (later)
     OpenJevEncoders/                   Apple platforms; its Core ML types need macOS 15 and iOS 18.
                                        Depends on Core ML and swift-transformers Tokenizers; no MLX.
@@ -292,18 +296,31 @@ issue #29), upstream's `MlxRuntime` and `MlxEngine.one_read` in one actor:
   actor, one at a time, which gives the single-thread discipline upstream enforces with a
   one-worker executor (R14). Only values cross it: `CanvasRead` in, `ReadResult` out.
 - Prefill cache: `PrefillCache<Value>`, generic so its eviction rule is tested without MLX, which
-  the runtime instantiates with `PromptCache`. Ordered and keyed by the prompt token ids (an image
-  key arrives with the vision milestone), bounded by entries (`promptCacheEntries`, default 12)
+  the runtime instantiates with `PromptCache`. Ordered and keyed by the prompt token ids, or for an
+  image prompt by upstream's `ImagePrompt.key` (the system text, the state text and the SHA-256 of
+  each image's data URL, `PrefillKey.image`), bounded by entries (`promptCacheEntries`, default 12)
   and tokens (`promptCacheTokens`, 16,384) with a running token total, no exempt entry (insert,
   then evict oldest first while either budget is exceeded; the caller keeps what it was handed),
   hits moved to the end, zero entries meaning no caching.
 - `read`: a token prompt longer than `maxPromptTokens` (32,768) is refused with upstream's
-  `SchemaError("the request is {n} tokens; the limit is {max}")` before anything runs, and an image
-  prompt with `DiffusionGemmaRuntimeError.unsupported("images")`; then the prefill or a cached one,
-  `model.read` over the canvas with the slots as `SlotRequest`s, `steps` passes and the top 20,
-  and `ReadOutput.readResult(for:)` with the prompt cache's token count.
-- Capabilities: steps, samples and sequential; not `think` (milestone 5) nor images (vision
-  milestone), so the engine answers `"openjev-0.1 does not support think"` and its image refusal.
+  `SchemaError("the request is {n} tokens; the limit is {max}")` before anything runs; then the
+  prefill or a cached one, `model.read` over the canvas with the slots as `SlotRequest`s, `steps`
+  passes and the top 20, and `ReadOutput.readResult(for:)` with the prompt cache's token count.
+- The image path (#47, #48, D-054): `ReadPrompt.image(systemText:stateText:images:)` is looked up
+  by its key first. On a miss, `ImageReadInputs` decodes each image (`RGBImage`: the JPEG and GIF
+  ports, ImageIO for PNG and WebP, anything else by its signature refused), resizes and rescales it
+  (`Gemma4ImageProcessor`) and expands the chat prompt into its soft tokens and
+  `mm_token_type_ids`; the cap is checked on the expanded prompt with upstream's message; and
+  `DiffusionGemmaModel.prefill(image:)` runs the vision tower and `embed_vision` (ported from
+  mlx-vlm, with `metal::precise::pow`), pads the soft tokens' positions, scatters the features in,
+  and prefills every layer in one piece with mlx-vlm's explicit masks, each image's block attending
+  to itself in both directions. A hit reuses the prefill and its count without decoding. The prompt
+  tokens a read reports include the image tokens. An image that does not decode or that the
+  processor cannot size is a `SchemaError` `"image could not be read: {reason}"` at
+  `["body", "images", i]`, the 400 of upstream's other image refusals (upstream answers a bare 500).
+- Capabilities: steps, samples, sequential and images (a model loaded without its vision tower
+  has no images, and the engine answers `"openjev-0.1 does not support images"`); not `think`
+  (milestone 5), so the engine answers `"openjev-0.1 does not support think"`.
   `think(prompt:budget:stopIDs:)` throws `unsupported("think")`. `modelName` is `openjev-0.1`.
 - Memory controls: `Configuration.cacheLimitGB` (nil leaves MLX alone, 0 disables MLX's buffer
   pool, otherwise `Memory.cacheLimit` in bytes, applied inside the actor at load, or later with
@@ -311,7 +328,7 @@ issue #29), upstream's `MlxRuntime` and `MlxEngine.one_read` in one actor:
   MLX's active, cache and peak bytes and the process's resident bytes; `statistics()` the reads,
   the prefill hits and misses and the model time.
 - Test seam: the internal `init(tokenizer:configuration:calls:setCacheLimit:)` takes the model's
-  `prefill` and `read` as closures (`ModelCalls`). The model-free tests bind them to a stub; the
+  `prefill`, `read` and image expansion as closures (`ModelCalls`). The model-free tests bind them to a stub; the
   live read-policy tests bind them to the shared checkpoint's model and record every prompt's
   token ids, with their own prefill cache and statistics and no second load.
 - Warm-up: `warmUp()` runs one small read directly on the model (one noul question over upstream's
@@ -515,6 +532,7 @@ stays loaded, up to the package's six or eight, unless `OPENJEV_ENCODER_FUNCTION
 | macOS 14+ Apple silicon | yes | yes (32 GB+ recommended) | yes | yes, from macOS 15 (Core ML's multifunction packages) | yes |
 | iOS 17+ | yes | no (memory) | no | yes, from iOS 18 | builds; the 4-bit conversion is meant for recent iPhones and iPads, not yet run on one |
 | Linux | yes (tests, tooling) | no | builds with a stub backend for contract tests and the SDK suite's stub server | no (Core ML) | no (MLX) |
+| Images (`images`) | validated on every platform (types, base64, size, count) | read on macOS (the vision tower, 1.06 GiB more); the decoders need ImageIO, so Apple platforms only | served by the `mlx` backend | refused, `"{model} does not support images"` | refused, `"jevk5-0.2 does not support images"` |
 
 ## Deliberately not in scope for 0.1
 

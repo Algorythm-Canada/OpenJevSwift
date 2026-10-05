@@ -210,7 +210,7 @@ struct JPEGRobustnessTests {
     /// 211th length and the last two; corruptions of each segment's marker code, the low byte of
     /// its length, its first and last bytes, and the first data byte after a scan header.
     static func mutations(of original: [UInt8], all: Bool) -> [Mutation] {
-        let segments = segments(original)
+        let segments = Self.segments(original)
         var lengths: Set<Int>
         var indices: Set<Int>
         if all {
@@ -233,10 +233,10 @@ struct JPEGRobustnessTests {
         let cuts = lengths.filter { $0 < original.count }.sorted().flatMap {
             [Mutation.cut($0, eoi: false), .cut($0, eoi: true)]
         }
-        let corruptions = indices.filter { $0 < original.count }.sorted().flatMap { index in
-            corruptions(of: original[index]).map { Mutation.corrupt(index: index, value: $0) }
+        let corrupted = indices.filter { $0 < original.count }.sorted().flatMap { index in
+            Self.corruptions(of: original[index]).map { Mutation.corrupt(index: index, value: $0) }
         }
-        return cuts + corruptions
+        return cuts + corrupted
     }
 
     @Test("Truncations and corruptions of the fixture JPEGs decode or are refused, never trap")

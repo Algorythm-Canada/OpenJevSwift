@@ -31,6 +31,10 @@ public enum ReadInputError: Error, Equatable, Sendable, CustomStringConvertible 
     case topKOutOfRange(topK: Int, vocabularySize: Int)
     /// The cache was made by a model with another layer count.
     case cacheLayerMismatch(cacheLayers: Int, modelLayers: Int)
+    /// An image prompt reached a tree without a vision tower.
+    case noVisionTower
+    /// An image prompt's `mm_token_type_ids` do not have one entry per id.
+    case tokenTypesMismatch(ids: Int, types: Int)
 
     /// What was refused, with the index, the id and the bounds involved.
     public var description: String {
@@ -57,6 +61,10 @@ public enum ReadInputError: Error, Equatable, Sendable, CustomStringConvertible 
             return "topK is \(topK); it must be at least 1 and below \(vocabularySize)"
         case .cacheLayerMismatch(let cacheLayers, let modelLayers):
             return "the cache has \(cacheLayers) layers and the model \(modelLayers)"
+        case .noVisionTower:
+            return "the model was loaded without a vision tower, so it cannot read images"
+        case .tokenTypesMismatch(let ids, let types):
+            return "the image prompt has \(ids) ids and \(types) token types"
         }
     }
 }
@@ -71,8 +79,8 @@ public final class PromptCache {
     public let layers: [LayerCache]
     /// The number of positions the prefill wrote, the RoPE offset of the canvas.
     public let offset: Int
-    /// The prompt tokens the prefill processed, which a read reports. For a text prompt it is the
-    /// prompt length; an image prompt (vision milestone) will count its expanded image tokens.
+    /// The prompt tokens the prefill processed, which a read reports: the prompt's length, for an
+    /// image prompt the expanded prompt with its image tokens, as upstream bills it.
     public let promptTokens: Int
 
     init(layers: [LayerCache], offset: Int, promptTokens: Int) {
@@ -89,12 +97,9 @@ extension DiffusionGemmaModel {
     /// The prompt is never chunked: a chunked prefill is exact in real arithmetic, but in
     /// bfloat16 it moves read probabilities by up to 0.62 (spike #22), so reads take none.
     ///
-    /// Hooks of mlx-vlm's encoder that later milestones add here, and that this text-only path
-    /// leaves out on purpose:
-    /// - Image prompts (vision milestone): the image placeholder ids are replaced by `pad`
-    ///   before the embedding and the vision tower's features scattered into their positions
-    ///   after it (language.py `EncoderModel.embed_inputs`), and the encoder masks get the
-    ///   bidirectional overlay over each image's block (`use_bidirectional_attention`).
+    /// Image prompts take ``prefill(image:stages:)``, which scatters the vision tower's features
+    /// into the embeddings and adds the bidirectional overlay to the masks. Hooks of mlx-vlm's
+    /// encoder that later milestones add here, and that this path leaves out on purpose:
     /// - Chunked prefill (generation, milestone 5): `diffusion_prefill_cache` with
     ///   `prefill_step_size`, evaluating and clearing the cache between chunks, for prompts that
     ///   do not fit one pass. Not for reads, for the reason above.
