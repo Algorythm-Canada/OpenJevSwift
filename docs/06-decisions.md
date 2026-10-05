@@ -198,7 +198,9 @@ Hugging Face cache) and otherwise skips as a model opt-in test, naming `OPENJEV_
 hosted CI builds it but does not run it until follow-up E in spikes/tokenizer-parity.md.
 
 Status. Accepted: swift-transformers for the tokenizer, the shipped template through
-swift-jinja for prompts. Decided by spikes #20 and #21.
+swift-jinja for prompts. Decided by spikes #20 and #21. The ids through `applyChatTemplate` are
+replaced by D-054 (issue #124): `chatPromptIDs` tokenizes the port's own rendering, whose `trim`
+is jinja2's.
 
 ## D-009 Hummingbird 2 for the server
 
@@ -3120,3 +3122,83 @@ UpstreamProbe's and the probe workflow's, and checks what the binaries import
 ([upstream-log.md](upstream-log.md)).
 
 Status. Proposed with issue #119.
+
+## D-054 The chat template's `trim` is jinja2's: where the port goes beyond or differs from the issue text
+
+Context. Gemma 4's chat template writes each system and user text through the `trim` filter:
+`message['content'] | trim` for a text, `item['text'] | trim` for a user's text part, and
+`item['text'] | trim + ' '` for the system text parts of an image prompt. Upstream renders it with
+jinja2, whose `trim` is `soft_str(value).strip(chars)`: without `chars`, Python's `str.strip()`,
+which removes the 29 characters CPython's `str.isspace()` accepts. transformers 5.17.0's template
+environment adds only `tojson`, `raise_exception` and `strftime_now`, so that is the `trim` upstream
+uses. swift-jinja 2.5.1's `trim` strips Foundation's `whitespacesAndNewlines`, which keeps U+001C to
+U+001F and removes U+200B. Upstream hands the state to the template unstripped
+(`openjev/engine.py:373`), so the port's prompt ids differed from upstream's whenever a state
+started or ended with one of those characters (issue #124, from PR #121's review): 22 ids where
+upstream has 21 for `Look at the photo.` with one of U+001C to U+001F before or after it, and
+`.` (236761) where upstream keeps `.` with U+200B (38834). Image prompts render the state through
+the same filter.
+
+Decision.
+
+1. **The tokenizer's template environment has jinja2's `trim`.** `SwiftTransformersTokenizer`
+   renders the chat template in an environment that holds `trim` as a function. Without `chars`, or
+   with `none`, it strips the scalars `TextOf.isPythonWhitespace` accepts, which an OpenJevCore test
+   holds to CPython 3.14.7's `isspace()` over every scalar; with a string, the scalars the string
+   holds, and an empty string strips nothing, as `str.strip('')` does. Any other `chars` throws,
+   where Python raises `TypeError`. It compares scalars, as Python compares code points. swift-jinja
+   looks a filter up in the environment before its built-in filters, so the package is not patched,
+   and macros, set blocks, filter blocks and loops reach the same function.
+2. **The ids come from the port's own rendering, not from swift-transformers'
+   `applyChatTemplate`.** D-008 had `chatPromptIDs` call `applyChatTemplate`, which renders in
+   swift-jinja's own environment and takes no filter. `chatPromptIDs`, and the public
+   `applyChatTemplate(messages:thinking:)`, now tokenize the text `renderChatTemplate` renders,
+   without special tokens and without truncation, which is all swift-transformers 1.3.4's
+   `applyChatTemplate` does with those arguments; the text and the ids come from one rendering.
+   swift-transformers' own path, through mlx-swift-lm's loader, gives upstream's ids on the 29
+   recorded prompts whose texts the two trims treat alike and other ids on the 10 they treat
+   differently (`MLXTokenizerLoaderTests`); that test fails once swift-jinja's `trim` is Python's,
+   and the override can then go.
+3. **Image prompts.** The image path renders through the same environment. mlx-vlm also strips the
+   user's text with Python's `str.strip()` before the template (`extract_text_from_content`); the
+   port does not, since stripping twice with one set strips once. `Engine.chat_prompt_ids` never
+   renders an image prompt, so `Tools/fixtures/vision_oracle.py` records the image states through
+   upstream's `MlxRuntime._inputs`, as `state_prompts` in `Fixtures/vision/preprocessing.json`.
+   Before this change the port gave 355 ids where upstream gives 354 for U+001C to U+001F, and 353
+   where upstream gives 349 for a state of whitespace.
+4. **Fifteen fixture states.** `chat-prompts/prompts.json` gains the issue's states under its system
+   text `Answer.`: `Look at the photo.` alone, with each of U+001C to U+001F after and before it,
+   and with U+000B, U+0085, U+00A0 and U+200B after it, an empty state, and a state of all 29
+   `isspace()` characters. The whitespace-only state the file already had (`" \n\t "`) is ASCII,
+   which both sets strip, so the issue's "a state of only whitespace" is the new one. `make
+   fixtures` changes nothing else. `vision/preprocessing.json` gains the same fifteen as the text
+   of a prompt with one image (`gradients.png`).
+5. **No other prompt-path text is stripped with Foundation's set.** Where upstream applies Python's
+   string methods to text a model reads, the port follows Python already: `text_of`'s `strip()` of
+   instructions and descriptions is `TextOf.render`, with CPython's set, and the state goes in
+   unstripped. Upstream's other `strip`, `split` and `partition` calls (the routes setting, the
+   authorization header, data URLs, logprob keys) are off the prompt path; the port parses the
+   first two with CPython's set as well. JevK5's prompt is pinned text filled as `str.format` fills
+   it, with no template and no trim; its checkpoint's `chat_template.jinja` is rendered neither
+   upstream nor here. Verdict's prompt is f-strings, and Laya's state is the text or its
+   `json.dumps`; the laya package's email helpers, which strip and split, are not on `system_one`'s
+   path. The template's only `split` is in `strip_thinking`, for model turns, which reads never
+   send. swift-jinja splits the template source on Foundation's `.newlines` for `lstrip_blocks`;
+   the shipped template has only line feeds, so nothing changes there.
+
+Alternatives rejected. (a) Patching swift-jinja, or forking it: the environment takes the filter
+without either, and a swift-jinja release with Python's `trim` shows in the departure test.
+(b) Stripping the texts with CPython's set before rendering, as mlx-vlm does for images:
+swift-jinja's `trim` would still remove a U+200B that Python keeps at either end, and the
+template's other `trim` (`captured_content | trim`) would stay Foundation's. (c) Handing the
+function to swift-transformers' `applyChatTemplate` through `additionalContext`: it works with
+swift-transformers 1.3.4, whose `Value(any:)` passes a `Jinja.Value` through into a context that
+shares the filters' namespace, but it rests on how another package builds its context, and the
+text would still need the port's own rendering.
+
+Consequences. A state's leading and trailing U+001C to U+001F are stripped and its U+200B kept, as
+upstream does, in text and image prompts; every prompt recorded before gives the same ids. The
+prompt path uses swift-transformers for tokenizing only, so a change in how its `applyChatTemplate`
+builds the context no longer reaches the port; the fixtures hold the context the port builds.
+
+Status. Proposed with issue #124.

@@ -54,6 +54,13 @@ Pillow 12.3.0) and no model.
   `Look at the photo.`: `ids`, `tokens`, `mm_token_type_ids`, `image_runs` (the `[start, end)`
   runs of soft image tokens), `soft_tokens` per image, and `pixel_values`, stacked with its shape
   or, for images of different sizes, a list of shapes.
+- `state_prompts` has the fifteen states of issue #124, the `trim_` rows of
+  [chat-prompts/prompts.json](../chat-prompts/README.md), each as the text of a prompt with
+  `gradients.png` and the same system text: `ids`, `tokens`, `mm_token_type_ids`, `image_runs` and
+  `soft_tokens`. mlx-vlm strips the user's text with Python's `str.strip()` before the template
+  trims it again, so the states come out as in the text prompts: U+001C to U+001F go at either
+  end, U+200B stays (354 tokens, 38834 last before `<turn|>`), and the whitespace-only state
+  gives the empty state's 349 tokens.
 - `gif_cases` maps a name to a small GIF for the rest of Pillow's GIF reader: its byte count,
   SHA-256 and the bytes in base64, and what upstream's `ImagePrompt.pil` (the decode in
   `MlxRuntime._inputs`) makes of it, `decoded` (the size and the SHA-256 of the RGB bytes) or
@@ -111,4 +118,5 @@ preprocessing, so the reads' record stays.
 `Tests/OpenJevDiffusionGemmaTests/Vision/VisionPreprocessingTests.swift` compares the port with
 `preprocessing.json`: the synthetic images and the GIF cases everywhere, the hot dog when the
 upstream checkout is present, every value when `Tools/oracle/results/vision/` is, and the prompts
-when the tokenizer files are. `reads.json` waits for the image runtime (#47).
+and the state prompts when the tokenizer files are. `reads.json` waits for the image runtime
+(#47).

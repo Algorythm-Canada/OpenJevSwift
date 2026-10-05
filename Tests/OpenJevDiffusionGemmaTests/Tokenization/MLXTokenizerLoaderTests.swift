@@ -74,12 +74,13 @@ struct MLXTokenizerLoaderTests {
         #expect(bridged.convertTokenToId("<turn|>") == EngineTokens.turnClose)
 
         let prompts = try TokenizerFixtures.cases("chat-prompts/prompts.json")
+        var departing = 0
         for row in prompts {
-            let messages = try #require(row["messages"]?.arrayValue).map { message in
-                [
-                    "role": try #require(message["role"]?.stringValue),
-                    "content": try #require(message["content"]?.stringValue),
-                ] as [String: any Sendable]
+            let messages = try Self.messages(of: row)
+            // The rows whose texts the two trims treat differently are `upstreamTrimDeparture`'s.
+            if try Self.trimsDiffer(row) {
+                departing += 1
+                continue
             }
             for (thinking, key) in [(false, "thinking_off"), (true, "thinking_on")] {
                 let expected = try TokenizerFixtures.ints(row[key]?["ids"])
@@ -89,6 +90,86 @@ struct MLXTokenizerLoaderTests {
                 #expect(ids == expected, "\(row["name"]?.stringValue ?? "") \(key)")
             }
         }
+        #expect(prompts.count - departing == 29)
+    }
+
+    /// A recorded prompt's messages, as chat message dictionaries.
+    static func messages(of row: OpenJevCore.JSONValue) throws -> [[String: any Sendable]] {
+        try #require(row["messages"]?.arrayValue).map { message in
+            [
+                "role": try #require(message["role"]?.stringValue),
+                "content": try #require(message["content"]?.stringValue),
+            ] as [String: any Sendable]
+        }
+    }
+
+    /// True when Foundation's `whitespacesAndNewlines`, which swift-jinja's own `trim` strips,
+    /// and Python's `str.strip()` trim one of a recorded prompt's texts differently.
+    static func trimsDiffer(_ row: OpenJevCore.JSONValue) throws -> Bool {
+        try #require(row["messages"]?.arrayValue).contains { message in
+            let text = message["content"]?.stringValue ?? ""
+            return text.trimmingCharacters(in: .whitespacesAndNewlines)
+                != TextOf.render(.string(text))
+        }
+    }
+
+    /// The `trim` departure decision D-054 works around, as swift-transformers 1.3.4 and
+    /// swift-jinja 2.5.1 show it through mlx-swift-lm's unmodified path, which renders in
+    /// swift-jinja's own environment: every recorded text prompt, and every recorded image
+    /// prompt's message shape, whose texts Foundation's set and Python's `str.strip()` trim
+    /// differently gets ids other than upstream's. The port's ids are upstream's. When a
+    /// swift-jinja update makes this test fail, `SwiftTransformersTokenizer`'s `trim` can go.
+    @Test("The unmodified swift-transformers path still trims with Foundation's set")
+    func upstreamTrimDeparture() async throws {
+        let bridged = try await #huggingFaceTokenizerLoader().load(
+            from: TokenizerFixtures.tokenizerDirectory)
+        let direct = try await TokenizerFixtures.tokenizer()
+        var departing: [String] = []
+        for row in try TokenizerFixtures.cases("chat-prompts/prompts.json") {
+            guard try Self.trimsDiffer(row) else {
+                continue
+            }
+            let name = try #require(row["name"]?.stringValue)
+            departing.append(name)
+            let messages = try Self.messages(of: row)
+            let expected = try TokenizerFixtures.ints(row["thinking_off"]?["ids"])
+            let before = try bridged.applyChatTemplate(
+                messages: messages, tools: nil, additionalContext: ["enable_thinking": false])
+            #expect(before != expected, "\(name)")
+            #expect(try direct.applyChatTemplate(messages: messages, thinking: false) == expected)
+            SpikeReport.record(
+                "chat-template-trim",
+                "text \(name): upstream \(expected.count) ids, swift-jinja's trim \(before.count): "
+                    + ChatTemplateParityTests.firstDifference(expected: expected, actual: before))
+        }
+        #expect(
+            departing == [
+                "trim_u001c_end", "trim_u001d_end", "trim_u001e_end", "trim_u001f_end",
+                "trim_u001c_start", "trim_u001d_start", "trim_u001e_start", "trim_u001f_start",
+                "trim_u200b_end", "trim_whitespace_only",
+            ])
+
+        // The image prompts' message shape, before the expansion of `<|image|>`.
+        var imageDeparting: [String] = []
+        for prompt in try VisionFixtures.preprocessing().statePrompts {
+            let messages = ImagePromptInputs.messages(
+                system: prompt.system, state: prompt.state, imageCount: prompt.softTokens.count)
+            let before = try bridged.applyChatTemplate(
+                messages: messages, tools: nil, additionalContext: ["enable_thinking": false])
+            let after = try direct.applyChatTemplate(messages: messages, thinking: false)
+            if before != after {
+                imageDeparting.append(prompt.key)
+            }
+            // The expansion puts each image's soft tokens and its two markers where its
+            // placeholder was: n + 1 more ids per image.
+            let expanded = prompt.softTokens.reduce(0) { $0 + $1 + 1 }
+            #expect(after.count + expanded == prompt.ids.count, "\(prompt.key)")
+            SpikeReport.record(
+                "chat-template-trim",
+                "image \(prompt.key): upstream \(prompt.ids.count) ids, swift-jinja's trim "
+                    + "\(before.count + expanded)")
+        }
+        #expect(imageDeparting == departing)
     }
 
     /// The two decode departures docs/spikes/tokenizer-parity.md records, as swift-transformers

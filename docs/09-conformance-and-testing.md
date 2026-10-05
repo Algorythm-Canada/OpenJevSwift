@@ -12,7 +12,7 @@ fixtures into `Fixtures/`:
 | Fixture | Contents | Swift tests |
 |---|---|---|
 | `tokenizer/` | For a corpus of strings: token ids with and without special tokens; decode round trips. Corpus: every label candidate after `"q1: "`, the scaffold, thought markers, `<end_of_turn>`, system texts, JSON states, non-ASCII, emoji, whitespace edge cases. | Tokenizer parity |
-| `chat-prompts/` | `[system, user]` messages → prompt token ids with generation prompt, thinking on and off. | Prompt builder |
+| `chat-prompts/` | `[system, user]` messages → prompt token ids with generation prompt, thinking on and off. Includes the states of issue #124, which start or end with characters that Python's `str.strip()`, the template's `trim` upstream, and Foundation's whitespace set treat differently. | Prompt builder |
 | `labels.json` | The 255 single-token choice labels in order. | Label discovery |
 | `schemas/` | Requests → internal schema (question ids, labels, forced answers, format) and errors with `loc` and message. | Schema builder |
 | `system-texts/` | Requests → system text per group, chunked and unchunked. | Prompt text |
@@ -76,8 +76,10 @@ from `Tools/fixtures/vision_oracle.py`, which runs upstream's `MlxRuntime._input
 processor: for upstream's hot dog photo and eleven synthetic images (two JPEGs, three PNGs, five
 GIFs and a WebP, each under 5 KB and committed), the decoded RGB digest, the resized size, the soft
 tokens, and `pixel_values` (shape, digest, per-channel mean, std, min and max, 4,096 sampled
-values); the expanded ids and `mm_token_type_ids` of 13 prompts; the resize rule on 34 sizes; and
-22 small GIFs, decoded or refused as upstream's `ImagePrompt.pil` does. `VisionPreprocessingTests`
+values); the expanded ids and `mm_token_type_ids` of 13 prompts, and of the 15 states issue #124
+added to `chat-prompts/`, each as the text of a prompt with one image; the resize rule on 34
+sizes; and 22 small GIFs, decoded or refused as upstream's `ImagePrompt.pil` does.
+`VisionPreprocessingTests`
 holds the port to it within 1e-3. Without any model file, in CI: the synthetic images decode to
 PIL's bytes, resize and rescale to the recorded shape, statistics and samples (bit for bit, on
 2026-10-02, and the GIFs added after PR #121's review on 2026-10-03), the small GIFs decode to
@@ -337,7 +339,9 @@ identity.
   (`OPENJEV_TEST_TOKENIZER`, `OPENJEV_TEST_MODEL` or the Hugging Face cache) and is opt-in the
   same way until CI fetches those files (spikes/tokenizer-parity.md, follow-up E). So are the
   tokenizer and Core ML suites of `OpenJevEncodersTests` (`OPENJEV_ENCODER_MODELS`), and the live
-  suite of `OpenJevLetterReadoutTests` (`OPENJEV_JEVK5_MODEL`).
+  suite of `OpenJevLetterReadoutTests` (`OPENJEV_JEVK5_MODEL`). The chat template's `trim`,
+  jinja2's in place of swift-jinja's (D-054), is checked in CI without the tokenizer files, on
+  small templates of the tests' own (`ChatTemplateTrimTests`).
 
 ## Test data hygiene
 
