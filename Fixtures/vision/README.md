@@ -1,8 +1,9 @@
 # Vision fixtures
 
 What upstream's own image path gives DiffusionGemma on the pinned checkpoint: the images'
-`pixel_values`, the expanded prompts and `mm_token_type_ids` (issue #46), and upstream's reads of
-the hot dog photo, which the image runtime (#47) is held to. Layer 2 in
+`pixel_values`, the expanded prompts and `mm_token_type_ids` (issue #46), upstream's reads of the
+hot dog photo, which the image runtime (#47) is held to, and what upstream's Pillow makes of
+damaged and unusual JPEGs (D-055). Layer 2 in
 [docs/09-conformance-and-testing.md](../../docs/09-conformance-and-testing.md); the method and the
 findings are in [docs/spikes/vision-preprocessing.md](../../docs/spikes/vision-preprocessing.md).
 
@@ -93,6 +94,30 @@ seed) and 1 (seed + 7919), one step.
   logprob]` pairs as `MlxRuntime.read` returns them) and `distributions`
   (`openjev.engine.slot_distribution`).
 
+## jpeg_cases.json
+
+[Tools/fixtures/jpeg_cases.py](../../Tools/fixtures/jpeg_cases.py) builds 185 JPEGs and runs each
+through upstream's `ImagePrompt.pil` at `dcd2094` (Pillow 12.3.0, with the libjpeg-turbo 3.1.4.1 it
+bundles). Each case is `baseline.jpg` or `progressive.jpg` from this directory, or bytes the script
+writes out (in base64), with a list of edits applied in order: cut, set, insert, delete, append,
+copy, repeat, and pseudo-random entropy-coded bytes from a seed. No image that is not ours is
+needed. The cases cover what PR #121's review found and what D-055 records: scan data that runs
+out, libjpeg-turbo's and Pillow's refusals, the standard Huffman tables, codes longer than 16
+bits, restart markers out of sequence or missing, blocks per MCU counted per scan, block
+smoothing, quantization values for the Arm Neon inverse DCT, libjpeg-turbo's fast Huffman path,
+Pillow's 65,536-byte reads during and after a scan, the checks of a lossless JPEG's first scan,
+and four 13,376 by 13,376 frames from a few hundred bytes.
+
+- `generator` records the script, its version, the upstream commit, and the Python, Pillow and
+  libjpeg-turbo versions, and the SHA-256 of the two source JPEGs.
+- `cases` maps a name to `from` (a source JPEG, or `bytes` with `base64`), `edits`, the built
+  JPEG's byte count and SHA-256, and either `decoded` (the size and the SHA-256 of the RGB bytes)
+  or `error` (the exception upstream raised). `port: "unsupported"` marks the five cases the port
+  knowingly hands to ImageIO (arithmetic coding, lossless, CMYK), and `note` explains a few.
+
+`Tests/OpenJevDiffusionGemmaTests/Vision/JPEGParityTests.swift` rebuilds each case with the same
+edits, checks its SHA-256, and holds the decoder to the record and to the bound on decoding work.
+
 ## Regenerating
 
 From the repository root, on an Apple silicon Mac with about 25 GB free:
@@ -115,13 +140,23 @@ and the run's timings to `Tools/oracle/results/vision_run.json`. The committed r
 run's, the reads included; pass `--run-out` with another path when redoing only the
 preprocessing, so the reads' record stays.
 
+`jpeg_cases.json` needs only the upstream checkout and the venv, no checkpoint:
+
+```bash
+Tools/oracle/.venv/bin/python Tools/fixtures/jpeg_cases.py
+```
+
+It runs every case twice and writes nothing unless the two passes agree; `--check` compares a run
+with the committed file, and `--upstream` names another checkout of upstream at the pinned commit.
+
 ## Using it from Swift
 
 `Tests/OpenJevDiffusionGemmaTests/Vision/VisionPreprocessingTests.swift` compares the port with
 `preprocessing.json`: the synthetic images and the GIF cases everywhere, the hot dog when the
 upstream checkout is present, every value when `Tools/oracle/results/vision/` is, and the prompts
-when the tokenizer files are. `Tests/OpenJevDiffusionGemmaTests/Model/ImageReadOracleTests.swift`
-reads `reads.json`'s four reads through the image runtime: bit for bit in D-014's exact tier,
-within its bounds natively (D-054). `Tools/oracle/stage_dump.py --image hotdog` writes mlx-vlm's
-own stages of the hot dog prefill to `Tools/oracle/results/vision/hotdog.stages.safetensors` for
-`ImageStageTests`.
+and the state prompts when the tokenizer files are.
+`Tests/OpenJevDiffusionGemmaTests/Model/ImageReadOracleTests.swift` reads `reads.json`'s four reads
+through the image runtime: bit for bit in D-014's exact tier, within its bounds natively (D-054).
+`Tools/oracle/stage_dump.py --image hotdog` writes mlx-vlm's own stages of the hot dog prefill to
+`Tools/oracle/results/vision/hotdog.stages.safetensors` for `ImageStageTests`. `jpeg_cases.json`
+is read by `JPEGParityTests` (above), everywhere.
