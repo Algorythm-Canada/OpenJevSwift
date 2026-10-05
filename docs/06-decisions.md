@@ -3184,11 +3184,16 @@ Decision.
    hit, which gives the same count, since the key fixes the bytes. The cap is checked on the
    expanded prompt with upstream's message, and the prompt tokens a read reports include the image
    tokens: 355 for the hot dog request and 411 for the README questions with the hot dog, upstream's
-   counts.
+   counts. The runtime sizes images with the checkpoint's `processor_config.json`, as mlx-vlm's
+   `load` builds its processor from the same directory; a folder without the file gets the pinned
+   checkpoint's values.
 6. **An image the port cannot read is a 400 naming it.** Upstream does not catch Pillow's or the
    processor's errors, so FastAPI answers a bare 500 `Internal Server Error`. The runtime turns a
    `VisionError` into a `SchemaError` `"image could not be read: {reason}"` at
-   `["body", "images", i]`, the plain-detail 400 of upstream's other image refusals. The input is
+   `["body", "images", i]`, the plain-detail 400 of upstream's other image refusals. A system or
+   state text that spells out more `<|image|>` placeholders than there are images, on which
+   mlx-vlm's expansion raises, is a 400 `"the image prompt could not be built: {reason}"` at
+   `["body"]` instead, since no image failed. The input is
    the client's to fix, a 500 tells it the server failed, and Jev's Python SDK retries every 5xx
    twice by default ([02-jev-wire-api.md](02-jev-wire-api.md)), sending the same image again; the
    400 names the image and why. Each case, against Pillow 12.3.0 in the oracle's venv:
