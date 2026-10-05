@@ -3269,7 +3269,8 @@ large frames from a few hundred bytes. It found three kinds of difference: scan 
 out, JPEGs on which libjpeg-turbo or Pillow raises that the port decoded or handed to ImageIO, and
 JPEGs libjpeg-turbo decodes that the port handed to ImageIO. One file of 1,130 bytes, a
 progressive 13,376 by 13,376 frame with 99 empty AC scans, took 147.6 s. #47 and #48 bring client
-images to the server, which makes these bytes untrusted input, so this change lands first. The
+images to the server, which makes these bytes untrusted input; they landed first (D-054), with an
+interim rule that refuses every JPEG ending before its EOI, which this change replaces. The
 decoder was checked against the libjpeg-turbo 3.1.4.1 sources and against Pillow 12.3.0 in
 `Tools/oracle/.venv`, file by file.
 
@@ -3446,9 +3447,11 @@ arithmetic: it is not what Pillow runs on Apple silicon (item 5). (c) Refusing e
 malformed, as the review's list read: out-of-sequence restart markers and most markers in scan
 data decode in Pillow, so refusing them would answer 500 where upstream answers.
 
-Consequences. #47 and #48 can hand client images to the decoder: a JPEG upstream raises on is
-refused with a `VisionError` (upstream answers it with a 500), apart from item 7's, and decoding
-work stays in proportion to the input up to the visit limit. D-051 items 2 and 5 and
+Consequences. The image runtime of #47 and #48 hands client images to this decoder: a JPEG upstream
+raises on is refused with a `VisionError`, which the runtime answers with a 400 naming the image
+(D-054) where upstream answers a 500, apart from item 7's, and decoding work stays in proportion
+to the input up to the visit limit. A JPEG missing only its EOI is read or refused as Pillow does,
+where D-054's interim rule refused them all. D-051 items 2 and 5, D-054's JPEG rows and
 [spikes/vision-preprocessing.md](spikes/vision-preprocessing.md) are corrected.
 
 Status. Proposed with issue #46, after PR #121's review.
