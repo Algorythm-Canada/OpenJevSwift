@@ -1,6 +1,9 @@
 # Swift Package Manager
 .build/
 Package.resolved.lock
+# LLVM coverage profiles: a binary built for coverage and run without LLVM_PROFILE_FILE writes
+# default.profraw into its working directory.
+*.profraw
 # Everything Xcode writes under .swiftpm stays ignored, xcuserdata and the per-user scheme
 # management plist included. The exception is the scheme files in xcschemes, which is where Xcode
 # writes a scheme marked Shared. The CI iOS job builds one of them (docs/development.md).
