@@ -3401,15 +3401,60 @@ Decision.
    one's headers are checked up to its first scan's data (item 2). A fault after that on which
    Pillow raises sends such a JPEG to ImageIO too, which may decode it: of two built while reviewing
    this change, ImageIO refuses a lossless JPEG whose second scan has a bad predictor and decodes a
-   lossless JPEG cut short. No file of the review's corpora has such a fault. Pillow's reading of
-   EXIF (for the resolution) and of MPF segments is not reproduced, so the port decodes the JPEGs
-   whose malformed EXIF or MPF data makes Pillow raise: built while reviewing this change, an EXIF
-   XResolution of a single byte beside a ResolutionUnit (an `IndexError` in `_read_dpi_from_exif`)
-   and an MPF entry list shorter than its image count (a `struct.error` in `_getmp`); well-formed
-   MPF files, which Pillow opens as MPO, decode to the same bytes. When the JPEG plugin raises,
-   `Image.open` tries Pillow's other formats, so a file built to start as a JPEG and be laid out as
-   a PhotoCD or SPIDER image decodes in Pillow as that format; the port refuses it, and ImageIO
-   reads neither format. And the visit limit (item 6).
+   lossless JPEG cut short. No file of the review's corpora has such a fault. When the JPEG plugin
+   raises, `Image.open` tries Pillow's other formats, so a file built to start as a JPEG and be laid
+   out as a PhotoCD or SPIDER image decodes in Pillow as that format; the port refuses it, and
+   ImageIO reads neither format. And the visit limit (item 6).
+8. **Pillow's EXIF and MPF readings are followed where they raise.** `JpegImageFile._open` ends
+   with `_read_dpi_from_exif`, which reads the EXIF block when no JFIF segment gave the
+   resolution, and `jpeg_factory` then calls `_getmp` to tell an MPO file from a JPEG; both read a
+   TIFF directory with `TiffImagePlugin.ImageFileDirectory_v2`. Without this item the port read
+   neither, so it decoded the JPEGs whose malformed EXIF or MPF data makes Pillow raise (found
+   while reviewing this change). Read from Pillow 12.3.0's source, every error a malformed block
+   gives is caught but two, and each escapes `Image.open` as "cannot identify image file"
+   (`ImageFile.__init__` makes an `IndexError` a `SyntaxError`, and `_open_core` tries the other
+   formats on that and on a `struct.error`):
+   - `_read_dpi_from_exif` catches `struct.error`, `KeyError`, `SyntaxError`, `TypeError`,
+     `ValueError` and `ZeroDivisionError` (Pillow then takes 72 dpi), but not the `IndexError` of
+     `float(x_resolution[0]) / x_resolution[1]`. XResolution has length 1 in `TiffTags`, so it
+     decodes to one value: a number, which cannot be indexed (a caught `TypeError`), the bytes of
+     a BYTE or UNDEFINED entry, or the string of an ASCII one, its trailing NUL dropped. One byte,
+     an empty string or one digit raises (any other character fails `float` first, with a
+     `ValueError`), when the directory also holds the ResolutionUnit read before it.
+   - `_getmp` makes any error of reading the directory a `SyntaxError`, and `jpeg_factory` catches
+     `SyntaxError`, `TypeError` and `IndexError`, leaving the file a JPEG, but not the
+     `struct.error` of unpacking 16 bytes of MP Entry per image. That needs NumberOfImages an
+     integer (SHORT, LONG, SBYTE, SSHORT, SLONG, IFD or LONG8; any other type fails `range` with a
+     `TypeError`), MP Entry a BYTE or UNDEFINED value of fewer whole entries, and no entry ahead of
+     the missing one whose image data format (bits 24 to 26 of its attribute, unpacked
+     little-endian unless the header is exactly `MM\0*`) is other than JPEG's, which `_getmp`
+     answers with a `SyntaxError`. An index read to its end makes an MPO file when it counts more
+     than one image; `MpoImageFile.adopt` raises nothing, and the image `convert` decodes is the
+     first one, this JPEG.
+
+   `PillowJPEGHeader` ports what decides those two cases and nothing more: which segments ahead of
+   the first scan count (a JFIF unit of 1 or 2 with both densities leaves the EXIF block unread;
+   each later EXIF segment continues the block after its six-byte header, and every leading
+   `Exif\0\0` is dropped; the last MPF segment counts), the directory's header (the five 8-byte
+   headers `_accept` takes; BigTIFF's `II+\0` fails on its 16-byte offset), and the entries `load`
+   keeps (other types and empty values are skipped, a later entry of a tag replaces an earlier one,
+   and an entry or value past the end of the block ends the load with the entries before it). Of the
+   values, only NumberOfImages and each entry's image data format are read; XResolution's type and
+   length decide its case. The rest of the reading (the other tags, the XMP orientation, the MPO
+   frame offsets) raises nothing or only errors that are caught, so it is not ported. One thing the
+   source does not settle: `load`, `_setitem` and `jpeg_factory` also warn on malformed data, and
+   under a warnings filter that makes warnings errors those would raise as well. Upstream sets no
+   filter, so this follows Python's default, under which they only print.
+
+   Over 6,000 JPEGs made for this by inserting random EXIF and MPF segments into the two fixture
+   JPEGs, with random JFIF units and placements (before, among and after the headers, and after
+   the first scan), the decoder without this item gave Pillow's bytes for the 5,374 Pillow
+   decodes, 465 of them opened as MPO, and decoded the 626 on which it raises; now it gives
+   Pillow's bytes for the 5,374 and refuses the 626. A second run of 30,000 went the same way,
+   27,044 to Pillow's bytes and 2,956 refused. A Python model of the rule agreed with Pillow on
+   every file, and each of its conditions, removed or changed one at a time, disagrees with Pillow
+   on at least 10 of the 30,000, except three that cannot change an outcome. The files are not
+   committed.
 
 Measured with Pillow 12.3.0 run afresh over each corpus on the reference Mac (M3 Max, macOS
 27.0.1), as outcomes per file:
@@ -3431,15 +3476,22 @@ or lossless; the 2 where Pillow raises are item 7's lossless examples. The slowe
 0.83 s, and the review's 147.6 s file 0.30 s. An AddressSanitizer build gives the same outcomes on
 every file of both corpora and the fixture's cases (219,968), with no report.
 
-Tests. `Fixtures/vision/jpeg_cases.json` holds 185 cases built by
-`Tools/fixtures/jpeg_cases.py` from the two committed fixture JPEGs or from bytes the script writes
-(no image that is not ours), with what upstream's `ImagePrompt.pil` made of each: 113 decoded, 72
-raised. The merged decoder gave Pillow's bytes for 15 of them, other bytes for 53, decoded 21 on
-which Pillow raises, and handed 96 to ImageIO; now 108 decode to Pillow's bytes, the 72 are refused
-and the 5 departures go to ImageIO. `JPEGParityTests` checks each, the work bound on each (blocks
-and restart searches counted, not time) and the visit limit; `JPEGRobustnessTests` adds cuts with
-FF D9 appended and corruptions of later scan headers and of the tables between scans, and holds
-every mutation to the work bound.
+Tests. `Fixtures/vision/jpeg_cases.json` holds 204 cases built by `Tools/fixtures/jpeg_cases.py`
+from the two committed fixture JPEGs or from bytes the script writes (no image that is not ours),
+with what upstream's `ImagePrompt.pil` made of each: 125 decoded, 79 raised. Of the 185 that hold no
+EXIF or MPF segment, the merged decoder gave Pillow's bytes for 15, other bytes for 53, decoded 21
+on which Pillow raises, and handed 96 to ImageIO. The other 19 are item 8's: both inputs found in
+review; five more Pillow raises on (an XResolution of one digit or an empty string, the one-byte
+XResolution split over two EXIF segments, entries Pillow reads little-endian after an `MM*\0`
+header, and a short MPF segment after a whole one); and twelve near misses it decodes (an
+XResolution that is a rational, two bytes, two digits or a letter, the one-byte one without a
+ResolutionUnit, with one the load never reaches, beside a JFIF resolution or after the scan, entries
+flagged as other than JPEG after `MM\0*`, a whole MPF segment after a short one, a rational
+NumberOfImages, and a two-image MPO). Now 120 decode to Pillow's bytes, the 79 are refused and the 5
+departures go to ImageIO. `JPEGParityTests` checks each, the work bound on each (blocks and restart
+searches counted, not time) and the visit limit; `JPEGRobustnessTests` adds cuts with FF D9 appended
+and corruptions of later scan headers and of the tables between scans, and holds every mutation to
+the work bound.
 
 Alternatives rejected. (a) A budget of blocks per scan, in proportion to the input: it refuses
 cheap empty scans that Pillow decodes, such as the review's slow files. (b) jidctint.c's
@@ -3454,7 +3506,8 @@ to the input up to the visit limit. A JPEG missing only its EOI is read or refus
 where D-054's interim rule refused them all. D-051 items 2 and 5, D-054's JPEG rows and
 [spikes/vision-preprocessing.md](spikes/vision-preprocessing.md) are corrected.
 
-Status. Proposed with issue #46, after PR #121's review.
+Status. Proposed with issue #46, after PR #121's review. Item 7 corrected and item 8 added on
+2026-10-05: the JPEGs on which Pillow's EXIF or MPF reading raises are refused rather than decoded.
 
 ## D-056 The chat template's `trim` is jinja2's: where the port goes beyond or differs from the issue text
 

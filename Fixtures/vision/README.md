@@ -96,7 +96,7 @@ seed) and 1 (seed + 7919), one step.
 
 ## jpeg_cases.json
 
-[Tools/fixtures/jpeg_cases.py](../../Tools/fixtures/jpeg_cases.py) builds 185 JPEGs and runs each
+[Tools/fixtures/jpeg_cases.py](../../Tools/fixtures/jpeg_cases.py) builds 204 JPEGs and runs each
 through upstream's `ImagePrompt.pil` at `dcd2094` (Pillow 12.3.0, with the libjpeg-turbo 3.1.4.1 it
 bundles). Each case is `baseline.jpg` or `progressive.jpg` from this directory, or bytes the script
 writes out (in base64), with a list of edits applied in order: cut, set, insert, delete, append,
@@ -106,7 +106,8 @@ out, libjpeg-turbo's and Pillow's refusals, the standard Huffman tables, codes l
 bits, restart markers out of sequence or missing, blocks per MCU counted per scan, block
 smoothing, quantization values for the Arm Neon inverse DCT, libjpeg-turbo's fast Huffman path,
 Pillow's 65,536-byte reads during and after a scan, the checks of a lossless JPEG's first scan,
-and four 13,376 by 13,376 frames from a few hundred bytes.
+the EXIF resolution and MPF index Pillow reads with the headers, and four 13,376 by 13,376 frames
+from a few hundred bytes.
 
 - `generator` records the script, its version, the upstream commit, and the Python, Pillow and
   libjpeg-turbo versions, and the SHA-256 of the two source JPEGs.

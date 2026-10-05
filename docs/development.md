@@ -182,7 +182,7 @@ That works while no test runs MLX code, for the reason above.
 
 `JPEGRobustnessTests` feeds the JPEG decoder truncations and corruptions of the fixture JPEGs, each
 of which must decode or be refused within the bound on decoding work, never trap.
-`JPEGParityTests` holds it to what upstream's Pillow made of the 185 regression cases in
+`JPEGParityTests` holds it to what upstream's Pillow made of the 204 regression cases in
 `Fixtures/vision/jpeg_cases.json` (D-055). By default the mutations are a subset that keeps every
 kind of mutation on every marker segment, 866 cases, and the parity test decodes the entropy-coded
 data of its four 13,376 by 13,376 cases but not their pixels: about 5 seconds in a debug build on

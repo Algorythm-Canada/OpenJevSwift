@@ -233,7 +233,7 @@ be checked bit for bit (D-051).
   arithmetic-coded, lossless and 4-component JPEGs it does not cover, which Pillow decodes. Decoding
   work stays in proportion to the input, and a JPEG whose scans would visit more than 838,860,600
   blocks one at a time is refused (D-055, which lists the exceptions). `JPEGParityTests` holds it to
-  Pillow on 185 regression cases (`Fixtures/vision/jpeg_cases.json`), and `JPEGRobustnessTests`
+  Pillow on 204 regression cases (`Fixtures/vision/jpeg_cases.json`), and `JPEGRobustnessTests`
   feeds it truncations and corruptions of the fixture JPEGs, each of which must decode or be refused
   within the bound on work: in CI a subset of 866 that keeps every kind of mutation on every
   segment, and all 7,650 with `OPENJEV_TEST_JPEG_MUTATIONS=1` (docs/development.md). A truncated
@@ -301,6 +301,24 @@ did not reproduce: 2,275 files decode to the same size with other bytes when Pil
 Every one of them equals the review's own run with libjpeg-turbo's SIMD code disabled, so those
 records came from the C inverse DCT, not the Neon one Pillow runs by default; the counts here use
 fresh runs, which repeat bit for bit.
+
+EXIF and MPF. While reading the headers Pillow also reads the EXIF block, for the resolution, and
+the MPF index, for MPO files, and two of the errors their malformed data gives escape `Image.open`:
+an XResolution of one byte, or an ASCII one that is empty or one digit, beside a ResolutionUnit (an
+`IndexError` in `_read_dpi_from_exif`, read only when the JFIF segment gives no resolution), and an
+MP Entry with fewer 16-byte entries than NumberOfImages counts, none of those before the missing one
+marked as other than JPEG data (a `struct.error` in `_getmp`). Every other error of either reading
+is caught, and leaves the resolution at 72 dpi or the file a JPEG. The port computes no resolution
+and builds no MPO index, and reads only what decides those two errors (D-055 item 8). Method: the
+exception paths were read from Pillow 12.3.0's `JpegImagePlugin.py`, `Image.py` (`Exif`),
+`TiffImagePlugin.py` (`ImageFileDirectory_v2`) and `MpoImagePlugin.py`, and written as a Python
+model of when Pillow raises; random EXIF and MPF segments inserted into the fixture JPEGs then went
+through Pillow, the model and the port. The model agreed with Pillow on all 36,000 files, and each
+of its conditions, removed or changed one at a time, disagreed on some of them, except three that
+cannot change an outcome, so the files tell every rule apart. Before the change the port decoded the
+3,582 files on which Pillow raises (626 of the first 6,000, 2,956 of the next 30,000); now it
+refuses them and decodes the other 32,418, the 2,812 Pillow opens as MPO among them, to Pillow's
+bytes.
 
 ## What #47 needs next
 

@@ -10,8 +10,9 @@ reading, the standard Huffman tables, codes longer than 16 bits, restart markers
 or missing, blocks per MCU counted per scan, block smoothing, the Arm Neon inverse DCT's 16-bit
 arithmetic, and libjpeg-turbo's fast Huffman path and Pillow's 65,536-byte reads. Six more pin
 the end of a single-scan JPEG, where Pillow reads no further than the 65,536-byte reads it has
-made, and seven the checks of a lossless JPEG's first scan. It runs each case through upstream's `ImagePrompt.pil` and writes
-Fixtures/vision/jpeg_cases.json.
+made, seven the checks of a lossless JPEG's first scan, and nineteen the EXIF resolution and the
+MPF index Pillow reads with the headers, each on either side of where it raises. It runs each
+case through upstream's `ImagePrompt.pil` and writes Fixtures/vision/jpeg_cases.json.
 
 Each case is built from one of the committed JPEGs (Fixtures/vision/baseline.jpg and
 progressive.jpg, which Tools/fixtures/vision_oracle.py draws) or from bytes this script writes out
@@ -49,6 +50,7 @@ import hashlib
 import io
 import json
 import re
+import struct
 import subprocess
 import sys
 from pathlib import Path
@@ -103,6 +105,44 @@ def sos(components, ss=0, se=63, ah=0, al=0):
 
 def dri(interval):
     return seg(0xDD, list(be16(interval)))
+
+
+BYTE, ASCII, SHORT, LONG, RATIONAL, UNDEFINED = 1, 2, 3, 4, 5, 7
+X_RESOLUTION, RESOLUTION_UNIT, MAKE, NUMBER_OF_IMAGES, MP_ENTRY = 0x011A, 0x0128, 0x010F, 0xB001, 0xB002
+
+
+def tiff(entries, header=b"II\x2a\x00"):
+    """A TIFF header and one directory, as EXIF and MPF segments hold them. entries: (tag, type,
+    count, value) with the value's bytes, laid out after the directory when longer than 4, or an
+    int written as the value's offset (one past the data, say)."""
+    e = ">" if header.startswith(b"MM") else "<"
+    data_at = 8 + 2 + 12 * len(entries) + 4
+    fields, area = b"", b""
+    for tag, typ, count, value in entries:
+        if isinstance(value, int):
+            field = struct.pack(e + "L", value)
+        elif len(value) > 4:
+            field = struct.pack(e + "L", data_at + len(area))
+            area += value
+        else:
+            field = value.ljust(4, b"\0")
+        fields += struct.pack(e + "HHL", tag, typ, count) + field
+    return header + struct.pack(e + "L", 8) + struct.pack(e + "H", len(entries)) + fields + bytes(4) + area
+
+
+def exif(entries):
+    return seg(0xE1, b"Exif\0\0" + tiff(entries))
+
+
+def mp_entry(attribute, size=0, offset=0, order="<"):
+    """One MP Entry: the attribute (ImageDataFormat in bits 24 to 26), size and offset."""
+    return struct.pack(order + "LLLHH", attribute, size, offset, 0, 0)
+
+
+def mpf(images, entries, header=b"II\x2a\x00"):
+    e = ">" if header.startswith(b"MM") else "<"
+    return seg(0xE2, b"MPF\0" + tiff([(NUMBER_OF_IMAGES, LONG, 1, struct.pack(e + "L", images)),
+                                      (MP_ENTRY, UNDEFINED, len(entries), entries)], header))
 
 
 ONE_CODE = [1] + [0] * 15  # one 1-bit code, 0
@@ -321,6 +361,53 @@ def define(cases, base, prog):
     cases.raw("pillow_two_components", two)
     cases.edit("pillow_segment_past_end", "baseline.jpg", [["insert", 20, "fffe7000"], ["cut", 60]])
     cases.edit("pillow_com_length_1", "baseline.jpg", [["insert", 20, "fffe0001"]])
+
+    # The EXIF resolution (_read_dpi_from_exif, when the JFIF segment gives none: baseline.jpg's
+    # unit is 0) and the MPF index (_getmp). Each raises one error its callers do not catch.
+    unit = (RESOLUTION_UNIT, SHORT, 1, struct.pack("<H", 2))
+    one_byte = exif([(X_RESOLUTION, BYTE, 1, b"\x48"), unit])
+    cases.edit("pillow_exif_resolution_byte", "baseline.jpg", [["insert", 20, one_byte.hex()]],
+               note="x_resolution[1] of one byte: an IndexError")
+    for name, value in (("digit", b"5\0"), ("empty", b"\0")):
+        cases.edit(f"pillow_exif_resolution_{name}", "baseline.jpg",
+                   [["insert", 20, exif([(X_RESOLUTION, ASCII, len(value), value), unit]).hex()]])
+    block = b"Exif\0\0" + tiff([(X_RESOLUTION, BYTE, 1, b"\x48"), unit])
+    cases.edit("pillow_exif_resolution_byte_split", "baseline.jpg",
+               [["insert", 20, (seg(0xE1, block[:16]) + seg(0xE1, b"Exif\0\0" + block[16:])).hex()]],
+               note="a later EXIF segment continues the block after its six-byte header")
+    near = (("rational", [(X_RESOLUTION, RATIONAL, 1, struct.pack("<LL", 72, 1)), unit]),
+            ("two_bytes", [(X_RESOLUTION, BYTE, 2, b"\x48\x01"), unit]),
+            ("two_digits", [(X_RESOLUTION, ASCII, 3, b"72\0"), unit]),
+            ("letter", [(X_RESOLUTION, ASCII, 2, b"a\0"), unit]),
+            ("byte_no_unit", [(X_RESOLUTION, BYTE, 1, b"\x48")]),
+            ("byte_unit_after_cut_value", [(X_RESOLUTION, BYTE, 1, b"\x48"), (MAKE, ASCII, 40, 4000), unit]))
+    for name, entries in near:
+        cases.edit(f"exif_resolution_{name}", "baseline.jpg", [["insert", 20, exif(entries).hex()]])
+    cases.edit("exif_resolution_byte_jfif_dpi", "baseline.jpg", [["set", 13, "01"], ["insert", 20, one_byte.hex()]],
+               note="the JFIF segment gives the resolution, so the EXIF block is not read")
+    cases.edit("exif_resolution_byte_after_scan", "baseline.jpg", [["insert", len(base) - 2, one_byte.hex()]],
+               note="Pillow's header reading stops at the first scan")
+    short_index = mpf(1, mp_entry(0)[:8])
+    cases.edit("pillow_mpf_entry_short", "baseline.jpg", [["insert", 20, short_index.hex()]],
+               note="16 bytes of MP Entry unpacked per image: a struct.error")
+    # Bits 24 to 26 of an entry's attribute are its image data format, other than 0 a SyntaxError
+    # that leaves the file a JPEG; the entries are little-endian unless the header is MM\0*.
+    other_format = mp_entry(1 << 24, order=">")
+    cases.edit("pillow_mpf_entries_little_endian", "baseline.jpg",
+               [["insert", 20, mpf(2, other_format, b"MM\x2a\x00").hex()]])
+    cases.edit("mpf_entries_big_endian", "baseline.jpg", [["insert", 20, mpf(2, other_format, b"MM\x00\x2a").hex()]])
+    two = mpf(2, mp_entry(0x030000) * 2)
+    cases.edit("pillow_mpf_last_index_short", "baseline.jpg", [["insert", 20, (two + short_index).hex()]])
+    cases.edit("mpf_last_index_whole", "baseline.jpg", [["insert", 20, (short_index + two).hex()]])
+    cases.edit("mpf_count_rational", "baseline.jpg", [["insert", 20, seg(0xE2, b"MPF\0" + tiff(
+        [(NUMBER_OF_IMAGES, RATIONAL, 1, struct.pack("<LL", 2, 1)), (MP_ENTRY, UNDEFINED, 8, bytes(8))])).hex()]])
+    # A well-formed MPO of two images, which Pillow opens as MPO and decodes the first of.
+    header_at = 20 + 4 + 4
+    placeholder = mpf(2, mp_entry(0) * 2)
+    first = len(base) + len(placeholder)
+    index = mpf(2, mp_entry(0x20030000, first, 0) + mp_entry(0x020002, len(prog), first - header_at))
+    assert len(index) == len(placeholder)
+    cases.edit("mpo_two_images", "baseline.jpg", [["insert", 20, index.hex()], ["append", prog.hex()]])
 
     # Inputs libjpeg-turbo decodes that the port used to hand to ImageIO.
     no_dht = [["delete", s[0], s[2] - s[0]] for s in reversed(bsegs) if s[1] == 0xC4]
