@@ -77,7 +77,7 @@ public enum WeightLoadingError: Error, Equatable, Sendable, CustomStringConverti
 }
 
 extension DiffusionGemmaModel {
-    /// What loading a checkpoint cost, measured by ``load(from:configuration:progress:)``.
+    /// What loading a checkpoint cost, measured by ``load(from:configuration:vision:progress:)``.
     ///
     /// The memory figures are of the whole process (`task_info` resident size and `getrusage`'s
     /// peak), so they mean most in a process that has done little else.
@@ -103,12 +103,18 @@ extension DiffusionGemmaModel {
         /// MLX's active memory in bytes after loading (`Memory.activeMemory`): the arrays the
         /// tree holds, which the resident size undercounts because the weights are GPU buffers.
         public var mlxActiveBytes: Int
+        /// The vision tower's and `embed_vision`'s parameter count (packed values for a quantized
+        /// projection count as stored), 0 for a text-only tree.
+        public var visionParameterCount: Int = 0
+        /// The bytes the vision tower's and `embed_vision`'s arrays hold, which MLX counts in
+        /// ``mlxActiveBytes``; 0 for a text-only tree.
+        public var visionBytes: Int = 0
 
         /// The resident memory loading added, in bytes.
         public var residentBytesAdded: Int { residentBytesAfter - residentBytesBefore }
     }
 
-    /// The stages ``load(from:configuration:progress:)`` reports.
+    /// The stages ``load(from:configuration:vision:progress:)`` reports.
     public enum LoadStage: Sendable, Hashable {
         /// Reading `config.json` and building the module tree.
         case configuring
@@ -133,7 +139,9 @@ extension DiffusionGemmaModel {
 
     /// Loads a checkpoint directory.
     ///
-    /// Reads `config.json` when no configuration is passed and builds the text tree. Then, from
+    /// Reads `config.json` when no configuration is passed and builds the tree: the text model,
+    /// and the vision tower and `embed_vision` when the configuration has a `vision_config` and
+    /// `vision` is true, as mlx-vlm loads them. Then, from
     /// the shard headers alone, it applies ``sanitizedName(_:)``, quantizes the tree as the
     /// configuration's per-layer map and the checkpoint's `.scales` tensors ask, and requires the
     /// tree's parameters and the checkpoint's tensors to be the same names with the same shapes.
@@ -149,7 +157,7 @@ extension DiffusionGemmaModel {
     ///   `loadWeights` throws.
     public static func load(
         from directory: URL, configuration: DiffusionGemmaConfiguration? = nil,
-        progress: (@Sendable (LoadStage) -> Void)? = nil
+        vision: Bool = true, progress: (@Sendable (LoadStage) -> Void)? = nil
     ) async throws -> LoadedModel {
         let before = ResourceUsage.current()
         let clock = ContinuousClock()
@@ -157,11 +165,12 @@ extension DiffusionGemmaModel {
 
         progress?(.configuring)
         let configuration = try configuration ?? DiffusionGemmaConfiguration.load(from: directory)
-        let model = DiffusionGemmaModel(configuration.text)
+        let model = DiffusionGemmaModel(configuration, vision: vision)
         let perLayer = configuration.quantization?.perLayerQuantization
 
         progress?(.checkingCoverage)
-        let checkpoint = try CheckpointTensors(directory: directory)
+        let checkpoint = try CheckpointTensors(
+            directory: directory, sanitize: { model.sanitizedName($0) })
         if let perLayer {
             // The index's names count too, so that a module whose shard is absent is still
             // quantized and its tensors are reported missing under their quantized names.
@@ -178,13 +187,17 @@ extension DiffusionGemmaModel {
 
         let after = ResourceUsage.current()
         progress?(.finished)
+        let visionArrays = [model.encoder.visionTower as Module?, model.encoder.embedVision]
+            .compactMap { $0 }.flatMap { $0.parameters().flattened().map(\.1) }
         let metrics = LoadMetrics(
             wallTime: clock.now - start, mappedBytes: checkpoint.shardBytes,
             shardCount: checkpoint.shards.count, tensorCount: checkpoint.tensors.count,
             droppedTensorCount: checkpoint.droppedCount,
             quantizedModuleCount: model.quantizedModuleCount,
             residentBytesBefore: before.residentBytes, residentBytesAfter: after.residentBytes,
-            peakResidentBytes: after.peakResidentBytes, mlxActiveBytes: Memory.activeMemory)
+            peakResidentBytes: after.peakResidentBytes, mlxActiveBytes: Memory.activeMemory,
+            visionParameterCount: visionArrays.reduce(0) { $0 + $1.size },
+            visionBytes: visionArrays.reduce(0) { $0 + $1.nbytes })
         return LoadedModel(model: model, configuration: configuration, metrics: metrics)
     }
 }
@@ -207,7 +220,8 @@ struct CheckpointTensors: Sendable {
     /// The tensors sanitize dropped.
     let droppedCount: Int
 
-    init(directory: URL) throws {
+    /// Reads the shard headers under `directory`, naming each tensor as `sanitize` does.
+    init(directory: URL, sanitize: (String) -> String?) throws {
         let indexURL = directory.appendingPathComponent("model.safetensors.index.json")
         var indexed: [String: String] = [:]
         var shardNames: [String]
@@ -218,7 +232,7 @@ struct CheckpointTensors: Sendable {
             }
             let index = try JSONDecoder().decode(Index.self, from: Data(contentsOf: indexURL))
             for (name, shard) in index.weightMap {
-                if let sanitized = DiffusionGemmaModel.sanitizedName(name) {
+                if let sanitized = sanitize(name) {
                     indexed[sanitized] = shard
                 }
             }
@@ -245,7 +259,7 @@ struct CheckpointTensors: Sendable {
                 atPath: url.resolvingSymlinksInPath().path)
             bytes += (attributes[.size] as? NSNumber)?.intValue ?? 0
             for (name, shape) in try Self.header(of: url, shard: shard) {
-                if let sanitized = DiffusionGemmaModel.sanitizedName(name) {
+                if let sanitized = sanitize(name) {
                     tensors[sanitized] = Entry(shard: shard, shape: shape)
                 } else {
                     dropped += 1

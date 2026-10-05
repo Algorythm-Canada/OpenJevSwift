@@ -1,7 +1,11 @@
+import CoreGraphics
 import Foundation
+import ImageIO
 import MLX
 import OpenJevCore
+import OpenJevTestSupport
 import Testing
+import UniformTypeIdentifiers
 
 @testable import OpenJevDiffusionGemma
 
@@ -27,6 +31,40 @@ private func ask(_ state: String, _ questions: String = readmeQuestions, _ extra
         #"{"state": \#(quoted), "model": "openjev-latest", "questions": \#(questions)\#(tail)}"#)
 }
 
+/// Upstream's tests/test_mlx_model.py `COLOUR`.
+private let colourQuestions =
+    #"{"colour": {"type": "choice", "instructions": "What colour fills the picture?", "#
+    + #""criteria": {"red": "the image is red", "blue": "the image is blue", "#
+    + #""green": "the image is green"}}}"#
+
+/// The JSON member `"images": [...]` of `urls`.
+private func images(_ urls: [String]) -> String {
+    #""images": ["# + urls.map { "\"\($0)\"" }.joined(separator: ", ") + "]"
+}
+
+/// Upstream's `solid_png`: a 64 by 64 PNG of one colour, as a data URL.
+private func solidPNG(_ rgb: (Int, Int, Int), size: Int = 64) throws -> String {
+    var pixels = [UInt8](repeating: 255, count: size * size * 4)
+    for index in 0..<(size * size) {
+        pixels[index * 4] = UInt8(rgb.0)
+        pixels[index * 4 + 1] = UInt8(rgb.1)
+        pixels[index * 4 + 2] = UInt8(rgb.2)
+    }
+    let space = try #require(CGColorSpace(name: CGColorSpace.sRGB))
+    let context = try #require(
+        CGContext(
+            data: &pixels, width: size, height: size, bitsPerComponent: 8,
+            bytesPerRow: size * 4, space: space,
+            bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue))
+    let image = try #require(context.makeImage())
+    let data = NSMutableData()
+    let destination = try #require(
+        CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil))
+    CGImageDestinationAddImage(destination, image, nil)
+    try #require(CGImageDestinationFinalize(destination))
+    return "data:image/png;base64,\((data as Data).base64EncodedString())"
+}
+
 /// True when two maps have the same ids and the same float32 logprobs, bit for bit.
 private func identical(_ a: ReadOutput, _ b: ReadOutput) -> Bool {
     a.slots.count == b.slots.count
@@ -40,7 +78,7 @@ extension MLXTests {
     /// The read cases of upstream's tests/test_mlx_model.py that the earlier live suites did not
     /// cover, named after upstream's, through ``DecisionEngine`` over ``DiffusionGemmaRuntime``.
     /// The README example, same request same answer and the cached prefill are in
-    /// RuntimeLiveTests and ReadOracleTests; the image, think and chat cases wait for their
+    /// RuntimeLiveTests and ReadOracleTests; the think and chat cases wait for their
     /// milestones and are listed at the end as disabled tests.
     @Suite(
         "upstream's test_mlx_model.py read cases",
@@ -364,18 +402,55 @@ extension MLXTests {
             #expect(budget == PrefillCacheDefaults.tokens)
         }
 
+        /// A solid colour is the least ambiguous thing an image can say, so a wrong or hedged
+        /// answer here is a real failure, not flakiness.
+        @Test("test_the_model_reads_an_image")
+        func theModelReadsAnImage() async throws {
+            let live = try await LiveCheckpoint.shared()
+            let engine = try DecisionEngine(backend: live.runtime, configuration: .default)
+            for (colour, rgb) in [("red", (255, 0, 0)), ("blue", (0, 0, 255))] {
+                let decision = try await engine.decide(
+                    ask("What colour is this?", colourQuestions, images([try solidPNG(rgb)])))
+                guard case .choice(let choice, let probabilities, _) = decision.answers["colour"]
+                else {
+                    Issue.record("no choice: \(decision.answers)")
+                    continue
+                }
+                let p = probabilities[colour] ?? 0
+                print("\(colour): \(choice) at \(p), \(decision.inputTokens) input tokens")
+                #expect(choice == colour && p > 0.9, "\(colour): \(choice) \(p)")
+                #expect(decision.inputTokens > 100)
+            }
+        }
+
+        /// Mirrors test_a_cached_prefill_reads_the_same: the decoder pass must leave an image
+        /// prompt's cache as it found it, or re-reads would drift.
+        @Test("test_an_image_prefill_reads_the_same_cold_or_reused")
+        func anImagePrefillReadsTheSameColdOrReused() async throws {
+            let live = try await LiveCheckpoint.shared()
+            let runtime = live.runtime
+            let engine = try DecisionEngine(backend: runtime, configuration: .default)
+            let image = images([try solidPNG((255, 0, 0))])
+            let request = try ask("What colour is this?", colourQuestions, image)
+            await runtime.removeCachedPrefills()
+            let cold = try await engine.decide(request)
+            #expect(
+                await runtime.statistics().cachedPrefills > 0, "the image prefill was not cached")
+            let before = await runtime.statistics()
+            // This one hits the cached vision pass.
+            let reused = try await engine.decide(request)
+            let after = await runtime.statistics()
+            #expect(after.prefillMisses == before.prefillMisses)
+            #expect(try PolicyFixtures.body(of: reused) == PolicyFixtures.body(of: cold))
+            let samples = try ask(
+                "What colour is this?", colourQuestions, image + #", "samples": 3"#)
+            #expect(
+                try PolicyFixtures.body(of: await engine.decide(samples))
+                    == PolicyFixtures.body(of: await engine.decide(samples)))
+        }
+
         // The cases that wait for later milestones. Each runs with OPENJEV_TEST_MODEL once the
         // feature it needs exists; until then the backend refuses it.
-
-        @Test(
-            "test_the_model_reads_an_image",
-            .disabled("needs images (#48); runs with OPENJEV_TEST_MODEL once #48 lands"))
-        func theModelReadsAnImage() {}
-
-        @Test(
-            "test_an_image_prefill_reads_the_same_cold_or_reused",
-            .disabled("needs images (#48); runs with OPENJEV_TEST_MODEL once #48 lands"))
-        func anImagePrefillReadsTheSameColdOrReused() {}
 
         @Test(
             "test_think_answers_and_is_billed",

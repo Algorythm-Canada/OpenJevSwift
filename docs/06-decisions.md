@@ -3123,84 +3123,132 @@ UpstreamProbe's and the probe workflow's, and checks what the binaries import
 
 Status. Proposed with issue #119.
 
-## D-054 The chat template's `trim` is jinja2's: where the port goes beyond or differs from the issue text
+## D-054 Vision tower and the images field: where the port goes beyond or differs from the issue text
 
-Context. Gemma 4's chat template writes each system and user text through the `trim` filter:
-`message['content'] | trim` for a text, `item['text'] | trim` for a user's text part, and
-`item['text'] | trim + ' '` for the system text parts of an image prompt. Upstream renders it with
-jinja2, whose `trim` is `soft_str(value).strip(chars)`: without `chars`, Python's `str.strip()`,
-which removes the 29 characters CPython's `str.isspace()` accepts. transformers 5.17.0's template
-environment adds only `tojson`, `raise_exception` and `strftime_now`, so that is the `trim` upstream
-uses. swift-jinja 2.5.1's `trim` strips Foundation's `whitespacesAndNewlines`, which keeps U+001C to
-U+001F and removes U+200B. Upstream hands the state to the template unstripped
-(`openjev/engine.py:373`), so the port's prompt ids differed from upstream's whenever a state
-started or ended with one of those characters (issue #124, from PR #121's review): 22 ids where
-upstream has 21 for `Look at the photo.` with one of U+001C to U+001F before or after it, and
-`.` (236761) where upstream keeps `.` with U+200B (38834). Image prompts render the state through
-the same filter.
+Context. Issue #47 asks for the checkpoint's vision tower and `embed_vision`, the encoder's image
+path (the soft tokens' positions padded, then filled with the projected features, and each image's
+block attending to itself in both directions in the prompt prefill), upstream's `ImagePrompt.key`
+for the prefill cache and the prompt count after the expansion, with mlx-swift-lm's Gemma 4 tower
+reused if possible, else ported from mlx-vlm 0.6.15. Issue #48 asks for the `images` field end to
+end. Most of the wire half was already on main (`ImageValidation`, the refusals with `think` and
+`sequential`, the seed key, `ImageLimits` from `OPENJEV_MAX_IMAGES` and `OPENJEV_MAX_IMAGE_BYTES`,
+the encoder backends' refusal); what remained was the runtime and the answer to images the decoder
+cannot read, which upstream answers with a bare 500.
 
 Decision.
 
-1. **The tokenizer's template environment has jinja2's `trim`.** `SwiftTransformersTokenizer`
-   renders the chat template in an environment that holds `trim` as a function. Without `chars`, or
-   with `none`, it strips the scalars `TextOf.isPythonWhitespace` accepts, which an OpenJevCore test
-   holds to CPython 3.14.7's `isspace()` over every scalar; with a string, the scalars the string
-   holds, and an empty string strips nothing, as `str.strip('')` does. Any other `chars` throws,
-   where Python raises `TypeError`. It compares scalars, as Python compares code points. swift-jinja
-   looks a filter up in the environment before its built-in filters, so the package is not patched,
-   and macros, set blocks, filter blocks and loops reach the same function.
-2. **The ids come from the port's own rendering, not from swift-transformers'
-   `applyChatTemplate`.** D-008 had `chatPromptIDs` call `applyChatTemplate`, which renders in
-   swift-jinja's own environment and takes no filter. `chatPromptIDs`, and the public
-   `applyChatTemplate(messages:thinking:)`, now tokenize the text `renderChatTemplate` renders,
-   without special tokens and without truncation, which is all swift-transformers 1.3.4's
-   `applyChatTemplate` does with those arguments; the text and the ids come from one rendering.
-   swift-transformers' own path, through mlx-swift-lm's loader, gives upstream's ids on the 29
-   recorded prompts whose texts the two trims treat alike and other ids on the 10 they treat
-   differently (`MLXTokenizerLoaderTests`); that test fails once swift-jinja's `trim` is Python's,
-   and the override can then go.
-3. **Image prompts.** The image path renders through the same environment. mlx-vlm also strips the
-   user's text with Python's `str.strip()` before the template (`extract_text_from_content`); the
-   port does not, since stripping twice with one set strips once. `Engine.chat_prompt_ids` never
-   renders an image prompt, so `Tools/fixtures/vision_oracle.py` records the image states through
-   upstream's `MlxRuntime._inputs`, as `state_prompts` in `Fixtures/vision/preprocessing.json`.
-   Before this change the port gave 355 ids where upstream gives 354 for U+001C to U+001F, and 353
-   where upstream gives 349 for a state of whitespace.
-4. **Fifteen fixture states.** `chat-prompts/prompts.json` gains the issue's states under its system
-   text `Answer.`: `Look at the photo.` alone, with each of U+001C to U+001F after and before it,
-   and with U+000B, U+0085, U+00A0 and U+200B after it, an empty state, and a state of all 29
-   `isspace()` characters. The whitespace-only state the file already had (`" \n\t "`) is ASCII,
-   which both sets strip, so the issue's "a state of only whitespace" is the new one. `make
-   fixtures` changes nothing else. `vision/preprocessing.json` gains the same fifteen as the text
-   of a prompt with one image (`gradients.png`). That is a new member, so the file's generator
-   version goes to 2. `vision_oracle.py` now versions its two files apart: `reads.json`, whose
-   shape did not change and which only a run with the model rewrites, stays at 1.
-5. **No other prompt-path text is stripped with Foundation's set.** Where upstream applies Python's
-   string methods to text a model reads, the port follows Python already: `text_of`'s `strip()` of
-   instructions and descriptions is `TextOf.render`, with CPython's set, and the state goes in
-   unstripped. Upstream's other `strip`, `split` and `partition` calls (the routes setting, the
-   authorization header, data URLs, logprob keys) are off the prompt path; the port parses the
-   first two with CPython's set as well. JevK5's prompt is pinned text filled as `str.format` fills
-   it, with no template and no trim; its checkpoint's `chat_template.jinja` is rendered neither
-   upstream nor here. Verdict's prompt is f-strings, and Laya's state is the text or its
-   `json.dumps`; the laya package's email helpers, which strip and split, are not on `system_one`'s
-   path. The template's only `split` is in `strip_thinking`, for model turns, which reads never
-   send. swift-jinja splits the template source on Foundation's `.newlines` for `lstrip_blocks`;
-   the shipped template has only line feeds, so nothing changes there.
+1. **The tower is ported, and the library no longer links MLXVLM.** In mlx-swift-lm 3.32.3 only
+   `Gemma4VisionConfiguration` is public; the tower, its blocks and the embedder are `private`, and
+   the public `Gemma4` model reaches them only through its own text model's `prepare`. Its
+   arithmetic also departs from mlx-vlm's: it adds the two position embeddings by `take` in another
+   order where mlx-vlm sums one-hot products, it passes no attention mask where mlx-vlm passes an
+   additive one, and it pools with a transposed einsum. `VisionTower.swift` ports mlx-vlm's
+   `vision.py` and gemma4.py's `MultimodalEmbedder` and `masked_scatter` operation for operation,
+   and `DiffusionGemmaVisionConfiguration` replaces mlx-swift-lm's type with `VisionConfig`'s
+   defaults, so `OpenJevDiffusionGemma` drops its MLXVLM dependency; only the tests link it, to keep
+   D-051's processor comparison. This settles R18's tower half.
+2. **The tower's `pow` is the precise one.** With the port written, D-014's exact tier first gave
+   0 of the 4 hot dog reads of `Fixtures/vision/reads.json`. `Tools/oracle/stage_dump.py --image`
+   records mlx-vlm's own stages (the pixels, the patches, each block, the pool, the features, the
+   embeddings after the scatter, the masks, every encoder layer and the caches) and the first block
+   one operation at a time. The first difference was the first block's output; fed mlx-vlm's own
+   inputs, every operation of the block was bit for bit except the three RMS norms (`x ** 2`) and
+   the RoPE timescale (`100 ** exponents`), both MLX `power`, while `mean` and `rsqrt` were exact.
+   mlx-swift compiles `Power` from source at run time with fast math, so the wheel's metallib never
+   supplies it; the wheel's precompiled kernel calls the precise `pow` (on the hot dog's first
+   block a third of the wheel's `x ** 2` differ from `x * x`). A one-line Metal kernel calling
+   `metal::precise::pow` (`precisePow`) reproduces the wheel's values, and with it the four reads
+   are bit for bit in the exact tier, every stage included. It is used in the tower only; the text
+   path keeps its own and stays as it was.
+3. **A loaded checkpoint loads its tower.** `DiffusionGemmaModel.load` builds the tower and
+   `embed_vision` when `config.json` has a `vision_config`, as mlx-vlm's `load` does: the strict
+   check now covers all 1,647 tensors (none dropped, 300 quantized modules), and a missing or
+   unexpected tower tensor is named with its shard like any other. They hold 570,057,264 stored
+   parameters, 569,449,008 of them the tower's in bfloat16 and 608,256 the 4-bit projection's
+   packed weight, scales and biases (3,244,032 logical weights), 1,140,925,536 bytes (1.06 GiB).
+   On the reference Mac (M3 Max, macOS 27.0.1, 2026-10-05) MLX holds 15.41 GiB after load where R4
+   recorded 14.35 GiB without the tower, the same 1.06 GiB; the resident size after load was
+   15.75 GiB in this run, within the 15.08 to 15.92 GiB R4 recorded without it, so the run does not
+   isolate the resident cost. `load(from:configuration:vision:progress:)` takes `vision: false` for
+   a text-only tree; the runtime does not expose it.
+4. **The image prefill uses mlx-vlm's explicit masks; text prompts keep theirs.** mlx-vlm's
+   processor hands the prefill an attention mask of ones, so for an image prompt
+   `_make_encoder_masks` builds boolean masks for every layer (causal, cut to the window on a
+   sliding layer, or-ed with the overlay), and the port builds the same. A text prompt still gets
+   `.causal` or the window band, unchanged: `ReadOracleTests` gives 63 of 63 reads and 126 of 126
+   cache digests bit for bit in the exact tier, and `RegressionTests` passes. No read is ever
+   prefilled in chunks (D-036); `allowsChunkedPrefill(mmTokenTypeIDs:hasPixelValues:)` ports
+   `chunked_prefill_policy` for generation (milestone 5), which may chunk.
+5. **A cached image prompt is not decoded again.** The prefill key is `ImagePrompt.key` (the system
+   text, the state text and the SHA-256 of each image's data URL), so an image never shares an
+   entry with another image or with none. Upstream decodes and expands the images on every read,
+   before the cache lookup; the port does so only on a miss and reads the count from the entry on a
+   hit, which gives the same count, since the key fixes the bytes. The cap is checked on the
+   expanded prompt with upstream's message, and the prompt tokens a read reports include the image
+   tokens: 355 for the hot dog request and 411 for the README questions with the hot dog, upstream's
+   counts. The runtime sizes images with the checkpoint's `processor_config.json`, as mlx-vlm's
+   `load` builds its processor from the same directory; a folder without the file gets the pinned
+   checkpoint's values.
+6. **An image the port cannot read is a 400 naming it.** Upstream does not catch Pillow's or the
+   processor's errors, so FastAPI answers a bare 500 `Internal Server Error`. The runtime turns a
+   `VisionError` into a `SchemaError` `"image could not be read: {reason}"` at
+   `["body", "images", i]`, the plain-detail 400 of upstream's other image refusals. A system or
+   state text that spells out more `<|image|>` placeholders than there are images, on which
+   mlx-vlm's expansion raises, is a 400 `"the image prompt could not be built: {reason}"` at
+   `["body"]` instead, since no image failed. The input is
+   the client's to fix, a 500 tells it the server failed, and Jev's Python SDK retries every 5xx
+   twice by default ([02-jev-wire-api.md](02-jev-wire-api.md)), sending the same image again; the
+   400 names the image and why. Each case, against Pillow 12.3.0 in the oracle's venv:
 
-Alternatives rejected. (a) Patching swift-jinja, or forking it: the environment takes the filter
-without either, and a swift-jinja release with Python's `trim` shows in the departure test.
-(b) Stripping the texts with CPython's set before rendering, as mlx-vlm does for images:
-swift-jinja's `trim` would still remove a U+200B that Python keeps at either end, and the
-template's other `trim` (`captured_content | trim`) would stay Foundation's. (c) Handing the
-function to swift-transformers' `applyChatTemplate` through `additionalContext`: it works with
-swift-transformers 1.3.4, whose `Value(any:)` passes a `Jinja.Value` through into a context that
-shares the filters' namespace, but it rests on how another package builds its context, and the
-text would still need the port's own rendering.
+   | Image | Pillow and upstream | The port |
+   |---|---|---|
+   | HEIC bytes labelled `image/jpeg` | `UnidentifiedImageError`, 500 | 400, not a JPEG, PNG, WebP or GIF (ImageIO would decode it) |
+   | TIFF or BMP bytes labelled `image/png` | decoded, 200 | 400, as above |
+   | A JPEG cut short | `OSError: image file is truncated`, 500 | 400, truncated (ImageIO would decode it) |
+   | A JPEG missing only its EOI | truncated, 500, when libjpeg reads past the end (the hot dog, `progressive.jpg`); decoded, 200, when it does not (`baseline.jpg`) | 400, truncated, in every case |
+   | 1 pixel high | the processor raises, 500 | 400 (D-051) |
+   | 3 pixels high | read as channels first, a wrong answer, 200 | 400 (D-051) |
+   | Past 178,956,970 pixels | `DecompressionBombError`, 500 | 400 |
+   | A JPEG of garbage after its SOI | `UnidentifiedImageError`, 500 | 400, truncated |
 
-Consequences. A state's leading and trailing U+001C to U+001F are stripped and its U+200B kept, as
-upstream does, in text and image prompts; every prompt recorded before gives the same ids. The
-prompt path uses swift-transformers for tokenizing only, so a change in how its `applyChatTemplate`
-builds the context no longer reaches the port; the fixtures hold the context the port builds.
+   The port accepts an image by its signature only when it is one of the four types the API
+   accepts, whatever the declared type, as Pillow ignores it; a TIFF or BMP under another label is
+   the one input refused where upstream answers, so that untrusted bytes never reach ImageIO's
+   other decoders. `LibjpegTurboDecoder` now refuses a JPEG that ends before its EOI marker
+   (no EOI, a marker or segment that runs past the end, a restart marker missing at the end of the
+   data) instead of handing it to ImageIO, which decoded such files. Pillow refuses such a file only
+   when libjpeg asks for data past its end, which depends on how far its bit reader looks ahead, so
+   a JPEG missing only its EOI is a 400 here where upstream sometimes reads it; following Pillow
+   exactly there is the JPEG hardening's to do. Other malformed JPEGs the port
+   does not cover still fall back to ImageIO, unmeasured (D-051); the JPEG decoder's hardening
+   against libjpeg-turbo's refusals is its own change.
+7. **`think` with images is refused as unsupported until #52.** Upstream answers `"think needs a
+   text state; send images without it"`; the runtime has no `think` yet, so the engine answers
+   `"openjev-0.1 does not support think"` first, also a 400 at `["body", "think"]`. `sequential`
+   with images gets upstream's message.
+8. **The stub tests draw 64 by 64 PNGs.** Upstream's stub tests send a 1 by 1 PNG, which upstream's
+   stub never decodes; the port's stub decodes for real, so the decode failures above are tested
+   without weights, and a 1-pixel-high image is one it refuses.
 
-Status. Proposed with issue #124.
+Measured on the reference Mac with the pinned 4-bit checkpoint and `OPENJEV_MLX_CACHE_LIMIT_GB=4`.
+Exact tier (the wheel's `mlx.metallib`, SHA-256 `dc59d1cc…`, and the oracle's RoPE table): the four
+reads of `reads.json` bit for bit, and every recorded stage of the hot dog prefill equal. Native:
+mean |dp| 0.0012 over the 24 labels, mean |dH| 0.146 over the 10 slots, the top label on 10 of 10,
+the largest |dp| of a read 0.0048, 0.0002, 0.0028 and 0.0054; natively the first block's only
+differing operations are MLX's `rms_norm` kernel, as for text. Live: solid red and blue read 0.99993
+and 0.99952 with 369 input tokens; the hot dog request answers hotdog 0.99921 and cat 0.00013 with
+355 input tokens. Upstream's `tests/test_live.py` against `openjev serve --backend mlx`: 9 passed
+(`test_image` among them), 3 failed (`test_think`, `test_chat` and `test_chat_stream`, milestone 5)
+and 4 skipped (the encoder models); the Swift live suite: 9 passed and 7 skipped.
+
+Alternatives rejected. (a) Reusing mlx-swift-lm's tower: it is private, and its arithmetic is not
+mlx-vlm's (item 1). (b) Accepting the exact tier's miss as kernel drift: the stage dump showed the
+cause is one op whose precise form is available. (c) Answering undecodable images with upstream's
+500: item 6. (d) Decoding any format ImageIO reads: it widens what untrusted input reaches and
+decodes files Pillow refuses.
+
+Consequences. The `mlx` backend reads images: the engine's capability check passes, the runtime
+builds `ImageReadInputs` and prefills through the tower. The model holds 1.06 GiB more. Library
+consumers no longer build MLXVLM. A bad image is a 400 that names it.
+
+Status. Proposed with issues #47 and #48.

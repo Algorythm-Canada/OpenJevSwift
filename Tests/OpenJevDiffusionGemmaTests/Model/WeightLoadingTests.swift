@@ -106,30 +106,51 @@ extension MLXTests {
                 ),
             ]
             for (name, expected) in cases {
-                #expect(DiffusionGemmaModel.sanitizedName(name) == expected, "\(name)")
+                #expect(
+                    DiffusionGemmaModel.sanitizedName(name, vision: false) == expected, "\(name)")
             }
         }
 
-        /// The real-size tree, built and quantized without evaluating anything, against the
-        /// 1,647 names of Fixtures/model/weight_map.json.
+        @Test("Sanitize: a load with the vision tower keeps its tensors, less unused clip bounds")
+        func sanitizeVisionNames() {
+            let weight = "model.encoder.vision_tower.encoder.layers.0.mlp.gate_proj.linear.weight"
+            let projection = "model.encoder.embed_vision.embedding_projection.weight"
+            let bound = "model.encoder.vision_tower.encoder.layers.0.mlp.gate_proj.input_max"
+            #expect(DiffusionGemmaModel.sanitizedName(weight, vision: true) == weight)
+            #expect(DiffusionGemmaModel.sanitizedName(projection, vision: true) == projection)
+            #expect(DiffusionGemmaModel.sanitizedName(bound, vision: true) == nil)
+            #expect(
+                DiffusionGemmaModel.sanitizedName(bound, vision: true, clippedLinears: true)
+                    == bound)
+            #expect(DiffusionGemmaModel.sanitizedName("lm_head.weight", vision: true) == nil)
+        }
+
+        /// The real-size tree with its vision tower, built and quantized without evaluating
+        /// anything, against the 1,647 names of Fixtures/model/weight_map.json.
         @Test("The checkpoint's names after sanitize are exactly the real tree's parameters")
         func checkpointCoverage() throws {
             MetalLibrary.configure()
             let configuration = try ModelFixtures.checkpointConfiguration()
             let weightMap = try ModelFixtures.checkpointWeightMap()
             #expect(weightMap.count == 1_647)
-            let sanitized = Set(weightMap.keys.compactMap(DiffusionGemmaModel.sanitizedName))
-            let dropped = weightMap.keys.filter { DiffusionGemmaModel.sanitizedName($0) == nil }
-            // 355 vision tower tensors and embed_vision's projection (weight, scales, biases).
-            // The pinned checkpoint has no rotary_emb, no lm_head.weight and no encoder text
-            // weight besides the 30 scalars, so those rules drop nothing here.
+            let sanitized = Set(
+                weightMap.keys.compactMap { DiffusionGemmaModel.sanitizedName($0, vision: true) })
+            // The pinned checkpoint has no rotary_emb, no lm_head.weight, no clipping bounds and
+            // no encoder text weight besides the 30 scalars, so a load with the tower keeps every
+            // tensor.
+            #expect(sanitized.count == 1_647)
+            // A text-only load drops the 355 vision tower tensors and embed_vision's projection
+            // (weight, scales, biases).
+            let dropped = weightMap.keys.filter {
+                DiffusionGemmaModel.sanitizedName($0, vision: false) == nil
+            }
             #expect(dropped.count == 358)
             #expect(dropped.filter { $0.hasPrefix("model.encoder.vision_tower.") }.count == 355)
             #expect(dropped.filter { $0.hasPrefix("model.encoder.embed_vision.") }.count == 3)
-            #expect(sanitized.count == 1_289)
 
             let before = ProcessMemory.current()
-            let model = DiffusionGemmaModel(configuration.text)
+            let model = DiffusionGemmaModel(configuration)
+            #expect(model.readsImages)
             let perLayer = try #require(configuration.quantization).perLayerQuantization
             model.quantize(perLayer, checkpointNames: sanitized)
             let parameters = Dictionary(
@@ -140,9 +161,9 @@ extension MLXTests {
             let unexpected = sanitized.subtracting(parameters.keys).sorted()
             #expect(missing.isEmpty, "missing: \(missing.prefix(5))")
             #expect(unexpected.isEmpty, "unexpected: \(unexpected.prefix(5))")
-            // Every .scales of the checkpoint but embed_vision's: 299 of 300.
+            // Every .scales of the checkpoint, embed_vision's included; the tower is bfloat16.
             #expect(weightMap.keys.filter { $0.hasSuffix(".scales") }.count == 300)
-            #expect(model.quantizedModuleCount == 299)
+            #expect(model.quantizedModuleCount == 300)
 
             // Shapes from the configuration: 8 bits pack 4 values per uint32, 4 bits 8, in
             // groups of 64.
@@ -164,6 +185,19 @@ extension MLXTests {
                 "model.decoder.layers.0.layer_scalar": [1],
                 "model.decoder.self_conditioning.gate_proj.weight": [2112, 352],
                 "model.encoder.language_model.layers.29.layer_scalar": [1],
+                "model.encoder.vision_tower.patch_embedder.position_embedding_table": [
+                    2, 10_240, 1_152,
+                ],
+                "model.encoder.vision_tower.patch_embedder.input_proj.weight": [1_152, 768],
+                "model.encoder.vision_tower.encoder.layers.26.self_attn.q_proj.linear.weight": [
+                    1_152, 1_152,
+                ],
+                "model.encoder.vision_tower.encoder.layers.0.self_attn.q_norm.weight": [72],
+                "model.encoder.vision_tower.encoder.layers.0.mlp.gate_proj.linear.weight": [
+                    4_304, 1_152,
+                ],
+                "model.encoder.vision_tower.std_bias": [1_152],
+                "model.encoder.embed_vision.embedding_projection.weight": [2_816, 144],
             ]
             for (name, shape) in expectedShapes {
                 #expect(parameters[name] == shape, "\(name)")

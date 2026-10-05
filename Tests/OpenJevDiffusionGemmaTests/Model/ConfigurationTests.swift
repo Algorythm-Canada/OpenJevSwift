@@ -112,11 +112,11 @@ struct ConfigurationTests {
     func vision() throws {
         let vision = try #require(try CheckpointFixture.load().config.vision)
         #expect(vision.modelType == "gemma4_vision")
-        #expect(vision.hiddenLayers == 27)
+        #expect(vision.numHiddenLayers == 27)
         #expect(vision.hiddenSize == 1152)
         #expect(vision.intermediateSize == 4304)
-        #expect(vision.attentionHeads == 16)
-        #expect(vision.keyValueHeads == 16)
+        #expect(vision.numAttentionHeads == 16)
+        #expect(vision.numKeyValueHeads == 16)
         #expect(vision.headDim == 72)
         #expect(vision.patchSize == 16)
         #expect(vision.rmsNormEps == 1e-6)
@@ -125,9 +125,7 @@ struct ConfigurationTests {
         #expect(vision.poolingKernelSize == 3)
         #expect(vision.useClippedLinears == false)
         #expect(vision.standardize)
-        #expect(vision.ropeParameters["rope_type"] == .string("default"))
-        let theta = vision.ropeParameters["rope_theta"]
-        #expect(theta == .float(100) || theta == .int(100))
+        #expect(vision.ropeParameters == .init(ropeType: "default", ropeTheta: 100))
     }
 
     @Test("The checkpoint's quantization: 4-bit default and 236 8-bit overrides")

@@ -2,14 +2,19 @@
 // openjev/mlx_backend.py lines 27 to 50, 116 to 128 and 150 to 174, Apache-2.0, see
 // THIRD_PARTY.md): an ordered map bounded by entries and tokens, with no exempt entry.
 
+import Foundation
+
 /// The key a prefill is cached under.
 ///
-/// A text prompt is keyed by its token ids, as upstream keys it by `tuple(prompt)`. The vision
-/// milestone adds an image key (the system text, the state text and the image digests, upstream's
-/// `ImagePrompt.key`).
+/// A text prompt is keyed by its token ids, as upstream keys it by `tuple(prompt)`; an image
+/// prompt by upstream's `ImagePrompt.key`, the system text, the state text and the SHA-256 of
+/// each image's data URL, so it never shares an entry with the same text with another image or
+/// with none.
 public enum PrefillKey: Hashable, Sendable {
     /// A prompt of token ids.
     case tokens([Int])
+    /// An image prompt: its system and state texts and each image's data URL digest, in order.
+    case image(systemText: String, stateText: String, digests: [Data])
 }
 
 /// The prefill cache's defaults, upstream's module constants.

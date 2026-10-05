@@ -68,8 +68,23 @@ differences otherwise. Above them, the read-level cases are covered (issue #31):
 reads span canvas widths 16 to 64, prompts of 78 to 3,643 tokens (13 past the 1,024-token window,
 nine of them JevBench's) and `steps` 1 to 3; `ReadOracleTests` compares a cached and a cold prefill bit for bit;
 `RuntimeLiveTests` checks the same request twice and a cold against a cached read through the
-runtime; and the regression file (below) checks determinism across runs. Image reads wait for the
-vision path (#48, upstream's `tests/data/hotdog.jpg` case).
+runtime; and the regression file (below) checks determinism across runs.
+
+Image reads (#47, D-054) have their own oracle in `Fixtures/vision/reads.json`: upstream's
+`MlxRuntime.read` of its hot dog photo for `test_live.py`'s `test_image` request and for the README
+questions, each at canvas index 0 and 1 (355 and 411 prompt tokens). `ImageReadOracleTests` expands
+the prompts to the recorded ids, prefills them through the ported vision tower and reads the four
+canvases: in the exact tier every map is bit for bit, and natively D-014's bounds hold over their
+10 slots, with per-read figures printed (measured 2026-10-05: mean |dp| 0.0012 over 24 labels, mean
+|dH| 0.146, the top label on 10 of 10, a read's largest |dp| at most 0.0054). Below the reads,
+`ImageStageTests` compares the hot dog prefill stage by stage with mlx-vlm's own, from
+`Tools/oracle/stage_dump.py --image hotdog` into `Tools/oracle/results/vision/` (the pixels, the
+patches, each of the 27 blocks, the pool, the projected features, the embeddings after the scatter,
+the masks of layers 0 and 5, every encoder layer and the first and last caches), and the first
+block one operation at a time from mlx-vlm's inputs; in the exact tier every stage and operation is
+equal. That comparison is how the tower's `pow` was found to need the precise kernel (D-054).
+These tests skip naming `OPENJEV_TEST_MODEL` without the checkpoint, the upstream checkout or the
+dump.
 
 Image preprocessing (#46) has its own oracle, [Fixtures/vision](../Fixtures/vision/README.md),
 from `Tools/fixtures/vision_oracle.py`, which runs upstream's `MlxRuntime._inputs` with mlx-vlm's
@@ -90,7 +105,8 @@ pinned upstream checkout, the hot dog is checked as well; with `Tools/oracle/res
 oracle's full tensors, every value is compared and the largest difference printed (0 for every
 image); with the tokenizer files, every prompt's ids and `mm_token_type_ids`. These skip naming
 `OPENJEV_TEST_MODEL`. The same tests measure `MLXVLM`'s Gemma 4 processor, which misses by 0.17
-to 1.21 (D-051). The fixture's `reads.json` holds upstream's hot dog reads for #47.
+to 1.21 (D-051). The fixture's `reads.json` holds upstream's hot dog reads, which
+`ImageReadOracleTests` reads (above).
 
 Measured on 2026-10-02 on the reference machine (M3 Max, 128 GB, macOS 27.0.1, the pinned 4-bit
 checkpoint, mlx-swift 0.32.2), native tier, through the model (`ReadOracleTests`) and through the
@@ -188,8 +204,21 @@ prefill by `ReadStatistics`), `test_steps_hold_the_template_and_reuse_one_prefil
 miss and one cached prefill for `steps` 1 and 4, a hit and the same bits for `steps` 4 again,
 and `steps` 1 bit-identical to the single decoder pass as it was before the step loop) and
 `test_the_prompt_cache_is_bounded_in_tokens` (12 prompts of 1,883 tokens leave 8 cached, 15,066
-tokens of the 16,384 budget). The image cases (#48), `think` (#52) and chat (#53) are disabled
-tests under upstream's names whose comments name the issue and `OPENJEV_TEST_MODEL`.
+tokens of the 16,384 budget), `test_the_model_reads_an_image` (solid red and blue read 0.99993 and
+0.99952, 369 input tokens) and `test_an_image_prefill_reads_the_same_cold_or_reused` (the same
+answers cold and from the cached image prefill, with no second prefill, and with `samples` 3). The
+`think` (#52) and chat (#53) cases are disabled tests under upstream's names whose comments name the
+issue and `OPENJEV_TEST_MODEL`.
+
+The image cases of upstream's `test_mlx_backend.py` and `test_api.py` run without weights, in CI:
+`ImageRuntimeTests` drives `DecisionEngine` over the runtime with a stub model that decodes each
+image for real (`test_an_image_read_goes_to_the_runtime`, `test_image_usage_counts_the_expanded_prompt`,
+`test_images_do_not_share_a_prefill_entry`, `test_same_image_request_same_canvas`,
+`test_images_with_think_or_sequential_are_still_refused`, the cap on the expanded prompt, and each
+image upstream cannot read answering a 400 at `["body", "images", i]`), and `ImageRequestTests`
+sends images over HTTP to the engine over `StubBackend` (`test_images_go_ahead_of_the_state`,
+`test_image_validation`, `test_oversize_image_is_refused_before_decoding`, the two limits, a
+backend's decode refusal as a 400, and an encoder backend's `"{model} does not support images"`).
 
 The read extensions of milestone 4 (#43 to #45) are proven on the checkpoint the same way, through
 `DecisionEngine` with `EngineConfiguration`'s defaults (autoThreshold 0.1, autoMax 4), measured on
@@ -275,14 +304,20 @@ The read extensions of milestone 4 (#43 to #45) are proven on the checkpoint the
   400 `api_usage_error` against every server. Beyond upstream's checks, every decision response
   must carry `server-timing` (unless `OPENJEV_LIVE_GATEWAY=1`) and the same `req_` id in
   `x-request-id` and `x-typesafe-request-id`, and every answer must have Jev's shape for its
-  question. The image,
-  `think`, chat and stream tests skip, naming #48, #52 and #53. The suite's `test_read_options` (`steps
+  question. `test_image`
+  wants the hot dog above 0.8, the cat below 0.2 and more than 200 input tokens (on 2026-10-05
+  against `openjev serve --backend mlx`: 0.99921, 0.00013 and 355). The
+  `think`, chat and stream tests skip, naming #52 and #53. The suite's `test_read_options` (`steps
   4`, `samples 4`, `sequential true`) checks the shapes over HTTP; what those options do on the
   model (one prefill per prompt, the billing, the re-reads and the earlier answers in the prompt)
   is shown in process in layer 2 (#43 to #45). Like the model tests, the runs are
   recorded in the pull request: the suite passes against the Swift server on Verdict, Laya and the
   DiffusionGemma 4-bit checkpoint and, unchanged, against upstream's Python server on the same
-  three, which shows that the suite itself is neutral.
+  three, which shows that the suite itself is neutral. With images (#48, 2026-10-05), against
+  `openjev serve --backend mlx` on the 4-bit checkpoint: the Swift suite passed 9 and skipped 7
+  (`test_think`, the chat tests and the four encoder models), and upstream's own
+  `tests/test_live.py` passed 9 (`test_image` among them), failed 3 (`test_think`, `test_chat` and
+  `test_chat_stream`, which need milestone 5) and skipped 4 (the encoder models).
   [development.md](development.md#the-live-suite) has the commands, upstream's own file included.
 - **JevBench.** `Tools/jevbench` (issue #61, D-041) runs JevBench v1's 231 public items, and the 102
   TypeSafe public-evaluation rows SemIf compares with Jev, against any `/v1/systemone` server, one

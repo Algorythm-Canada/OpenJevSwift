@@ -57,7 +57,7 @@ loads the same models inside an app.
 |---|---|---|---|
 | `verdict` | `verdict-1.4`, 151M parameters, Core ML | Apple silicon, macOS 15 or later | 1.6 GB with the functions one-question reads load, 2.8 GB with all six |
 | `laya` | `laya-1.0`, 421M parameters, Core ML | Apple silicon, macOS 15 or later | 4.7 GB with the functions one-question reads load, 8.9 GB with all eight and up to 9.7 GB at peak; with `OPENJEV_ENCODER_FUNCTIONS=2`, 2.1 GB for one-question reads and up to 4.4 GB at peak |
-| `mlx` | `openjev-0.1`, DiffusionGemma 26B-A4B, 4-bit, MLX | Apple silicon | about 16 GB to load, 17.3 GiB in service with short prompts and up to about 3.6 GB more for cached long prompts; 32 GB or more recommended |
+| `mlx` | `openjev-0.1`, DiffusionGemma 26B-A4B, 4-bit, MLX | Apple silicon | about 17 GB to load, the vision tower's 1.06 GiB included (D-054); 17.3 GiB in service with short prompts, measured before the tower loaded, and up to about 3.6 GB more for cached long prompts; 32 GB or more recommended |
 | `jevk5` | `jevk5-0.2`, JevK5 (Qwen3.5-4B), 8-bit, MLX | Apple silicon | 6.0 GB once loaded, up to 11.0 GB in service with `OPENJEV_MLX_CACHE_LIMIT_GB=4`; 3.6 and 8.9 GB with the 4-bit conversion |
 
 Building needs Xcode 26.4 or later. The `mlx` backend also needs MLX's Metal shaders, which Swift
@@ -72,15 +72,15 @@ core, the server and the `openjev` tool for the tests, without any backend.
 Milestones 0 to 3 are complete, every work issue in them closed: the foundations, the decision
 engine core, DiffusionGemma reads on MLX, and the Jev-compatible HTTP server with the `openjev`
 tool. Milestone 4, the read extensions and images, is in progress: `steps`, `samples` and
-`sequential` are verified end to end on the DiffusionGemma checkpoint (#43, #44 and #45), and images
-remain. Verdict and Laya, from milestone 6, and from milestone 7 the JevBench comparison with
+`sequential` are verified end to end on the DiffusionGemma checkpoint (#43, #44 and #45), and
+images are read on it, matching upstream's image reads bit for bit on the oracle's kernels (#46 to
+#48). Verdict and Laya, from milestone 6, and from milestone 7 the JevBench comparison with
 upstream and DiffusionGemma's calibration report (#61 and #62), are done too. JevK5 (#55), also
 from milestone 6, is served, and gives its author's published top answer on 230 of JevBench's 231
 items (D-052).
 
 Not there yet:
 
-- Images in requests: #46, #47 and #48.
 - `think`, a thought before the read: #50, #51 and #52.
 - `POST /v1/chat/completions`: #53.
 - The CLM model: #59.

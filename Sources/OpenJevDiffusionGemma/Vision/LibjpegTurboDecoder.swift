@@ -139,12 +139,19 @@ enum LibjpegTurboDecoder {
         init(_ description: String) { self.description = description }
     }
 
-    /// A JPEG refused outright: one that declares more pixels than ``RGBImage/maxPixels``, or
-    /// more scans than ``maxScans``. No other decoder should be tried on it.
+    /// A JPEG refused outright: one that declares more pixels than ``RGBImage/maxPixels``, has
+    /// more scans than ``maxScans``, or ends before its EOI marker (``truncated``). No other
+    /// decoder should be tried on it.
     struct Refused: Error, CustomStringConvertible {
         let description: String
         init(_ description: String) { self.description = description }
     }
+
+    /// Why a JPEG that ends before its EOI marker is refused. libjpeg-turbo would decode it with
+    /// a warning, but Pillow's `ImageFile.load` raises `OSError("image file is truncated")` when
+    /// the decoder asks for data the file does not have, so upstream never reads such a JPEG.
+    static let truncated =
+        "the JPEG is truncated: it ends before its EOI marker (Pillow: image file is truncated)"
 
     /// The most scans a JPEG may have. Each scan walks the whole image, so a small file of empty
     /// scans would otherwise cost time in proportion to its size times the image's. Encoders
@@ -294,16 +301,25 @@ enum LibjpegTurboDecoder {
         }
 
         /// Drops buffered bits and moves past the restart marker that must follow.
-        mutating func restart() throws(Unsupported) {
+        ///
+        /// - Throws: ``Refused`` (``LibjpegTurboDecoder/truncated``) when the data ends with
+        ///   neither the marker nor an EOI, as Pillow refuses a truncated file; ``Unsupported``
+        ///   when the marker is missing from a file that goes on.
+        mutating func restart() throws {
             buffer = 0
             count = 0
             hitMarker = false
+            var sawEOI = false
             while position + 1 < bytes.count {
                 if bytes[position] == 0xFF, (0xD0...0xD7).contains(bytes[position + 1]) {
                     position += 2
                     return
                 }
+                sawEOI = sawEOI || (bytes[position] == 0xFF && bytes[position + 1] == 0xD9)
                 position += 1
+            }
+            if !sawEOI {
+                throw Refused(LibjpegTurboDecoder.truncated)
             }
             throw Unsupported("a restart marker is missing")
         }
@@ -343,8 +359,8 @@ enum LibjpegTurboDecoder {
         var scans = 0
         var allocatedCoefficients = false
 
-        func u16(_ at: Int) throws(Unsupported) -> Int {
-            guard at + 1 < bytes.count else { throw Unsupported("the JPEG is cut short") }
+        func u16(_ at: Int) throws -> Int {
+            guard at + 1 < bytes.count else { throw Refused(Self.truncated) }
             return Int(bytes[at]) << 8 | Int(bytes[at + 1])
         }
 
@@ -352,7 +368,7 @@ enum LibjpegTurboDecoder {
             // Find the next marker, skipping fill bytes.
             while position < bytes.count, bytes[position] != 0xFF { position += 1 }
             while position < bytes.count, bytes[position] == 0xFF { position += 1 }
-            guard position < bytes.count else { throw Unsupported("the JPEG has no EOI") }
+            guard position < bytes.count else { throw Refused(Self.truncated) }
             let marker = bytes[position]
             position += 1
             switch marker {
@@ -366,7 +382,8 @@ enum LibjpegTurboDecoder {
             let length = try u16(position)
             let start = position + 2
             let end = position + length
-            guard length >= 2, end <= bytes.count else { throw Unsupported("a marker overruns") }
+            guard length >= 2 else { throw Unsupported("a marker's length is below 2") }
+            guard end <= bytes.count else { throw Refused(Self.truncated) }
             switch marker {
             case 0xE0:
                 // examine_app0: "JFIF\0" with at least 14 bytes of data.
@@ -628,7 +645,7 @@ enum LibjpegTurboDecoder {
         _ components: inout [Component], scan: [Int], reader: inout BitReader,
         dcTables: [HuffmanTable], acTables: [HuffmanTable], progressive: Bool, ss: Int, se: Int,
         ah: Int, al: Int, restartInterval: Int, mcusPerLine: Int, mcusPerColumn: Int
-    ) throws(Unsupported) {
+    ) throws {
         for index in scan { components[index].predictor = 0 }
         var eobrun = 0
 
@@ -750,7 +767,7 @@ enum LibjpegTurboDecoder {
         }
 
         var mcusToRestart = restartInterval
-        func restartIfDue() throws(Unsupported) {
+        func restartIfDue() throws {
             guard restartInterval > 0 else { return }
             if mcusToRestart == 0 {
                 try reader.restart()

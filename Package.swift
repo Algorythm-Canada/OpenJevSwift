@@ -250,8 +250,9 @@ var targets: [Target] = [
                 "OpenJevCore",
                 .product(name: "MLX", package: "mlx-swift"),
                 .product(name: "MLXNN", package: "mlx-swift"),
+                // Not MLXVLM: the vision tower and its configuration are ported (D-054), so only
+                // the tests link it, to compare its Gemma 4 processor.
                 .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
-                .product(name: "MLXVLM", package: "mlx-swift-lm"),
                 .product(name: "Tokenizers", package: "swift-transformers"),
                 .product(name: "Hub", package: "swift-transformers"),
                 .product(name: "Jinja", package: "swift-jinja"),

@@ -36,8 +36,8 @@ out or set to the empty string with the same effect.
 | `OPENJEV_MAX_INFLIGHT` | `64` | mlx | Reads in flight at once. The encoders make one call at a time whatever it says, as upstream's do. |
 | `OPENJEV_AUTO_THRESHOLD` | `0.1` | mlx | The top-k entropy above which a group is read again, when the request does not set `samples`. |
 | `OPENJEV_AUTO_MAX` | `4` | mlx | The most reads of one group under those automatic re-reads. `1` turns them off. |
-| `OPENJEV_MAX_IMAGES` | `8` | mlx | Images per request. No backend reads images yet (issue #48), so a request with images is refused first and this has no effect. |
-| `OPENJEV_MAX_IMAGE_BYTES` | `5242880` | mlx | Bytes per decoded image, 5 MiB. No effect until images land (issue #48). |
+| `OPENJEV_MAX_IMAGES` | `8` | mlx | Images per request; more is a 400. The other backends refuse images whatever it says. |
+| `OPENJEV_MAX_IMAGE_BYTES` | `5242880` | mlx | Bytes per decoded image, 5 MiB, checked on the base64 text before decoding; more is a 400. |
 | `OPENJEV_ENCODER_BATCH` | `16` | encoders | Questions per backend call. On a Mac each Core ML call reads at most 16 questions; JevK5 reads a call's questions concurrently, one pass at a time. |
 | `OPENJEV_ENCODER_FUNCTIONS` | unset | encoders | This port's: the most Core ML functions an encoder keeps loaded, at least 1. Unset keeps every function a read has needed, up to Verdict's 6 and Laya's 8 (D-042). |
 | `OPENJEV_ENCODER_MODELS` | unset | encoders | This port's: a folder of converted Core ML packages, used instead of downloading them (D-033). |
