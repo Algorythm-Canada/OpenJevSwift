@@ -26,6 +26,12 @@ public enum PolicyFixtures {
     }
 
     /// The request of the recorded case named `name`, decoded.
+    ///
+    /// Never inlined: Swift 6.4 at -O crashed in LLVM's CoroSplit ("While splitting coroutine")
+    /// on async tests that inlined the untyped throw of `policyCase(named:)` next to the typed
+    /// throw of `validate`, so `swift build -c release --build-tests` failed. The LLVM fix is
+    /// llvm/llvm-project#217372.
+    @inline(never)
     public static func request(named name: String) throws -> SystemOneRequest {
         try RequestValidator().validate(policyCase(named: name)["request"])
     }
