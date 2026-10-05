@@ -248,6 +248,30 @@ struct ImageRuntimeTests {
         #expect(log.imagePrefills == 0 && log.reads.isEmpty)
     }
 
+    /// mlx-vlm's expansion raises when the system or state text spells out more `<|image|>`
+    /// placeholders than there are images; that is not an image failing to decode, so it is not
+    /// reported at `["body", "images", i]`.
+    @Test("A prompt error that names no image is not reported as an unreadable image")
+    func promptErrorIsNotAnImageError() async throws {
+        let calls = DiffusionGemmaRuntime.ModelCalls(
+            prefill: { _ in throw CancellationError() },
+            read: { _, _, _, _, _ in throw CancellationError() },
+            imagePrompt: { _, _, _ in
+                throw VisionError("the prompt has 2 image placeholders for 1 images")
+            })
+        let runtime = DiffusionGemmaRuntime(
+            tokenizer: FixtureTokenizer.shared, configuration: .default, calls: calls)
+        let engine = try DecisionEngine(backend: runtime)
+        let error = await #expect(throws: SchemaError.self) {
+            try await engine.decide(example(images([url(try encoded(.png))])))
+        }
+        #expect(
+            error?.message
+                == "the image prompt could not be built: the prompt has 2 image placeholders for 1 images"
+        )
+        #expect(error?.loc == ["body"])
+    }
+
     @Test("The chunked prefill policy keeps image prompts in one piece")
     func chunkedPrefillPolicy() {
         #expect(

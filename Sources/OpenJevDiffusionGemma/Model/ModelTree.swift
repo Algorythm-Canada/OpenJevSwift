@@ -298,8 +298,12 @@ public final class DiffusionGemmaModel: Module, BaseLanguageModel {
     /// tests, which start from a stage dump's embeddings, and for an image prompt, whose masks
     /// are given.
     ///
-    /// - Parameter given: the mask of each layer type; a type without one gets
-    ///   ``encoderMask(for:length:)``.
+    /// - Parameters:
+    ///   - embeddings: `[1, length, hidden]`, the embedded prompt.
+    ///   - layers: the layers to run, every layer when nil.
+    ///   - given: the mask of each layer type; a type without one gets
+    ///     ``encoderMask(for:length:)``.
+    ///   - stages: receives each layer's intermediate outputs, for the parity tests.
     /// - Returns: the caches of the layers run and the last layer's output.
     public func prefill(
         embeddings: MLXArray, layers: Range<Int>? = nil,

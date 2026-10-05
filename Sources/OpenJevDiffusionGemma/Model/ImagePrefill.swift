@@ -113,7 +113,7 @@ extension DiffusionGemmaModel {
     /// Prefills a prompt with images in one piece, as upstream's `MlxRuntime._prefill` calls
     /// `diffusion_prefill_cache` with the processor's `input_ids`, `pixel_values`,
     /// `mm_token_type_ids` and `attention_mask`, and evaluates the caches: the embeddings with
-    /// the image features scattered in (``embedInputs(ids:mmTokenTypeIDs:pixelValues:stages:)``),
+    /// the image features scattered in (language.py's `_embed_inputs`),
     /// then every layer in encoder mode with the explicit masks and the overlay, so each image's
     /// soft tokens attend to each other in both directions. Never chunked
     /// (``allowsChunkedPrefill(mmTokenTypeIDs:hasPixelValues:)``).

@@ -369,9 +369,11 @@ public final class VisionModel: Module {
     /// array when the images share a size, read as a batch, else one `(3, H, W)` array per
     /// image, each read on its own, with the results concatenated in order.
     ///
-    /// - Parameter stages: receives `vision.patches`, each block's output as `vision.layer.N`,
-    ///   `vision.pooled` and `vision.out`, for the parity tests (the last image's, when they are
-    ///   read one by one).
+    /// - Parameters:
+    ///   - pixelValues: the processor's `pixel_values`, as ``ImageReadInputs`` holds them.
+    ///   - stages: receives `vision.patches`, each block's output as `vision.layer.N`,
+    ///     `vision.pooled` and `vision.out`, for the parity tests (the last image's, when they
+    ///     are read one by one).
     public func callAsFunction(_ pixelValues: [MLXArray], stages: StageObserver? = nil)
         -> MLXArray
     {

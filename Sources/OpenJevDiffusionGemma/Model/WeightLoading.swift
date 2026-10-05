@@ -77,7 +77,7 @@ public enum WeightLoadingError: Error, Equatable, Sendable, CustomStringConverti
 }
 
 extension DiffusionGemmaModel {
-    /// What loading a checkpoint cost, measured by ``load(from:configuration:progress:)``.
+    /// What loading a checkpoint cost, measured by ``load(from:configuration:vision:progress:)``.
     ///
     /// The memory figures are of the whole process (`task_info` resident size and `getrusage`'s
     /// peak), so they mean most in a process that has done little else.
@@ -114,7 +114,7 @@ extension DiffusionGemmaModel {
         public var residentBytesAdded: Int { residentBytesAfter - residentBytesBefore }
     }
 
-    /// The stages ``load(from:configuration:progress:)`` reports.
+    /// The stages ``load(from:configuration:vision:progress:)`` reports.
     public enum LoadStage: Sendable, Hashable {
         /// Reading `config.json` and building the module tree.
         case configuring

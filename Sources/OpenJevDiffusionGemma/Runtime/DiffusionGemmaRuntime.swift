@@ -121,10 +121,13 @@ public actor DiffusionGemmaRuntime: DecisionBackend {
             tokenBudget: configuration.promptCacheTokens)
     }
 
-    /// A runtime over a loaded model.
+    /// A runtime over a loaded model, whose images `processor` sizes: the checkpoint's
+    /// `processor_config.json` when ``load(_:configuration:cache:token:resolver:progress:)`` finds
+    /// one, else the pinned checkpoint's values.
     init(
         tokenizer: any DecisionTokenizer, configuration: Configuration,
-        loaded: sending DiffusionGemmaModel.LoadedModel
+        loaded: sending DiffusionGemmaModel.LoadedModel,
+        processor: Gemma4ImageProcessor = Gemma4ImageProcessor()
     ) {
         let model = loaded.model
         self.tokenizer = tokenizer
@@ -133,7 +136,8 @@ public actor DiffusionGemmaRuntime: DecisionBackend {
         if model.readsImages, let transformers = tokenizer as? SwiftTransformersTokenizer {
             imagePrompt = { system, state, images in
                 let inputs = try ImageReadInputs(
-                    system: system, state: state, parts: images, tokenizer: transformers)
+                    system: system, state: state, parts: images, tokenizer: transformers,
+                    processor: processor)
                 return ImagePrefill(
                     promptTokens: inputs.prompt.ids.count,
                     prefill: { try model.prefill(image: inputs) })
@@ -192,8 +196,16 @@ public actor DiffusionGemmaRuntime: DecisionBackend {
         let loaded = try await DiffusionGemmaModel.load(
             from: resolution.directory, progress: { progress?(.loadingWeights($0)) })
         let modelMetrics = loaded.metrics
+        // The image processor the checkpoint names, as mlx-vlm's `load` builds it from the same
+        // directory; a folder without the file gets the pinned checkpoint's values.
+        let processorURL = resolution.directory.appendingPathComponent("processor_config.json")
+        let processor =
+            FileManager.default.fileExists(atPath: processorURL.path)
+            ? try Gemma4ImageProcessor(configuration: Data(contentsOf: processorURL))
+            : Gemma4ImageProcessor()
         let runtime = DiffusionGemmaRuntime(
-            tokenizer: tokenizer, configuration: configuration, loaded: loaded)
+            tokenizer: tokenizer, configuration: configuration, loaded: loaded,
+            processor: processor)
         try await runtime.prepare(
             resolution: resolution, resolveTime: resolveTime,
             tokenizerMetrics: tokenizer.loadMetrics, modelMetrics: modelMetrics,
@@ -282,7 +294,9 @@ public actor DiffusionGemmaRuntime: DecisionBackend {
     ///   before the prefill when the prompt, expanded for an image prompt, is longer than
     ///   ``maxPromptTokens``; for an image that does not decode or that the processor cannot
     ///   size, a ``/OpenJevCore/SchemaError`` `"image could not be read: {reason}"` at
-    ///   `["body", "images", i]` (upstream answers these with a bare 500, D-054);
+    ///   `["body", "images", i]`, and for text that spells out more image placeholders than there
+    ///   are images `"the image prompt could not be built: {reason}"` at `["body"]` (upstream
+    ///   answers both with a bare 500, D-054);
     ///   ``DiffusionGemmaRuntimeError/unsupported(_:)`` for an image prompt to a model without
     ///   its vision tower; ``ReadInputError`` for a canvas or slots the model refuses.
     public func read(_ read: CanvasRead) async throws -> ReadResult {
@@ -350,9 +364,14 @@ public actor DiffusionGemmaRuntime: DecisionBackend {
                 prepared = made
                 tokens = made.promptTokens
             } catch let error as VisionError {
+                guard let index = error.imageIndex else {
+                    // Not an image: the system or state text spells out more `<|image|>`
+                    // placeholders than there are images, which mlx-vlm's expansion raises on.
+                    throw SchemaError("the image prompt could not be built: \(error.message)")
+                }
                 throw SchemaError(
                     "image could not be read: \(error.message)",
-                    loc: ["body", "images"] + (error.imageIndex.map { [.index($0)] } ?? []))
+                    loc: ["body", "images", .index(index)])
             }
         }
         // An image prompt's length is only known here, after the expansion.
