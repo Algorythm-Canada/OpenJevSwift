@@ -380,7 +380,7 @@ identity.
   same way until CI fetches those files (spikes/tokenizer-parity.md, follow-up E). So are the
   tokenizer and Core ML suites of `OpenJevEncodersTests` (`OPENJEV_ENCODER_MODELS`), and the live
   suite of `OpenJevLetterReadoutTests` (`OPENJEV_JEVK5_MODEL`). The chat template's `trim`,
-  jinja2's in place of swift-jinja's (D-054), is checked in CI without the tokenizer files, on
+  jinja2's in place of swift-jinja's (D-056), is checked in CI without the tokenizer files, on
   small templates of the tests' own (`ChatTemplateTrimTests`).
 
 ## Test data hygiene

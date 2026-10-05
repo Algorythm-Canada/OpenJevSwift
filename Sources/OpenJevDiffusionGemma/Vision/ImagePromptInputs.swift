@@ -20,7 +20,7 @@ import OpenJevCore
 /// (token 236743) before `<turn|>`, which a text prompt's does not. On the way mlx-vlm also
 /// strips the user's text with Python's `str.strip()` (`extract_text_from_content`), and the
 /// template trims it again; the port renders the state as given, and the template's `trim`,
-/// which is Python's here (the tokenizer's `templateEnvironment()`, D-054), gives the same text.
+/// which is Python's here (the tokenizer's `templateEnvironment()`, D-056), gives the same text.
 /// The template writes one `<|image|>` per image part; the processor then replaces the n-th
 /// `<|image|>` of the whole text with `<|image>`, that image's soft tokens of `<|image|>`, and
 /// `<image|>`, and tokenizes the result without adding special tokens (the template writes

@@ -113,7 +113,7 @@ struct MLXTokenizerLoaderTests {
         }
     }
 
-    /// The `trim` departure decision D-054 works around, as swift-transformers 1.3.4 and
+    /// The `trim` departure decision D-056 works around, as swift-transformers 1.3.4 and
     /// swift-jinja 2.5.1 show it through mlx-swift-lm's unmodified path, which renders in
     /// swift-jinja's own environment: every recorded text prompt, and every recorded image
     /// prompt's message shape, whose texts Foundation's set and Python's `str.strip()` trim
