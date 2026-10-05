@@ -5,7 +5,7 @@ import Testing
 
 /// Compares the chat prompts ``SwiftTransformersTokenizer`` renders with what Python's
 /// `apply_chat_template` recorded in Fixtures/chat-prompts/prompts.json (spike #21, decisions
-/// D-008 and D-054): the text, through swift-jinja, and the ids, that text tokenized.
+/// D-008 and D-056): the text, through swift-jinja, and the ids, that text tokenized.
 @Suite(
     "Chat template parity with the Python fixtures",
     .enabled(if: TokenizerFixtures.available, TokenizerFixtures.missingMessage))

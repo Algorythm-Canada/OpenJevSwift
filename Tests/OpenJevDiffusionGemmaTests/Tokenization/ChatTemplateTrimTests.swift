@@ -5,7 +5,7 @@ import Testing
 @testable import OpenJevDiffusionGemma
 
 /// The `trim` of the chat template's environment, which is jinja2's, Python's `str.strip()`
-/// (decision D-054), on templates of the tests' own. No checkpoint file is needed, so these run
+/// (decision D-056), on templates of the tests' own. No checkpoint file is needed, so these run
 /// in CI; ``ChatTemplateParityTests`` checks the same states through the shipped template when
 /// the tokenizer files are present.
 @Suite("The chat template's trim is jinja2's, Python's str.strip()")
