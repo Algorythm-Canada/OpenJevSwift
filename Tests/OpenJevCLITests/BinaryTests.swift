@@ -17,7 +17,7 @@ struct BinaryTests {
         let outcome = try await BuiltBinary.run(
             ["--version"], environment: BuiltBinary.environment())
         #expect(outcome.status == 0)
-        #expect(outcome.output == "0.1.0-dev\n")
+        #expect(outcome.output == "0.1.0\n")
     }
 
     @Test("Invalid settings exit 2 with upstream's message naming the variable")

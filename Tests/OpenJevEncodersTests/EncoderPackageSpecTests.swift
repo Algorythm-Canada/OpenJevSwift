@@ -217,6 +217,6 @@ struct EncoderPackageSpecTests {
 
     @Test("The module reports the package version")
     func version() {
-        #expect(openJevEncodersVersion == "0.1.0-dev")
+        #expect(openJevEncodersVersion == "0.1.0")
     }
 }
