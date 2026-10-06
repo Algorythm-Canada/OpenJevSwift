@@ -382,8 +382,8 @@ swift package --disable-sandbox preview-documentation --target OpenJevCore
   build leaves extended types out, and the two `init(_:)` the server adds to
   `EngineConfiguration` and `EncoderEngineConfiguration` are documented in the source alone.
   `OpenJevCore` depends on no other module, so it names the backends' types in code voice.
-- **Coverage.** Every public symbol declared in the five modules has a doc comment, and a new one
-  needs one too. `generate-documentation` with `--experimental-documentation-coverage
+- **Coverage.** Every public symbol needs a doc comment. `generate-documentation` with
+  `--experimental-documentation-coverage
   --coverage-summary-level detailed` reports coverage per symbol, though it also counts the
   members the compiler synthesizes, which no comment can document.
 - **The configuration reference.** `ConfigurationReferenceTests` in `OpenJevServerTests` reads the
