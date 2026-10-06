@@ -7,9 +7,9 @@ body:
         OpenJevSwift answers every request as upstream OpenJev does, apart from the differences
         [docs/compatibility.md](https://github.com/Algorythm-Canada/OpenJevSwift/blob/main/docs/compatibility.md)
         records. Check its third table, "Different, and why", first: a difference listed there is
-        known, and its decision says why. Probabilities agree within the bounds of its second
         table, not bit for bit. Send the same request to both servers, with the same backend, and
-        paste each exchange whole. Remove API keys and tokens from the headers.
+        paste each exchange whole after redacting private data. Remove API keys and tokens from
+        the headers.
   - type: input
     id: openjevswift
     attributes:
