@@ -1,7 +1,14 @@
 # Contributing
 
-The project is in its research and planning phase. Work is organised as GitHub issues grouped
-into milestones; see [docs/08-implementation-plan.md](docs/08-implementation-plan.md).
+Milestones 0 to 5 are complete, and release 0.1.0 is the first version a package can depend on;
+the README's [Status](README.md#status) section lists what is done and what is not there yet.
+Work is organised as GitHub issues grouped into milestones; see
+[docs/08-implementation-plan.md](docs/08-implementation-plan.md).
+
+Open an issue with one of the templates in [.github/ISSUE_TEMPLATE](.github/ISSUE_TEMPLATE/): a
+bug report when something does not work as the documentation says, or a compatibility report when
+OpenJevSwift answers a request differently from upstream OpenJev. Report a vulnerability
+privately, as [SECURITY.md](SECURITY.md) describes, never in a public issue.
 
 ## How issues are written
 

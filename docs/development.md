@@ -96,14 +96,14 @@ The package declares macOS 14 and iOS 17 as minimum deployment targets.
 
 | Package | Requirement | Resolved | Products used | Declared on |
 |---|---|---|---|---|
-| [mlx-swift](https://github.com/ml-explore/mlx-swift) | exactly 0.32.3 | 0.32.3 | `MLX`, `MLXNN` | macOS hosts |
-| [mlx-swift-lm](https://github.com/ml-explore/mlx-swift-lm) | exactly 3.32.3 | 3.32.3 (`3b339ad`) | `MLXLMCommon`, `MLXVLM` | macOS hosts |
-| [swift-transformers](https://github.com/huggingface/swift-transformers) | 1.3.0 up to the next minor | 1.3.4 | `Tokenizers` | macOS hosts |
-| [swift-jinja](https://github.com/huggingface/swift-jinja) | 2.4.2 or later | 2.5.1 | `Jinja` | macOS hosts |
-| [hummingbird](https://github.com/hummingbird-project/hummingbird) | 2.23.0 or later | 2.27.0 | `Hummingbird`, `HummingbirdCore` (server), `HummingbirdTesting` (server and CLI tests) | all hosts |
-| [swift-argument-parser](https://github.com/apple/swift-argument-parser) | 1.8.0 or later | 1.8.2 | `ArgumentParser` | all hosts |
-| [swift-http-types](https://github.com/apple/swift-http-types) | 1.8.0 or later | 1.8.0 | `HTTPTypes` (server, server and CLI tests) | all hosts |
-| [swift-log](https://github.com/apple/swift-log) | 1.15.1 or later | 1.15.1 | `Logging` (server, CLI, server and CLI tests) | all hosts |
+| [mlx-swift](https://github.com/ml-explore/mlx-swift) | exactly 0.32.3 | 0.32.3 | `MLX` (DiffusionGemma, JevK5, DiffusionGemma tests, JevK5 tests), `MLXNN` (DiffusionGemma, JevK5, DiffusionGemma tests) | macOS hosts |
+| [mlx-swift-lm](https://github.com/ml-explore/mlx-swift-lm) | exactly 3.32.3 | 3.32.3 (`3b339ad`) | `MLXLMCommon` (DiffusionGemma, JevK5, DiffusionGemma tests), `MLXLLM` (JevK5), `MLXHuggingFace` and `MLXVLM` (DiffusionGemma tests) | macOS hosts |
+| [swift-transformers](https://github.com/huggingface/swift-transformers) | 1.3.0 up to the next minor | 1.3.4 | `Tokenizers` (DiffusionGemma, encoders, JevK5, DiffusionGemma tests), `Hub` (DiffusionGemma and JevK5) | macOS hosts |
+| [swift-jinja](https://github.com/huggingface/swift-jinja) | 2.4.2 or later | 2.5.1 | `Jinja` (DiffusionGemma) | macOS hosts |
+| [hummingbird](https://github.com/hummingbird-project/hummingbird) | 2.23.0 or later | 2.27.0 | `Hummingbird` (server, CLI tests, JevK5 tests), `HummingbirdCore` (server), `HummingbirdTesting` (server tests, CLI tests, JevK5 tests) | all hosts |
+| [swift-argument-parser](https://github.com/apple/swift-argument-parser) | 1.8.0 or later | 1.8.2 | `ArgumentParser` (CLI, bench, CLI tests, bench tests) | all hosts |
+| [swift-http-types](https://github.com/apple/swift-http-types) | 1.8.0 or later | 1.8.0 | `HTTPTypes` (server, server tests, CLI tests, JevK5 tests) | all hosts |
+| [swift-log](https://github.com/apple/swift-log) | 1.15.1 or later | 1.15.1 | `Logging` (server, CLI, stub server, server tests, CLI tests) | all hosts |
 | [swift-nio](https://github.com/apple/swift-nio) | 2.103.0 or later | 2.103.0 | `NIOCore` (server and server tests), `NIOPosix` and `NIOHTTP1` (server), `NIOEmbedded` (server tests) | all hosts |
 | [swift-service-lifecycle](https://github.com/swift-server/swift-service-lifecycle) | 2.12.0 or later | 2.12.0 | `ServiceLifecycle` (server, CLI, stub server, server tests), `UnixSignals` (CLI, stub server) | all hosts |
 | [async-http-client](https://github.com/swift-server/async-http-client) | 1.36.2 or later | 1.36.2 | `AsyncHTTPClient` (server and server tests) | all hosts |
@@ -314,9 +314,11 @@ Upstream/.venv/bin/python -m pip install pytest httpx==0.28.1
 OPENJEV_LIVE_URL=http://127.0.0.1:8080 Upstream/.venv/bin/python -m pytest Upstream/openjev/tests/test_live.py -v
 ```
 
-Against the Swift server's `mlx` backend, its `think`, chat and stream tests fail until #52 and
-#53 land, while the Swift suite skips them. The chat tests run there rather than
-skip because the listing already names `diffusiongemma-26b`, as upstream's does.
+Against the Swift server's `mlx` backend, upstream's file runs 12 tests and skips the four
+`test_encoder` cases. After #52 and #53 (D-059), all 12 passed on 2026-10-06, `test_think`,
+`test_chat` and `test_chat_stream` among them. The chat tests run there because the listing names
+`diffusiongemma-26b`, as upstream's does. The Swift suite runs the same tests on the same
+conditions; it passed them there too, with its own check that a long streamed reply arrives whole.
 
 ### MLX in tests
 
