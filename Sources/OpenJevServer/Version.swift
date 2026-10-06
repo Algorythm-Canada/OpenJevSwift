@@ -1,5 +1,6 @@
 /// The version of the OpenJevServer module.
 ///
-/// Every OpenJevSwift module reports the same Semantic Versioning string. The `-dev` suffix marks
-/// unreleased work toward 0.1.0.
-public let openJevServerVersion = "0.1.0-dev"
+/// Every OpenJevSwift module reports the same Semantic Versioning string: the release's version at
+/// its tag, and the next release's version with a `-dev` suffix between releases
+/// (docs/development.md, "Versioning and releases").
+public let openJevServerVersion = "0.1.0"

@@ -167,6 +167,6 @@ struct ArgumentParsingTests {
         #expect(help.output.contains("Exit statuses"))
         let version = await CommandHarness.run(["--version"])
         #expect(version.status == 0)
-        #expect(version.output == "0.1.0-dev\n")
+        #expect(version.output == "0.1.0\n")
     }
 }
