@@ -155,6 +155,8 @@
         }
     }
 
+    /// The generation settings that `OPENJEV_GEN_*` variables set, for
+    /// `POST /v1/chat/completions`.
     extension ChatCompletionsConfiguration {
         /// The settings upstream's generator reads: `OPENJEV_GEN_MAX_INFLIGHT`,
         /// `OPENJEV_GEN_MAX_QUEUE` and `OPENJEV_GEN_MAX_TOKENS`.

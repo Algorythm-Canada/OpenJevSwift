@@ -20,5 +20,6 @@ public struct VisionError: Error, Sendable, Hashable, CustomStringConvertible {
         VisionError(message, imageIndex: index)
     }
 
+    /// The message.
     public var description: String { message }
 }

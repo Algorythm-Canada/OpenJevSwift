@@ -377,10 +377,11 @@ swift package --disable-sandbox preview-documentation --target OpenJevCore
   article is absolute, with the module first, ``` ``/OpenJevCore/DecisionEngine`` ``` or
   `<doc:/OpenJevCore/GettingStarted>`, and resolves only when the module's archive is built with
   its dependencies', as the combined build does; a single-target build or preview warns about it.
-  `OpenJevServer` extends two core types, and the page DocC makes for those extensions is named
+  `OpenJevServer` extends three core types, and the page DocC makes for those extensions is named
   `OpenJevCore` too: Swift 6.2's DocC resolved every such link against that page and failed, so the
-  build leaves extended types out, and the two `init(_:)` the server adds to
-  `EngineConfiguration` and `EncoderEngineConfiguration` are documented in the source alone.
+  build leaves extended types out, and the three `init(_:)` the server adds to
+  `EngineConfiguration`, `EncoderEngineConfiguration` and `ChatCompletionsConfiguration` are
+  documented in the source alone.
   `OpenJevCore` depends on no other module, so it names the backends' types in code voice.
 - **Coverage.** Every public symbol needs a doc comment. `generate-documentation` with
   `--experimental-documentation-coverage
