@@ -230,15 +230,18 @@ be checked bit for bit (D-051).
   black; none of the fixtures takes that path, and the review's measurements of it are below.
 - A request's image bytes are untrusted, so the JPEG port refuses, as a `VisionError`, the JPEGs on
   which upstream's Pillow or its libjpeg-turbo raises, and hands to ImageIO only the
-  arithmetic-coded, lossless and 4-component JPEGs it does not cover, which Pillow decodes. Decoding
-  work stays in proportion to the input, and a JPEG whose scans would visit more than 838,860,600
-  blocks one at a time is refused (D-055, which lists the exceptions). `JPEGParityTests` holds it to
-  Pillow on 204 regression cases (`Fixtures/vision/jpeg_cases.json`), and `JPEGRobustnessTests`
-  feeds it truncations and corruptions of the fixture JPEGs, each of which must decode or be refused
-  within the bound on work: in CI a subset of 866 that keeps every kind of mutation on every
-  segment, and all 7,650 with `OPENJEV_TEST_JPEG_MUTATIONS=1` (docs/development.md). A truncated
-  JPEG is refused where Pillow's `load` raises "image file is truncated", and decoded where Pillow
-  decodes it, as when only the EOI is missing after a single scan.
+  arithmetic-coded, lossless and 4-component JPEGs it does not cover, which Pillow decodes, and
+  arithmetic-coded or lossless ones on which only decoding their scans would tell whether Pillow
+  raises: chiefly arithmetic-coded JPEGs whose data runs past 65,536 bytes, on which Pillow mostly
+  raises, as jdarith.c cannot wait for more of the file (D-057). Decoding work stays in proportion
+  to the input, and a JPEG whose scans would visit more than 838,860,600 blocks one at a time is
+  refused (D-055, which lists the exceptions). `JPEGParityTests` holds it to Pillow on 232
+  regression cases (`Fixtures/vision/jpeg_cases.json`), and `JPEGRobustnessTests` feeds it
+  truncations and corruptions of the fixture JPEGs, each of which must decode or be refused within
+  the bound on work: in CI a subset of 866 that keeps every kind of mutation on every segment, and
+  all 7,650 with `OPENJEV_TEST_JPEG_MUTATIONS=1` (docs/development.md). A truncated JPEG is refused
+  where Pillow's `load` raises "image file is truncated", and decoded where Pillow decodes it, as
+  when only the EOI is missing after a single scan.
 - No timing was measured: two other jobs shared the machine.
 - The Layr-Labs fork's `DiffusionGemmaProcessor.swift`, `DiffusionGemmaImagePixels.swift` and
   `DiffusionGemmaBicubicRGB.swift` were not used; nothing here derives from them.
@@ -293,8 +296,8 @@ build (3.1.4.1, linked into small C programs) settled questions about coefficien
 `last_good_iMCU_row` where Pillow shows only pixels. Now every file of the review's corpora and of
 7,847 more made for this change decodes to Pillow's bytes or is refused where Pillow raises, except
 41 arithmetic-coded or lossless files, which go to ImageIO as D-051 decided (2 of them lossless
-files Pillow refuses, D-055 item 7); an AddressSanitizer build gives the same outcomes with no
-report.
+files Pillow refuses, D-055 item 7, whose later scans D-057 now reads); an AddressSanitizer build
+gives the same outcomes with no report.
 
 The review's recorded Pillow results for its batches `st1` to `st8` (JPEGs with random tables)
 did not reproduce: 2,275 files decode to the same size with other bytes when Pillow is run again.

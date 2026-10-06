@@ -181,13 +181,15 @@ That works while no test runs MLX code, for the reason above.
 ### The JPEG decoder's tests
 
 `JPEGRobustnessTests` feeds the JPEG decoder truncations and corruptions of the fixture JPEGs, each
-of which must decode or be refused within the bound on decoding work, never trap.
-`JPEGParityTests` holds it to what upstream's Pillow made of the 204 regression cases in
-`Fixtures/vision/jpeg_cases.json` (D-055). By default the mutations are a subset that keeps every
-kind of mutation on every marker segment, 866 cases, and the parity test decodes the entropy-coded
-data of its four 13,376 by 13,376 cases but not their pixels: about 5 seconds in a debug build on
-an M3 Max. Set `OPENJEV_TEST_JPEG_MUTATIONS=1` to run all 7,650 mutations and decode those four
-cases in full, which takes about 100 seconds there (under 2 seconds in a release build):
+of which must decode or be refused within the bound on decoding work, never trap, and of five
+arithmetic-coded and lossless cases, which it reads without decoding their scans (D-057).
+`JPEGParityTests` holds it to what upstream's Pillow made of the 232 regression cases in
+`Fixtures/vision/jpeg_cases.json` (D-055, D-057). By default the mutations are a subset that keeps
+every kind of mutation on every marker segment, 866 and 646 cases, and the parity test decodes the
+entropy-coded data of its four 13,376 by 13,376 cases but not their pixels: about 5 seconds in a
+debug build on an M3 Max. Set `OPENJEV_TEST_JPEG_MUTATIONS=1` to run all 7,650 and 2,224 mutations
+and decode those four cases in full, which takes about 100 seconds there (under 2 seconds in a
+release build):
 
 ```bash
 OPENJEV_TEST_JPEG_MUTATIONS=1 swift test --filter JPEG

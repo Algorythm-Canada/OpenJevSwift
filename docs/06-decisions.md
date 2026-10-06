@@ -3393,18 +3393,17 @@ Decision.
    else is in proportion to the input: at most 14 blocks decoded per byte, and at most 2 restart
    searches per byte plus 2 per scan (5.1 blocks per byte at most over every file measured).
 7. **Departures that stay.** Arithmetic-coded, lossless and 4-component (CMYK and YCCK) JPEGs, which
-   Pillow decodes, still go to ImageIO (D-051): each needs another decoder ported (jdarith.c,
-   jdlossls.c with jddiffct.c, and Pillow's CMYK handling), none was asked for here, and they are
-   the only differences left in the corpora (22 files of the review's and 19 of this change's, all
-   arithmetic or lossless). Before handing one over, the port makes the checks it shares with them:
-   a 4-component JPEG's scans are decoded and its markers read, and an arithmetic-coded or lossless
-   one's headers are checked up to its first scan's data (item 2). A fault after that on which
-   Pillow raises sends such a JPEG to ImageIO too, which may decode it: of two built while reviewing
-   this change, ImageIO refuses a lossless JPEG whose second scan has a bad predictor and decodes a
-   lossless JPEG cut short. No file of the review's corpora has such a fault. When the JPEG plugin
-   raises, `Image.open` tries Pillow's other formats, so a file built to start as a JPEG and be laid
-   out as a PhotoCD or SPIDER image decodes in Pillow as that format; the port refuses it, and
-   ImageIO reads neither format. And the visit limit (item 6).
+   Pillow decodes (most arithmetic-coded ones whose data runs past 65,536 bytes excepted, D-057),
+   still go to ImageIO (D-051): each needs another decoder ported (jdarith.c, jdlossls.c with
+   jddiffct.c, and Pillow's CMYK handling), none was asked for here, and they are the only
+   differences left in the corpora (22 files of the review's and 19 of this change's, all arithmetic
+   or lossless). Before handing one over, the port makes the checks it shares with them: a
+   4-component JPEG's scans are decoded and its markers read, and an arithmetic-coded or lossless
+   one is read to its end as libjpeg-turbo reads it, short of decoding its scans' data (item 2 and
+   D-057, which lists what only decoding would settle). When the JPEG plugin raises, `Image.open`
+   tries Pillow's other formats, so a file built to start as a JPEG and be laid out as a PhotoCD or
+   SPIDER image decodes in Pillow as that format; the port refuses it, and ImageIO reads neither
+   format. And the visit limit (item 6).
 8. **Pillow's EXIF and MPF readings are followed where they raise.** `JpegImageFile._open` ends
    with `_read_dpi_from_exif`, which reads the EXIF block when no JFIF segment gave the
    resolution, and `jpeg_factory` then calls `_getmp` to tell an MPO file from a JPEG; both read a
@@ -3469,10 +3468,10 @@ Measured with Pillow 12.3.0 run afresh over each corpus on the reference Mac (M3
 | Refused where Pillow decodes | 14 | 0 | 0 | 0 |
 | Refused where Pillow raises | 1 | 150,537 | 0 | 2,850 |
 
-The 7,847 were made for this change (the fast path, the 65,536-byte reads, restart markers,
-markers in and after scan data, scan structure, block smoothing, quantization values for the Neon
-IDCT and lossless headers) and are not committed. Every file left on ImageIO is arithmetic-coded
-or lossless; the 2 where Pillow raises are item 7's lossless examples. The slowest file now takes
+The 7,847 were made for this change (the fast path, the 65,536-byte reads, restart markers, markers
+in and after scan data, scan structure, block smoothing, quantization values for the Neon IDCT and
+lossless headers) and are not committed. Every file left on ImageIO is arithmetic-coded or lossless;
+the 2 where Pillow raises are the lossless examples of D-057's context. The slowest file now takes
 0.83 s, and the review's 147.6 s file 0.30 s. An AddressSanitizer build gives the same outcomes on
 every file of both corpora and the fixture's cases (219,968), with no report.
 
@@ -3591,3 +3590,147 @@ builds the context no longer reaches the port; the fixtures hold the context the
 
 Status. Proposed with issue #124. First numbered D-054 (PR #128); renumbered after PR #129's
 merge replaced it with that pull request's own D-054, the vision tower and the images field.
+
+## D-057 Arithmetic-coded and lossless JPEGs are read to their end, short of decoding their scans
+
+Context. D-055 item 7 left arithmetic-coded and lossless JPEGs on the ImageIO fallback (D-051) once
+the port had checked their headers up to the first scan's data, so a later fault on which Pillow
+raises still reached ImageIO: built while reviewing D-055, a lossless JPEG whose second scan has
+predictor 0 ("broken data stream" in Pillow; ImageIO refuses it) and a lossless JPEG cut short
+("image file is truncated"; ImageIO decodes it). This change reads the rest of such a JPEG as
+libjpeg-turbo 3.1.4.1 reads it under Pillow 12.3.0, without decoding its scans' data, and works out
+from the sources what the data itself can make libjpeg-turbo do. That turned up a larger gap:
+jdarith.c cannot suspend and Pillow's source always does, so Pillow raises on an arithmetic-coded
+JPEG whose data runs past the 65,536 bytes it has read. Every well-formed arithmetic-coded file of
+this change's corpus over 65,536 bytes (81) raises "broken data stream" in Pillow, every one under
+it decodes, and the port handed all of them to ImageIO, which decodes them.
+
+Decision.
+
+1. **Every scan is read to EOI as libjpeg-turbo reads it, without decoding its data.** After the
+   first scan's checks, the port passes over each scan's entropy-coded data to the marker that ends
+   it, as `next_marker` finds it after a scan (FF 00 and FF fill are data), and finds its restart
+   markers as `read_restart_marker` and `jpeg_resync_to_restart` do every `restart_interval` MCUs (a
+   lossless scan counts them in MCU rows, jddiffct.c, which comes to the same MCUs). The markers
+   between scans go through the marker reader of the Huffman-coded path (D-055 item 2), and each
+   later scan gets the checks libjpeg-turbo makes as it starts: `start_input_pass` for an
+   arithmetic-coded scan, whose `start_pass` in jdarith.c makes jdphuff.c's progression checks and
+   one more, a table number past 15, that cannot fail on a scan header's 4-bit numbers; and, for a
+   lossless one, the checks D-055 item 2 makes of the first scan. A multi-scan JPEG is read to EOI
+   in `jpeg_start_decompress`, so data that ends first raises.
+2. **Nothing in a scan's data raises; how far libjpeg-turbo reads it decides.** Read in jdarith.c,
+   jdlhuff.c, jddiffct.c and jdlossls.c at the 3.1.4.1 tag: a bad arithmetic code is a warning
+   (`JWRN_ARITH_BAD_CODE`, after which jdarith.c reads nothing more of the segment), so is a bad
+   Huffman code (`JWRN_HUFF_BAD_CODE`: 17 bits read, symbol 0), data that meets a marker is filled
+   with zeros, and jdlossls.c's one check while decoding (the `default` of
+   `jpeg_undifference_first_row`) repeats `start_pass_lossless`'s check of the predictor and cannot
+   fail. The data decides only how far libjpeg-turbo reads, which matters three ways under Pillow.
+   jdarith.c's `get_byte` and `process_restart` raise `JERR_CANT_SUSPEND` when Pillow's buffer runs
+   out (Pillow's `fill_input_buffer` always asks to suspend, which jdarith.c cannot do), so reading
+   past the 65,536-byte reads Pillow had made when a scan started raises. jdlhuff.c suspends, but
+   reading past the end of the file before the last row is "image file is truncated". And after a
+   single scan's last row Pillow reads markers only within what it has read (D-055 item 5).
+3. **What follows without decoding is ported.**
+   - A restart marker is read whatever the data holds, so an arithmetic-coded scan whose next
+     restart marker lies past Pillow's buffer raises `JERR_CANT_SUSPEND`: refused.
+   - jdarith.c's first decision of a segment loads two bytes of data: refused when they lie past the
+     buffer.
+   - jdlhuff.c's first fill of a segment loads 57 bits, eight bytes, and a sample reads at least its
+     code and the difference bits after it, or the 17 bits of a string that is no code, which every
+     table has (no code is all ones). Data that ends before the last segment's samples could be read
+     at those fewest bits is "image file is truncated": refused. That matters for a single scan; a
+     multi-scan JPEG is read to EOI whatever its data holds.
+   - A scan whose data ends at a marker within what Pillow has read reads nothing past it, so what
+     follows is settled; after a single scan, the markers up to EOI are read within those bytes, as
+     after a Huffman-coded one.
+   - Found by the corpus: jddiffct.c keeps a multi-scan lossless JPEG's samples in arrays it does
+     not have zeroed (jdcoefct.c does), so reading a component no scan reaches for the first output
+     row makes jmemmgr.c's `access_virt_sarray` raise `JERR_BAD_VIRTUAL_ACCESS`: refused. An
+     arithmetic-coded JPEG's unscanned component comes out as 128, as a Huffman-coded one's (D-055
+     item 5).
+   - After a scan whose reading is not settled (item 4), a later fault raises either way: refused.
+4. **What only decoding would settle goes to ImageIO, and says why.** The port does not decode these
+   scans (D-051), so three cases stay open, each named in the `Unsupported` reason:
+   - An arithmetic-coded scan whose last segment's data runs on past Pillow's buffer, or to the end
+     of the file without a marker: whether jdarith.c reads that far depends on how many decisions
+     its blocks take and on where a bad code stops it. Of two cases built alike, Pillow decodes
+     `arith_scan_open_64` and raises on `arith_scan_open_1024`. Of the 8,172 files measured below,
+     it raises on 443 of the 450 such files, and on all 35 well-formed ones among them; the other 46
+     well-formed arithmetic-coded files over 65,536 bytes have a restart marker past a read, and are
+     refused under item 3.
+   - A single lossless scan whose data runs to the end of the file without a marker and is longer
+     than it is sure to read: whether jdlhuff.c reaches the end before the last row is out (84 of
+     the 90 such files among the 8,172 raise; `lossless_single_scan_open_8` decodes,
+     `lossless_single_scan_open_16` raises).
+   - A single lossless scan that ends past the bytes Pillow is sure to have read by its last row,
+     and a fault after it: whether Pillow has read as far as the fault when the last row is out (all
+     11 such files among the 8,172 raise).
+5. **Work stays in proportion to the input.** A restart search reads at least the two bytes of a
+   marker; a restart marker that resynchronisation leaves is taken within two more restarts, and any
+   other marker it leaves stays for every later segment, which the walk passes over at once. That is
+   at most 1.5 restart searches a byte (0.25 the most measured), within D-055's bound on every file
+   and case. In an optimized build the slowest corpus file took 2.3 ms; a 4.8 MB lossless file of
+   400,001 scans takes 1.2 s, about 3 microseconds a scan, most of it deriving the scan's Huffman
+   table as jdlhuff.c does, where the Huffman-coded path takes 1.3 s on a 5.2 MB file of 400,000
+   scans.
+
+Measured with Pillow 12.3.0 run in `Tools/oracle/.venv` and a standalone optimized build of the
+decoder's three source files, over 8,172 files made for this change with Homebrew's `cjpeg` 3.1.4.1
+from synthetic images and not committed: 756 well-formed ones (1 by 1 to 640 by 480, grey and
+colour, three noise levels; arithmetic-coded sequential at three samplings, progressive, with
+restarts and with non-interleaved scans; lossless with predictors 1 to 7, point transforms, restarts
+and scan scripts) and 7,416 damaged ones (cuts with and without EOI; later scans' headers; markers
+inserted between scans; restart markers deleted, renumbered or replaced; bytes inserted into scan
+data; data after EOI; COM segments that put a scan's header, first bytes, restart marker or end on a
+65,536-byte read; faults after a single scan near one; and SOF11). Pillow decodes 3,618 and raises
+on 4,554. As `cjpeg` writes no subsampled lossless JPEG, 1,728 more were built from bytes,
+arithmetic-coded and lossless, with sampling factors of 2 by 2, 2 by 1 and 1 by 2, one interleaved
+scan or two, restart markers placed by MCU count every row, every two rows or not at all, and each
+whole, without EOI and cut with and without it; Pillow decodes 756 of them.
+
+| Outcome | 8,172, PR #130 | 8,172, now | 1,728, PR #130 | 1,728, now |
+|---|---|---|---|---|
+| ImageIO where Pillow decodes | 3,618 | 3,618, 13 undecided | 756 | 756, 83 undecided |
+| ImageIO where Pillow raises | 4,223 | 538, all undecided | 827 | 102, all undecided |
+| Refused where Pillow raises | 331 | 4,016 | 145 | 870 |
+| Refused where Pillow decodes | 0 | 0 | 0 | 0 |
+
+Of the files left on ImageIO where Pillow raises, ImageIO decodes 461 of the 538 and refuses 77, and
+decodes 27 of the 102 (the lossless ones) and refuses 75. The 2,224 truncations and corruptions
+`JPEGRobustnessTests` makes of five of the new cases (below) agree with Pillow too: PR #130 handed
+519 of the 1,344 on which Pillow raises to ImageIO, and this change refuses all 1,344; of the 880
+Pillow decodes, 2 are undecided. An AddressSanitizer build gives the same outcomes on all 12,124
+files, with no report.
+
+The 8,172 files' 3,685 new refusals: `JERR_CANT_SUSPEND` 1,270; data that ends before libjpeg-turbo
+stops reading 986; `JERR_BAD_PROGRESSION` 380, `JERR_BAD_COMPONENT_ID` 193, `JERR_BAD_HUFF_TABLE`
+113, `JERR_NO_HUFF_TABLE` 24 and `JERR_BAD_RESTART` 8 (later scans and the tables between them);
+`JERR_UNKNOWN_MARKER` 170, `JERR_BAD_LENGTH` 138, `JERR_DAC_INDEX` 77, `JERR_SOI_DUPLICATE` 76,
+`JERR_EOI_EXPECTED` 70, `JERR_SOF_DUPLICATE` 65, `JERR_DQT_INDEX` 59 and `JERR_SOF_UNSUPPORTED` 1
+(markers between and after scans); and `JERR_BAD_VIRTUAL_ACCESS` 55.
+
+Tests. `Fixtures/vision/jpeg_cases.json` gains 28 cases built from bytes
+`Tools/fixtures/jpeg_cases.py` writes, 232 in all (134 decoded, 98 raised): faults in later scans of
+arithmetic-coded and lossless JPEGs, the two kinds of D-055's examples among them; restart markers
+out of order; arithmetic-coded scans at the 65,536-byte reads; single scans cut, and followed by a
+fault within the reads and past them; a component no scan reaches; and two 2,000 by 2,000 frames
+with a restart every MCU or row and ten bytes of data. The port hands 17 cases to ImageIO, marked
+`port: "unsupported"`; the notes of 5 of them say they are undecided, and Pillow decodes 2 of those.
+`JPEGRobustnessTests` adds the arithmetic-coded rules at the boundary byte by byte, the lossless
+bound at its edge, the fewest bits of a sample, the unscanned component, a restart order that
+resynchronisation leaves twice, and truncations and corruptions of five of the new cases.
+
+Alternatives rejected. (a) Porting jdarith.c's and jdlhuff.c's decoding to settle item 4: decoding
+these codings is D-051's departure and was not asked for, and jdarith.c's AC refinement reads the
+coefficients of earlier scans, so settling it takes the whole coefficient decoder short of the
+inverse DCT. (b) Refusing the arithmetic-coded JPEGs left open: Pillow decodes some (7 of 450 in the
+8,172 files, 67 of 142 in the 1,728, and `arith_scan_open_64`), and D-055 refuses only where Pillow
+raises. (c) A lower bound on how far jdarith.c reads, from the decisions a scan needs, as for
+jdlhuff.c: an arithmetic decision can take less than a bit, so no such bound reaches past a read.
+
+Consequences. A generated arithmetic-coded or lossless JPEG on which Pillow raises reaches ImageIO
+only for item 4's reasons. The commonest left open is a well-formed arithmetic-coded JPEG over
+65,536 bytes, which upstream answers with a 500 and the port hands to ImageIO; porting jdarith.c's
+decoding would settle it. D-055 item 7 is corrected.
+
+Status. Proposed with issue #46, after D-055.
