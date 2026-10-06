@@ -411,10 +411,11 @@ identity.
 - macOS Apple silicon job: build everything with Swift Build, run every test target, and run
   swift-format. MLX unit tests on synthetic small shapes run there on the runner's GPU (issue #8
   and D-028). The JevBench harness's smoke test (`Tools/jevbench/smoke_test.py`) runs there too.
-- Documentation workflow: build the four modules' DocC catalogs into one site on macOS with every
+- Documentation workflow: build the five modules' DocC catalogs into one site on macOS with every
   DocC warning an error, so a link to a symbol that does not exist fails, and publish the site from
-  `main` once GitHub Pages is enabled. `ConfigurationReferenceTests`, in the server tests, holds the
-  configuration reference to `ServerSettings` and to [deployment.md](deployment.md) (D-047).
+  `main` to <https://algorythm-canada.github.io/OpenJevSwift/>. `ConfigurationReferenceTests`, in
+  the server tests, holds the configuration reference to `ServerSettings` and to
+  [deployment.md](deployment.md) (D-047).
 - Every job fails when a test skips for any reason other than an unset `OPENJEV_TEST_MODEL`,
   `OPENJEV_ENCODER_MODELS`, `OPENJEV_JEVK5_MODEL`, `OPENJEV_LIVE_URL` or `OPENJEV_TEST_DOWNLOAD`, so
   a fixture test cannot stop testing without failing.
