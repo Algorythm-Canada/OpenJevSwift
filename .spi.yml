@@ -1,0 +1,19 @@
+# The Swift Package Index's settings for this package (docs/development.md, "Versioning and
+# releases").
+version: 1
+builder:
+  configs:
+    # The five modules Tools/docs/build-site.sh publishes, built on macOS, the only platform where
+    # all five exist, without extended types, as that script builds them.
+    - documentation_targets:
+        - OpenJevCore
+        - OpenJevServer
+        - OpenJevDiffusionGemma
+        - OpenJevEncoders
+        - OpenJevLetterReadout
+      custom_documentation_parameters: [--exclude-extended-types]
+    # iOS builds the scheme the CI iOS job builds and tests, OpenJevCore and OpenJevEncoders; the
+    # package's own scheme also holds the executables, which do not build for iOS. macOS and Linux
+    # build with swift build, as the CI jobs do.
+    - platform: ios
+      scheme: OpenJevCore-iOS

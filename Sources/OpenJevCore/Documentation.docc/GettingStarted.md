@@ -9,7 +9,7 @@ engine for the life of the process and calls it with a ``SystemOneRequest``. The
 upstream's rules to the questions, reads the model and returns a ``Decision``: one ``Answer`` per
 question, in the request's order, and the tokens the request cost.
 
-Three backends exist today. Each module's own documentation covers its loading options, its
+Four backends exist today. Each module's own documentation covers its loading options, its
 downloads and its memory.
 
 | Backend | Served as | Module | Engine | Runs on |
@@ -17,15 +17,15 @@ downloads and its memory.
 | `VerdictBackend` | `verdict-1.4` | OpenJevEncoders | ``EncoderDecisionEngine`` | macOS 15 and iOS 18 or later, on Core ML |
 | `LayaBackend` | `laya-1.0` | OpenJevEncoders | ``EncoderDecisionEngine`` | macOS 15 and iOS 18 or later, on Core ML |
 | `DiffusionGemmaRuntime` | `openjev-0.1` | OpenJevDiffusionGemma | ``DecisionEngine`` | Apple silicon Macs; the 4-bit weights take about 16 GB |
+| `JevK5Backend` | `jevk5-0.2` | OpenJevLetterReadout | ``EncoderDecisionEngine`` | Apple silicon Macs, on MLX; it builds for iOS but has not run on an iPhone yet |
 
 ### Add the package
 
-OpenJevSwift has no release yet, so depend on a branch or a revision:
+Depend on a release, 0.1.0 or later:
 
 ```swift
 dependencies: [
-    .package(
-        url: "https://github.com/Algorythm-Canada/OpenJevSwift.git", branch: "main"),
+    .package(url: "https://github.com/Algorythm-Canada/OpenJevSwift.git", from: "0.1.0"),
 ],
 targets: [
     .target(
@@ -37,10 +37,10 @@ targets: [
 ]
 ```
 
-A version requirement cannot work yet: the package pins mlx-swift-lm by revision, and SwiftPM
-refuses a revision-pinned dependency inside a package that another package requires by version.
-Release 0.1.0 (issue #65) waits for an mlx-swift-lm release that holds the pinned commit. Add
-`OpenJevDiffusionGemma` instead of, or beside, `OpenJevEncoders` for DiffusionGemma.
+The package needs macOS 14 or iOS 17, so the app's manifest declares at least those in its
+`platforms`. Before 1.0 a minor release may break the API, so `.upToNextMinor(from: "0.1.0")` keeps
+an app on 0.1 releases. Add `OpenJevDiffusionGemma` instead of, or beside, `OpenJevEncoders` for
+DiffusionGemma, and `OpenJevLetterReadout` for JevK5.
 
 ### Load a backend and its engine
 

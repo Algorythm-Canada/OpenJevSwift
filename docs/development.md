@@ -139,6 +139,30 @@ match [05-architecture.md](05-architecture.md).
 The first resolution on a clean machine clones 35 packages, including swift-syntax, and takes
 about a minute.
 
+## Versioning and releases
+
+OpenJevSwift follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html), and
+[CHANGELOG.md](../CHANGELOG.md) records every release. The public interface the version speaks
+for is the library products' public API, the `openjev` tool's commands, flags and exit statuses,
+the `OPENJEV_*` settings, and the server's answers as [compatibility.md](compatibility.md) records
+them.
+
+- **Before 1.0, a minor release may break.** 0.2.0 may change anything 0.1.x did; its changelog
+  entry says what broke and what to change. A patch release, such as 0.1.1, breaks nothing.
+- **From 1.0, only a major release breaks.**
+- **Depending on a release.** SwiftPM's `from: "0.1.0"` accepts every version below 1.0.0, minor
+  releases included, so before 1.0 an app that must not break depends with
+  `.upToNextMinor(from: "0.1.0")`.
+- **Tags.** A release is a tag of the bare version, such as `0.1.0`, on a commit of `main`, with a
+  GitHub release whose notes are `docs/release-notes/<version>.md`. SwiftPM and the Swift Package
+  Index read the tag; `.spi.yml` tells the index which modules to document.
+- **Version strings.** Every module's `Version.swift` holds the same version, which
+  `openjev --version` prints: the next release with `-dev` between releases, and the release itself
+  at its tag.
+- **Dependencies by version.** Every dependency in `Package.swift` is required by version
+  (`exact`, `from` or `upToNextMinor`), never by branch or revision: SwiftPM refuses a package
+  required by version whose own dependencies are not, as the mlx-swift-lm bullet above explains.
+
 ## Building
 
 On macOS, with the Metal Toolchain installed:

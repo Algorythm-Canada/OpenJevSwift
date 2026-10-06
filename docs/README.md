@@ -37,6 +37,9 @@ Documentation workflow publishes it to <https://algorythm-canada.github.io/OpenJ
 minimal reproductions of anything that differed. The decision each one feeds is in
 06-decisions.md.
 
+[release-notes/](release-notes/) holds each release's notes, as its GitHub release shows them, and
+[../CHANGELOG.md](../CHANGELOG.md) lists every release with the versioning policy.
+
 The numbered documents' findings date from 2026-09-29; each spike outcome under spikes/ carries
 its own date. Upstream projects referenced here move quickly; pinned revisions are listed in
 [../THIRD_PARTY.md](../THIRD_PARTY.md).

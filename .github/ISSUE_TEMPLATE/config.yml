@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/Algorythm-Canada/OpenJevSwift/security/advisories/new
+    about: Report it privately, as SECURITY.md describes, never in a public issue.
