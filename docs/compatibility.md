@@ -111,7 +111,7 @@ which is why the server loads the 8-bit one ([quality.md](quality.md#jevk5)).
 | Error messages' `repr` | CPython's Unicode tables decide which characters are escaped | This platform's tables, which can differ for newly assigned characters | D-018 |
 | Settings errors | A bare `ValueError` naming only the text; any integer accepted | The message names the variable; an integer beyond `Int` is refused | D-030 |
 | `OPENJEV_LOG_LEVEL` | uvicorn's level names | The same and swift-log's `notice` | D-030 |
-| Backends | `vllm` by default, and `mlx`, `laya`, `verdict`, `clm`, `jevk5` | `mlx` by default, `laya`, `verdict` and `jevk5`; `vllm` and `clm` are unknown names (issue #59) | D-030, D-038, D-052 |
+| Backends | `vllm` by default, and `mlx`, `laya`, `verdict`, `clm`, `jevk5` | `mlx` by default, `laya`, `verdict` and `jevk5`; `vllm` and `clm` are unknown names (CLM is deferred until someone asks for it) | D-011, D-030, D-038, D-052 |
 | DiffusionGemma checkpoint | The newest revision of `OPENJEV_MLX_MODEL`'s repository | The default repository loads the pinned revision `a7a81407`; `repo@revision` picks another | D-039 |
 | `think` on `mlx` | Supported; the thought's random canvases come from MLX's unseeded generator, so the same request can think differently from one process to the next | Supported, the same thought token for token on the oracle's Metal library; every thought draws from MLX's generator seeded with 0, so the same request always thinks the same way | D-059 |
 | An image that cannot be read on `mlx` | Pillow's or the processor's exception, answered as a bare 500 | The 400 `image could not be read: {reason}` at `["body", "images", i]` | D-054 |
@@ -193,4 +193,7 @@ encoder engines do), from the `openjev` tool's `BackendRegistry`, and from the p
 - **`jevk5`** runs wherever MLX does: the server on an Apple silicon Mac, and in an app through
   `EncoderDecisionEngine`, which compiles for iOS but has not run on an iPhone yet. It is a reads-only
   model like the encoders, so its other cells are upstream's n/a.
-- **CLM**, upstream's other model, is not served on any platform yet (issue #59).
+- **CLM**, upstream's other model, is deferred until someone asks for it
+  ([D-011](06-decisions.md#d-011-encoder-models-core-ml-for-verdict-and-laya-jevk5-first-among-the-extra-models)),
+  so no platform serves it. A server on a Mac can still forward `clm-v0.1` to upstream's `clm`
+  container as a routed model (`OPENJEV_MODEL_ROUTES`).

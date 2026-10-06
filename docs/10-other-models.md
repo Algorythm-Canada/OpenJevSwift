@@ -49,7 +49,7 @@ calibration that a Swift port must reproduce exactly. Facts below come from upst
 | Checkpoint | [Contrastive-LM/CLM-v0.1-8B](https://huggingface.co/Contrastive-LM/CLM-v0.1-8B): `CLM_v0.1-8B.pt` (75.6 MB): a state head and an action head, MLPs to 512 dimensions over the last-token embeddings of a frozen Qwen3-8B; Apache-2.0 |
 | Mechanism | Embed the state with the question appended, and each option, with Qwen3-8B (vLLM pooling runner, `pooling_type LAST`); project through the heads; answer is a softmax over scaled cosines. 2,048 tokens; upstream truncates from the left so the question survives. Caches embeddings and projections. `usage.input_tokens` counts only texts that had to be embedded. |
 | Known issue | Score questions can ignore the state (upstream CLM issue #3). |
-| Swift feasibility | Qwen3-8B exists in `MLXLLM`; last-token hidden states are available; the heads are tiny MLPs (convert `.pt` to safetensors once). Memory: about 5 GB at 4-bit. Deferred behind the others because of its quality caveat and the extra conversion step. |
+| Swift feasibility | Deferred until someone asks for it (#59, [D-011](06-decisions.md#d-011-encoder-models-core-ml-for-verdict-and-laya-jevk5-first-among-the-extra-models)): nobody has, score questions can ignore the state, and it is about a week of work. Qwen3-8B exists in `MLXLLM`; last-token hidden states are available; the heads are tiny MLPs (convert `.pt` to safetensors once). Memory: about 5 GB at 4-bit. |
 
 ## What a Swift "encoder backend" shares
 
