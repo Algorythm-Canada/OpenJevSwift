@@ -69,15 +69,14 @@ core, the server and the `openjev` tool for the tests, without any backend.
 
 ## Status
 
-Milestones 0 to 3 are complete, every work issue in them closed: the foundations, the decision
-engine core, DiffusionGemma reads on MLX, and the Jev-compatible HTTP server with the `openjev`
-tool. Milestone 4, the read extensions and images, is in progress: `steps`, `samples` and
-`sequential` are verified end to end on the DiffusionGemma checkpoint (#43, #44 and #45), and
-images are read on it, matching upstream's image reads bit for bit on the oracle's kernels (#46 to
-#48). Verdict and Laya, from milestone 6, and from milestone 7 the JevBench comparison with
-upstream and DiffusionGemma's calibration report (#61 and #62), are done too. JevK5 (#55), also
-from milestone 6, is served, and gives its author's published top answer on 230 of JevBench's 231
-items (D-052).
+Milestones 0 to 4 are complete, every work issue in them closed: the foundations, the decision
+engine core, DiffusionGemma reads on MLX, the Jev-compatible HTTP server with the `openjev` tool,
+and the read extensions and images. `steps`, `samples` and `sequential` are verified end to end on
+the DiffusionGemma checkpoint (#43, #44 and #45), and images are read on it, matching upstream's
+image reads bit for bit on the oracle's kernels (#46 to #48). Verdict and Laya, from milestone 6,
+and from milestone 7 the JevBench comparison with upstream and DiffusionGemma's calibration report
+(#61 and #62), are done too. JevK5 (#55), also from milestone 6, is served, and gives its author's
+published top answer on 230 of JevBench's 231 items (D-052).
 
 Not there yet:
 
@@ -110,9 +109,9 @@ macOS, iOS and Linux.
 - **API documentation.** The DocC catalogs of `OpenJevCore`, `OpenJevEncoders`,
   `OpenJevDiffusionGemma`, `OpenJevLetterReadout` and `OpenJevServer`: getting started in an app, the request and answer
   types, implementing a backend, running the server and the configuration reference. The
-  Documentation workflow builds them whenever the sources change and, once GitHub Pages is enabled
-  for the repository, publishes them to <https://algorythm-canada.github.io/OpenJevSwift/>.
-  `make docs` builds the same site locally ([docs/development.md](docs/development.md)).
+  Documentation workflow builds them whenever the sources change and publishes them to
+  <https://algorythm-canada.github.io/OpenJevSwift/>. `make docs` builds the same site locally
+  ([docs/development.md](docs/development.md)).
 - **[docs/deployment.md](docs/deployment.md)**: running `openjev serve` on a Mac.
 - **[docs/compatibility.md](docs/compatibility.md)**: what is identical to upstream, within
   tolerance, or different.

@@ -31,8 +31,7 @@ The API documentation lives beside the code, in a DocC catalog per library modul
 (`Sources/<module>/Documentation.docc`): making decisions in an app, the request and answer types,
 implementing a backend, running the server and the configuration reference of every `OPENJEV_*`
 variable. `make docs` builds it ([development.md](development.md#api-documentation)), and the
-Documentation workflow publishes it to <https://algorythm-canada.github.io/OpenJevSwift/> once
-GitHub Pages is enabled for the repository.
+Documentation workflow publishes it to <https://algorythm-canada.github.io/OpenJevSwift/>.
 
 [spikes/](spikes/) holds the written outcome of each spike: what was measured, how, and the
 minimal reproductions of anything that differed. The decision each one feeds is in
