@@ -76,6 +76,13 @@
             logger.error("\(text)")
         }
 
+        /// Logs a failed generation of the chat route at error level, with the status the client
+        /// got: the 503, or the 200 of a stream that broke off. Upstream logs neither.
+        func failure(status: Int, _ message: String) {
+            let text = Self.line(status: status, requestID: requestID, [message])
+            logger.error("\(text)")
+        }
+
         private func warning(status: Int, _ problems: [String]) {
             let text = Self.line(status: status, requestID: requestID, problems)
             logger.warning("\(text)")

@@ -99,6 +99,9 @@ The server reads upstream's `OPENJEV_*` variables, with upstream's defaults and 
 | `OPENJEV_JEVK5_MODEL` | `Algorythm-Canada/jevk5-0.2-mlx-8bit` | The JevK5 conversion: a folder, or a Hub repository with an optional `@revision` (this port's, D-052). The default, the published 8-bit conversion, is downloaded at its pinned commit on first start ([JevK5](#jevk5)). |
 | `OPENJEV_ENCODER_FUNCTIONS` | unset | The most Core ML functions an encoder keeps loaded, at least 1 (this port's, D-042). Unset keeps every function a read has needed, up to Verdict's 6 and Laya's 8, and the settings line shows `encoder_functions=all`; a lower number releases the least recently used one first. |
 | `OPENJEV_MAX_QUEUE` | `512` | Decisions inside the server before a 529. `0` refuses every request, as upstream's does. |
+| `OPENJEV_GEN_MAX_INFLIGHT` | `8` | Chat replies generating at once on the `mlx` backend ([Text generation](#text-generation)). Above 1 they wait their turn, as the model generates one at a time. |
+| `OPENJEV_GEN_MAX_QUEUE` | `32` | Chat requests waiting beyond those before a 529 with `retry-after: 2`. |
+| `OPENJEV_GEN_MAX_TOKENS` | `8192` | The longest chat reply in tokens; a request's `max_tokens` (1024 when unset) is bounded by it. |
 | `OPENJEV_MAX_QUESTIONS` | `256` | Questions per request before a 400. |
 | `OPENJEV_MAX_BODY_BYTES` | `67108864` | Request body limit before a 413. |
 | `OPENJEV_MAX_IMAGES` | `8` | Images per request on the `mlx` backend before a 400. |
@@ -400,6 +403,38 @@ takes about 0.3 s, and 1 to 16 concurrent callers share 3.0 to 3.4 requests per 
 ([benchmarks.md](benchmarks.md)). A state of 10,000 tokens takes about 13 s to prefill before its
 first read. Those figures were taken at the nominal thermal state; on the M3 Max laptop, sustained
 load raised the same read's latency by up to about 80% once the thermal state reached fair.
+
+### Text generation
+
+`POST /v1/chat/completions` is upstream's OpenAI-compatible text generation from the same
+DiffusionGemma, for tools that talk to a chat model: the model names `diffusiongemma-26b` and
+`diffusiongemma`, `max_tokens` or `max_completion_tokens` (1024 when unset, at most
+`OPENJEV_GEN_MAX_TOKENS`), `stop` (only strings that are one token end a reply), `stream`,
+`response_format` `json_object` or `json_schema` (an instruction to the model and the first JSON
+value of its reply), and `chat_template_kwargs.enable_thinking`. Other OpenAI fields, such as
+`temperature` and `seed`, are dropped, as upstream drops them: generation is greedy. The route is
+served on the `mlx` backend once the model generates text (issue #51 and its wiring); the encoder
+backends have no chat route, as upstream's have none, and answer it with a 404.
+
+Errors are OpenAI's shape, `{"error": {"message", "type", "code"}}`, with upstream's statuses: a
+400 `invalid_request_error` for a body that is not JSON, no `messages`, no `model`, a `max_tokens`
+that is not a positive integer or a prompt over `OPENJEV_MLX_MAX_PROMPT`, a 404 `model_not_found`,
+and the 529 `overloaded_error` with `retry-after: 2` once `OPENJEV_GEN_MAX_INFLIGHT` plus
+`OPENJEV_GEN_MAX_QUEUE` requests are generating or waiting. That is two seconds where a decision's
+529 says one, as upstream's do. A generation that fails before its answer starts is a 503
+`api_error` naming the error's type, logged at error level. Authentication and the body limit
+apply as on every `/v1/` route, with Jev's error shape.
+
+The model generates one reply at a time, and a reply holds it for its whole length: a few hundred
+tokens take seconds, so requests beyond `OPENJEV_GEN_MAX_INFLIGHT` wait, and decisions wait for the
+reply too. Every refusal comes before the answer starts. A streamed reply (`"stream": true`) is a
+`text/event-stream` of OpenAI's chunks: the role, the text as the model commits it block by block,
+the finish reason, the usage, then `data: [DONE]`. A client that disconnects stops its generation
+at the next block, and so does one that reads so slowly that 64 pieces wait for it: its stream
+ends after the pieces it already had, with no finish chunk and no `[DONE]`, so it never reads a
+reply with a piece missing as if it were whole. A whole reply's client that disconnects stops it
+too, and the request log shows 499. On a graceful shutdown a reply in flight runs to its end within
+`--shutdown-timeout`, and is cut off after it.
 
 ## JevK5
 

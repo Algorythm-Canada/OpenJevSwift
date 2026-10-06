@@ -1,6 +1,7 @@
 // A port of upstream OpenJev (razorback16/openjev at dcd2094), `create_app` in `openjev/api.py`:
 // the `/health`, `/v1/models` and `/v1/systemone` routes, their middleware and error answers, the
-// model routes, and the host and port `openjev/__main__.py` binds. Apache-2.0. See THIRD_PARTY.md.
+// model routes, the chat routes `add_chat_routes` adds, and the host and port `openjev/__main__.py`
+// binds. Apache-2.0. See THIRD_PARTY.md.
 
 #if canImport(Hummingbird)
     import HTTPTypes
@@ -14,9 +15,11 @@
     public enum OpenJevApplication {
         /// The routes over a loaded service, behind upstream's `request_id_and_auth` in its
         /// order: the request log, the headers middleware, then authentication and the body cap
-        /// for `/v1/`. Requests are not watched for clients that go away;
-        /// ``application(settings:service:logger:onServerRunning:)`` builds a server that watches
-        /// them.
+        /// for `/v1/`. `POST /v1/chat/completions` is among them when the service's model
+        /// generates text (``/OpenJevCore/SystemOneService/textGenerator``), as upstream adds the
+        /// chat routes for its DiffusionGemma backends only. Requests are not watched for clients
+        /// that go away; ``application(settings:service:logger:onServerRunning:)`` builds a server
+        /// that watches them.
         public static func router(
             settings: ServerSettings, service: any SystemOneService
         ) -> Router<OpenJevRequestContext> {
@@ -24,10 +27,23 @@
         }
 
         /// The routes, cancelling the decision of a client that goes away when its connection is
-        /// in `connections`.
+        /// in `connections`, with the chat routes over the service's text generator, if any.
         static func router(
             settings: ServerSettings, service: any SystemOneService,
             connections: ConnectionRegistry?
+        ) -> Router<OpenJevRequestContext> {
+            let chat = service.textGenerator.map { generator in
+                ChatCompletions(
+                    generator: generator, configuration: ChatCompletionsConfiguration(settings))
+            }
+            return router(
+                settings: settings, service: service, connections: connections, chat: chat)
+        }
+
+        /// The routes, with `POST /v1/chat/completions` answered by `chat` when it is not `nil`.
+        static func router(
+            settings: ServerSettings, service: any SystemOneService,
+            connections: ConnectionRegistry?, chat: ChatCompletions?
         ) -> Router<OpenJevRequestContext> {
             let router = Router(context: OpenJevRequestContext.self)
             router.add(middleware: RequestLogMiddleware())
@@ -43,6 +59,13 @@
             router.get("/v1/models") { _, _ in try routes.models() }
             router.post("/v1/systemone") { request, context in
                 try await routes.systemOne(request, context: context)
+            }
+            if let chat {
+                let chatRoute = ChatCompletionsRoute(
+                    settings: settings, chat: chat, connections: connections)
+                router.post("/v1/chat/completions") { request, context in
+                    try await chatRoute.respond(request, context: context)
+                }
             }
             return router
         }

@@ -114,4 +114,23 @@ struct RuntimeTests {
         #expect(error?.message == "openjev-0.1 does not support think")
         #expect(!log.touched)
     }
+
+    @Test("The runtime does not generate text yet, so its server has no chat routes")
+    func noTextGeneratorYet() throws {
+        let engine = try DecisionEngine(backend: DiffusionGemmaRuntime.stub())
+        #expect(engine.textGenerator == nil)
+    }
+
+    /// Upstream's test over its `StubRuntime` and the real tokenizer: the whole reply's shape
+    /// (`chat.completion`, a `chatcmpl-` id, the stub reply and its last segment, finish `stop`,
+    /// index 0) and usage billing the prompt the runtime was handed. The chat route's own tests
+    /// check the same shape over a stub generator (OpenJevServerTests); this one needs the
+    /// runtime's ``/OpenJevCore/TextGenerator`` conformance over a stub model.
+    @Test(
+        "test_chat_completion_on_mlx",
+        .disabled(
+            Comment(
+                rawValue: "needs DiffusionGemmaRuntime's TextGenerator conformance (#51, wired "
+                    + "by #53's follow-up); then runs with the tokenizer of OPENJEV_TEST_MODEL")))
+    func chatCompletionOnMLX() {}
 }

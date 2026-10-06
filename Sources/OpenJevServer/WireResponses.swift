@@ -30,15 +30,17 @@
             json(status: .ok, bytes: try WireEncoder().bytes(value))
         }
 
-        /// The response for an error thrown by a route: a ``WireError`` as its status, body and
-        /// headers; a Hummingbird error, such as the router's 404, as FastAPI's
-        /// `{"detail": "<reason phrase>"}`; ``ClientDisconnected`` as an empty 499, which only a
-        /// client that half-closed and still reads receives; anything else as Starlette's
-        /// plain-text 500, logged.
+        /// The response for an error thrown by a route: a ``WireError`` or a
+        /// ``/OpenJevCore/ChatCompletionError`` as its status, body and headers; a Hummingbird
+        /// error, such as the router's 404, as FastAPI's `{"detail": "<reason phrase>"}`;
+        /// ``ClientDisconnected`` as an empty 499, which only a client that half-closed and still
+        /// reads receives; anything else as Starlette's plain-text 500, logged.
         static func response(for error: any Error, context: OpenJevRequestContext) -> Response {
             switch error {
             case let wire as WireError:
                 return response(for: wire, context: context)
+            case let chat as ChatCompletionError:
+                return response(for: chat, context: context)
             case is ClientDisconnected:
                 return Response(status: clientClosedRequest)
             case let http as any HTTPResponseError:
@@ -54,6 +56,22 @@
 
         /// The response for a ``WireError``, or the 500 when its body cannot be written.
         static func response(for error: WireError, context: OpenJevRequestContext) -> Response {
+            do {
+                return json(
+                    status: HTTPResponse.Status(code: error.status),
+                    bytes: try WireEncoder().bytes(error), headers: error.headers)
+            } catch {
+                context.logger.error(
+                    "an error body could not be written: \(String(describing: error))")
+                return internalError()
+            }
+        }
+
+        /// The response for a ``/OpenJevCore/ChatCompletionError``, in OpenAI's shape, or the 500
+        /// when its body cannot be written.
+        static func response(
+            for error: ChatCompletionError, context: OpenJevRequestContext
+        ) -> Response {
             do {
                 return json(
                     status: HTTPResponse.Status(code: error.status),

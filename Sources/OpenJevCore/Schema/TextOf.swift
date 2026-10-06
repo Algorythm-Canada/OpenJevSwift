@@ -53,6 +53,15 @@ public enum TextOf {
         return String(scalars[start...end])
     }
 
+    /// The text without trailing Python whitespace, as `str.rstrip()` leaves it.
+    static func pythonRightStripped(_ text: String) -> String {
+        let scalars = text.unicodeScalars
+        guard let end = scalars.lastIndex(where: { !isPythonWhitespace($0) }) else {
+            return ""
+        }
+        return String(scalars[...end])
+    }
+
     /// `json.dumps(value, ensure_ascii=False)` for a value that came through the wire types.
     ///
     /// - Precondition: The value can be written. Only a hand-built value with an infinite or

@@ -30,6 +30,10 @@ OpenJevSwift/                          Swift package, tools 6.2, strict concurre
                      QuestionReadBackend protocol, EncoderEngineConfiguration,
                      EncoderDecisionEngine (batched reads); SystemOneService, ServedModels
       Images/        Data-URL and {content_type, base64} validation (no decoding of pixels)
+      Generation/    TextGenerator protocol and TextGeneration; ChatCompletionRequest (the route's
+                     checks and normalize), ChatCompletions (capacity, the whole reply),
+                     ChatCompletionStream (the 64-piece queue), ExtractJSON, the response and
+                     event shapes, ChatCompletionError (OpenAI's error shape), #53
     OpenJevDiffusionGemma/             Apple silicon only. Depends on mlx-swift, MLXLMCommon and
                                        swift-transformers Tokenizers (not MLXVLM, D-054).
       Model/         Configuration (config.json decoding, #23); Norms, Attention, DenseMLP,
@@ -43,7 +47,8 @@ OpenJevSwift/                          Swift package, tools 6.2, strict concurre
                      masked_scatter, precisePow) and ImagePrefill (embedding with images, the
                      block overlay and masks, the chunking policy) (#47)
       Runtime/       DiffusionGemmaRuntime actor: prefill cache, read(), think(), generate()
-      Tokenization/  Tokenizer adapter, chat prompt builder, label discovery hookup
+      Tokenization/  Tokenizer adapter, chat prompt builder (reads, and a chat request's
+                     messages with the scaffold: generationPromptIDs), label discovery hookup
       Vision/        RGBImage and the JPEG and GIF ports, Gemma4ImageProcessor (Pillow's bicubic),
                      ImagePromptInputs and ImageReadInputs (expansion, mm_token_type_ids), #46
       Generation/    Sampler, stopping rules, block loop, streaming detokenizer (later)
@@ -184,6 +189,23 @@ public actor DecisionEngine {
 }
 
 public struct Decision { answers: OrderedMap<Answer>; inputTokens: Int; outputTokens: Int; modelTime: Duration }
+```
+
+Text generation (`Sources/OpenJevCore/Generation/`, issue #53) is a protocol of its own, which
+the DiffusionGemma runtime adopts beside `DecisionBackend`; `SystemOneService.textGenerator`
+exposes it, so `DecisionEngine` hands the server its backend when the backend generates:
+
+```swift
+public protocol TextGenerator: Sendable {
+    var maxPromptTokens: Int { get }               // OPENJEV_MLX_MAX_PROMPT, scaffold included
+    var thoughtChannelMarkerIDs: [Int] { get }     // enc("<|channel>thought\n") + enc("<channel|>")
+    func generationPromptIDs(messages: [JSONValue], thinking: Bool) async throws -> [Int]
+    func encode(_ text: String) throws -> [Int]    // a stop string
+    func generate(
+        prompt: [Int], maxTokens: Int, stopIDs: [Int], skipSpecialTokenIDs: [Int],
+        emit: @Sendable (_ text: String, _ token: Int?) -> Bool
+    ) async throws -> TextGeneration               // generated ids, prompt tokens, stop/length/cancelled
+}
 ```
 
 `CanvasRead` carries the prompt (`ReadPrompt.tokens(ids)` for a text state, a thought or earlier
@@ -411,8 +433,23 @@ Every connection carries a `ClientDisconnectHandler`, which sees the end of the 
 The route runs the decision in a child task beside a watch of its connection: a client that goes
 away cancels the decision, which reaches the reads through task cancellation, and the request log
 shows 499. Request handling creates no unstructured or detached task. Decisions D-030, D-031 and
-D-038 record where the server differs from upstream. Text generation routes are added only when a
-generation-capable backend is loaded.
+D-038 record where the server differs from upstream.
+
+`POST /v1/chat/completions` exists only when the service's model generates text
+(`SystemOneService.textGenerator`), as upstream adds its chat routes for its DiffusionGemma
+backends and not for the encoders (D-012). `ChatCompletionsRoute` reads the body as Starlette's
+`request.json()` does, whatever its content type, and `ChatCompletions` (OpenJevCore) answers in
+upstream's order: `messages`, `model`, the capacity bound (`OPENJEV_GEN_MAX_INFLIGHT` plus
+`OPENJEV_GEN_MAX_QUEUE`, the 529 with `retry-after: 2`), `normalize`, the prompt and its limit,
+then the stop strings, every refusal in OpenAI's error shape before an answer starts. A whole
+reply generates while the client is there, as a decision does. A streamed reply is admitted and
+waits for its turn before its 200 is sent; then `ChatCompletionStream` runs the generation beside
+a queue of 64 pieces, which the route drains into the event stream while a sibling task watches
+the connection. A client that goes away, or a piece that finds the queue full, stops the
+generation at its next block, so a reply ends early rather than reaching a live client with a
+piece missing. The slot comes back once the generation has stopped, and a stream whose answer
+never started gives it back as it is discarded. The chat template renders on a thread of its
+own, since it recurses into a request's tool calls. D-058 records the choices.
 
 `ModelRouter` is `OPENJEV_MODEL_ROUTES`, upstream's `forward`. The route asks it once the body has
 passed validation, before the model name is checked: a model with a route that the service does

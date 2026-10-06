@@ -94,4 +94,41 @@ struct ChatTemplateTrimTests {
         // Gemma 4's system text parts: the filter binds before `+`.
         #expect(try Self.render("{{ s | trim + ' ' }}", ["s": text]) == "y ")
     }
+
+    /// A JSON value as the template reads a chat request's.
+    static func value(_ json: JSONValue) -> any Sendable {
+        SwiftTransformersTokenizer.templateValue(json)
+    }
+
+    @Test("A value that is not a string is trimmed as Python's str() writes it (D-058)")
+    func nonStrings() throws {
+        let cases: [(JSONValue, String)] = [
+            (nil, "None"), (5, "5"), (true, "True"), (false, "False"), (1.5, "1.5"),
+            (0.1, "0.1"), (1e16, "1e+16"), ([1, "a", nil, ["it's"]], "[1, 'a', None, [\"it's\"]]"),
+            (["k": "v", "n": [true]], "{'k': 'v', 'n': [True]}"),
+        ]
+        for (json, expected) in cases {
+            #expect(
+                try Self.render("{{ x | trim }}", ["x": Self.value(json)]) == expected, "\(json)")
+        }
+        // An undefined value is jinja2's Undefined, whose text is empty.
+        #expect(try Self.render("[{{ missing | trim }}]", [:]) == "[]")
+    }
+
+    @Test("A dict is a sequence, as jinja2's test says of anything with len() and [] (D-058)")
+    func sequences() throws {
+        let source = "{% if x is sequence %}yes{% else %}no{% endif %}"
+        let cases: [(JSONValue, String)] = [
+            (["a"], "yes"), ("text", "yes"), (["k": 1], "yes"), (.object(JSONObject()), "yes"),
+            (nil, "no"), (7, "no"), (true, "no"),
+        ]
+        for (json, expected) in cases {
+            #expect(try Self.render(source, ["x": Self.value(json)]) == expected, "\(json)")
+        }
+        // Iterating a dict gives its keys, as Gemma 4's template does with a dict content.
+        #expect(
+            try Self.render(
+                "{% for k in x %}{{ k }},{% endfor %}", ["x": Self.value(["b": 1, "a": 2])])
+                == "b,a,")
+    }
 }

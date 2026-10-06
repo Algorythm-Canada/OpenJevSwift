@@ -72,7 +72,24 @@ public struct SwiftTransformersTokenizer: DecisionTokenizer {
     static func templateEnvironment() -> Jinja.Environment {
         let environment = Jinja.Environment()
         environment["trim"] = .function(pythonTrim)
+        environment["sequence"] = .function(isPythonSequence)
         return environment
+    }
+
+    /// jinja2's `sequence` test, which a value passes when Python's `len()` and `__getitem__`
+    /// accept it: a list, a string or a dict. swift-jinja 2.5.1's own test leaves dicts out, and
+    /// the template asks it of a message's `content` and a tool's result, which a chat request
+    /// may give as an object. swift-jinja looks a test up in the environment before its built-in
+    /// tests, as it does a filter (D-058).
+    @Sendable static func isPythonSequence(
+        _ args: [Jinja.Value], kwargs: [String: Jinja.Value], env: Jinja.Environment
+    ) throws -> Jinja.Value {
+        switch args.first ?? .undefined {
+        case .array, .string, .object:
+            return .boolean(true)
+        default:
+            return .boolean(false)
+        }
     }
 
     /// jinja2's `trim` filter, `soft_str(value).strip(chars)`, which is Python's `str.strip`.
@@ -82,8 +99,8 @@ public struct SwiftTransformersTokenizer: DecisionTokenizer {
     /// holds, so an empty string strips nothing. Scalars are compared one by one, as Python
     /// compares code points. Any other `chars`, an undefined variable included, throws, where
     /// Python raises `TypeError: strip arg must be None or str`. A value that is not a string is
-    /// written as swift-jinja writes it before it is stripped, as swift-jinja's own `trim` does;
-    /// Gemma 4's template trims only strings.
+    /// written as Python's `str()` writes it first (``pythonString(_:)``), as `soft_str` does: a
+    /// chat request's text part can hold a number, a Boolean or null (D-058).
     @Sendable static func pythonTrim(
         _ args: [Jinja.Value], kwargs: [String: Jinja.Value], env: Jinja.Environment
     ) throws -> Jinja.Value {
@@ -92,13 +109,7 @@ public struct SwiftTransformersTokenizer: DecisionTokenizer {
         else {
             throw Jinja.JinjaError.runtime("trim takes one argument, chars")
         }
-        let text: String
-        switch args.first ?? .undefined {
-        case .string(let string):
-            text = string
-        case let other:
-            text = other.description
-        }
+        let text = pythonString(args.first ?? .undefined)
         let strips: (Unicode.Scalar) -> Bool
         switch args.count == 2 ? args[1] : kwargs["chars"] ?? .null {
         case .null:
@@ -116,6 +127,44 @@ public struct SwiftTransformersTokenizer: DecisionTokenizer {
             return .string("")
         }
         return .string(String(scalars[start...end]))
+    }
+
+    /// Python's `str()` of a value the template reads, as jinja2 writes it: a string as itself,
+    /// an undefined value as nothing, `None`, `True`, `False`, an integer's digits, a float as
+    /// Python's `repr`, and a list or dict as Python writes it, its strings quoted.
+    static func pythonString(_ value: Jinja.Value) -> String {
+        switch value {
+        case .string(let string):
+            return string
+        case .undefined:
+            return ""
+        case .null:
+            return "None"
+        case .boolean(let flag):
+            return flag ? "True" : "False"
+        case .int(let integer):
+            return String(integer)
+        case .double(let number):
+            return number.pythonRepr
+        case .array(let elements):
+            return "[" + elements.map(pythonRepresentation).joined(separator: ", ") + "]"
+        case .object(let object):
+            let entries = object.map { key, value in
+                pythonRepresentation(Jinja.Value(key)) + ": " + pythonRepresentation(value)
+            }
+            return "{" + entries.joined(separator: ", ") + "}"
+        case .function, .macro:
+            return value.description
+        }
+    }
+
+    /// Python's `repr()` of a value inside a list or dict: a string quoted, the rest as
+    /// ``pythonString(_:)``.
+    static func pythonRepresentation(_ value: Jinja.Value) -> String {
+        if case .string(let string) = value {
+            return string.pythonRepr
+        }
+        return pythonString(value)
     }
 
     /// Renders `source`, compiled with ``templateOptions``, over `context` in
@@ -348,6 +397,106 @@ public struct SwiftTransformersTokenizer: DecisionTokenizer {
         } catch {
             throw OpenJevCore.TokenizerError(
                 "swift-jinja could not render the chat template: \(error)")
+        }
+    }
+
+    /// The prompt ids of a chat request, upstream's `MlxGenerator.prompt_ids`: the chat template
+    /// over `messages` with the generation prompt and `enable_thinking` set to `thinking`
+    /// (``renderChatTemplate(chatMessages:thinking:)``), tokenized without special tokens, then
+    /// the ids of the empty thought scaffold `<|channel>thought\n<channel|>`, which has the model
+    /// start past a thought on most replies (issue #53).
+    ///
+    /// - Throws: An ``/OpenJevCore/TokenizerError`` when the template does not render, or when
+    ///   `messages` nest deeper than ``/OpenJevCore/ChatCompletionRequest/maximumNesting``.
+    public func generationPromptIDs(messages: [JSONValue], thinking: Bool) async throws -> [Int] {
+        let text = try await renderChatTemplate(chatMessages: messages, thinking: thinking)
+        return try encode(text, addSpecialTokens: false)
+            + encode(EngineTokens.scaffoldText, addSpecialTokens: false)
+    }
+
+    /// The chat template rendered over a chat request's messages, as upstream's
+    /// `apply_chat_template(messages, add_generation_prompt=True, enable_thinking=thinking)` renders
+    /// them: each message is the value `json.loads` gave, its keys in the request's order, so the
+    /// template reads `role`, `content`, `tool_calls` and the rest as it does upstream.
+    ///
+    /// Two things differ from jinja2 with values a chat request can hold, both in tool calls: a
+    /// `null` that the template writes with `{{ }}`, a tool call's argument or a tool's missing
+    /// result, is written as nothing where jinja2 writes `None`, and an integer too large for
+    /// `Int` is a float (D-058).
+    ///
+    /// The template renders on a thread of its own with 16 MB of stack:
+    /// swift-jinja recurses into tool call arguments, and in a debug build, on a thread with a
+    /// task's 512 KB of stack, 7 levels of them rendered and 16 overflowed it, while the 64 levels
+    /// ``/OpenJevCore/ChatCompletionRequest/maximumNesting`` allows needed 8 MB.
+    ///
+    /// - Throws: An ``/OpenJevCore/TokenizerError`` when the template does not render, or when
+    ///   `messages` nest deeper than ``/OpenJevCore/ChatCompletionRequest/maximumNesting``, which
+    ///   bounds the template's recursion.
+    public func renderChatTemplate(chatMessages messages: [JSONValue], thinking: Bool) async throws
+        -> String
+    {
+        let depth = ChatCompletionRequest.nesting(of: .array(messages))
+        guard depth <= ChatCompletionRequest.maximumNesting else {
+            throw OpenJevCore.TokenizerError(
+                "the messages nest \(depth) levels deep; the limit is "
+                    + "\(ChatCompletionRequest.maximumNesting)")
+        }
+        let template = chatTemplate
+        var context = specialTokenContext
+        context["add_generation_prompt"] = .boolean(true)
+        context["enable_thinking"] = .boolean(thinking)
+        let base = context
+        return try await Self.onRenderingThread {
+            var context = base
+            context["messages"] = .array(messages.map(Self.templateValue))
+            do {
+                return try template.render(context, environment: Self.templateEnvironment())
+            } catch {
+                throw OpenJevCore.TokenizerError(
+                    "swift-jinja could not render the chat template: \(error)")
+            }
+        }
+    }
+
+    /// The stack of the thread a chat request's template renders on: 16 MB, twice what a debug
+    /// build needs at the deepest messages allowed.
+    static let renderingStackSize = 16 << 20
+
+    /// Runs `body` on a new thread with ``renderingStackSize`` bytes of stack and returns what it
+    /// returns or throws. The task waits without blocking its thread.
+    static func onRenderingThread<T: Sendable>(
+        _ body: @escaping @Sendable () throws -> T
+    ) async throws -> T {
+        try await withCheckedThrowingContinuation { continuation in
+            let thread = Thread {
+                continuation.resume(with: Result { try body() })
+            }
+            thread.stackSize = renderingStackSize
+            thread.start()
+        }
+    }
+
+    /// A JSON value as the template reads it, with an object's keys in order.
+    static func templateValue(_ value: JSONValue) -> Jinja.Value {
+        switch value {
+        case .null:
+            return .null
+        case .bool(let flag):
+            return .boolean(flag)
+        case .integer(let digits):
+            return Int(digits).map(Jinja.Value.int) ?? .double(Double(digits) ?? .nan)
+        case .float(let number):
+            return .double(number)
+        case .string(let string):
+            return .string(string)
+        case .array(let elements):
+            return .array(elements.map(templateValue))
+        case .object(let object):
+            var entries = OrderedDictionary<Jinja.ObjectKey, Jinja.Value>()
+            for (key, element) in object {
+                entries[.string(key)] = templateValue(element)
+            }
+            return .object(entries)
         }
     }
 

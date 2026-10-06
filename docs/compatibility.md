@@ -3,7 +3,7 @@
 OpenJevSwift is compatible with upstream OpenJev,
 [razorback16/openjev](https://github.com/razorback16/openjev) at `dcd2094` (0.5.0), which implements
 TypeSafe's published contract for `/v1/systemone`. This page says what is identical, what agrees
-within a measured tolerance, and what differs and why, as of 2026-10-02. Each difference names the
+within a measured tolerance, and what differs and why, as of 2026-10-06. Each difference names the
 decision in [06-decisions.md](06-decisions.md) that records it;
 [09-conformance-and-testing.md](09-conformance-and-testing.md) describes how each claim is tested.
 The last section is the matrix of what runs where.
@@ -32,6 +32,7 @@ commit ([Fixtures/](../Fixtures/README.md)), and the tests compare with them exa
 | Model routes | Which requests are forwarded, the bytes and the three headers sent, what comes back, the routed listing, and the 503 names of a failed exchange | the server's route tests (D-040) |
 | Settings | Upstream's `OPENJEV_*` variables: their names, defaults and startup checks and the checks' messages, apart from the settings rows of the third table; `OPENJEV_ENCODER_MODELS` and `OPENJEV_ENCODER_FUNCTIONS` are this port's own | the settings tests, upstream's `test_settings_are_checked_at_startup` |
 | Clients | TypeSafe's Python SDK 0.7.2 and TypeScript SDK 0.6.0, unchanged, decode answers, retry the 529, and raise the authentication error and the 422 as against upstream | `Tools/sdk-compat`, in CI (D-040) |
+| Chat completions | `POST /v1/chat/completions` as upstream's MLX generator answers it: `Generator.normalize` on 56 bodies (the fields kept, `max_tokens` and its errors, thinking, forced streamed usage, JSON mode's instruction), `extract_json` on 44 replies, the prompt text and ids `MlxGenerator.prompt_ids` gives for 49 conversations, and the route's statuses, error bodies, whole replies and event streams, byte for byte, on 61 of 69 recorded exchanges over upstream's stub runtimes; the other 8 are the chat rows of the third table | `Fixtures/chat-completions` (D-058) |
 
 Upstream's own end-to-end file, `tests/test_live.py`, passes against the Swift server on Verdict
 and Laya, and the Swift port of it passes unchanged against both servers on all three backends
@@ -117,7 +118,14 @@ which is why the server loads the 8-bit one ([quality.md](quality.md#jevk5)).
 | Image formats on `mlx` | Whatever Pillow identifies by its bytes, whatever the declared type | JPEG, PNG, WebP or GIF by their bytes, whatever the declared type; a TIFF or BMP under another label is a 400 | D-054 |
 | Truncated JPEGs and images 3 pixels high on `mlx` | A truncated JPEG is a 500, though one missing only its EOI is read when libjpeg does not look past its end; an image 3 pixels high is read as channels first and answered | A truncated JPEG is a 400 where Pillow raises and read where Pillow reads it; an image 3 pixels high is a 400 | D-051, D-054, D-055 |
 | A cached image prefill on `mlx` | The images are decoded again for every read | Decoded once per prefill; a cached one reuses its count, so the answers and the billing are the same | D-054 |
-| `POST /v1/chat/completions` | Served by the `mlx` backend | A 404 until issue #53, though `/v1/models` still lists `diffusiongemma-26b` as upstream's does | D-012, D-043 |
+| `POST /v1/chat/completions` | Served by the `mlx` backend | The route is ported and answers once the `mlx` backend's model generates text (issue #51, then the wiring that follows #53); until then a 404, though `/v1/models` lists `diffusiongemma-26b` as upstream's does | D-012, D-043, D-058 |
+| Chat requests upstream crashes on | A message that is not an object or whose `role` is not a string, a `chat_template_kwargs`, `response_format`, `json_schema` or streaming `stream_options` that is true but not a dict, a `stop` of another type, or a template error: a bare 500, or `dict()`'s message for a string message in JSON mode | The 400 `invalid_request_error` naming the field; messages nested past 64 levels are refused too | D-058 |
+| A chat generation that fails | A bare 500, or a stream that breaks off | The 503 `inference backend unavailable: <type name>` with `retry-after: 2` before the answer starts, logged; a stream that broke off is logged | D-058 |
+| A chat client that goes away | A whole reply runs to its end; a stream notices within 0.1 s and stops at the next block | Both stop at the next block, at once; a whole reply's request logs 499 | D-058 |
+| A chat stream's reader 64 pieces behind | The reply ends, its end marker displacing the oldest queued piece | The reply ends after every queued piece | D-058 |
+| Chat bodies `json.loads` reads and RFC 8259 refuses | Served | The 400 "The request body is not valid JSON." | D-016, D-058 |
+| `null` written by the chat template | `None`, in a tool call's arguments or a tool's missing result | Nothing; an integer past `Int` is written as a float | D-058 |
+| JSON mode's reply | A lone surrogate escape kept, then a 500 encoding the answer; a value nested past CPython's stack, a 500 | The surrogate is U+FFFD; a value nested past 1,024 levels leaves the reply unchanged | D-058 |
 | `server-timing` `model` on `mlx` | `0.0`: the MLX engine does not time its reads | The time spent in reads, summed over reads that ran at once, so it can exceed `total` | D-038, D-044 |
 | Encoder arithmetic | PyTorch, on CUDA when present, else in float32 on the CPU | Core ML packages in float16 on the GPU or the Neural Engine, within the bounds above | D-011, D-034, D-037 |
 | Encoder weights | The checkpoint that `OPENJEV_VERDICT_MODEL` or `OPENJEV_LAYA_MODEL` names, on the device `OPENJEV_DEVICE` names | Converted packages from the `Algorythm-Canada/openjev-models` releases at pinned digests, or `OPENJEV_ENCODER_MODELS`' folder; those three variables are read but have no effect | D-033, D-047 |
@@ -142,7 +150,7 @@ encoder engines do), from the `openjev` tool's `BackendRegistry`, and from the p
 
 | Platform | Backend | Reads | `steps` | `samples` | `sequential` | Images | `think` | Chat |
 |---|---|---|---|---|---|---|---|---|
-| macOS 14 or later, Apple silicon | `mlx` | yes | yes | yes | yes | yes | no, issue #52 | no, issue #53 |
+| macOS 14 or later, Apple silicon | `mlx` | yes | yes | yes | yes | yes | no, issue #52 | the route yes; the model no, issue #51 |
 | macOS 15 or later | `verdict` | yes | n/a | n/a | n/a | n/a | n/a | n/a |
 | macOS 15 or later | `laya` | yes | n/a | n/a | n/a | n/a | n/a | n/a |
 | macOS 14 or later, Apple silicon | `jevk5` | yes | n/a | n/a | n/a | n/a | n/a | n/a |
