@@ -3778,10 +3778,9 @@ Decision.
    streaming `stream_options` that is true but not a dict (`normalize`'s `TypeError` or
    `AttributeError`), and a `stop` that is neither a string, a list of strings nor a dict
    (`stop_ids`' `TypeError`, after the prompt, which a stream reports by breaking off after its
-   first chunk).
-   The port answers each with a 400 `invalid_request_error` naming the field, at the point where
-   upstream would raise: the role check where `normalize` or the template first reads the
-   messages, the stop strings after the prompt's limit. In JSON mode upstream answers a string
+   first chunk). The port answers each with a 400 `invalid_request_error` naming the field, at the
+   point where upstream would raise: the role check where `normalize` or the template first reads
+   the messages, the stop strings after the prompt's limit. In JSON mode upstream answers a string
    message with `dict()`'s `ValueError` as a 400 ("dictionary update sequence element #0 has
    length 1; 2 is required"); the port gives its own message there too. A template that cannot
    render the messages is a 400 too, and messages nested deeper than 64 levels are refused before
@@ -3794,7 +3793,7 @@ Decision.
    the failure is logged.
 6. **Streaming and cancellation.** A streamed request takes its slot before its 200, as upstream's
    does, and the stream hands pieces from `emit` to the response through a queue of 64, empty
-   pieces included. Four differences:
+   pieces included. Five points beyond upstream's:
    - A piece that finds the queue full is not queued: the generation is asked to stop and the
      stream ends after the pieces already queued, without a finish chunk or `[DONE]`. Upstream's
      end marker displaces the oldest queued piece, so a client got a gap before the end; here a
@@ -3815,6 +3814,9 @@ Decision.
    - The slot is given back once the generation has stopped, as upstream's `reap` does. A stream
      whose answer never started, because Hummingbird could not write its head and so never runs
      the body, gives it back when it is discarded.
+   - A graceful shutdown lets a stream finish within the group's time, and a stream still running
+     when the time is up is cancelled and counts as cut short (D-049), although the server closes
+     the connection's input as it cancels, which a client's leaving also does.
 7. **Rendering a chat request's prompt.** `SwiftTransformersTokenizer.generationPromptIDs` renders
    the messages as the JSON values they are, keys in the request's order, through the shipped
    template in D-056's environment, which gains two of jinja2's behaviours that chat messages
@@ -3850,16 +3852,19 @@ Decision.
 11. **Tests.** The route's tests carry upstream's names and run over `StubTextGenerator`, which
     reproduces `StubRuntime`, `ReplayRuntime` and `OneTokenRuntime`: in OpenJevCoreTests (the
     stream's slow reader, cancelled waits, a stream that never runs), OpenJevServerTests (the
-    recorded exchanges, the named cases over HTTP, and a client that leaves mid-stream, before its
-    whole reply, or while waiting, on a live server), and OpenJevDiffusionGemmaTests (the prompt
-    parity, opt-in like the other tokenizer tests). They run on macOS and Linux, and the streaming
-    and cancellation tests also ran in a release build, since Swift 6.4 has miscompiled task-group
-    code at `-O` here (PR #122). The cases that need the model (`test_chat_completion_on_mlx`,
+    recorded exchanges, the named cases over HTTP, and on a live server a client that leaves
+    mid-stream, before its whole reply or while waiting, and a graceful and a timed-out shutdown
+    with a stream in flight), and OpenJevDiffusionGemmaTests (the prompt parity, opt-in like the
+    other tokenizer tests). The model-free ones run on macOS and Linux, and the streaming and
+    cancellation tests also ran in a release build, since Swift 6.4 has miscompiled task-group code
+    at `-O` here (PR #122). The cases that need the model (`test_chat_completion_on_mlx`,
     `test_chat_completion_generates_text`, `test_chat_stream_matches_the_whole_reply`,
     `test_chat_json_mode_returns_one_object`, `test_no_reply_leaks_the_thought_channel`, and the
     live suite's `test_chat` and `test_chat_stream`) stay disabled, naming #51 and the wiring after
-    this change; their bodies run through `SystemOneService.textGenerator` once the runtime
-    conforms.
+    this change. Four of the DiffusionGemma ones have upstream's checks as bodies, which run
+    through `SystemOneService.textGenerator` once the runtime conforms;
+    `test_chat_completion_on_mlx` needs the runtime's stub model to generate too, and the live
+    suite's bodies were already upstream's.
 
 Alternatives rejected. (a) A `generator` parameter on the router and `DecisionServer`, which the
 CLI would pass: the backend already knows whether it generates, and the parameter would have to
