@@ -78,8 +78,7 @@ extension MLXTests {
     /// The read cases of upstream's tests/test_mlx_model.py that the earlier live suites did not
     /// cover, named after upstream's, through ``DecisionEngine`` over ``DiffusionGemmaRuntime``.
     /// The README example, same request same answer and the cached prefill are in
-    /// RuntimeLiveTests and ReadOracleTests; the chat cases wait for their milestone and are
-    /// listed at the end as disabled tests.
+    /// RuntimeLiveTests and ReadOracleTests; the think and chat cases come last.
     @Suite(
         "upstream's test_mlx_model.py read cases",
         .enabled(if: ModelFixtures.checkpointAvailable, ModelFixtures.missingCheckpointMessage))
@@ -515,22 +514,15 @@ extension MLXTests {
             #expect(thought.inputTokens > plain.inputTokens)
         }
 
-        // The cases that wait for /v1/chat/completions (#53). Each runs with OPENJEV_TEST_MODEL
-        // once the endpoint exists.
+        // The chat cases (#53), through the runtime's TextGenerator conformance.
 
-        /// Why the chat cases skip until the model generates text.
-        static let waitingForGeneration = Comment(
-            rawValue: "needs the model's generation (#51) behind the chat routes (#53's "
-                + "follow-up); runs with OPENJEV_TEST_MODEL then")
-
-        /// The chat service over the checkpoint, through the backend's ``TextGenerator``
-        /// conformance, which the model's generation brings (#51, then #53's follow-up wires the
-        /// `mlx` backend's routes).
+        /// The chat service over the checkpoint, through the runtime's ``TextGenerator``
+        /// conformance, as the server builds it for the `mlx` backend.
         static func chatService() async throws -> ChatCompletions {
             let live = try await LiveCheckpoint.shared()
             let engine = try DecisionEngine(backend: live.runtime, configuration: .default)
             let generator = try #require(
-                engine.textGenerator, "DiffusionGemmaRuntime does not generate text yet")
+                engine.textGenerator, "DiffusionGemmaRuntime does not generate text")
             return ChatCompletions(generator: generator)
         }
 
@@ -567,8 +559,7 @@ extension MLXTests {
         }
 
         @Test(
-            "test_chat_completion_generates_text",
-            .disabled(Self.waitingForGeneration))
+            "test_chat_completion_generates_text")
         func chatCompletionGeneratesText() async throws {
             let chat = try await Self.chatService()
             let reply = try await chat.complete(try await chat.prepare(Self.chatRequest))
@@ -579,8 +570,7 @@ extension MLXTests {
 
         /// Greedy generation, same prompt: the streamed pieces join to the whole reply.
         @Test(
-            "test_chat_stream_matches_the_whole_reply",
-            .disabled(Self.waitingForGeneration))
+            "test_chat_stream_matches_the_whole_reply")
         func chatStreamMatchesTheWholeReply() async throws {
             let chat = try await Self.chatService()
             let whole = try await chat.complete(try await chat.prepare(Self.chatRequest)).content
@@ -590,8 +580,7 @@ extension MLXTests {
         }
 
         @Test(
-            "test_chat_json_mode_returns_one_object",
-            .disabled(Self.waitingForGeneration))
+            "test_chat_json_mode_returns_one_object")
         func chatJSONModeReturnsOneObject() async throws {
             let chat = try await Self.chatService()
             let body: JSONValue = [
@@ -610,8 +599,7 @@ extension MLXTests {
         /// rather than asserted per reply: the checkpoint returns an empty generation for an
         /// identical greedy prompt about once in thirty, upstream measured.
         @Test(
-            "test_no_reply_leaks_the_thought_channel",
-            .disabled(Self.waitingForGeneration))
+            "test_no_reply_leaks_the_thought_channel")
         func noReplyLeaksTheThoughtChannel() async throws {
             let chat = try await Self.chatService()
             let prompts = [

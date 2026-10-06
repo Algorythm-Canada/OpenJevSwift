@@ -353,10 +353,12 @@ issue #29), upstream's `MlxRuntime` and `MlxEngine.one_read` in one actor:
   `StreamingDetokenizer`, `skipSpecialTokenIDs` left out first, and `emit(text, token)` gets the
   text released. A final `emit(text, nil)` carries the buffered tail. `emit` returning false ends
   the reply after that token, and a cancelled task ends it before the prefill, before the next
-  block or after the last one, all `cancelled`. It returns a `GenerationResult`: the ids, the prompt tokens and `stop`, `length` or
-  `cancelled`. Each reply's random canvases come from `MLXRandom.RandomState(seed:
-  Configuration.generationSeed)` (0), which reproduces `mx.random.seed` in mlx-vlm. The whole
-  reply runs inside the actor, as upstream holds its MLX thread.
+  block or after the last one, all `cancelled`. It returns the core's `TextGeneration`: the ids,
+  the prompt tokens and `stop`, `length` or `cancelled`. Each reply's random canvases come from
+  `MLXRandom.RandomState(seed: Configuration.generationSeed)` (0), which reproduces
+  `mx.random.seed` in mlx-vlm. The whole reply runs inside the actor, as upstream holds its MLX
+  thread. With `generationPromptIDs`, `encode` and `thoughtChannelMarkerIDs` the runtime is a
+  `TextGenerator`, so the server serves `POST /v1/chat/completions` over it (#53, D-059).
 - `think(prompt:budget:stopIDs:)` (#52): `generate` of up to `budget` tokens with the close marker
   as the stop and nothing skipped, as `ThoughtGeneration`; the engine builds the prompt (thinking
   on, the open marker), cuts at the first close id and bills it (`DecisionEngine.think`).

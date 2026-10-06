@@ -413,8 +413,7 @@ DiffusionGemma, for tools that talk to a chat model: the model names `diffusiong
 `response_format` `json_object` or `json_schema` (an instruction to the model and the first JSON
 value of its reply), and `chat_template_kwargs.enable_thinking`. Other OpenAI fields, such as
 `temperature` and `seed`, are dropped, as upstream drops them: generation is greedy. The route is
-served on the `mlx` backend once the model generates text (issue #51 and its wiring); the encoder
-backends have no chat route, as upstream's have none, and answer it with a 404.
+served on the `mlx` backend, whose model generates text (D-059); the encoder backends have no chat route, as upstream's have none, and answer it with a 404.
 
 Errors are OpenAI's shape, `{"error": {"message", "type", "code"}}`, with upstream's statuses: a
 400 `invalid_request_error` for a body that is not JSON, no `messages`, no `model`, a `max_tokens`

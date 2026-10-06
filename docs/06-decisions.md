@@ -3965,7 +3965,7 @@ Decision.
    Upstream's own generation has no task to cancel; this is the Swift side of a client that goes
    away (D-040). The prompt cap is checked in `generate` with upstream's
    message, for `think` (`MlxEngine.think` checks it) and the chat endpoint (`MlxGenerator` checks
-   it). The result type is `GenerationResult`.
+   it). The result type is `TextGeneration`.
 7. **think.** The runtime's `think` is `generate` with the close marker as the stop and nothing
    skipped. The engine's existing `DecisionEngine.think` builds the prompt, cuts at the first close
    id and bills: input is the thought pass's prompt plus the reads after it, output the thought,
@@ -3981,6 +3981,19 @@ Decision.
    re-noise canvas on the last step too, and always applies the stopping rule. It computes the
    step temperature in float32 and has its own quantized soft-embedding kernel. Any of these
    changes greedy replies against upstream's. The port follows mlx-vlm in each.
+
+9. **The chat endpoint runs on it (#53).** PR #136 merged the route over a `TextGenerator` while
+   this change was open, so the runtime now conforms: `generate` returns the core's
+   `TextGeneration` (it had its own `GenerationResult` of the same shape),
+   `thoughtChannelMarkerIDs` is `enc("<|channel>thought\n") + enc("<channel|>")`,
+   `generationPromptIDs` is `SwiftTransformersTokenizer.generationPromptIDs`, rendered off the
+   actor, and `encode` is `Engine.enc`. `DecisionEngine.textGenerator` then returns the runtime and
+   the server adds the chat routes for the `mlx` backend; the CLI needed no change. The cases
+   D-058 item 11 left disabled run: `test_chat_completion_on_mlx` over the stub model and the real
+   tokenizer, the four DiffusionGemma chat cases on the checkpoint, and the live suite's
+   `test_chat` and `test_chat_stream`. This also answers D-058 item 10: mlx-vlm drops the skipped
+   ids before they enter its detokenizer's buffer wherever they appear, so the ordinary `thought`
+   and `\n` tokens among them go too (below), and the port does the same.
 
 Found. Upstream's chat path skips `engine.thought_open + engine.thought_close`, and
 `enc("<|channel>thought\n")` is three ids: the open marker, `thought` (45518) and the newline
@@ -4003,10 +4016,10 @@ upstream does: no reply could be tested against the oracle, and the same `think`
 bill and answer differently from run to run. (c) Caching generation prefills in the read cache:
 chat prompts would evict the reads the cache exists for, and upstream caches none.
 
-Consequences. `think` works on the `mlx` backend with upstream's answers and billing, reproducibly.
-The chat endpoint (#53) can call `generate` as upstream's `MlxGenerator.generate` calls
-`MlxRuntime.generate`. Agreement past the first tokens of a long reply is held only in the exact
+Consequences. `think` works on the `mlx` backend with upstream's answers and billing, reproducibly,
+and so does `POST /v1/chat/completions`, which calls `generate` as upstream's
+`MlxGenerator.generate` calls `MlxRuntime.generate`. Agreement past the first tokens of a long reply is held only in the exact
 tier.
 
-Status. Proposed with issues #50, #51 and #52. First numbered D-058; renumbered because the chat
+Status. Proposed with issues #50, #51, #52 and #53. First numbered D-058; renumbered because the chat
 endpoint's PR #136 claims D-058.

@@ -176,7 +176,7 @@ extension MLXTests {
             task.cancel()
             let result = try await task.value
             #expect(
-                result == GenerationResult(generated: [], promptTokens: 3, finishReason: .cancelled)
+                result == TextGeneration(generated: [], promptTokens: 3, finishReason: .cancelled)
             )
             #expect(log.prefills.isEmpty && log.canvases.isEmpty)
             #expect(emitted.tokens.isEmpty)
@@ -249,6 +249,44 @@ extension MLXTests {
             let capped = try await DiffusionGemmaRuntime.stub(blocks: { _, _ in [7, 8, 9] })
                 .think(prompt: [1], budget: 2, stopIDs: [101])
             #expect(capped == ThoughtGeneration(generated: [7, 8], promptTokens: 1))
+        }
+
+        /// Upstream's test over its `StubRuntime` and the real tokenizer: the whole reply's shape
+        /// (`chat.completion`, a `chatcmpl-` id, the stub reply and its last segment, finish `stop`,
+        /// index 0) and usage billing the prompt the runtime was handed. The chat route's own tests
+        /// check the same shape over a stub generator (OpenJevServerTests); this one goes through the
+        /// runtime's ``/OpenJevCore/TextGenerator`` conformance over a stub model.
+        @Test(
+            "test_chat_completion_on_mlx",
+            .enabled(if: TokenizerFixtures.available, TokenizerFixtures.missingMessage))
+        func chatCompletionOnMLX() async throws {
+            let tokenizer = try await TokenizerFixtures.tokenizer()
+            let log = StubModelLog()
+            let runtime = DiffusionGemmaRuntime.stub(
+                log: log, tokenizer: tokenizer, blocks: { _, _ in [10, 11, 12, 106] })
+            let engine = try DecisionEngine(backend: runtime)
+            let chat = ChatCompletions(generator: try #require(engine.textGenerator))
+            let body: JSONValue = [
+                "model": "diffusiongemma-26b",
+                "messages": [["role": "user", "content": "Where is Zurich?"]],
+            ]
+            let reply = try await chat.complete(try await chat.prepare(body))
+            let prompt = try #require(log.prefills.first)
+            #expect(log.prefills.count == 1)
+            #expect(
+                prompt
+                    == (try await runtime.generationPromptIDs(
+                        messages: [["role": "user", "content": "Where is Zurich?"]], thinking: false
+                    )))
+            #expect(reply.content == " w10 w11 w12")
+            #expect(reply.finishReason == .stop)
+            #expect(reply.identity.id.hasPrefix("chatcmpl-"))
+            #expect(
+                reply.usage == ChatCompletionUsage(promptTokens: prompt.count, completionTokens: 3))
+            let json = reply.json
+            #expect(json["object"]?.stringValue == "chat.completion")
+            #expect(json["model"]?.stringValue == "diffusiongemma-26b")
+            #expect(json["choices"]?[0]?["index"]?.intValue == 0)
         }
     }
 }

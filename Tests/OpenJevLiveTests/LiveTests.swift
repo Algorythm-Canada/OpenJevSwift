@@ -260,7 +260,6 @@ struct LiveTests {
 
     @Test(
         "test_chat",
-        .disabled(Waiting.chat),
         .enabled("the server at OPENJEV_LIVE_URL does not serve text generation") {
             try await ModelListing.lists("diffusiongemma-26b")
         })
@@ -278,7 +277,6 @@ struct LiveTests {
 
     @Test(
         "test_chat_stream",
-        .disabled(Waiting.chat),
         .enabled("the server at OPENJEV_LIVE_URL does not serve text generation") {
             try await ModelListing.lists("diffusiongemma-26b")
         })
@@ -349,13 +347,4 @@ struct LiveTests {
     func encoderJevK5() async throws {
         try await Self.encoder("jevk5-0.2")
     }
-}
-
-/// The skip comments of the tests that wait for a feature of this server. Each names the issue,
-/// and `OPENJEV_LIVE_URL`, which CI's test log check requires of a skipped live test.
-enum Waiting {
-    static let chat = Comment(
-        rawValue: "waits for the model's generation (#51) behind /v1/chat/completions (#53's "
-            + "follow-up); it then runs against OPENJEV_LIVE_URL when the server lists "
-            + "diffusiongemma-26b")
 }

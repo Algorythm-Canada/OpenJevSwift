@@ -373,7 +373,9 @@ committed file.
   (#52, 2026-10-06), the same server: the Swift suite passed 10 (`test_think` among them) and
   skipped 6 (the chat tests and the four encoder models), and upstream's file passed 10
   (`test_think` among them), failed 2 (`test_chat` and `test_chat_stream`, a 404 until #53) and
-  skipped 4.
+  skipped 4. With chat (#53, 2026-10-06), the same server: the Swift suite passed 12 (`test_think`,
+  `test_chat` and `test_chat_stream` among them) and skipped 4 (the encoder models), and upstream's
+  file passed 12 and skipped 4.
   [development.md](development.md#the-live-suite) has the commands, upstream's own file included.
 - **JevBench.** `Tools/jevbench` (issue #61, D-041) runs JevBench v1's 231 public items, and the 102
   TypeSafe public-evaluation rows SemIf compares with Jev, against any `/v1/systemone` server, one

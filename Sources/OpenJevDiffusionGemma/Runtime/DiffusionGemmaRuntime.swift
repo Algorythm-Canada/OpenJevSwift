@@ -94,6 +94,9 @@ public actor DiffusionGemmaRuntime: DecisionBackend {
     public nonisolated let capabilities: BackendCapabilities
     /// `openjev-0.1`, ``/OpenJevCore/ServedModels/diffusionGemmaVersion``.
     public nonisolated let modelName = ServedModels.diffusionGemmaVersion
+    /// The thought-channel markers' ids, ``thoughtChannelMarkerIDs``; empty when the tokenizer
+    /// cannot encode them.
+    nonisolated let markerIDs: [Int]
 
     /// The model the live tests share with the model-level suites, so the 16 GB checkpoint loads
     /// once per test process. Those suites are serialized under one parent and never overlap a
@@ -116,6 +119,7 @@ public actor DiffusionGemmaRuntime: DecisionBackend {
     ) {
         self.tokenizer = tokenizer
         self.configuration = configuration
+        markerIDs = Self.markerIDs(tokenizer)
         capabilities = Self.capabilities(
             images: calls.imagePrompt != nil, think: calls.generation != nil)
         self.calls = calls
@@ -141,6 +145,7 @@ public actor DiffusionGemmaRuntime: DecisionBackend {
         let model = loaded.model
         self.tokenizer = tokenizer
         self.configuration = configuration
+        markerIDs = Self.markerIDs(tokenizer)
         var imagePrompt: ModelCalls.ImagePromptCall?
         if model.readsImages, let transformers = tokenizer as? SwiftTransformersTokenizer {
             imagePrompt = { system, state, images in
@@ -181,6 +186,13 @@ public actor DiffusionGemmaRuntime: DecisionBackend {
         prefills = PrefillCache(
             entryBudget: configuration.promptCacheEntries,
             tokenBudget: configuration.promptCacheTokens)
+    }
+
+    /// `enc("<|channel>thought\n") + enc("<channel|>")`, upstream's `engine.thought_open +
+    /// engine.thought_close`.
+    static func markerIDs(_ tokenizer: any DecisionTokenizer) -> [Int] {
+        guard let tokens = try? EngineTokens(tokenizer: tokenizer) else { return [] }
+        return tokens.thoughtOpen + tokens.thoughtClose
     }
 
     /// The runtime's capabilities: steps, samples and sequential reads, `think` when it

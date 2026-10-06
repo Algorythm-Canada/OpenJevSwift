@@ -8,34 +8,6 @@ import Foundation
 import MLX
 import OpenJevCore
 
-/// What one generation produced.
-public struct GenerationResult: Sendable, Hashable {
-    /// Why a generation ended.
-    public enum FinishReason: String, Sendable, Hashable {
-        /// An EOS id of the model or one of the caller's stop ids; the stop id is not in
-        /// ``GenerationResult/generated``.
-        case stop
-        /// `maxTokens` tokens.
-        case length
-        /// `emit` returned false, or the calling task was cancelled.
-        case cancelled
-    }
-
-    /// The generated ids, without the stop id.
-    public var generated: [Int]
-    /// The prompt tokens processed, the prompt's length.
-    public var promptTokens: Int
-    /// Why it ended.
-    public var finishReason: FinishReason
-
-    /// Creates a result.
-    public init(generated: [Int], promptTokens: Int, finishReason: FinishReason) {
-        self.generated = generated
-        self.promptTokens = promptTokens
-        self.finishReason = finishReason
-    }
-}
-
 extension DiffusionGemmaRuntime {
     /// The model operations generation drives. The real runtime binds them to a
     /// ``DiffusionGemmaModel``; the model-free tests bind them to a stub.
@@ -64,15 +36,15 @@ extension DiffusionGemmaRuntime {
     /// as upstream caches none, and its blocks go to a copy, never to the cached prefill.
     ///
     /// The tokens of a block are taken in order. The first of the model's EOS ids (1, 106, 50) or
-    /// of `stopIDs` ends the reply with ``GenerationResult/FinishReason/stop`` and is not
-    /// returned; the `maxTokens`-th token ends it with ``GenerationResult/FinishReason/length``.
+    /// of `stopIDs` ends the reply with ``/OpenJevCore/TextGeneration/FinishReason/stop`` and is not
+    /// returned; the `maxTokens`-th token ends it with ``/OpenJevCore/TextGeneration/FinishReason/length``.
     /// Every other token goes through the streaming detokenizer, `skipSpecialTokenIDs` left out
     /// before they enter its buffer, and `emit` is called once per token with the text the
     /// detokenizer released (often `""`: a word's text comes with the token after it). At the end
     /// `emit` is called once more with the last buffered text and a nil token, when there is any.
     /// `emit` returning false ends the reply after that token, and a cancelled calling task ends
     /// it before the prefill or before the next block, or after the last block in place of its
-    /// stop or length, all with ``GenerationResult/FinishReason/cancelled`` and no final call.
+    /// stop or length, all with ``/OpenJevCore/TextGeneration/FinishReason/cancelled`` and no final call.
     ///
     /// The canvases are drawn from MLX's generator seeded with
     /// ``Configuration/generationSeed`` (0) for every reply, so a prompt always gets the same
@@ -96,7 +68,7 @@ extension DiffusionGemmaRuntime {
     public func generate(
         prompt: [Int], maxTokens: Int, stopIDs: [Int], skipSpecialTokenIDs: [Int],
         emit: @Sendable (_ text: String, _ token: Int?) -> Bool
-    ) async throws -> GenerationResult {
+    ) async throws -> TextGeneration {
         guard let generation = calls.generation else {
             throw DiffusionGemmaRuntimeError.unsupported("generation")
         }
@@ -106,7 +78,7 @@ extension DiffusionGemmaRuntime {
         }
         // A request cancelled while it waited for the actor runs nothing, not even its prefill.
         if Task.isCancelled {
-            return GenerationResult(
+            return TextGeneration(
                 generated: [], promptTokens: prompt.count, finishReason: .cancelled)
         }
         let clock = ContinuousClock()
@@ -123,10 +95,10 @@ extension DiffusionGemmaRuntime {
         var ids: [Int] = []
         var count = 0
         var committed: [Int]?
-        var finish = GenerationResult.FinishReason.length
+        var finish = TextGeneration.FinishReason.length
         blocks: while count < limit {
             if Task.isCancelled {
-                return GenerationResult(
+                return TextGeneration(
                     generated: ids, promptTokens: prompt.count, finishReason: .cancelled)
             }
             if let committed {
@@ -143,7 +115,7 @@ extension DiffusionGemmaRuntime {
                 detokenizer.add(token, skipping: skipped)
                 ids.append(token)
                 if !emit(detokenizer.lastSegment(), token) {
-                    return GenerationResult(
+                    return TextGeneration(
                         generated: ids, promptTokens: prompt.count, finishReason: .cancelled)
                 }
                 if count >= limit {
@@ -156,7 +128,7 @@ extension DiffusionGemmaRuntime {
         // Cancelled during the last block, which then ended at a stop id or at `maxTokens`: the
         // reply is cancelled all the same, without its tail.
         if Task.isCancelled {
-            return GenerationResult(
+            return TextGeneration(
                 generated: ids, promptTokens: prompt.count, finishReason: .cancelled)
         }
         detokenizer.finalize()
@@ -164,7 +136,7 @@ extension DiffusionGemmaRuntime {
         if !tail.isEmpty {
             _ = emit(tail, nil)
         }
-        return GenerationResult(generated: ids, promptTokens: prompt.count, finishReason: finish)
+        return TextGeneration(generated: ids, promptTokens: prompt.count, finishReason: finish)
     }
 
     /// Upstream's `MlxEngine.think` on the runtime: ``generate(prompt:maxTokens:stopIDs:skipSpecialTokenIDs:emit:)``
@@ -188,5 +160,30 @@ extension DiffusionGemmaRuntime {
             prompt: prompt, maxTokens: budget, stopIDs: stopIDs, skipSpecialTokenIDs: [],
             emit: { _, _ in true })
         return ThoughtGeneration(generated: result.generated, promptTokens: result.promptTokens)
+    }
+}
+
+extension DiffusionGemmaRuntime: TextGenerator {
+    /// `enc("<|channel>thought\n") + enc("<channel|>")`, which the chat route skips.
+    public nonisolated var thoughtChannelMarkerIDs: [Int] { markerIDs }
+
+    /// The prompt of a chat request, upstream's `MlxGenerator.prompt_ids`, through
+    /// ``SwiftTransformersTokenizer/generationPromptIDs(messages:thinking:)``: the chat template,
+    /// then the empty thought scaffold. Rendered on the request's task, outside the actor.
+    ///
+    /// - Throws: ``DiffusionGemmaRuntimeError/unsupported(_:)`` for a runtime whose tokenizer is
+    ///   not the checkpoint's, which has no chat template to render; the template's errors.
+    public nonisolated func generationPromptIDs(messages: [JSONValue], thinking: Bool)
+        async throws -> [Int]
+    {
+        guard let transformers = tokenizer as? SwiftTransformersTokenizer else {
+            throw DiffusionGemmaRuntimeError.unsupported("generation")
+        }
+        return try await transformers.generationPromptIDs(messages: messages, thinking: thinking)
+    }
+
+    /// `Engine.enc`: the ids of `text` without special tokens.
+    public nonisolated func encode(_ text: String) throws -> [Int] {
+        try tokenizer.encode(text, addSpecialTokens: false)
     }
 }

@@ -62,7 +62,6 @@ chat endpoint arrives with issue #53.
 
 ### Generation
 
-- ``GenerationResult``
 - ``DiffusionGenerationPolicy``
 - ``DiffusionSampler``
 - ``DenoisedBlock``

@@ -1,6 +1,6 @@
 import OpenJevCore
 
-/// A backend that reads and generates text, as the DiffusionGemma runtime will once it conforms to
+/// A backend that reads and generates text, as the DiffusionGemma runtime does through
 /// ``/OpenJevCore/TextGenerator``: ``StubBackend``'s reads and ``StubTextGenerator``'s generations.
 ///
 /// A ``/OpenJevCore/DecisionEngine`` over it serves `POST /v1/systemone` and, through
