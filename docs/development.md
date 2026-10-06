@@ -354,7 +354,7 @@ make docs
 ```
 
 `make docs` runs [Tools/docs/build-site.sh](../Tools/docs/build-site.sh): one
-`generate-documentation` call over the four targets with
+`generate-documentation` call over the five targets with
 `--enable-experimental-combined-documentation`, which builds each archive with
 `--transform-for-static-hosting --hosting-base-path OpenJevSwift` and merges them into one site
 with a shared sidebar, then [Tools/docs/index.html](../Tools/docs/index.html) as the front page. It
@@ -382,7 +382,7 @@ swift package --disable-sandbox preview-documentation --target OpenJevCore
   build leaves extended types out, and the two `init(_:)` the server adds to
   `EngineConfiguration` and `EncoderEngineConfiguration` are documented in the source alone.
   `OpenJevCore` depends on no other module, so it names the backends' types in code voice.
-- **Coverage.** Every public symbol declared in the four modules has a doc comment, and a new one
+- **Coverage.** Every public symbol declared in the five modules has a doc comment, and a new one
   needs one too. `generate-documentation` with `--experimental-documentation-coverage
   --coverage-summary-level detailed` reports coverage per symbol, though it also counts the
   members the compiler synthesizes, which no comment can document.
@@ -615,7 +615,7 @@ And took this long:
   3.12 is Ubuntu 24.04's own `python3`, installed with apt inside the Swift container and checked
   by version. A failure prints every HTTP exchange of the failed checks in the log, and the
   artifact `sdk-compat-exchanges` holds every exchange and the three servers' logs for 14 days.
-- **The documentation job.** It builds the four modules' DocC catalogs into one site with
+- **The documentation job.** It builds the five modules' DocC catalogs into one site with
   `Tools/docs/build-site.sh`, every DocC warning an error, so a link that does not resolve or a
   parameter documented under the wrong name fails the pull request
   ([API documentation](#api-documentation)). It keeps Xcode 26.6's default build system, the
@@ -623,7 +623,7 @@ And took this long:
   compiles the dependencies. The site is uploaded with `actions/upload-pages-artifact`, so a pull
   request's run also offers it for download. On `main`, `Check GitHub Pages` asks the Pages API
   whether Pages publishes from GitHub Actions, and `Deploy to GitHub Pages` runs only when it does;
-  until then that job is skipped and the run carries a notice. Enabling Pages is a repository
+  otherwise that job is skipped and the run carries a notice. Enabling Pages is a repository
   setting (Settings, Pages, Build and deployment, Source: GitHub Actions), which no workflow
   changes.
 - **The test log check.** [check-test-log.sh](../.github/scripts/check-test-log.sh) reads the

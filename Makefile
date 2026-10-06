@@ -65,7 +65,7 @@ sdk-compat:
 	$(SWIFT) build --product openjev-stub-server
 	$(SDK_COMPAT_VENV_PYTHON) Tools/sdk-compat/run.py --server "$$($(SWIFT) build --show-bin-path)/openjev-stub-server" $(SDK_COMPAT_ARGS)
 
-# Build the DocC documentation of the four library modules into one static site at
+# Build the DocC documentation of the five library modules into one static site at
 # .build/docs-site, as the Documentation workflow publishes it (macOS only). Any DocC warning fails.
 docs:
 	Tools/docs/build-site.sh
