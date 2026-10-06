@@ -48,14 +48,15 @@ public final class ChatCompletionStream: Sendable {
     private let buffer = ChunkBuffer(capacity: ChatCompletionStream.bufferCapacity)
     private let started = StartFlag()
 
+    /// A stream of `prepared`, whose place holds its slot.
     init(
         prepared: PreparedChatCompletion, generator: any TextGenerator,
-        identity: ChatCompletionIdentity, lease: GenerationLease
+        identity: ChatCompletionIdentity
     ) {
         self.prepared = prepared
         self.generator = generator
         self.identity = identity
-        self.lease = lease
+        self.lease = prepared.lease
     }
 
     /// Stops the stream from any task, as the server does when the client goes away: the

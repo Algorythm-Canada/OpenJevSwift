@@ -18,6 +18,31 @@ final class Counter: @unchecked Sendable {
     }
 }
 
+/// The capacity count of a chat service each time its stub renders a prompt.
+final class RenderObserver: @unchecked Sendable {
+    private let lock = NSLock()
+    private var service: ChatCompletions?
+    private var seen: [Int] = []
+
+    /// The service whose count is recorded; set once it exists, and cleared to break the cycle
+    /// through its generator.
+    var chat: ChatCompletions? {
+        get { lock.withLock { service } }
+        set { lock.withLock { service = newValue } }
+    }
+
+    /// The counts recorded, in order.
+    var counts: [Int] {
+        lock.withLock { seen }
+    }
+
+    /// Records the service's count now, or -1 without a service.
+    func record() {
+        let running = chat?.running ?? -1
+        lock.withLock { seen.append(running) }
+    }
+}
+
 /// Upstream's `MlxGenerator` semantics over a stub generator, without HTTP: the capacity bound
 /// and the slots, the whole reply, and the stream's guarantees as upstream's
 /// `tests/test_mlx_backend.py` pins them, driven the way those tests drive `gen.stream` (issue #53).
@@ -248,9 +273,8 @@ struct ChatCompletionsTests {
     func unrunStream() async throws {
         let chat = ChatCompletions(
             generator: StubTextGenerator(), configuration: .init(maxInflight: 1, maxQueue: 0))
-        let prepared = try await chat.prepare(Self.streamed)
         do {
-            let stream = try await chat.stream(prepared)
+            let stream = try await chat.stream(try await chat.prepare(Self.streamed))
             #expect(chat.running == 1 && chat.freeSlots == 0)
             // The bound is reached: one more is refused before anything is counted.
             await #expect(throws: ChatCompletionError.overloaded) {
@@ -277,13 +301,15 @@ struct ChatCompletionsTests {
         })
         let chat = ChatCompletions(
             generator: generator, configuration: .init(maxInflight: 1, maxQueue: 32))
-        let prepared = try await chat.prepare(Self.streamed)
-        let holder = try await chat.stream(prepared)
+        let holder = try await chat.stream(try await chat.prepare(Self.streamed))
         #expect(chat.running == 1 && chat.freeSlots == 0)
-        let waits = (0..<3).map { _ in
-            Task { try await chat.stream(prepared) }
+        var waits: [Task<ChatCompletionStream, any Error>] = []
+        for _ in 0..<3 {
+            let prepared = try await chat.prepare(Self.streamed)
+            waits.append(Task { try await chat.stream(prepared) })
         }
-        try await Self.until { chat.running == 4 }
+        #expect(chat.running == 4)
+        try await Self.until { chat.capacity.slots.waitingCount == 3 }
         for wait in waits {
             wait.cancel()
         }
@@ -313,7 +339,7 @@ struct ChatCompletionsTests {
         #expect(chat.running == 0 && chat.freeSlots == 8)
     }
 
-    @Test("The bound counts admitted requests: inflight plus queue, then the 529")
+    @Test("The bound counts prepared requests: inflight plus queue, then the 529")
     func bound() async throws {
         let gate = ReadGate()
         let generator = StubTextGenerator(generate: { call, emit in
@@ -322,22 +348,119 @@ struct ChatCompletionsTests {
         })
         let chat = ChatCompletions(
             generator: generator, configuration: .init(maxInflight: 1, maxQueue: 1))
-        let prepared = try await chat.prepare(Self.chat)
-        let first = Task { try await chat.complete(prepared) }
+        let first = Task { try await chat.complete(try await chat.prepare(Self.chat)) }
         await gate.waitForArrivals(1)
-        let second = Task { try await chat.complete(prepared) }
-        try await Self.until { chat.running == 2 }
+        // A prepared request holds its place: it waits for its turn and is never refused.
+        let prepared = try await chat.prepare(Self.chat)
+        #expect(chat.running == 2)
         await #expect(throws: ChatCompletionError.overloaded) {
             _ = try await chat.prepare(Self.chat)
         }
-        // A request prepared before the bound was reached is refused when it is admitted.
-        await #expect(throws: ChatCompletionError.overloaded) {
-            _ = try await chat.complete(prepared)
-        }
+        #expect(generator.renderedPrompts.count == 2, "a refused request rendered its prompt")
+        let second = Task { try await chat.complete(prepared) }
         gate.open()
         _ = try await first.value
         _ = try await second.value
         #expect(chat.running == 0 && chat.freeSlots == 1)
+    }
+
+    /// Upstream renders a prompt on its event loop, so nothing else runs between its check of
+    /// the bound and its count; here prompts render concurrently, so a request is counted in
+    /// before its prompt renders, and the bound bounds how many render at once.
+    @Test("A request is counted in before its prompt renders, and refused before rendering")
+    func countedBeforeRendering() async throws {
+        let observer = RenderObserver()
+        let chat = ChatCompletions(
+            generator: StubTextGenerator(prompt: { messages, thinking in
+                observer.record()
+                return try StubTextGenerator.syntheticPrompt(messages: messages, thinking: thinking)
+            }), configuration: .init(maxInflight: 1, maxQueue: 0))
+        observer.chat = chat
+        defer { observer.chat = nil }
+        _ = try await chat.complete(try await chat.prepare(Self.chat))
+        #expect(observer.counts == [1])
+        let release = try Self.occupy(chat)
+        await #expect(throws: ChatCompletionError.overloaded) {
+            _ = try await chat.prepare(Self.chat)
+        }
+        release()
+        #expect(observer.counts == [1], "a refused request rendered its prompt")
+    }
+
+    @Test("A request refused after it was counted in gives its place back")
+    func refusedAfterCounting() async throws {
+        struct Unencodable: Error {}
+        let tokens = try Self.chatPromptTokens()
+        let short = ChatCompletions(
+            generator: StubTextGenerator(maxPromptTokens: tokens - 1),
+            configuration: .init(maxInflight: 1, maxQueue: 0))
+        let unencodable = ChatCompletions(
+            generator: StubTextGenerator(encode: { _ in throw Unencodable() }),
+            configuration: .init(maxInflight: 1, maxQueue: 0))
+        let unrenderable = ChatCompletions(
+            generator: StubTextGenerator(prompt: { _, _ in throw Unencodable() }),
+            configuration: .init(maxInflight: 1, maxQueue: 0))
+        var body = try #require(Self.chat.objectValue)
+        body.updateValue(true, forKey: "max_tokens")
+        let refusals: [(ChatCompletions, JSONValue, ChatCompletionError)] = [
+            (short, .object(body), .maxTokens(true)),
+            (short, Self.chat, .promptTooLong(tokens: tokens, limit: tokens - 1)),
+            (unencodable, Self.chat(stop: "x"), .backendUnavailable("Unencodable")),
+            (
+                unrenderable, Self.chat,
+                .invalidRequest(
+                    "The messages could not be rendered with the model's chat template: "
+                        + "Unencodable()")
+            ),
+        ]
+        for (chat, request, refusal) in refusals {
+            // Twice: with one place, a place kept by the first would make the second a 529.
+            for _ in 0..<2 {
+                await #expect(throws: refusal) {
+                    _ = try await chat.prepare(request)
+                }
+            }
+            #expect(chat.running == 0, "\(refusal)")
+        }
+    }
+
+    @Test("A prepared request that is never answered gives its place back")
+    func discardedPreparation() async throws {
+        let chat = ChatCompletions(
+            generator: StubTextGenerator(), configuration: .init(maxInflight: 1, maxQueue: 0))
+        do {
+            let prepared = try await chat.prepare(Self.chat)
+            #expect(chat.running == 1 && prepared.prompt.count > 0)
+        }
+        #expect(chat.running == 0 && chat.freeSlots == 1)
+        _ = try await chat.complete(try await chat.prepare(Self.chat))
+        #expect(chat.running == 0 && chat.freeSlots == 1)
+    }
+
+    /// Python's sum of the two settings cannot overflow.
+    @Test("A bound past Int.max is no bound, not a crash")
+    func unboundedSettings() async throws {
+        let chat = ChatCompletions(
+            generator: StubTextGenerator(),
+            configuration: .init(maxInflight: .max, maxQueue: .max))
+        #expect(chat.capacity.limit == .max)
+        let reply = try await chat.complete(try await chat.prepare(Self.chat))
+        #expect(reply.content == #"{"city": "Zurich"}"#)
+        #expect(chat.running == 0)
+    }
+
+    /// Counts one request in, as upstream's tests set `running`, and returns a function that
+    /// counts it out again.
+    static func occupy(_ chat: ChatCompletions) throws -> @Sendable () -> Void {
+        try chat.capacity.admit()
+        return { chat.capacity.leave() }
+    }
+
+    /// `CHAT` with a `stop`.
+    static func chat(stop: JSONValue) -> JSONValue {
+        var body = chat.objectValue ?? JSONObject()
+        body.updateValue(stop, forKey: "stop")
+        return .object(body)
     }
 
     // MARK: The whole reply and preparation

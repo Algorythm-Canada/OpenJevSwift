@@ -34,8 +34,8 @@
         ///
         /// - Throws: A ``/OpenJevCore/ChatCompletionError`` for every refusal before the answer
         ///   starts, which the headers middleware renders, the 503 for a generator that failed
-        ///   included; ``ClientDisconnected`` when the client went away before the answer was
-        ///   ready.
+        ///   included, which is logged at error level; ``ClientDisconnected`` when the client went
+        ///   away before the answer was ready.
         func respond(_ request: Request, context: OpenJevRequestContext) async throws -> Response {
             let log = RefusalLog(context: context)
             let reader = RequestBodyReader(maxBodyBytes: settings.maxBodyBytes)
@@ -48,7 +48,17 @@
             } catch {
                 throw ChatCompletionError.notJSON
             }
-            let prepared = try await chat.prepare(body)
+            let prepared: PreparedChatCompletion
+            do throws(ChatCompletionError) {
+                prepared = try await chat.prepare(body)
+            } catch {
+                // The rest are the client's; a 503 is the generator failing, logged as one that
+                // fails later is.
+                if error.status == 503 {
+                    log.failure(status: error.status, error.message)
+                }
+                throw error
+            }
             let watch = connections?.watch(for: context.channel)
             let chat = chat
             if prepared.request.stream {

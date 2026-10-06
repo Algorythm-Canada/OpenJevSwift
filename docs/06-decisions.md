@@ -3766,12 +3766,19 @@ Decision.
    `model`, the 529 (`running >= gen_max_inflight + gen_max_queue`, `retry-after: 2`),
    `normalize`, then the prompt's limit before the answer starts. `Tools/fixtures/chat_tables.py`
    records upstream's own functions and route (`Fixtures/chat-completions`): `normalize` on 56
-   bodies, `extract_json` on 44 replies, `prompt_ids` on 49 conversations, and 69 HTTP exchanges
+   bodies, `extract_json` on 44 replies, `prompt_ids` on 51 conversations, and 69 HTTP exchanges
    over the stub runtimes of upstream's `test_mlx_backend.py`, with the completion id and clock
    fixed. The port gives the same bytes, event streams included, on 61 of the 69; items 4 and 9
-   are the other eight. The capacity bound is checked where upstream checks it and again when the
-   request is admitted, since the prompt renders on another thread in between and concurrent
-   requests could otherwise pass the bound together; a request refused there gets the same 529.
+   are the other eight. The capacity bound is checked where upstream checks it, and the request
+   is counted in there, before its prompt renders. Upstream counts it once the prompt has
+   rendered, but renders on its event loop, so nothing runs between its check and its count;
+   here prompts render concurrently, each on a thread of its own (item 7). Counting at the check
+   keeps upstream's guarantee that a request past the check is never refused later, refuses a
+   request beyond the bound before it renders anything, and bounds the prompts rendering at once
+   by `OPENJEV_GEN_MAX_INFLIGHT` plus `OPENJEV_GEN_MAX_QUEUE`, which a burst of requests could
+   otherwise exceed without limit, a 16 MB thread each. A request refused after the check gives
+   its place back. The sum saturates at `Int.max` rather than trapping, as Python's cannot
+   overflow.
 4. **A 400 where upstream crashes.** Upstream raises, and Starlette answers a bare 500, for a
    message that is not an object or has no string `role` (the template's `UndefinedError` or
    `TypeError`), a `chat_template_kwargs`, `response_format`, `response_format.json_schema` or
@@ -3786,9 +3793,10 @@ Decision.
    render the messages is a 400 too, and messages nested deeper than 64 levels are refused before
    rendering (item 7). A `stop` given as a dict keeps upstream's reading, its keys.
 5. **A generator's failure.** Upstream's MLX generator lets a runtime error through, a bare 500.
-   Here an error before the answer starts is the 503 `api_error` `inference backend unavailable:
-   <type name>` with `retry-after: 2`, the vLLM generator's answer for a backend that failed, and
-   is logged at error level as D-031 logs a backend failure. After a stream has started the status
+   Here an error before the answer starts, from generating or from encoding a `stop` string, is
+   the 503 `api_error` `inference backend unavailable: <type name>` with `retry-after: 2`, the vLLM
+   generator's answer for a backend that failed, and is logged at error level as D-031 logs a
+   backend failure. After a stream has started the status
    is sent: the connection closes without the response's end, as uvicorn closes it upstream, and
    the failure is logged.
 6. **Streaming and cancellation.** A streamed request takes its slot before its 200, as upstream's
@@ -3819,15 +3827,26 @@ Decision.
      the connection's input as it cancels, which a client's leaving also does.
 7. **Rendering a chat request's prompt.** `SwiftTransformersTokenizer.generationPromptIDs` renders
    the messages as the JSON values they are, keys in the request's order, through the shipped
-   template in D-056's environment, which gains two of jinja2's behaviours that chat messages
-   reach: the `sequence` test passes a dict, and `trim` writes a value that is not a string as
-   Python's `str()` writes it (`None`, `True`, `1.5`, `[1, 'a']`). With them the port gives
-   upstream's text and ids for all 49 recorded conversations, contents that are dicts, numbers and
-   lists of strings among them, and for the 33 prompts the recorded exchanges rendered. Two
+   template in D-056's environment, which gains three of jinja2's behaviours that chat messages
+   reach: the `sequence` test passes a dict, `trim` writes a value that is not a string as
+   Python's `str()` writes it (`None`, `True`, `1.5`, `[1, 'a']`), and `dictsort`, which the
+   template applies to a tool call's arguments, the objects inside them and a legacy tool
+   response, orders keys as jinja2 does, by Python's `str.lower()` and then code point, final
+   sigma included. swift-jinja's own `dictsort` compares keys with Foundation's case-insensitive
+   `compare`, which sorts `ß` as `ss` and a decomposed `é` with a composed one. Lowercasing uses
+   the Swift runtime's Unicode data, which gives a lowercase to 28 scalars Unicode 17 added and
+   CPython 3.14 does not yet know. With them the port gives upstream's text and ids for all 51
+   recorded conversations, contents that are dicts, numbers and lists of strings among them, and
+   argument keys the two `dictsort`s order differently, and for the 33 prompts the recorded
+   exchanges rendered. Two
    differences remain, in tool calls, which upstream's MLX path never declares (it does not pass
    `tools` to the template): a `null` the template writes with `{{ }}`, a tool call argument or a
    tool's missing result, is written as nothing where jinja2 writes `None`, and an integer past
-   `Int` is a float. swift-jinja recurses into tool call arguments: in a debug build, on a thread
+   `Int` is a float. One request is refused instead: an object with two keys that differ only in
+   Unicode normalization, such as `é` composed and decomposed, is a 400, since Python keeps both
+   keys and the template writes both, while swift-jinja keys an object by Swift's `String`, whose
+   equality is canonical equivalence, so one key would replace the other unseen. swift-jinja
+   recurses into tool call arguments: in a debug build, on a thread
    with a task's 512 KB of stack, 7 levels rendered and 16 overflowed it, and 64 needed 8 MB. The
    template renders on a thread of its own with 16 MB of stack, and messages nested deeper than 64
    levels are refused with a 400; jinja2 would raise `RecursionError` deeper still.
@@ -3872,7 +3891,10 @@ be threaded through every provider. (b) Synchronous prompt rendering on the requ
 debug build overflowed it on a request a client controls. (c) Reproducing upstream's 500s, or
 `dict()`'s message: they are crashes, not answers, and a client can do nothing with them.
 (d) Dropping a piece when the queue is full, as upstream's end marker does: a live client would
-read a reply with a gap.
+read a reply with a gap. (e) Counting a request in after its prompt renders, as upstream does,
+with the rendering threads bounded by a pool of their own: requests past the bound would still
+render before their 529, and which of two concurrent requests got the last place would depend on
+how fast each prompt rendered rather than on the order upstream's event loop serves them in.
 
 Consequences. The `mlx` backend serves chat once `DiffusionGemmaRuntime` conforms to
 `TextGenerator`, with nothing else to wire; until then its server has no chat route, though

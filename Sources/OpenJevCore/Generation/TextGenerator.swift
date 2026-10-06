@@ -40,9 +40,11 @@ public struct TextGeneration: Sendable, Hashable {
 /// chat routes either. The core never renders a prompt itself: the chat template and the tokenizer
 /// are the model's.
 ///
-/// The prompt, encoding and limit requirements are used on the request's task, before a generation
-/// is admitted, so a conformance that is an actor implements them `nonisolated`: a request whose
-/// prompt is too long is refused without waiting for the generation in flight.
+/// The prompt, encoding and limit requirements are used on the request's task, before it waits for
+/// its turn to generate, so a conformance that is an actor implements them `nonisolated`: a request
+/// whose prompt is too long is refused without waiting for the generation in flight. The chat
+/// route counts a request against its capacity bound before rendering its prompt, so no more
+/// prompts render at once than the bound allows.
 public protocol TextGenerator: Sendable {
     /// The most prompt tokens a generation may carry, upstream's `OPENJEV_MLX_MAX_PROMPT`. The
     /// chat route compares it with ``generationPromptIDs(messages:thinking:)``, scaffold included,

@@ -26,7 +26,7 @@ struct ChatCompletionPromptTests {
         let scaffold = try TokenizerFixtures.ints(file["scaffold"])
         #expect(scaffold == [100, 45518, 107, 101])
         let rows = try ChatFixtures.cases("prompts.json")
-        #expect(rows.count == 49)
+        #expect(rows.count == 51)
         var textMismatches: [String] = []
         var idMismatches: [String] = []
         for row in rows {

@@ -30,28 +30,42 @@ public struct ChatCompletionsConfiguration: Sendable, Hashable {
 
 /// A chat completion request ready to generate: checked, normalized, its prompt rendered within
 /// the limit and its stop ids found, all before an answer starts.
-public struct PreparedChatCompletion: Sendable, Hashable {
+///
+/// It holds the request's place against the capacity bound, taken by
+/// ``ChatCompletions/prepare(_:)``: ``ChatCompletions/complete(_:)`` or
+/// ``ChatCompletions/stream(_:)`` answers it once and gives the place back when its generation
+/// stops, and a prepared request discarded unanswered gives it back as it goes.
+public struct PreparedChatCompletion: Sendable {
     /// The normalized request.
     public var request: ChatCompletionRequest
     /// The prompt ids, upstream's `prompt_ids`, scaffold included.
     public var prompt: [Int]
     /// The ids of the request's single-token `stop` strings, upstream's `stop_ids`.
     public var stopIDs: [Int]
+    /// The request's place.
+    let lease: GenerationLease
 }
 
 /// `POST /v1/chat/completions` over a ``TextGenerator``: upstream's `MlxGenerator`, whose
 /// normalization, capacity bound and response shapes it shares with the vLLM proxy this port does
 /// not have.
 ///
-/// A request is answered in three steps, each before the next: ``prepare(_:)`` refuses it with
-/// upstream's answers before anything is sent; ``complete(_:)`` generates a whole reply, or
-/// ``stream(_:)`` admits a streamed one and waits for its turn, before its answer starts; the
-/// stream is then drained by ``ChatCompletionStream/run(_:)``.
+/// A request is answered in three steps, each before the next: ``prepare(_:)`` counts it in and
+/// refuses it with upstream's answers before anything is sent; ``complete(_:)`` generates a whole
+/// reply, or ``stream(_:)`` waits for a streamed one's turn, before its answer starts; the stream
+/// is then drained by ``ChatCompletionStream/run(_:)``.
 ///
 /// Capacity is upstream's: a request counts from its admission until its generation has stopped,
 /// at most `OPENJEV_GEN_MAX_INFLIGHT` of them generate at once and the rest wait, and a request that
 /// finds `OPENJEV_GEN_MAX_INFLIGHT` plus `OPENJEV_GEN_MAX_QUEUE` counted is the 529. A request
 /// cancelled while it waits gives its place back.
+///
+/// Upstream counts a request in once its prompt has rendered, but it renders on its event loop,
+/// so nothing else runs between its check of the bound and the count. Here prompts render
+/// concurrently, the DiffusionGemma tokenizer's each on a thread of its own, so the request is
+/// counted in at the check, before its prompt renders: the bound also bounds how many prompts
+/// render at once, and a request that finds it reached is refused before rendering anything
+/// (D-058). One refused later gives its place back.
 public final class ChatCompletions: Sendable {
     /// The model.
     public let generator: any TextGenerator
@@ -94,8 +108,9 @@ public final class ChatCompletions: Sendable {
 
     /// Checks and normalizes a parsed body and renders its prompt, in upstream's order: the
     /// body's `messages` and `model` (``ChatCompletionRequest/checked(_:)``), the capacity bound,
-    /// `normalize` (``ChatCompletionRequest/init(normalizing:maxTokensCap:)``), the prompt and its
-    /// limit, then the stop strings.
+    /// which counts the request in, `normalize`
+    /// (``ChatCompletionRequest/init(normalizing:maxTokensCap:)``), the prompt and its limit, then
+    /// the stop strings. A request refused after it was counted in gives its place back.
     ///
     /// - Throws: A ``ChatCompletionError``: upstream's 400s and 404, the 529 when the bound is
     ///   reached, the 400 for a prompt over ``TextGenerator/maxPromptTokens``, and this port's 400s
@@ -105,9 +120,20 @@ public final class ChatCompletions: Sendable {
         _ body: JSONValue
     ) async throws(ChatCompletionError) -> PreparedChatCompletion {
         let object = try ChatCompletionRequest.checked(body)
-        if capacity.isFull {
-            throw .overloaded
+        try capacity.admit()
+        let lease = GenerationLease(capacity: capacity)
+        do throws(ChatCompletionError) {
+            return try await prepare(object, lease: lease)
+        } catch {
+            lease.release()
+            throw error
         }
+    }
+
+    /// The rest of ``prepare(_:)``, for a request counted in under `lease`.
+    private func prepare(
+        _ object: JSONObject, lease: GenerationLease
+    ) async throws(ChatCompletionError) -> PreparedChatCompletion {
         let request = try ChatCompletionRequest(
             normalizing: object, maxTokensCap: configuration.maxTokens)
         let prompt: [Int]
@@ -134,21 +160,23 @@ public final class ChatCompletions: Sendable {
                 stopIDs.append(ids[0])
             }
         }
-        return PreparedChatCompletion(request: request, prompt: prompt, stopIDs: stopIDs)
+        return PreparedChatCompletion(
+            request: request, prompt: prompt, stopIDs: stopIDs, lease: lease)
     }
 
-    /// Generates a whole reply, upstream's `MlxGenerator.complete`: admitted, then in its turn,
-    /// every emitted text joined, and in JSON mode reduced to its first JSON object or array.
-    /// Cancelling the task stops the generation at its next block.
+    /// Generates a whole reply, upstream's `MlxGenerator.complete`: in its turn, every emitted
+    /// text joined, and in JSON mode reduced to its first JSON object or array. Cancelling the
+    /// task stops the generation at its next block. The place is given back on return.
     ///
-    /// - Throws: ``ChatCompletionError/overloaded`` when the bound was reached since
-    ///   ``prepare(_:)``, `CancellationError` when the task was cancelled while it waited, and
-    ///   whatever the generator throws.
+    /// - Precondition: `prepared` has not been answered before.
+    /// - Throws: `CancellationError` when the task was cancelled while it waited, and whatever
+    ///   the generator throws.
     public func complete(_ prepared: PreparedChatCompletion) async throws -> ChatCompletion {
-        try capacity.admit()
-        defer { capacity.leave() }
+        let lease = prepared.lease
+        precondition(lease.answer(), "a prepared chat completion is answered once")
+        defer { lease.release() }
         try await capacity.slots.wait()
-        defer { capacity.slots.signal() }
+        lease.holdSlot()
         let parts = TextParts()
         let generation = try await generator.generate(
             prompt: prepared.prompt, maxTokens: prepared.request.maxTokens,
@@ -167,27 +195,32 @@ public final class ChatCompletions: Sendable {
                 completionTokens: generation.generated.count))
     }
 
-    /// Admits a streamed reply and waits for its turn, upstream's `MlxGenerator.stream` before
-    /// its response starts. The returned stream holds the place until it has been run and its
-    /// generation has stopped, or until it is discarded without being run.
+    /// Waits for a streamed reply's turn, upstream's `MlxGenerator.stream` before its response
+    /// starts. The returned stream holds the place until it has been run and its generation has
+    /// stopped, or until it is discarded without being run.
     ///
-    /// - Throws: ``ChatCompletionError/overloaded`` when the bound was reached since
-    ///   ``prepare(_:)``, and `CancellationError` when the task was cancelled while it waited,
-    ///   which gives the place back.
+    /// - Precondition: `prepared` has not been answered before.
+    /// - Throws: `CancellationError` when the task was cancelled while it waited, which gives the
+    ///   place back.
     public func stream(_ prepared: PreparedChatCompletion) async throws -> ChatCompletionStream {
-        try capacity.admit()
-        let lease = GenerationLease(capacity: capacity)
-        try await capacity.slots.wait()
+        let lease = prepared.lease
+        precondition(lease.answer(), "a prepared chat completion is answered once")
+        do {
+            try await capacity.slots.wait()
+        } catch {
+            lease.release()
+            throw error
+        }
         lease.holdSlot()
-        return ChatCompletionStream(
-            prepared: prepared, generator: generator, identity: identity(), lease: lease)
+        return ChatCompletionStream(prepared: prepared, generator: generator, identity: identity())
     }
 }
 
 /// Upstream's `running` count and `slots` semaphore: requests counted from admission until their
 /// generation stops, and the generations allowed to run at once.
 final class GenerationCapacity: @unchecked Sendable {
-    /// `OPENJEV_GEN_MAX_INFLIGHT` plus `OPENJEV_GEN_MAX_QUEUE`.
+    /// `OPENJEV_GEN_MAX_INFLIGHT` plus `OPENJEV_GEN_MAX_QUEUE`, or `Int.max` when the sum is
+    /// larger, which no count reaches: Python's sum does not overflow.
     let limit: Int
     /// `asyncio.Semaphore(gen_max_inflight)`.
     let slots: AsyncSemaphore
@@ -197,7 +230,8 @@ final class GenerationCapacity: @unchecked Sendable {
     private var counted = 0
 
     init(inflight: Int, queue: Int) {
-        limit = inflight + queue
+        let (sum, overflow) = inflight.addingReportingOverflow(queue)
+        limit = overflow ? .max : sum
         slots = AsyncSemaphore(permits: inflight)
     }
 
@@ -211,13 +245,8 @@ final class GenerationCapacity: @unchecked Sendable {
         slots.availablePermits
     }
 
-    /// Whether a request now would be refused, the route's `running >= max_inflight +
-    /// max_queue`.
-    var isFull: Bool {
-        lock.withLock { counted >= limit }
-    }
-
-    /// Counts a request in, or refuses it when the bound is reached.
+    /// Counts a request in, or refuses it when the bound is reached, the route's `running >=
+    /// max_inflight + max_queue`.
     func admit() throws(ChatCompletionError) {
         let admitted = lock.withLock { () -> Bool in
             guard counted < limit else { return false }
@@ -238,19 +267,30 @@ final class GenerationCapacity: @unchecked Sendable {
     }
 }
 
-/// A streamed request's place: counted in from ``ChatCompletions/stream(_:)`` and, once its turn
-/// came, holding a slot. ``release()`` gives both back once; a lease that is discarded first, as
-/// the stream of an answer whose head could not be written is, gives them back as it goes.
+/// A request's place: counted in by ``ChatCompletions/prepare(_:)`` and, once its turn came,
+/// holding a slot. ``release()`` gives both back once; a lease that is discarded first, as a
+/// prepared request never answered or the stream of an answer whose head could not be written
+/// is, gives them back as it goes.
 final class GenerationLease: @unchecked Sendable {
     private let capacity: GenerationCapacity
 
     // Guarded by `lock`.
     private let lock = NSLock()
+    private var answered = false
     private var slotHeld = false
     private var released = false
 
+    /// A lease of a place `capacity` has already counted in.
     init(capacity: GenerationCapacity) {
         self.capacity = capacity
+    }
+
+    /// Records that the request is being answered; false when it already was.
+    func answer() -> Bool {
+        lock.withLock {
+            defer { answered = true }
+            return !answered
+        }
     }
 
     /// Records that the slot was taken.

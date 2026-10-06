@@ -205,6 +205,13 @@ TURNS = [
 ]
 TOOL_CALL = {"id": "call_1", "type": "function",
              "function": {"name": "get_weather", "arguments": "{\"city\": \"Zurich\"}"}}
+# Keys jinja2's dictsort orders by str.lower() and code point where a case-insensitive Unicode
+# compare would not: a sharp s, a decomposed e acute, capitals, a dotted capital I, CJK.
+SORTED_KEYS = ["b", chr(0xE4), "a", "f", "Z", "_x", "B", chr(0xDF), "z", chr(0xC4), "ea", "ez",
+               chr(0x65E5) + chr(0x672C), chr(0x4E2D), "e" + chr(0x301), "A", "a1", "a_",
+               chr(0xC9) + "b", "1", "~", "j", chr(0x130), "i"]
+# A capital sigma ending a word lowers to a final sigma, which sorts before a medial one.
+SIGMA_KEYS = [chr(0x3B1) + chr(0x3C3), chr(0x391) + chr(0x3A3), chr(0x3B1) + chr(0x3C2)]
 
 
 def conversation(turns):
@@ -312,6 +319,18 @@ PROMPT_BODIES = [
         {"role": "tool", "tool_call_id": "call_2", "content": [{"type": "text", "text": "booked"}]},
         {"role": "user", "content": "Thanks."}]},
      "arguments as an object are written sorted, without JSON quoting; a tool response as text parts"),
+    ("tool_call_arguments_sorted_as_python", {"messages": [
+        {"role": "user", "content": "Sort them."},
+        {"role": "assistant", "content": "", "tool_calls": [{"id": "call_3", "type": "function", "function": {
+            "name": "sort",
+            "arguments": dict.fromkeys(SORTED_KEYS, 1) | {"nested": dict.fromkeys(SIGMA_KEYS, 2)}}}]},
+        {"role": "tool", "tool_call_id": "call_3", "content": "sorted"}]},
+     "dictsort orders keys by str.lower() and code point, at the top and inside an argument"),
+    ("legacy_tool_responses_sorted_as_python", {"messages": [
+        {"role": "user", "content": "Sort them."},
+        {"role": "assistant", "content": "", "tool_responses": [
+            {"name": "sort", "response": dict.fromkeys(SIGMA_KEYS + SORTED_KEYS, 3)}]}]},
+     "a legacy tool response's object is sorted the same way"),
     ("tool_call_then_answer", {"messages": [
         {"role": "user", "content": "Weather in Zurich?"},
         {"role": "assistant", "content": None, "tool_calls": [TOOL_CALL]},

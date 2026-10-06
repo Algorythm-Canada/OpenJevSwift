@@ -314,6 +314,37 @@
                 })
         }
 
+        /// The generator fails before the answer starts when it cannot encode a `stop` string:
+        /// the same 503, logged the same way, and the place given back.
+        @Test("A stop string the generator cannot encode is a 503, logged as a failure")
+        func unencodableStop() async throws {
+            struct EncoderFault: Error {}
+            let generator = StubTextGenerator(encode: { _ in throw EncoderFault() })
+            let recorder = LogRecorder()
+            try await ChatHarness.withClient(generator: generator, logger: recorder.logger) {
+                client, chat in
+                let response = try await ChatHarness.post(client, ChatHarness.chat(["stop": "x"]))
+                #expect(response.status == .serviceUnavailable)
+                #expect(
+                    ServerHarness.text(response)
+                        == #"{"error":{"message":"inference backend unavailable: EncoderFault","#
+                        + #""type":"api_error","code":null}}"#)
+                #expect(ServerHarness.header(response, "retry-after") == "2")
+                #expect(chat.running == 0 && generator.calls.isEmpty)
+                // The client's own mistakes are not logged as failures.
+                let refused = try await ChatHarness.post(client, ChatHarness.chat(["stop": 5]))
+                #expect(refused.status == .badRequest)
+            }
+            let failures = recorder.lines.filter { $0.level >= .warning }
+            #expect(failures.count == 1, "\(failures)")
+            #expect(
+                failures.first.map {
+                    $0.level == .error
+                        && $0.message.hasPrefix("503 ")
+                        && $0.message.hasSuffix("inference backend unavailable: EncoderFault")
+                } == true, "\(failures)")
+        }
+
         @Test("A body that is not JSON is the 400, whatever its content type")
         func notJSON() async throws {
             try await ChatHarness.withClient(generator: StubTextGenerator()) { client, _ in

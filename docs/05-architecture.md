@@ -440,16 +440,18 @@ D-038 record where the server differs from upstream.
 backends and not for the encoders (D-012). `ChatCompletionsRoute` reads the body as Starlette's
 `request.json()` does, whatever its content type, and `ChatCompletions` (OpenJevCore) answers in
 upstream's order: `messages`, `model`, the capacity bound (`OPENJEV_GEN_MAX_INFLIGHT` plus
-`OPENJEV_GEN_MAX_QUEUE`, the 529 with `retry-after: 2`), `normalize`, the prompt and its limit,
-then the stop strings, every refusal in OpenAI's error shape before an answer starts. A whole
-reply generates while the client is there, as a decision does. A streamed reply is admitted and
-waits for its turn before its 200 is sent; then `ChatCompletionStream` runs the generation beside
-a queue of 64 pieces, which the route drains into the event stream while a sibling task watches
-the connection. A client that goes away, or a piece that finds the queue full, stops the
-generation at its next block, so a reply ends early rather than reaching a live client with a
-piece missing. The slot comes back once the generation has stopped, and a stream whose answer
-never started gives it back as it is discarded. The chat template renders on a thread of its
-own, since it recurses into a request's tool calls. D-058 records the choices.
+`OPENJEV_GEN_MAX_QUEUE`, the 529 with `retry-after: 2`), which counts the request in before its
+prompt renders, `normalize`, the prompt and its limit, then the stop strings, every refusal in
+OpenAI's error shape before an answer starts. A whole reply generates while the client is there, as
+a decision does. A streamed reply waits for its turn before its 200 is sent; then
+`ChatCompletionStream` runs the generation beside a queue of 64 pieces, which the route drains into
+the event stream while a sibling task watches the connection. A client that goes away, or a piece
+that finds the queue full, stops the generation at its next block, so a reply ends early rather
+than reaching a live client with a piece missing. The slot comes back once the generation has
+stopped, and a stream whose answer never started gives it back as it is discarded. The chat
+template renders on a thread of its own, since it recurses into a request's tool calls, and
+counting a request in before its prompt renders bounds how many such threads run at once. D-058
+records the choices.
 
 `ModelRouter` is `OPENJEV_MODEL_ROUTES`, upstream's `forward`. The route asks it once the body has
 passed validation, before the model name is checked: a model with a route that the service does

@@ -420,10 +420,11 @@ Errors are OpenAI's shape, `{"error": {"message", "type", "code"}}`, with upstre
 400 `invalid_request_error` for a body that is not JSON, no `messages`, no `model`, a `max_tokens`
 that is not a positive integer or a prompt over `OPENJEV_MLX_MAX_PROMPT`, a 404 `model_not_found`,
 and the 529 `overloaded_error` with `retry-after: 2` once `OPENJEV_GEN_MAX_INFLIGHT` plus
-`OPENJEV_GEN_MAX_QUEUE` requests are generating or waiting. That is two seconds where a decision's
-529 says one, as upstream's do. A generation that fails before its answer starts is a 503
-`api_error` naming the error's type, logged at error level. Authentication and the body limit
-apply as on every `/v1/` route, with Jev's error shape.
+`OPENJEV_GEN_MAX_QUEUE` requests are in progress, a request counting from that check on: rendering
+its prompt, waiting or generating. That is two seconds where a decision's 529 says one, as
+upstream's do. A generator that fails before the answer starts, generating or encoding a `stop`
+string, is a 503 `api_error` naming the error's type, logged at error level. Authentication and the
+body limit apply as on every `/v1/` route, with Jev's error shape.
 
 The model generates one reply at a time, and a reply holds it for its whole length: a few hundred
 tokens take seconds, so requests beyond `OPENJEV_GEN_MAX_INFLIGHT` wait, and decisions wait for the

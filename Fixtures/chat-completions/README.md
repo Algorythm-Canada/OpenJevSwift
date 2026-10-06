@@ -19,15 +19,17 @@ enable_thinking=thinking)` and `ids` is `prompt_ids`, which the script checks is
 without special tokens followed by the scaffold.
 
 The rows cover user, system, developer and assistant turns, multi-turn conversations with and
-without a system turn, consecutive assistant messages, a thought channel inside an assistant
-turn, an unknown role, content as text parts in each role, image and `image_url` parts, non-ASCII
-text, special token text, inner whitespace, the template's `trim` (ASCII whitespace, U+001C to
-U+001F, the other characters `str.isspace()` accepts, and U+200B, which stays), empty, missing
-and null content, extra message keys, OpenAI tool calls with string and object arguments and
-their responses, `reasoning_content`, a twelve-round conversation, JSON mode with and without a
-system turn, and content shapes a client may send that are not OpenAI's: a dict, parts that are
-not dicts, a number, and text parts whose text is null, a number, a Boolean, a list or a dict,
-which jinja2 writes as Python's `str()` does.
+without a system turn, consecutive assistant messages, a thought channel inside an assistant turn,
+an unknown role, content as text parts in each role, image and `image_url` parts, non-ASCII text,
+special token text, inner whitespace, the template's `trim` (ASCII whitespace, U+001C to U+001F,
+the other characters `str.isspace()` accepts, and U+200B, which stays), empty, missing and null
+content, extra message keys, OpenAI tool calls with string and object arguments and their
+responses, argument keys and a legacy `tool_responses` object that jinja2's `dictsort` orders by
+`str.lower()` and code point (a sharp s, a decomposed e acute, capitals, a dotted capital I, a
+final sigma, CJK), `reasoning_content`, a twelve-round conversation, JSON mode with and without a
+system turn, and content shapes a client may send that are not OpenAI's: a dict, parts that are not
+dicts, a number, and text parts whose text is null, a number, a Boolean, a list or a dict, which
+jinja2 writes as Python's `str()` does.
 
 ## normalize.json
 

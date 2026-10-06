@@ -96,8 +96,8 @@ struct ChatTemplateTrimTests {
     }
 
     /// A JSON value as the template reads a chat request's.
-    static func value(_ json: JSONValue) -> any Sendable {
-        SwiftTransformersTokenizer.templateValue(json)
+    static func value(_ json: JSONValue) throws -> any Sendable {
+        try SwiftTransformersTokenizer.templateValue(json)
     }
 
     @Test("A value that is not a string is trimmed as Python's str() writes it (D-058)")

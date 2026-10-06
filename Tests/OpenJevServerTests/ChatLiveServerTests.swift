@@ -70,9 +70,14 @@
                 #expect(try await eventually { generator.running == 0 })
                 #expect(
                     emitted.count < 200, "the generation ran to completion after the client left")
+                // The stream gives its place back once its run has ended, a moment after the
+                // generation stopped; until then the next request is the 529. One whose place
+                // never came back would be refused until the limit.
                 let next = server.client()
-                let response = try await next.execute(Self.post(ChatHarness.chat))
-                #expect(response.status == .ok)
+                #expect(
+                    try await eventually {
+                        (try? await next.execute(Self.post(ChatHarness.chat)))?.status == .ok
+                    })
                 try await next.shutdown()
             }
         }
@@ -191,13 +196,13 @@
         @Test("A stream the server cancels counts as cut short, even with its watch closed")
         func serverCancellationIsNotAClientLeaving() async throws {
             let chat = ChatCompletions(generator: Self.gated(ReadGate()))
-            let prepared = try await chat.prepare(ChatHarness.chat(["stream": true]))
-            let cut = try await chat.stream(prepared)
+            let streamed = ChatHarness.chat(["stream": true])
+            let cut = try await chat.stream(try await chat.prepare(streamed))
             await #expect(throws: CancellationError.self) {
                 try await Self.writeWithClosedWatch(cut, cancelled: true)
             }
             // A client that left, with the task not cancelled, ends the stream quietly.
-            let left = try await chat.stream(prepared)
+            let left = try await chat.stream(try await chat.prepare(streamed))
             await #expect(throws: Never.self) {
                 try await Self.writeWithClosedWatch(left, cancelled: false)
             }
