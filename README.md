@@ -48,8 +48,14 @@ echo '{"model":"jev-latest","state":"The deploy failed twice and the site is dow
 ```
 
 Ctrl-C stops the server gracefully. [docs/deployment.md](docs/deployment.md) covers the settings,
-a launchd job, the logs and the exit statuses, and the DocC article "Making decisions in an app"
-loads the same models inside an app.
+a launchd job, the logs and the exit statuses.
+
+An app depends on a release and links `OpenJevCore` and the module of each backend it loads; the
+DocC article "Making decisions in an app" loads the same models inside an app:
+
+```swift
+.package(url: "https://github.com/Algorythm-Canada/OpenJevSwift.git", from: "0.1.0"),
+```
 
 ## Requirements
 
@@ -69,9 +75,11 @@ core, the server and the `openjev` tool for the tests, without any backend.
 
 ## Status
 
-Milestones 0 to 4 are complete, every work issue in them closed: the foundations, the decision
-engine core, DiffusionGemma reads on MLX, the Jev-compatible HTTP server with the `openjev` tool,
-and the read extensions and images. `steps`, `samples` and `sequential` are verified end to end on
+Release 0.1.0 is the first version a package can depend on; [CHANGELOG.md](CHANGELOG.md) lists
+what it ships. Milestones 0 to 5 are complete, every work issue in them closed: the foundations,
+the decision engine core, DiffusionGemma reads on MLX, the Jev-compatible HTTP server with the
+`openjev` tool, the read extensions and images, and text generation with `think` and chat
+completions (#50 to #53). `steps`, `samples` and `sequential` are verified end to end on
 the DiffusionGemma checkpoint (#43, #44 and #45), and images are read on it, matching upstream's
 image reads bit for bit on the oracle's kernels (#46 to #48). Verdict and Laya, from milestone 6,
 and from milestone 7 the JevBench comparison with upstream and DiffusionGemma's calibration report
@@ -121,6 +129,11 @@ macOS, iOS and Linux.
   quality against upstream, and speed and memory.
 - **[docs/README.md](docs/README.md)**: the index of the design documents, from how upstream works
   to the decisions and the conformance strategy.
+- **[CHANGELOG.md](CHANGELOG.md)**: each release and the versioning policy.
+- **[SECURITY.md](SECURITY.md)**: how to report a vulnerability, what the code connects to and how
+  it handles keys.
+- **[ADOPTERS.md](ADOPTERS.md)**: organizations that use OpenJevSwift; add yours with a pull
+  request.
 
 ## License and credits
 

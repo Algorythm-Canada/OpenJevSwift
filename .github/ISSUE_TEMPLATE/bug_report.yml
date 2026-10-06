@@ -1,0 +1,74 @@
+name: Bug report
+description: Something in OpenJevSwift does not work as its documentation says.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        An answer, status or header that differs from upstream OpenJev's for the same request is a
+        compatibility report: use that template instead. Report a security problem privately, as
+        [SECURITY.md](https://github.com/Algorythm-Canada/OpenJevSwift/blob/main/SECURITY.md)
+        says, never in an issue. Leave API keys, tokens and private data out of everything you
+        paste.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The release or commit, and what `openjev --version` prints if you run the tool.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: usage
+    attributes:
+      label: How you use it
+      options:
+        - openjev serve
+        - openjev decide or openjev models
+        - The libraries in an app
+        - Something else
+    validations:
+      required: true
+  - type: dropdown
+    id: backend
+    attributes:
+      label: Backend
+      multiple: true
+      options:
+        - mlx (DiffusionGemma)
+        - verdict
+        - laya
+        - jevk5
+        - Not backend-specific
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      description: The OS and its version, the chip and its memory, and the Xcode or Swift version that built OpenJevSwift.
+      placeholder: macOS 27.0, M3 Max with 128 GB, Xcode 27.0
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The commands, the `OPENJEV_*` settings and the request that show the problem, or the smallest code that does.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: What should have happened, and the documentation that says so if you know it.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened
+      description: The response or the error, and the log lines around it.
+      render: text
+    validations:
+      required: true

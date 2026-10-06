@@ -1,0 +1,59 @@
+name: Compatibility report
+description: OpenJevSwift answers a request differently from upstream OpenJev.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        OpenJevSwift answers every request as upstream OpenJev does, apart from the differences
+        [docs/compatibility.md](https://github.com/Algorythm-Canada/OpenJevSwift/blob/main/docs/compatibility.md)
+        records. Check its third table, "Different, and why", first: a difference listed there is
+        table, not bit for bit. Send the same request to both servers, with the same backend, and
+        paste each exchange whole after redacting private data. Remove API keys and tokens from
+        the headers.
+  - type: input
+    id: openjevswift
+    attributes:
+      label: OpenJevSwift
+      description: The release or commit, the backend and the platform.
+      placeholder: 0.1.0, verdict, macOS 27.0 on an M3 Max
+    validations:
+      required: true
+  - type: input
+    id: upstream
+    attributes:
+      label: Upstream OpenJev
+      description: The version or commit of razorback16/openjev, the backend, and how it ran.
+      placeholder: 0.5.0 (dcd2094), verdict, python -m openjev
+    validations:
+      required: true
+  - type: textarea
+    id: request
+    attributes:
+      label: The request
+      description: The method, the path, the headers and the body, for example as a curl command.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: upstream-response
+    attributes:
+      label: Upstream's response
+      description: The status, the headers and the body, as `curl -i` prints them.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: openjevswift-response
+    attributes:
+      label: This server's response
+      description: The status, the headers and the body, as `curl -i` prints them.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: What the difference breaks
+      description: Which client, SDK or workflow fails because of it, if any.
+    validations:
+      required: false
