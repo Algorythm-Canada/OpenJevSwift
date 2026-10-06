@@ -31,6 +31,8 @@ public final class ClippableLinear: Module, UnaryLayer {
         super.init()
     }
 
+    /// `x`, `[..., inputs]`, projected to `[..., outputs]`. When the layer clips, `x` is clamped
+    /// to `input_min` and `input_max` first and the result to `output_min` and `output_max`.
     public func callAsFunction(_ x: MLXArray) -> MLXArray {
         var x = x
         if let inputMin, let inputMax {
@@ -97,6 +99,8 @@ public final class VisionRMSNorm: Module, UnaryLayer {
         super.init()
     }
 
+    /// `x`, `[..., dimensions]`, normed over its last axis and scaled by `weight`, in its own
+    /// shape and dtype.
     public func callAsFunction(_ x: MLXArray) -> MLXArray {
         let float = x.asType(.float32)
         // `x_float**2` is MLX's power, not square, and the wheel's power is the precise pow.
@@ -182,11 +186,17 @@ func visionFusedAttention(
 /// vision.py's `VisionAttention`: bidirectional attention over the patches with 2D RoPE and
 /// normed queries, keys and values, at scale 1.
 public final class VisionAttention: Module {
+    /// The query projection, `q_proj`.
     @ModuleInfo(key: "q_proj") public var qProj: ClippableLinear
+    /// The key projection, `k_proj`.
     @ModuleInfo(key: "k_proj") public var kProj: ClippableLinear
+    /// The value projection, `v_proj`.
     @ModuleInfo(key: "v_proj") public var vProj: ClippableLinear
+    /// The output projection, `o_proj`.
     @ModuleInfo(key: "o_proj") public var oProj: ClippableLinear
+    /// The query norm over each head, `q_norm`.
     @ModuleInfo(key: "q_norm") public var qNorm: VisionRMSNorm
+    /// The key norm over each head, `k_norm`.
     @ModuleInfo(key: "k_norm") public var kNorm: VisionRMSNorm
 
     let heads: Int
@@ -212,6 +222,15 @@ public final class VisionAttention: Module {
         super.init()
     }
 
+    /// vision.py's `VisionAttention.__call__`: queries and keys normed and rotated by the
+    /// patches' positions, values normed without a scale, attention at scale 1, and the output
+    /// projection.
+    ///
+    /// - Parameters:
+    ///   - x: `[B, L, hidden]`, one row per patch.
+    ///   - positions: `[B, L, 2]` int32 patch coordinates, x first.
+    ///   - mask: the attention mask, `[B, 1, L, L]`, or nil for none.
+    /// - Returns: `[B, L, hidden]`.
     public func callAsFunction(_ x: MLXArray, positions: MLXArray, mask: MLXArray?) -> MLXArray {
         let (batch, length) = (x.dim(0), x.dim(1))
         var queries = qNorm(qProj(x).reshaped(batch, length, heads, headDim))
@@ -230,8 +249,11 @@ public final class VisionAttention: Module {
 
 /// vision.py's `VisionMLP`: `down(gelu_approx(gate(x)) * up(x))`.
 public final class VisionMLP: Module, UnaryLayer {
+    /// The gate projection, `gate_proj`.
     @ModuleInfo(key: "gate_proj") public var gateProj: ClippableLinear
+    /// The up projection, `up_proj`.
     @ModuleInfo(key: "up_proj") public var upProj: ClippableLinear
+    /// The down projection back to the hidden size, `down_proj`.
     @ModuleInfo(key: "down_proj") public var downProj: ClippableLinear
 
     /// The MLP of one block.
@@ -246,6 +268,7 @@ public final class VisionMLP: Module, UnaryLayer {
         super.init()
     }
 
+    /// `down_proj(gelu_approx(gate_proj(x)) * up_proj(x))`, in `x`'s shape, `[..., hidden]`.
     public func callAsFunction(_ x: MLXArray) -> MLXArray {
         // MLXNN's geluApproximate is mlx.nn.gelu_approx, compiled shapeless as there.
         downProj(geluApproximate(gateProj(x)) * upProj(x))
@@ -255,11 +278,17 @@ public final class VisionMLP: Module, UnaryLayer {
 /// vision.py's `VisionTransformerBlock`: attention and MLP, each between two norms, with
 /// residuals.
 public final class VisionBlock: Module {
+    /// The self-attention, `self_attn`.
     @ModuleInfo(key: "self_attn") public var selfAttention: VisionAttention
+    /// The MLP, `mlp`.
     @ModuleInfo public var mlp: VisionMLP
+    /// The norm before the attention, `input_layernorm`.
     @ModuleInfo(key: "input_layernorm") public var inputLayerNorm: RMSNorm
+    /// The norm of the attention's output, `post_attention_layernorm`.
     @ModuleInfo(key: "post_attention_layernorm") public var postAttentionLayerNorm: RMSNorm
+    /// The norm before the MLP, `pre_feedforward_layernorm`.
     @ModuleInfo(key: "pre_feedforward_layernorm") public var preFeedforwardLayerNorm: RMSNorm
+    /// The norm of the MLP's output, `post_feedforward_layernorm`.
     @ModuleInfo(key: "post_feedforward_layernorm") public var postFeedforwardLayerNorm: RMSNorm
 
     /// One block.
@@ -274,6 +303,15 @@ public final class VisionBlock: Module {
         super.init()
     }
 
+    /// vision.py's `VisionTransformerBlock.__call__`: the attention's residual
+    /// `h = x + post_attention_layernorm(self_attn(input_layernorm(x)))`, then the MLP's,
+    /// `h + post_feedforward_layernorm(mlp(pre_feedforward_layernorm(h)))`.
+    ///
+    /// - Parameters:
+    ///   - x: `[B, L, hidden]`.
+    ///   - positions: `[B, L, 2]` int32 patch coordinates, x first, for the attention's RoPE.
+    ///   - mask: the attention mask, `[B, 1, L, L]`, or nil for none.
+    /// - Returns: `[B, L, hidden]`.
     public func callAsFunction(_ x: MLXArray, positions: MLXArray, mask: MLXArray?) -> MLXArray {
         let attention = postAttentionLayerNorm(
             selfAttention(inputLayerNorm(x), positions: positions, mask: mask))
@@ -285,7 +323,10 @@ public final class VisionBlock: Module {
 /// vision.py's `VisionPatchEmbedder`: each 16 by 16 patch projected, plus a learned embedding
 /// per axis of its position.
 public final class VisionPatchEmbedder: Module {
+    /// The projection of each patch's `3·p·p` pixel values to the hidden size, `input_proj`.
     @ModuleInfo(key: "input_proj") public var inputProj: Linear
+    /// The position embeddings, `position_embedding_table`: one table per axis, x first, with a
+    /// row per coordinate, `[2, position_embedding_size, hidden]`.
     @ParameterInfo(key: "position_embedding_table") public var positionEmbeddingTable: MLXArray
 
     let patchSize: Int
@@ -329,6 +370,14 @@ public final class VisionPatchEmbedder: Module {
         return inputProj(patches.asType(inputProj.weight.dtype))
     }
 
+    /// vision.py's `VisionPatchEmbedder.__call__`: each patch's pixels scaled to [-1, 1] and
+    /// projected, plus the embedding of its position, which is zero for a padding patch.
+    ///
+    /// - Parameters:
+    ///   - pixels: `[B, C, H, W]`.
+    ///   - positions: `[B, patches, 2]` int32 patch coordinates, x first.
+    ///   - padding: `[B, patches]`, true for a padding patch.
+    /// - Returns: `[B, patches, hidden]`.
     public func callAsFunction(_ pixels: MLXArray, positions: MLXArray, padding: MLXArray)
         -> MLXArray
     {
@@ -340,9 +389,15 @@ public final class VisionPatchEmbedder: Module {
 /// (`encoder.layers`): patches, 27 bidirectional blocks, a 3 by 3 average pool into soft
 /// tokens, times √hidden, and the standardization.
 public final class VisionModel: Module {
+    /// The patch embedder, `patch_embedder`.
     @ModuleInfo(key: "patch_embedder") public var patchEmbedder: VisionPatchEmbedder
+    /// The transformer blocks, `encoder`.
     @ModuleInfo public var encoder: VisionEncoder
+    /// The shift the standardization subtracts from the soft tokens, `std_bias`, or nil when
+    /// the configuration does not standardize.
     @ParameterInfo(key: "std_bias") public var stdBias: MLXArray?
+    /// The scale the standardization then multiplies them by, `std_scale`, or nil when the
+    /// configuration does not standardize.
     @ParameterInfo(key: "std_scale") public var stdScale: MLXArray?
 
     /// The configuration the tower was built from.
@@ -469,6 +524,7 @@ public final class VisionModel: Module {
 
 /// vision.py's `VisionTransformerModel`, `vision_tower.encoder`: the blocks.
 public final class VisionEncoder: Module {
+    /// The blocks, `layers`, in the order they run.
     @ModuleInfo public var layers: [VisionBlock]
 
     /// `num_hidden_layers` blocks.
@@ -477,6 +533,14 @@ public final class VisionEncoder: Module {
         super.init()
     }
 
+    /// vision.py's `VisionTransformerModel.__call__`: `x` through every block in order.
+    ///
+    /// - Parameters:
+    ///   - x: `[B, L, hidden]`, the patch embeddings.
+    ///   - positions: `[B, L, 2]` int32 patch coordinates, x first.
+    ///   - mask: the attention mask, `[B, 1, L, L]`, or nil for none.
+    ///   - stages: receives each block's output as `vision.layer.N`, for the parity tests.
+    /// - Returns: `[B, L, hidden]`, the last block's output.
     public func callAsFunction(
         _ x: MLXArray, positions: MLXArray, mask: MLXArray?, stages: StageObserver? = nil
     ) -> MLXArray {
@@ -492,6 +556,7 @@ public final class VisionEncoder: Module {
 /// gemma4.py's `MultimodalEmbedder`, `embed_vision`: the soft tokens normed without a scale
 /// (language.py's `RMSNormNoScale`) and projected to the text model's width.
 public final class MultimodalEmbedder: Module, UnaryLayer {
+    /// The projection from the tower's width to the text model's, `embedding_projection`.
     @ModuleInfo(key: "embedding_projection") public var embeddingProjection: Linear
     let eps: Float
 
@@ -503,6 +568,8 @@ public final class MultimodalEmbedder: Module, UnaryLayer {
         super.init()
     }
 
+    /// The soft tokens `x`, `[..., embeddingDimensions]`, normed without a scale and projected to
+    /// the text model's width, `[..., textHiddenSize]`.
     public func callAsFunction(_ x: MLXArray) -> MLXArray {
         embeddingProjection(rmsNormNoScale(x, eps: eps))
     }
