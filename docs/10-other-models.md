@@ -53,14 +53,15 @@ calibration that a Swift port must reproduce exactly. Facts below come from upst
 
 ## What a Swift "encoder backend" shares
 
-Upstream's `EncoderEngine` contract, which the Swift `OpenJevCore` will mirror as a sibling of
-`DecisionBackend`:
+Upstream's `EncoderEngine` contract, which `OpenJevCore` mirrors as `QuestionReadBackend`, a
+sibling of `DecisionBackend`, and the `EncoderDecisionEngine` that reads through it (#67):
 
 - `build_schema` with the same forced answers and limits (`max_choices` 24 for Verdict, 255
   otherwise).
 - A 400 for `images`, `steps > 1`, `samples > 1`, `think` and `sequential`
   (`"{model} does not support {field}"`).
-- Batched reads of at most `OPENJEV_ENCODER_BATCH` (16) questions per forward pass.
+- Batched reads of at most `OPENJEV_ENCODER_BATCH` (16) questions per backend call, which a backend
+  may run as several model passes.
 - A distribution over the caller's options in the caller's order; noul is `[P(true), 1 − P(true)]`.
 - Deterministic: the seed is unused.
 - Its own `/v1/models` entry with the upstream description text and release date, and acceptance

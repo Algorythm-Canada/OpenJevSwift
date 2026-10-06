@@ -6,8 +6,8 @@ does.
 ## Overview
 
 The settings are upstream OpenJev's variables, with upstream's names, defaults and startup checks,
-so deployment files written for upstream keep working (decision D-013). Two are this port's own. The
-`openjev` tool reads them from the process environment through
+so deployment files written for upstream keep working (decision D-013). Three are this port's own.
+The `openjev` tool reads them from the process environment through
 ``ServerSettings/init(environment:)``, after writing its flags over their variables, and passes
 `OPENJEV_ENCODER_MODELS` to the encoder store, `EncoderPackageStore(environment:)`; the libraries
 never read the process environment themselves. In the table, unset means the variable may be left
@@ -33,7 +33,7 @@ out or set to the empty string with the same effect.
 | `OPENJEV_MLX_CACHE_LIMIT_GB` | unset | mlx, jevk5 | MLX's buffer pool limit in GB. Unset leaves MLX alone; `0` disables the pool. |
 | `OPENJEV_CANVAS` | `64` | mlx | The longest canvas in tokens. Questions are read in groups whose answer template fits it. |
 | `OPENJEV_CANVAS_STEP` | `16` | mlx | A canvas's width is its template's length plus one, rounded up to a multiple of this and capped at `OPENJEV_CANVAS`. |
-| `OPENJEV_MAX_INFLIGHT` | `64` | mlx | Reads in flight at once. The encoders make one call at a time whatever it says, as upstream's do. |
+| `OPENJEV_MAX_INFLIGHT` | `64` | mlx | Reads in flight at once. The encoders make one call at a time whatever it says, as upstream's Verdict and Laya do. |
 | `OPENJEV_AUTO_THRESHOLD` | `0.1` | mlx | The top-k entropy above which a group is read again, when the request does not set `samples`. |
 | `OPENJEV_AUTO_MAX` | `4` | mlx | The most reads of one group under those automatic re-reads. `1` turns them off. |
 | `OPENJEV_MAX_IMAGES` | `8` | mlx | Images per request; more is a 400. The other backends refuse images whatever it says. |
@@ -45,7 +45,7 @@ out or set to the empty string with the same effect.
 | `OPENJEV_LAYA_MODEL` | `convaiinnovations/laya-typed-decisions` | laya | Read as upstream reads it, with no effect, for the same reason. |
 | `OPENJEV_JEVK5_MODEL` | `Algorythm-Canada/jevk5-0.2-mlx-8bit` | jevk5 | This port's: the JevK5 checkpoint converted to MLX, a directory (`Tools/jevk5/convert.py` writes one) or a Hugging Face repository with an optional `@revision`. A conversion's repository loads its pinned commit; the default, the published 8-bit conversion, is downloaded into the Hugging Face cache on first start (D-052). Upstream reads its vLLM server's `OPENJEV_MODEL` instead. |
 | `OPENJEV_DEVICE` | unset | encoders | Upstream's PyTorch device. Read, with no effect: Core ML picks the compute units for the platform (D-011). |
-| `OPENJEV_GEN_MAX_INFLIGHT` | `8` | mlx | Generations of `POST /v1/chat/completions` running at once; above 1 they only wait their turn, since the model generates one reply at a time. The route serves once the model generates text (issue #51); until then this is read and checked. |
+| `OPENJEV_GEN_MAX_INFLIGHT` | `8` | mlx | Generations of `POST /v1/chat/completions` running at once; above 1 they only wait their turn, since the model generates one reply at a time. The `mlx` backend serves the route because its model generates text (D-059); the encoder backends have no chat route. |
 | `OPENJEV_GEN_MAX_QUEUE` | `32` | mlx | Chat requests waiting beyond those before a 529 `overloaded_error` with `retry-after: 2`. `0` lets none wait. |
 | `OPENJEV_GEN_MAX_TOKENS` | `8192` | mlx | The longest reply in tokens: a request's `max_tokens` or `max_completion_tokens`, 1024 when it has neither, is bounded by it. |
 
@@ -85,12 +85,12 @@ too (D-030).
 | `HF_HUB_CACHE`, `HF_HOME`, `XDG_CACHE_HOME` | `mlx`, `jevk5`; `verdict` and `laya` with `OPENJEV_ENCODER_MODELS` | Where the Hugging Face cache is, as `huggingface_hub` finds it: `HF_HUB_CACHE`, else `HF_HOME/hub`, else `XDG_CACHE_HOME/huggingface/hub`, else `~/.cache/huggingface/hub`. DiffusionGemma's checkpoint and JevK5's conversion are kept there, and a local encoder folder's tokenizer is looked for there. |
 | `HF_TOKEN` | `mlx`, `jevk5` | A Hugging Face token for a gated or private repository; an empty value counts as unset. |
 
-Upstream also reads variables for the backends this port does not have, which it ignores:
-`OPENJEV_UPSTREAM`, `OPENJEV_UPSTREAM_MODEL` and `OPENJEV_TOKENIZER` (the vLLM server), the
-`OPENJEV_CLM_*` settings, and `OPENJEV_MODEL` and `OPENJEV_JEVK5_WORKERS` (JevK5). Its container
-scripts' vLLM variables, such as `OPENJEV_GPU_UTIL`, have no counterpart either. The test suites'
-own variables, `OPENJEV_TEST_MODEL` and `OPENJEV_LIVE_URL` among them, are in the repository's
-`docs/development.md`.
+Upstream also reads variables for its vLLM server and the backends that read through it, which
+this port ignores: `OPENJEV_UPSTREAM`, `OPENJEV_UPSTREAM_MODEL` and `OPENJEV_TOKENIZER` (the vLLM
+server), the `OPENJEV_CLM_*` settings, and `OPENJEV_MODEL` and `OPENJEV_JEVK5_WORKERS` (JevK5,
+which this port runs on MLX in the process, D-052). Its container scripts' vLLM variables, such as
+`OPENJEV_GPU_UTIL`, have no counterpart either. The test suites' own variables, `OPENJEV_TEST_MODEL`
+and `OPENJEV_LIVE_URL` among them, are in the repository's `docs/development.md`.
 
 ## See Also
 
