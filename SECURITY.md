@@ -46,7 +46,7 @@ requests that carry the proxy's secret ([docs/deployment.md](docs/deployment.md#
 | `GET /v1/models`, `POST /v1/systemone` | `OPENJEV_ORIGIN_SECRET` and `OPENJEV_API_KEY`, each when set |
 | `POST /v1/chat/completions`, on the `mlx` backend only | the same |
 
-Without `OPENJEV_API_KEY` every route is open to whoever can reach the port. The size of a request
+With neither variable set, every route is open to whoever can reach the port. The size of a request
 and the work clients can queue are bounded by `OPENJEV_MAX_BODY_BYTES` (64 MiB),
 `OPENJEV_MAX_QUEUE`, `OPENJEV_MAX_QUESTIONS`, `OPENJEV_MAX_IMAGES`, `OPENJEV_MAX_IMAGE_BYTES` and
 the `OPENJEV_GEN_*` settings, which the

@@ -82,16 +82,15 @@ release notes.
   ([configuration reference](Sources/OpenJevServer/Documentation.docc/Configuration.md)).
 - A graceful shutdown on SIGINT and SIGTERM, exit statuses for scripts and launchd, and a log
   that never holds a request body or a header value and shows the keys only as set or unset
-  ([deployment.md](docs/deployment.md#graceful-shutdown),
-  [deployment.md](docs/deployment.md#logs)).
+  ([deployment.md](docs/deployment.md#graceful-shutdown), [its logs](docs/deployment.md#logs)).
 
 ### Apps on iOS and macOS
 
 - Four library products answer requests in an app without a server: `OpenJevCore`,
   `OpenJevEncoders`, `OpenJevDiffusionGemma` and `OpenJevLetterReadout`
   ([Making decisions in an app](Sources/OpenJevCore/Documentation.docc/GettingStarted.md)).
-- iOS: `OpenJevCore` from iOS 17, and Verdict and Laya on Core ML from iOS 18, on the Neural
-  Engine, Laya with one package per sequence length that the app downloads
+- iOS: `OpenJevCore` from iOS 17; Verdict and Laya on Core ML from iOS 18, on the Neural Engine,
+  Laya through one package per sequence length that the app downloads
   ([Reading Verdict and Laya](Sources/OpenJevEncoders/Documentation.docc/ReadingVerdictAndLaya.md#on-an-iphone)).
   JevK5 builds for iOS but has not run on an iPhone yet, DiffusionGemma compiles for iOS but no
   iPhone holds it, and the server does not run on iOS
