@@ -112,7 +112,7 @@ which is why the server loads the 8-bit one ([quality.md](quality.md#jevk5)).
 | `OPENJEV_LOG_LEVEL` | uvicorn's level names | The same and swift-log's `notice` | D-030 |
 | Backends | `vllm` by default, and `mlx`, `laya`, `verdict`, `clm`, `jevk5` | `mlx` by default, `laya`, `verdict` and `jevk5`; `vllm` and `clm` are unknown names (issue #59) | D-030, D-038, D-052 |
 | DiffusionGemma checkpoint | The newest revision of `OPENJEV_MLX_MODEL`'s repository | The default repository loads the pinned revision `a7a81407`; `repo@revision` picks another | D-039 |
-| `think` on `mlx` | Supported; the thought's random canvases come from MLX's unseeded generator, so the same request can think differently from one process to the next | Supported, the same thought token for token on the oracle's Metal library; every thought draws from MLX's generator seeded with 0, so the same request always thinks the same way | D-058 |
+| `think` on `mlx` | Supported; the thought's random canvases come from MLX's unseeded generator, so the same request can think differently from one process to the next | Supported, the same thought token for token on the oracle's Metal library; every thought draws from MLX's generator seeded with 0, so the same request always thinks the same way | D-059 |
 | An image that cannot be read on `mlx` | Pillow's or the processor's exception, answered as a bare 500 | The 400 `image could not be read: {reason}` at `["body", "images", i]` | D-054 |
 | Image formats on `mlx` | Whatever Pillow identifies by its bytes, whatever the declared type | JPEG, PNG, WebP or GIF by their bytes, whatever the declared type; a TIFF or BMP under another label is a 400 | D-054 |
 | Truncated JPEGs and images 3 pixels high on `mlx` | A truncated JPEG is a 500, though one missing only its EOI is read when libjpeg does not look past its end; an image 3 pixels high is read as channels first and answered | A truncated JPEG is a 400 where Pillow raises and read where Pillow reads it; an image 3 pixels high is a 400 | D-051, D-054, D-055 |
@@ -165,7 +165,7 @@ encoder engines do), from the `openjev` tool's `BackendRegistry`, and from the p
   verified end to end on the real checkpoint: upstream's read cases (D-044) and issues #43, #44 and
   #45 (D-045).
 - **`think` on `mlx`** generates the thought with the runtime's block loop, upstream's
-  `MlxRuntime.generate` (D-058); upstream's three think cases and the live suite's `test_think`
+  `MlxRuntime.generate` (D-059); upstream's three think cases and the live suite's `test_think`
   pass on the real checkpoint, and the billing is upstream's: the thought pass's prompt and the
   reads after it as input, the thought as output, on the first group only when `sequential`.
 - **Routed models** are requests a server forwards to the OpenJev server `OPENJEV_MODEL_ROUTES`

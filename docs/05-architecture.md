@@ -319,7 +319,7 @@ issue #29), upstream's `MlxRuntime` and `MlxEngine.one_read` in one actor:
   tokens a read reports include the image tokens. An image that does not decode or that the
   processor cannot size is a `SchemaError` `"image could not be read: {reason}"` at
   `["body", "images", i]`, the 400 of upstream's other image refusals (upstream answers a bare 500).
-- `generate(prompt:maxTokens:stopIDs:skipSpecialTokenIDs:emit:)` (#51, D-058): upstream's
+- `generate(prompt:maxTokens:stopIDs:skipSpecialTokenIDs:emit:)` (#51, D-059): upstream's
   `MlxRuntime.generate`, greedy. The prompt cap is checked with upstream's message. The prefill is
   the one reads cached for the same prompt, else a new one that is not cached. Then blocks of
   `min(256, max(remaining, 64))` positions, each `DiffusionGemmaModel.denoiseBlock` (the

@@ -274,7 +274,7 @@ The read extensions of milestone 4 (#43 to #45) are proven on the checkpoint the
   request. Images with `sequential` or `think` are refused before any read
   (`DecisionEngineTests`, "Images cannot be combined with think or sequential").
 
-### Generation and think (#50 to #52, D-058)
+### Generation and think (#50 to #52, D-059)
 
 `Tools/fixtures/generation_oracle.py` writes `Fixtures/generation/generation.json` from upstream's
 own path. It holds mlx-vlm's sampling functions on synthetic logits, run on the CPU. It holds seven

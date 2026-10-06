@@ -20,7 +20,7 @@ The port matches mlx-vlm bit for bit on all 63 recorded oracle reads when it run
 Metal library, and stays within the bounds of decisions D-014 and D-048 on mlx-swift's own kernels,
 which is how it runs in production; reads with images match the oracle's four image reads bit for
 bit there too (D-054). `steps`, `samples`, `sequential`, images and `think` work. Text generation
-reproduces upstream's greedy replies token for token on the oracle's Metal library (D-058); the
+reproduces upstream's greedy replies token for token on the oracle's Metal library (D-059); the
 chat endpoint arrives with issue #53.
 
 <doc:ReadingWithDiffusionGemma> loads the model and covers its settings, memory and downloads.

@@ -111,7 +111,7 @@ finished block into the encoder cache (`diffusion_update_cache`) and a streaming
 Swift version of this loop (see [04-swift-inference-landscape.md](04-swift-inference-landscape.md)).
 
 What upstream actually runs (`MlxRuntime.generate`, which passes only `max_tokens`, the skipped ids
-and `temperature=0.0`), and what the port reproduces (D-058):
+and `temperature=0.0`), and what the port reproduces (D-059):
 
 1. **One block.** A canvas of `min(256, max(remaining, 64))` random ids from MLX's generator. Then
    up to 48 decoder passes over the encoder cache. Each pass divides the logits by the step's

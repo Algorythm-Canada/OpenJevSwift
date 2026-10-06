@@ -3735,7 +3735,7 @@ decoding would settle it. D-055 item 7 is corrected.
 
 Status. Proposed with issue #46, after D-055.
 
-## D-058 Generation and think follow upstream's `MlxRuntime.generate`, seeded: where the port goes beyond or differs from the issue text
+## D-059 Generation and think follow upstream's `MlxRuntime.generate`, seeded: where the port goes beyond or differs from the issue text
 
 Context. Issues #50 to #52 port the text generation that `think` (and later the chat endpoint,
 #53) runs on: mlx-vlm 0.6.15's sampling functions, the block loop of `stream_diffusion_generate`,
@@ -3836,4 +3836,5 @@ The chat endpoint (#53) can call `generate` as upstream's `MlxGenerator.generate
 `MlxRuntime.generate`. Agreement past the first tokens of a long reply is held only in the exact
 tier.
 
-Status. Proposed with issues #50, #51 and #52.
+Status. Proposed with issues #50, #51 and #52. First numbered D-058; renumbered because the chat
+endpoint's PR #136 claims D-058.

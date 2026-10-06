@@ -1,7 +1,7 @@
 # Generation oracle fixtures
 
 What upstream's own MLX generation returns on the pinned checkpoint, for the generation and
-`think` parity tests (issues #50 to #52, D-058; layer 2 in
+`think` parity tests (issues #50 to #52, D-059; layer 2 in
 [docs/09-conformance-and-testing.md](../../docs/09-conformance-and-testing.md)).
 
 ## generation.json
@@ -58,6 +58,6 @@ with `mx.random.seed(seed)` before each reply and each `decide`, and records the
 
 Note what the `list` and `json` texts show: upstream's chat path skips `enc("<|channel>thought\n")`
 and `enc("<channel|>")`, and the first is three ids, the open marker, `thought` (45518) and the
-newline (107), so a chat reply loses every newline and every `thought` token (D-058).
+newline (107), so a chat reply loses every newline and every `thought` token (D-059).
 
 The run's timings are in `Tools/oracle/results/generation_run.json`, never in this file.
