@@ -24,8 +24,10 @@ public protocol SystemOneService: Sendable {
     func decide(_ request: SystemOneRequest) async throws -> Decision
 
     /// The model's text generation, which the server serves at `POST /v1/chat/completions`, or
-    /// `nil` for a model that does not generate text, whose server has no chat routes, as
-    /// upstream's encoder containers have none (decision D-012).
+    /// `nil` for a model with no ``TextGenerator``, whose server has no chat routes, as upstream's
+    /// encoder containers have none (decision D-012). A generator that cannot generate after all,
+    /// such as a DiffusionGemma runtime made without generation, keeps the routes and answers
+    /// them with a 503, as upstream keeps its routes whatever its runtime can do.
     var textGenerator: (any TextGenerator)? { get }
 }
 
@@ -167,8 +169,8 @@ extension DecisionEngine: SystemOneService {
     /// ``ServedModels/diffusionGemma``.
     public nonisolated var servedModels: ServedModels { .diffusionGemma }
 
-    /// The backend, when it also generates text: a DiffusionGemma runtime that conforms to
-    /// ``TextGenerator`` serves `POST /v1/chat/completions` beside its reads.
+    /// The backend, when it conforms to ``TextGenerator``: the DiffusionGemma runtime does, so it
+    /// serves `POST /v1/chat/completions` beside its reads.
     public nonisolated var textGenerator: (any TextGenerator)? {
         backend as? any TextGenerator
     }

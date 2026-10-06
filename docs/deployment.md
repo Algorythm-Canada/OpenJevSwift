@@ -413,8 +413,7 @@ DiffusionGemma, for tools that talk to a chat model: the model names `diffusiong
 `response_format` `json_object` or `json_schema` (an instruction to the model and the first JSON
 value of its reply), and `chat_template_kwargs.enable_thinking`. Other OpenAI fields, such as
 `temperature` and `seed`, are dropped, as upstream drops them: generation is greedy. The route is
-served on the `mlx` backend once the model generates text (issue #51 and its wiring); the encoder
-backends have no chat route, as upstream's have none, and answer it with a 404.
+served on the `mlx` backend, whose model generates text (D-059); the encoder backends have no chat route, as upstream's have none, and answer it with a 404.
 
 Errors are OpenAI's shape, `{"error": {"message", "type", "code"}}`, with upstream's statuses: a
 400 `invalid_request_error` for a body that is not JSON, no `messages`, no `model`, a `max_tokens`
@@ -431,7 +430,8 @@ tokens take seconds, so requests beyond `OPENJEV_GEN_MAX_INFLIGHT` wait, and dec
 reply too. Every refusal comes before the answer starts. A streamed reply (`"stream": true`) is a
 `text/event-stream` of OpenAI's chunks: the role, the text as the model commits it block by block,
 the finish reason, the usage, then `data: [DONE]`. A client that disconnects stops its generation
-at the next block, and so does one that reads so slowly that 64 pieces wait for it: its stream
+at the next block, and so does one that reads so slowly that two blocks of pieces (513) wait for
+it: its stream
 ends after the pieces it already had, with no finish chunk and no `[DONE]`, so it never reads a
 reply with a piece missing as if it were whole. A whole reply's client that disconnects stops it
 too, and the request log shows 499. On a graceful shutdown a reply in flight runs to its end within

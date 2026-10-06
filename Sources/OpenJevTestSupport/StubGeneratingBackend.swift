@@ -1,6 +1,6 @@
 import OpenJevCore
 
-/// A backend that reads and generates text, as the DiffusionGemma runtime will once it conforms to
+/// A backend that reads and generates text, as the DiffusionGemma runtime does through
 /// ``/OpenJevCore/TextGenerator``: ``StubBackend``'s reads and ``StubTextGenerator``'s generations.
 ///
 /// A ``/OpenJevCore/DecisionEngine`` over it serves `POST /v1/systemone` and, through
@@ -25,6 +25,7 @@ public final class StubGeneratingBackend: DecisionBackend, TextGenerator, ModelR
     public var capabilities: BackendCapabilities { reads.capabilities }
     public var modelName: String { reads.modelName }
     public var thoughtChannelMarkerIDs: [Int] { generation.thoughtChannelMarkerIDs }
+    public var blockLength: Int { generation.blockLength }
 
     public func read(_ read: CanvasRead) async throws -> ReadResult {
         try await reads.read(read)

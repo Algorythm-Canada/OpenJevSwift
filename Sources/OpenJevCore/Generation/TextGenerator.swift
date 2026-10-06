@@ -12,8 +12,8 @@ public struct TextGeneration: Sendable, Hashable {
         case stop
         /// The generation reached its `maxTokens`.
         case length
-        /// `emit` returned false, or the calling task was cancelled, and the generation stopped
-        /// at the next block boundary.
+        /// `emit` returned false, and the generation stopped after that token; or the calling
+        /// task was cancelled, and it stopped before its next block.
         case cancelled
     }
 
@@ -46,18 +46,30 @@ public struct TextGeneration: Sendable, Hashable {
 /// route counts a request against its capacity bound before rendering its prompt, so no more
 /// prompts render at once than the bound allows.
 public protocol TextGenerator: Sendable {
+    /// The most pieces ``generate(prompt:maxTokens:stopIDs:skipSpecialTokenIDs:emit:)`` emits
+    /// back to back, without suspending: the most tokens it commits at once. A diffusion model
+    /// denoises a block of up to its canvas length (256 for DiffusionGemma) and then emits every
+    /// token of it at once; a model that emits each token as it decodes it reports 1.
+    ///
+    /// A streamed reply's queue holds two such blocks and the final segment
+    /// (``ChatCompletionStream/capacity(blockLength:)``), so a reader that writes one block's
+    /// pieces while the next is denoised never falls behind within a block.
+    var blockLength: Int { get }
+
     /// The most prompt tokens a generation may carry, upstream's `OPENJEV_MLX_MAX_PROMPT`. The
     /// chat route compares it with ``generationPromptIDs(messages:thinking:)``, scaffold included,
     /// and answers a longer prompt with its 400 before a response starts.
     var maxPromptTokens: Int { get }
 
-    /// The ids of the thought-channel markers, upstream's `engine.thought_open +
-    /// engine.thought_close`: `enc("<|channel>thought\n") + enc("<channel|>")`, which for the
-    /// DiffusionGemma tokenizer are `[100, 45518, 107, 101]`.
+    /// The ids of the thought-channel markers, which a chat reply leaves out.
     ///
     /// The chat route passes them to ``generate(prompt:maxTokens:stopIDs:skipSpecialTokenIDs:emit:)``
     /// as `skipSpecialTokenIDs`: the model opens a thought channel of its own accord on some
-    /// replies, and a chat client asked for the reply, not the markers.
+    /// replies, and a chat client asked for the reply, not the markers. Upstream passes
+    /// `engine.thought_open + engine.thought_close`, `enc("<|channel>thought\n") + enc("<channel|>")`,
+    /// which for the DiffusionGemma tokenizer are `[100, 45518, 107, 101]`: the two markers and the
+    /// ordinary tokens `thought` and `\n`, which then vanish wherever a reply has them. The
+    /// DiffusionGemma runtime reports only the two markers, `[100, 101]` (D-059).
     var thoughtChannelMarkerIDs: [Int] { get }
 
     /// The prompt of a chat request, upstream's `MlxGenerator.prompt_ids`: the tokenizer's chat
@@ -90,8 +102,9 @@ public protocol TextGenerator: Sendable {
     /// empty, and once more at the end with the detokenizer's final buffered segment and a `nil`
     /// token; the chat route takes an empty text as no chunk, so that last call may be skipped when
     /// the segment is empty, as upstream's runtime skips it, and its return value is ignored.
-    /// Returning false asks the generation to stop: it ends at the next block boundary with
-    /// ``TextGeneration/FinishReason/cancelled``, as it does when the calling task is cancelled.
+    /// Returning false stops the generation after that token, with
+    /// ``TextGeneration/FinishReason/cancelled`` and no final call, as upstream's runtime breaks
+    /// out of its stream; a cancelled calling task stops it before its next block, the same way.
     /// `emit` may be called on the generator's own executor and must not block.
     ///
     /// - Throws: Whatever the model throws. A generation the calling task cancelled may throw

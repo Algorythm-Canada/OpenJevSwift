@@ -321,7 +321,10 @@ public final class DiffusionGemmaModel: Module, BaseLanguageModel {
             let layer = decoder.layers[index]
             let mask = masks[layer.layerType] ?? encoderMask(for: layer.layerType, length: length)
             masks[layer.layerType] = mask
-            let cache = LayerCache(isFullAttention: layer.layerType == .fullAttention)
+            let cache = LayerCache(
+                isFullAttention: layer.layerType == .fullAttention,
+                slidingWindow: layer.layerType == .slidingAttention
+                    ? configuration.slidingWindow : nil)
             h = layer(
                 h, mask: mask, cache: cache, decoder: false, offset: 0,
                 layerScalar: encoder.layerScalar(index), stages: stages)

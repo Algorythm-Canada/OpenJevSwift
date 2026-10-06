@@ -43,25 +43,34 @@ struct RuntimeTests {
             DiffusionGemmaRuntimeError.unsupported("images").description.contains("vision tower"))
     }
 
-    @Test("Steps, samples, sequential and images are on; think is off; the name is openjev-0.1")
+    @Test("Every option is on with generation; think is off without it; the name is openjev-0.1")
     func capabilities() {
         let runtime = DiffusionGemmaRuntime.stub()
+        #expect(runtime.capabilities == .all)
         #expect(
-            runtime.capabilities
+            DiffusionGemmaRuntime.stub(blocks: nil).capabilities
                 == BackendCapabilities(
                     steps: true, samples: true, think: false, sequential: true, images: true))
         #expect(runtime.modelName == "openjev-0.1")
         #expect(runtime.modelName == ServedModels.diffusionGemmaVersion)
     }
 
-    @Test("think throws unsupported until milestone 5")
+    @Test("A runtime without generation refuses think and generate before the model is touched")
     func think() async {
         let log = StubModelLog()
-        let runtime = DiffusionGemmaRuntime.stub(log: log)
+        let runtime = DiffusionGemmaRuntime.stub(log: log, blocks: nil)
         await #expect(throws: DiffusionGemmaRuntimeError.unsupported("think")) {
             try await runtime.think(prompt: [1, 2, 3], budget: 16, stopIDs: [4])
         }
+        await #expect(throws: DiffusionGemmaRuntimeError.unsupported("generation")) {
+            try await runtime.generate(
+                prompt: [1, 2, 3], maxTokens: 16, stopIDs: [], skipSpecialTokenIDs: [],
+                emit: { _, _ in true })
+        }
         #expect(!log.touched)
+        #expect(
+            DiffusionGemmaRuntimeError.unsupported("think").description.contains(
+                "without generation"))
     }
 
     @Test("A CanvasRead reaches the model as its canvas, SlotRequests, steps and top-k 20")
@@ -102,10 +111,10 @@ struct RuntimeTests {
         #expect(state.keys == [.tokens([1, 2, 3]), .tokens([4, 5])])
     }
 
-    @Test("The engine refuses think with \"openjev-0.1 does not support think\" before any read")
+    @Test("Without generation the engine refuses think with \"openjev-0.1 does not support think\"")
     func engineRefusals() async throws {
         let log = StubModelLog()
-        let engine = try DecisionEngine(backend: DiffusionGemmaRuntime.stub(log: log))
+        let engine = try DecisionEngine(backend: DiffusionGemmaRuntime.stub(log: log, blocks: nil))
         let think = try SystemOneRequest(
             json: JSONParser().parse(
                 #"{"state": "s", "model": "jev-latest", "think": 8, "questions": "#
@@ -115,22 +124,15 @@ struct RuntimeTests {
         #expect(!log.touched)
     }
 
-    @Test("The runtime does not generate text yet, so its server has no chat routes")
-    func noTextGeneratorYet() throws {
+    @Test("The runtime generates text, so its server has chat routes; it skips the channel markers")
+    func textGenerator() throws {
         let engine = try DecisionEngine(backend: DiffusionGemmaRuntime.stub())
-        #expect(engine.textGenerator == nil)
+        let generator = try #require(engine.textGenerator)
+        let tokenizer = StubRuntimeTokenizer()
+        #expect(
+            generator.thoughtChannelMarkerIDs
+                == (try tokenizer.encode("<|channel>", addSpecialTokens: false))
+                + (try tokenizer.encode("<channel|>", addSpecialTokens: false)))
+        #expect(try generator.encode("ab") == [97, 98])
     }
-
-    /// Upstream's test over its `StubRuntime` and the real tokenizer: the whole reply's shape
-    /// (`chat.completion`, a `chatcmpl-` id, the stub reply and its last segment, finish `stop`,
-    /// index 0) and usage billing the prompt the runtime was handed. The chat route's own tests
-    /// check the same shape over a stub generator (OpenJevServerTests); this one needs the
-    /// runtime's ``/OpenJevCore/TextGenerator`` conformance over a stub model.
-    @Test(
-        "test_chat_completion_on_mlx",
-        .disabled(
-            Comment(
-                rawValue: "needs DiffusionGemmaRuntime's TextGenerator conformance (#51, wired "
-                    + "by #53's follow-up); then runs with the tokenizer of OPENJEV_TEST_MODEL")))
-    func chatCompletionOnMLX() {}
 }

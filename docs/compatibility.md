@@ -113,16 +113,18 @@ which is why the server loads the 8-bit one ([quality.md](quality.md#jevk5)).
 | `OPENJEV_LOG_LEVEL` | uvicorn's level names | The same and swift-log's `notice` | D-030 |
 | Backends | `vllm` by default, and `mlx`, `laya`, `verdict`, `clm`, `jevk5` | `mlx` by default, `laya`, `verdict` and `jevk5`; `vllm` and `clm` are unknown names (issue #59) | D-030, D-038, D-052 |
 | DiffusionGemma checkpoint | The newest revision of `OPENJEV_MLX_MODEL`'s repository | The default repository loads the pinned revision `a7a81407`; `repo@revision` picks another | D-039 |
-| `think` on `mlx` | Supported | `openjev-0.1 does not support think` until issue #52; with images, that refusal comes before upstream's `think needs a text state` | D-039, D-054 |
+| `think` on `mlx` | Supported; the thought's random canvases come from MLX's unseeded generator, so the same request can think differently from one process to the next | Supported, the same thought token for token on the oracle's Metal library; every thought draws from MLX's generator seeded with 0, so the same request always thinks the same way | D-059 |
 | An image that cannot be read on `mlx` | Pillow's or the processor's exception, answered as a bare 500 | The 400 `image could not be read: {reason}` at `["body", "images", i]` | D-054 |
 | Image formats on `mlx` | Whatever Pillow identifies by its bytes, whatever the declared type | JPEG, PNG, WebP or GIF by their bytes, whatever the declared type; a TIFF or BMP under another label is a 400 | D-054 |
 | Truncated JPEGs and images 3 pixels high on `mlx` | A truncated JPEG is a 500, though one missing only its EOI is read when libjpeg does not look past its end; an image 3 pixels high is read as channels first and answered | A truncated JPEG is a 400 where Pillow raises and read where Pillow reads it; an image 3 pixels high is a 400 | D-051, D-054, D-055 |
 | A cached image prefill on `mlx` | The images are decoded again for every read | Decoded once per prefill; a cached one reuses its count, so the answers and the billing are the same | D-054 |
-| `POST /v1/chat/completions` | Served by the `mlx` backend | The route is ported and answers once the `mlx` backend's model generates text (issue #51, then the wiring that follows #53); until then a 404, though `/v1/models` lists `diffusiongemma-26b` as upstream's does | D-012, D-043, D-058 |
+| `POST /v1/chat/completions` | Served by the `mlx` backend; a reply's random canvases come from MLX's unseeded generator | Served by the `mlx` backend; every reply draws from MLX's generator seeded with 0, so the same request gets the same reply | D-012, D-043, D-058, D-059 |
+| Newlines and `thought` in chat replies on `mlx` | The skip list `enc("<\|channel>thought\n") + enc("<channel\|>")` drops every single-newline token (107) and every `thought` (45518) wherever a reply has them, so lists and code run together | Only the two channel markers (100, 101) are skipped; replies keep their newlines and the word `thought` | D-059 |
 | Chat requests upstream crashes on | A message that is not an object or whose `role` is not a string, a `chat_template_kwargs`, `response_format`, `json_schema` or streaming `stream_options` that is true but not a dict, a `stop` of another type, or a template error: a bare 500, or `dict()`'s message for a string message in JSON mode | The 400 `invalid_request_error` naming the field; messages nested past 64 levels are refused too | D-058 |
 | A chat generation that fails | A bare 500, or a stream that breaks off | The 503 `inference backend unavailable: <type name>` with `retry-after: 2` before the answer starts, logged; a stream that broke off is logged | D-058 |
 | A chat client that goes away | A whole reply runs to its end; a stream notices within 0.1 s and stops at the next block | Both stop at the next block, at once; a whole reply's request logs 499 | D-058 |
-| A chat stream's reader 64 pieces behind | The reply ends, its end marker displacing the oldest queued piece | The reply ends after every queued piece | D-058 |
+| A chat stream's queue | 64 pieces; a block of more than 64 tokens, which the model emits at once, can overflow it and end the reply without its finish | Two of the generator's blocks and the final segment, 513 pieces for DiffusionGemma, so a reader that keeps up between blocks never falls behind | D-059 |
+| A chat stream's reader that many pieces behind | The reply ends, its end marker displacing the oldest queued piece | The reply ends after every queued piece | D-058 |
 | Chat bodies `json.loads` reads and RFC 8259 refuses | Served | The 400 "The request body is not valid JSON." | D-016, D-058 |
 | `null` written by the chat template | `None`, in a tool call's arguments or a tool's missing result | Nothing; an integer past `Int` is written as a float | D-058 |
 | A chat object whose keys differ only in Unicode normalization | Both keys kept, and the template writes both | The 400 `invalid_request_error`: the template engine keys an object by Swift's `String`, which would keep one | D-058 |
@@ -152,7 +154,7 @@ encoder engines do), from the `openjev` tool's `BackendRegistry`, and from the p
 
 | Platform | Backend | Reads | `steps` | `samples` | `sequential` | Images | `think` | Chat |
 |---|---|---|---|---|---|---|---|---|
-| macOS 14 or later, Apple silicon | `mlx` | yes | yes | yes | yes | yes | no, issue #52 | the route yes; the model no, issue #51 |
+| macOS 14 or later, Apple silicon | `mlx` | yes | yes | yes | yes | yes | yes | yes |
 | macOS 15 or later | `verdict` | yes | n/a | n/a | n/a | n/a | n/a | n/a |
 | macOS 15 or later | `laya` | yes | n/a | n/a | n/a | n/a | n/a | n/a |
 | macOS 14 or later, Apple silicon | `jevk5` | yes | n/a | n/a | n/a | n/a | n/a | n/a |
@@ -174,6 +176,10 @@ encoder engines do), from the `openjev` tool's `BackendRegistry`, and from the p
 - **`steps`, `samples` and `sequential` on `mlx`** run through the engine and the runtime and are
   verified end to end on the real checkpoint: upstream's read cases (D-044) and issues #43, #44 and
   #45 (D-045).
+- **`think` on `mlx`** generates the thought with the runtime's block loop, upstream's
+  `MlxRuntime.generate` (D-059); upstream's three think cases and the live suite's `test_think`
+  pass on the real checkpoint, and the billing is upstream's: the thought pass's prompt and the
+  reads after it as input, the thought as output, on the first group only when `sequential`.
 - **Routed models** are requests a server forwards to the OpenJev server `OPENJEV_MODEL_ROUTES`
   names, unchanged, so the options are whatever that server honours. Only `/v1/systemone` is
   forwarded, as upstream forwards it.

@@ -1,5 +1,5 @@
 // A port of upstream OpenJev (razorback16/openjev at dcd2094), `MlxGenerator.stream` in
-// `openjev/chat.py`: the generation beside a bounded queue of 64 chunks, the role chunk first, the
+// `openjev/chat.py`: the generation beside a bounded queue of chunks, the role chunk first, the
 // finish and usage chunks and `[DONE]` last, and a reply that ends early, rather than one that
 // loses a chunk, when its reader falls behind or goes away. Apache-2.0. See THIRD_PARTY.md.
 
@@ -9,20 +9,31 @@ import Foundation
 ///
 /// ``run(_:)`` starts the generation and writes the reply's server-sent events as the generation
 /// emits its text: the role, each non-empty piece, the finish reason, the usage and `[DONE]`. The
-/// generation hands its pieces over through a queue of ``bufferCapacity`` entries, so it never
-/// waits for the reader and cannot run far ahead of one. A piece that finds the queue full means
-/// the reader is gone or hopelessly behind: the generation is asked to stop at its next block, the
-/// pieces already queued are still written, and the stream ends there without a finish chunk or
-/// `[DONE]`, so a client never reads a reply with a piece missing as if it were whole. Cancelling
+/// generation hands its pieces over through a queue of ``capacity(blockLength:)`` entries, two of
+/// the generator's blocks and the final segment, so it never waits for the reader and cannot run
+/// far ahead of one. A piece that finds the queue full means the reader is gone or hopelessly
+/// behind: its `emit` returns false, which stops the generation, the pieces already queued are
+/// still written, and the stream ends there without a finish chunk or `[DONE]`, so a client never
+/// reads a reply with a piece missing as if it were whole. Cancelling
 /// the task that runs it, as the server does when the client goes away, stops the generation the
 /// same way and writes nothing more.
 ///
 /// The slot and the place are given back once the generation has stopped, however the run ends,
 /// or when a stream that never runs is discarded.
 public final class ChatCompletionStream: Sendable {
-    /// Upstream's `asyncio.Queue(maxsize=64)`: the pieces, empty ones included, that may wait for
-    /// the reader.
-    public static let bufferCapacity = 64
+    /// Upstream's `asyncio.Queue(maxsize=64)`: the least the queue holds.
+    public static let minimumCapacity = 64
+
+    /// The pieces, empty ones included, that may wait for the reader: two of the generator's
+    /// blocks and the final segment, `2 × blockLength + 1`, and never fewer than upstream's 64.
+    ///
+    /// The DiffusionGemma runtime emits a whole block of up to 256 tokens back to back once it is
+    /// denoised, so upstream's 64 refused the 65th token of every block of more than 64 and ended
+    /// the reply without its finish (D-059). Two blocks leave a reader that is still writing one
+    /// block when the next arrives room for both; the final segment comes with the end.
+    public static func capacity(blockLength: Int) -> Int {
+        max(minimumCapacity, 2 * max(blockLength, 0) + 1)
+    }
 
     /// The generator failed after the stream started; ``error`` is what it threw.
     public struct GenerationFailed: Error, @unchecked Sendable {
@@ -34,7 +45,7 @@ public final class ChatCompletionStream: Sendable {
     public enum Ending: Sendable, Hashable {
         /// Every event was written, `[DONE]` last.
         case completed(TextGeneration)
-        /// The reader fell ``ChatCompletionStream/bufferCapacity`` pieces behind: the generation
+        /// The reader fell the stream's `capacity` pieces behind: the generation
         /// was stopped and the stream ended after the pieces already queued.
         case readerFellBehind
     }
@@ -45,7 +56,9 @@ public final class ChatCompletionStream: Sendable {
     public let identity: ChatCompletionIdentity
     let generator: any TextGenerator
     let lease: GenerationLease
-    private let buffer = ChunkBuffer(capacity: ChatCompletionStream.bufferCapacity)
+    /// The pieces that may wait for the reader, ``capacity(blockLength:)`` of the generator's.
+    public let capacity: Int
+    private let buffer: ChunkBuffer
     private let started = StartFlag()
 
     /// A stream of `prepared`, whose place holds its slot.
@@ -57,11 +70,13 @@ public final class ChatCompletionStream: Sendable {
         self.generator = generator
         self.identity = identity
         self.lease = prepared.lease
+        capacity = Self.capacity(blockLength: generator.blockLength)
+        buffer = ChunkBuffer(capacity: capacity)
     }
 
     /// Stops the stream from any task, as the server does when the client goes away: the
-    /// generation is asked to stop at its next block and ``run(_:)`` writes nothing more and
-    /// throws `CancellationError`. Before the run, the run stops at once.
+    /// generation's next `emit` returns false, which stops it, and ``run(_:)`` writes nothing more
+    /// and throws `CancellationError`. Before the run, the run stops at once.
     public func cancel() {
         buffer.cancel()
     }
@@ -166,8 +181,8 @@ private final class StartFlag: @unchecked Sendable {
     }
 }
 
-/// The queue between a generation's `emit` and a stream's reader, upstream's `asyncio.Queue(64)`
-/// with its `END` marker and `cancel` flag.
+/// The queue between a generation's `emit` and a stream's reader, upstream's `asyncio.Queue` with
+/// its `END` marker and `cancel` flag, holding the stream's `capacity` pieces.
 ///
 /// `offer` never blocks. The reader takes the pieces in order and, once none is left, how the
 /// stream ends: the generation's outcome, or that the reader fell behind. Cancelling ends the

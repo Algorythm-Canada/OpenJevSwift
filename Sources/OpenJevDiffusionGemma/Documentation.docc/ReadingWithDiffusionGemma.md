@@ -68,11 +68,17 @@ process's resident size, ``DiffusionGemmaRuntime/statistics()`` the reads, the p
 hits and the time in the model, and ``DiffusionGemmaRuntime/removeCachedPrefills()`` empties the
 prefill cache.
 
-### What the runtime does not do yet
+### Generation and think
 
-The runtime's ``DiffusionGemmaRuntime/capabilities`` turn `think` off, so the engine answers
-`openjev-0.1 does not support think` before any read. Text generation, `think` and
-`POST /v1/chat/completions` arrive with issues #50 to #53. Images are read: the checkpoint's vision
+The runtime generates text greedily, as upstream's `MlxRuntime.generate` runs mlx-vlm's
+`stream_diffusion_generate`: ``DiffusionGemmaRuntime/generate(prompt:maxTokens:stopIDs:skipSpecialTokenIDs:emit:)``
+writes a reply a block of up to 256 tokens at a time, streams each committed token's text through
+`emit`, and stops at the model's EOS ids, the caller's stop ids or `maxTokens`. `think` runs on it,
+so the engine writes a thought before a read when a request asks for one. Each reply's random
+canvases come from MLX's generator seeded with
+``DiffusionGemmaRuntime/Configuration/generationSeed``, so a prompt always gets the same reply in
+any process. The runtime is the server's ``/OpenJevCore/TextGenerator``, so the `mlx` backend
+serves `POST /v1/chat/completions` over it. Images are read: the checkpoint's vision
 tower loads with the model (1.06 GiB more), and an image the decoder cannot read is a
 ``/OpenJevCore/SchemaError`` naming it at `["body", "images", i]`.
 

@@ -19,8 +19,9 @@ which CI checks, but no iPhone holds the model.
 The port matches mlx-vlm bit for bit on all 63 recorded oracle reads when it runs on the oracle's
 Metal library, and stays within the bounds of decisions D-014 and D-048 on mlx-swift's own kernels,
 which is how it runs in production; reads with images match the oracle's four image reads bit for
-bit there too (D-054). `steps`, `samples`, `sequential` and images work; `think` with text
-generation (issues #50 to #53) does not yet, and the engine refuses it with upstream's message.
+bit there too (D-054). `steps`, `samples`, `sequential`, images and `think` work, and the runtime
+serves `POST /v1/chat/completions` as a `TextGenerator`. Text generation reproduces upstream's
+greedy replies token for token on the oracle's Metal library (D-059).
 
 <doc:ReadingWithDiffusionGemma> loads the model and covers its settings, memory and downloads.
 
@@ -58,6 +59,12 @@ generation (issues #50 to #53) does not yet, and the engine refuses it with upst
 - ``DiffusionGemmaGenerationConfiguration``
 - ``DiffusionGemmaConfigurationError``
 - ``WeightLoadingError``
+
+### Generation
+
+- ``DiffusionGenerationPolicy``
+- ``DiffusionSampler``
+- ``DenoisedBlock``
 
 ### Reads
 

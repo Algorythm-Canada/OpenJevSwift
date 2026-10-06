@@ -43,12 +43,24 @@ final class StubModelLog: @unchecked Sendable {
     private var prefillCalls: [[Int]] = []
     private var readCalls: [Read] = []
     private var cacheLimits: [Int] = []
+    private var canvasCalls: [Int] = []
+    private var detokenized: [Int] = []
+    private var commitCalls: [(promptTokens: Int, offset: Int, tokens: [Int])] = []
 
     var prefills: [[Int]] { lock.withLock { prefillCalls } }
     var imagePrompts: [ImagePrompt] { lock.withLock { imagePromptCalls } }
     var imagePrefills: Int { lock.withLock { imagePrefillCalls } }
     var reads: [Read] { lock.withLock { readCalls } }
     var limits: [Int] { lock.withLock { cacheLimits } }
+    /// The ids the detokenizer looked up, in order: every generated id it was not told to skip.
+    var detokenizedIDs: [Int] { lock.withLock { detokenized } }
+    func detokenizing(_ id: Int) { lock.withLock { detokenized.append(id) } }
+    /// The canvas length of each block the stub denoised.
+    var canvases: [Int] { lock.withLock { canvasCalls } }
+    /// Each committed block: the cache's prompt tokens and offset, and the block.
+    var commits: [(promptTokens: Int, offset: Int, tokens: [Int])] {
+        lock.withLock { commitCalls }
+    }
     var touched: Bool { !prefills.isEmpty || !reads.isEmpty || !imagePrompts.isEmpty }
 
     func prefilled(_ ids: [Int]) { lock.withLock { prefillCalls.append(ids) } }
@@ -56,6 +68,12 @@ final class StubModelLog: @unchecked Sendable {
     func prefilledImage() { lock.withLock { imagePrefillCalls += 1 } }
     func read(_ read: Read) { lock.withLock { readCalls.append(read) } }
     func limit(_ bytes: Int) { lock.withLock { cacheLimits.append(bytes) } }
+    func denoised(_ length: Int) { lock.withLock { canvasCalls.append(length) } }
+    func committed(_ cache: PromptCache, _ tokens: [Int]) {
+        lock.withLock {
+            commitCalls.append((cache.promptTokens, cache.offset, tokens))
+        }
+    }
 }
 
 /// The soft tokens the stub counts per image, upstream's test_mlx_backend.py `IMAGE_TOKENS`.
@@ -68,9 +86,15 @@ extension DiffusionGemmaRuntime {
     /// With `images`, an image prompt is decoded and sized for real (``ImageReadInputs/process(_:processor:)``,
     /// so a bad image fails as it would on the model) and counted as upstream's stub counts it:
     /// the words of the system and state texts plus ``stubImageTokens`` per image.
+    ///
+    /// With `blocks`, the runtime generates: block `k` of a reply is `blocks(k, canvasLength)`
+    /// (padded with id 5 to the canvas, cut to it), committing appends to the cache's offset,
+    /// and id `n` reads as the word `▁wn`. Without, it has no generation and flags `think` off.
     static func stub(
         configuration: Configuration = .default, log: StubModelLog = StubModelLog(),
-        images: Bool = true, tokenizer: any DecisionTokenizer = StubRuntimeTokenizer()
+        images: Bool = true, tokenizer: any DecisionTokenizer = StubRuntimeTokenizer(),
+        policy: DiffusionGenerationPolicy = DiffusionGenerationPolicy(),
+        blocks: (@Sendable (_ index: Int, _ canvasLength: Int) -> [Int])? = { _, _ in [] }
     ) -> DiffusionGemmaRuntime {
         let calls = ModelCalls(
             prefill: { ids in
@@ -109,7 +133,28 @@ extension DiffusionGemmaRuntime {
                             log.prefilledImage()
                             return PromptCache(layers: [], offset: tokens, promptTokens: tokens)
                         })
-                } : nil)
+                } : nil,
+            generation: blocks.map { script in
+                GenerationCalls(
+                    policy: policy,
+                    denoise: { cache, length, _ in
+                        let index = log.canvases.count
+                        log.denoised(length)
+                        var tokens = Array(script(index, length).prefix(length))
+                        tokens += [Int](repeating: 5, count: length - tokens.count)
+                        return DenoisedBlock(tokens: tokens, steps: 1, ending: .allRevealed)
+                    },
+                    commit: { cache, tokens in
+                        log.committed(cache, tokens)
+                        return PromptCache(
+                            layers: [], offset: cache.offset + tokens.count,
+                            promptTokens: cache.promptTokens)
+                    },
+                    tokenText: { id in
+                        log.detokenizing(id)
+                        return "\u{2581}w\(id)"
+                    })
+            })
         return DiffusionGemmaRuntime(
             tokenizer: tokenizer, configuration: configuration, calls: calls,
             setCacheLimit: { log.limit($0) })

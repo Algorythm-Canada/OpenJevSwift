@@ -13,9 +13,7 @@ import Testing
 /// The DiffusionGemma tests run when the server lists `openjev-latest`, and `test_encoder` runs
 /// for whichever of `laya-1.0`, `verdict-1.4`, `clm-v0.1` and `jevk5-0.2` it lists, as upstream's
 /// do. `test_unknown_model` runs against every server. Every answer's headers and shapes are
-/// checked too (``JevContract``). `test_think`, `test_chat` and `test_chat_stream` wait for the
-/// issues that bring their features to this server's model, so they skip; their bodies are
-/// upstream's checks, ready for then. `LiveSettings` lists the variables.
+/// checked too (``JevContract``). `LiveSettings` lists the variables.
 @Suite(
     "test_live.py", .serialized, .enabled(if: LiveSettings.configured, LiveSettings.unsetMessage))
 struct LiveTests {
@@ -144,7 +142,6 @@ struct LiveTests {
 
     @Test(
         "test_think",
-        .disabled(Waiting.think),
         .enabled("the server at OPENJEV_LIVE_URL does not list openjev-latest") {
             try await ModelListing.lists(diffusionGemma)
         })
@@ -263,7 +260,6 @@ struct LiveTests {
 
     @Test(
         "test_chat",
-        .disabled(Waiting.chat),
         .enabled("the server at OPENJEV_LIVE_URL does not serve text generation") {
             try await ModelListing.lists("diffusiongemma-26b")
         })
@@ -281,7 +277,6 @@ struct LiveTests {
 
     @Test(
         "test_chat_stream",
-        .disabled(Waiting.chat),
         .enabled("the server at OPENJEV_LIVE_URL does not serve text generation") {
             try await ModelListing.lists("diffusiongemma-26b")
         })
@@ -305,6 +300,56 @@ struct LiveTests {
             text += choices[0]["delta"]?["content"]?.stringValue ?? ""
         }
         #expect(!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, "\(response.text)")
+    }
+
+    /// The port's own check, not upstream's: a reply of more than one 256-token block streams to
+    /// the end, its finish chunk and `[DONE]` last, and its text is the reply without `stream`.
+    /// The model emits a whole block at once; upstream's queue of 64 pieces overflowed on every
+    /// block of more than 64 tokens and ended such a reply without either (D-059).
+    @Test(
+        "A long streamed reply arrives whole, with its finish and [DONE], as the reply unstreamed",
+        .enabled("the server at OPENJEV_LIVE_URL does not serve text generation") {
+            try await ModelListing.lists("diffusiongemma-26b")
+        })
+    func longStreamIsWhole() async throws {
+        let messages: JSONValue = [
+            [
+                "role": "user",
+                "content": .string(
+                    "Write a story of about 400 words about a lighthouse keeper who finds "
+                        + "a message in a bottle."),
+            ]
+        ]
+        let client = try LiveClient.make()
+        let whole = try await client.post(
+            "/v1/chat/completions", json: ["model": "diffusiongemma-26b", "messages": messages])
+        try #require(whole.status == 200, "\(whole.status): \(whole.text)")
+        let body = try whole.json()
+        let expected = try #require(body["choices"]?[0]?["message"]?["content"]?.stringValue)
+        let completionTokens = try #require(body["usage"]?["completion_tokens"]?.intValue)
+        // More than one block, so the stream carries at least one whole block of 256.
+        #expect(completionTokens > 256, "\(completionTokens) tokens")
+
+        let streamed = try await client.post(
+            "/v1/chat/completions",
+            json: ["model": "diffusiongemma-26b", "messages": messages, "stream": true])
+        try #require(streamed.status == 200, "\(streamed.status): \(streamed.text)")
+        let lines = streamed.text.split(omittingEmptySubsequences: false) {
+            $0 == "\n" || $0 == "\r\n" || $0 == "\r"
+        }.filter { $0.hasPrefix("data: ") }
+        #expect(lines.last == "data: [DONE]")
+        var text = ""
+        var finishes: [String] = []
+        for line in lines.dropLast() {
+            let chunk = try JSONParser().parse(String(line.dropFirst("data: ".count)))
+            guard let choice = chunk["choices"]?[0] else { continue }
+            text += choice["delta"]?["content"]?.stringValue ?? ""
+            if let finish = choice["finish_reason"]?.stringValue {
+                finishes.append(finish)
+            }
+        }
+        #expect(finishes.count == 1 && ["stop", "length"].contains(finishes.first ?? ""))
+        #expect(text == expected, "streamed \(text.count) characters, whole \(expected.count)")
     }
 
     /// Upstream's `test_encoder` for one of its four models.
@@ -352,16 +397,4 @@ struct LiveTests {
     func encoderJevK5() async throws {
         try await Self.encoder("jevk5-0.2")
     }
-}
-
-/// The skip comments of the tests that wait for a feature of this server. Each names the issue,
-/// and `OPENJEV_LIVE_URL`, which CI's test log check requires of a skipped live test.
-enum Waiting {
-    static let think = Comment(
-        rawValue: "waits for the think option (#52); it then runs against OPENJEV_LIVE_URL when "
-            + "the server lists openjev-latest")
-    static let chat = Comment(
-        rawValue: "waits for the model's generation (#51) behind /v1/chat/completions (#53's "
-            + "follow-up); it then runs against OPENJEV_LIVE_URL when the server lists "
-            + "diffusiongemma-26b")
 }

@@ -42,6 +42,8 @@ public final class StubTextGenerator: TextGenerator, @unchecked Sendable {
 
     public let maxPromptTokens: Int
     public let thoughtChannelMarkerIDs: [Int]
+    /// The DiffusionGemma runtime's block, 256, unless the test says otherwise.
+    public let blockLength: Int
     private let prompt: @Sendable (_ messages: [JSONValue], _ thinking: Bool) throws -> [Int]
     private let encoding: @Sendable (_ text: String) throws -> [Int]
     private let body: Body
@@ -55,6 +57,7 @@ public final class StubTextGenerator: TextGenerator, @unchecked Sendable {
     public init(
         maxPromptTokens: Int = 32768,
         markers: [Int] = StubTextGenerator.markers,
+        blockLength: Int = 256,
         prompt: @escaping @Sendable (_ messages: [JSONValue], _ thinking: Bool) throws -> [Int] =
             StubTextGenerator.syntheticPrompt,
         encode: @escaping @Sendable (_ text: String) throws -> [Int] =
@@ -63,6 +66,7 @@ public final class StubTextGenerator: TextGenerator, @unchecked Sendable {
     ) {
         self.maxPromptTokens = maxPromptTokens
         self.thoughtChannelMarkerIDs = markers
+        self.blockLength = blockLength
         self.prompt = prompt
         self.encoding = encode
         self.body = body

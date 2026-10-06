@@ -16,8 +16,8 @@
     /// everything upstream refuses is refused before an answer starts. A whole reply is generated
     /// while the client is there, as a decision is. A streamed reply is admitted and waits for its
     /// turn before its 200 is sent, then writes its events as the generation emits them; a client
-    /// that goes away, or reads so slowly that 64 pieces wait for it, stops the generation at its
-    /// next block (``/OpenJevCore/ChatCompletionStream``).
+    /// that goes away, or reads so slowly that two blocks of pieces wait for it, stops the
+    /// generation (``/OpenJevCore/ChatCompletionStream``).
     struct ChatCompletionsRoute: Sendable {
         /// The settings: the body cap.
         let settings: ServerSettings

@@ -7,7 +7,8 @@ import Foundation
 import MLX
 
 extension DiffusionGemmaRuntime {
-    /// The runtime's settings, with upstream's defaults.
+    /// The runtime's settings, with upstream's defaults and a generation seed of 0, which upstream
+    /// does not have.
     ///
     /// The library never reads the environment (D-013). The CLI maps `ServerSettings` onto this
     /// initializer: `mlxMaxPrompt` to ``maxPromptTokens``, `mlxPromptCache` to
@@ -28,23 +29,31 @@ extension DiffusionGemmaRuntime {
         /// Whether loading runs one small read so the first user does not pay kernel compilation,
         /// `OPENJEV_WARMUP` (on).
         public var warmUp: Bool
+        /// The seed of MLX's generator for each reply's random canvases (0). Every reply draws
+        /// from a generator seeded with it, so a prompt gets the same reply each time, in any
+        /// process; upstream leaves MLX's generator unseeded, so its replies vary from one
+        /// process to the next. Fixtures/generation records the replies with seed 0.
+        public var generationSeed: UInt64
 
-        /// Creates a configuration; every argument defaults to upstream's value.
+        /// Creates a configuration; every argument defaults to upstream's value, but
+        /// `generationSeed`, which upstream does not have (it leaves MLX's generator unseeded).
         public init(
             maxPromptTokens: Int = 32_768,
             promptCacheEntries: Int = PrefillCacheDefaults.entries,
             promptCacheTokens: Int = PrefillCacheDefaults.tokens,
             cacheLimitGB: Double? = nil,
-            warmUp: Bool = true
+            warmUp: Bool = true,
+            generationSeed: UInt64 = 0
         ) {
             self.maxPromptTokens = maxPromptTokens
             self.promptCacheEntries = promptCacheEntries
             self.promptCacheTokens = promptCacheTokens
             self.cacheLimitGB = cacheLimitGB
             self.warmUp = warmUp
+            self.generationSeed = generationSeed
         }
 
-        /// Upstream's defaults.
+        /// Upstream's defaults, and `generationSeed` 0.
         public static let `default` = Configuration()
 
         /// The byte count ``cacheLimitGB`` asks MLX for, or nil when MLX is left alone. 0 stays

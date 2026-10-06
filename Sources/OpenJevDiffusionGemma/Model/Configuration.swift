@@ -580,7 +580,7 @@ public struct DiffusionGemmaGenerationConfiguration: Codable, Equatable, Sendabl
         /// `_cls_name`, the sampler's configuration class (`EntropyBoundSamplerConfig`).
         public let className: String?
         /// `entropy_bound`.
-        public let entropyBound: Float?
+        public let entropyBound: Double?
 
         enum CodingKeys: String, CodingKey {
             case className = "_cls_name"
@@ -593,13 +593,13 @@ public struct DiffusionGemmaGenerationConfiguration: Codable, Equatable, Sendabl
     /// `sampler_config`.
     public let sampler: SamplerConfiguration?
     /// `confidence_threshold`.
-    public let confidenceThreshold: Float?
+    public let confidenceThreshold: Double?
     /// `stability_threshold`.
     public let stabilityThreshold: Int?
     /// `t_max`.
-    public let tMax: Float?
+    public let tMax: Double?
     /// `t_min`.
-    public let tMin: Float?
+    public let tMin: Double?
     /// `max_new_tokens`.
     public let maxNewTokens: Int?
     /// `eos_token_id`, an integer or a list in the file.
@@ -620,14 +620,16 @@ public struct DiffusionGemmaGenerationConfiguration: Codable, Equatable, Sendabl
     }
 
     /// Decodes `generation_config`. Every field is optional, as mlx-vlm keeps the object untyped.
+    /// The thresholds and temperatures are Doubles, the Python floats mlx-vlm computes the step
+    /// temperature with (``DiffusionSampler/linearTemperature(step:maxSteps:schedule:)``).
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         maxDenoisingSteps = try c.decodeIfPresent(Int.self, forKey: .maxDenoisingSteps)
         sampler = try c.decodeIfPresent(SamplerConfiguration.self, forKey: .sampler)
-        confidenceThreshold = try c.decodeIfPresent(Float.self, forKey: .confidenceThreshold)
+        confidenceThreshold = try c.decodeIfPresent(Double.self, forKey: .confidenceThreshold)
         stabilityThreshold = try c.decodeIfPresent(Int.self, forKey: .stabilityThreshold)
-        tMax = try c.decodeIfPresent(Float.self, forKey: .tMax)
-        tMin = try c.decodeIfPresent(Float.self, forKey: .tMin)
+        tMax = try c.decodeIfPresent(Double.self, forKey: .tMax)
+        tMin = try c.decodeIfPresent(Double.self, forKey: .tMin)
         maxNewTokens = try c.decodeIfPresent(Int.self, forKey: .maxNewTokens)
         eosTokenIDs = try c.decodeTokenIDs(forKey: .eosTokenIDs)
         padTokenID = try c.decodeIfPresent(Int.self, forKey: .padTokenID)

@@ -3760,7 +3760,9 @@ Decision.
    template's recursion has room (item 7). `SystemOneService` gains `textGenerator`, `nil` by
    default; `DecisionEngine` returns its backend when the backend conforms, and the server adds the
    chat route only then. Wiring the `mlx` backend is therefore the runtime's conformance:
-   `DiffusionGemmaRuntime` conforms once it generates (#51), and its routes appear.
+   `DiffusionGemmaRuntime` conforms (D-059 item 9), unconditionally, so a runtime made without
+   generation keeps the routes and answers them with the 503 of a failing generator, as upstream
+   keeps its routes whatever its runtime can do.
 3. **Upstream's answers, recorded.** Every status, type, code, message and header of the route is
    upstream's, in its order: the body (`request.json()`, whatever the content type), `messages`,
    `model`, the 529 (`running >= gen_max_inflight + gen_max_queue`, `retry-after: 2`),
@@ -3868,6 +3870,7 @@ Decision.
     passed as upstream passes them, `[100, 45518, 107, 101]`, which holds two ordinary tokens,
     `thought` and `\n`; whether mlx-vlm drops them wherever a reply has them, as its
     `skip_special_token_ids` would, is for #51 to check against mlx-vlm (it is not installed here).
+    It does, and the DiffusionGemma runtime reports only the two markers: D-059 item 10.
 11. **Tests.** The route's tests carry upstream's names and run over `StubTextGenerator`, which
     reproduces `StubRuntime`, `ReplayRuntime` and `OneTokenRuntime`: in OpenJevCoreTests (the
     stream's slow reader, cancelled waits, a stream that never runs), OpenJevServerTests (the
@@ -3903,3 +3906,163 @@ and the Fixtures workflow regenerates its files. Every answer the route gives it
 upstream's bytes in CI.
 
 Status. Proposed with issue #53 (the HTTP and core side); the issue closes when the model is wired.
+
+## D-059 Generation and think follow upstream's `MlxRuntime.generate`, seeded: where the port goes beyond or differs from the issue text
+
+Context. Issues #50 to #52 port the text generation that `think` (and later the chat endpoint,
+#53) runs on: mlx-vlm 0.6.15's sampling functions, the block loop of `stream_diffusion_generate`,
+`diffusion_update_cache`, and upstream's `MlxRuntime.generate` and `MlxEngine.think`
+(`mlx_backend.py` lines 210 to 257 and 274 to 288). Their text describes the checkpoint's
+published policy. What upstream runs is narrower: `MlxRuntime.generate` passes only `max_tokens`,
+the skipped ids and `temperature=0.0`, so every other option takes mlx-vlm's default. The oracle
+(`Tools/fixtures/generation_oracle.py`, `Fixtures/generation/generation.json`) records that path
+and the port is held to it.
+
+Decision.
+
+1. **The sampler upstream runs, not the checkpoint's.** `stream_diffusion_generate` defaults to the
+   `confidence-threshold` sampler at 0.9 (`DEFAULT_DIFFUSION_CONFIDENCE_THRESHOLD`). It reads the
+   checkpoint's `EntropyBoundSamplerConfig` only to refuse another class. The entropy-bound mask
+   (`entropy_bound` 0.1) that #50 names is ported (`DiffusionSampler.entropyTransferMask`) and held
+   to mlx-vlm's vectors, but no reply uses it. The temperature schedule still divides the logits
+   at temperature 0, which changes the probabilities the sampler compares with 0.9 and the
+   entropies the stopping rule compares with 0.005. Its value is computed in Double, as Python's
+   floats, then rounded to float32. For that the generation configuration's `t_min`, `t_max`,
+   `confidence_threshold` and `entropy_bound` are now Doubles (they were Floats, read by no code).
+   The stopping rule applies because the checkpoint names `confidence_threshold` and
+   `stability_threshold` at the top of `generation_config.json`. The nested
+   `diffusion_stopping_config` and `linear_temperature_schedule_config` mlx-vlm also reads are not
+   read, since the pinned checkpoint has neither.
+2. **Each reply is seeded.** The initial canvas and every re-noised position come from MLX's global
+   generator. Upstream never seeds it, so its replies, greedy as they are, change from one process
+   to the next. The oracle seeds it before each reply and records the seed. The port gives each
+   reply its own `MLXRandom.RandomState(seed: Configuration.generationSeed)` (0 by default). Its
+   key splitting is that of MLX's global `KeySequence`, so it draws exactly what `mx.random.seed`
+   gives (`SamplerTests`). Two departures follow: the port's replies are reproducible in any
+   process, and no other code's use of MLX's global generator can move them. A setting could
+   restore upstream's variety by passing a fresh seed per reply; none is exposed.
+3. **The options upstream never sets are left out.** `diffusion_static_cache` (a preallocated
+   `StaticPrefixKVCache` whose decoder window starts before its empty slots), `diffusion_full_canvas`,
+   the minimum and maximum canvas overrides, `diffusion_compile`, the unmasking display, chunked
+   prefill (`prefill_step_size`), seeding the canvas from `decoder_input_ids`, pixel values, and a
+   temperature above 0 in the loop (`sampleCanvas` is ported and tested, but the policy's
+   temperature is 0). The canvases are mlx-vlm's defaults: `min(256, max(remaining, 64))`.
+4. **Blocks are committed to a copy.** `DiffusionGemmaModel.updateCache` runs the encoder over the
+   committed canvas after the cache with mlx-vlm's continuation masks and RoPE offset, on
+   `LayerCache.extended()` copies. A full layer grows by 256-position buffers as `KVCache` does. A
+   sliding layer keeps its last 1,023 positions and appends, as `RotatingKVCache._update_concat`
+   does. So a reply can start from the prefill a read cached for the same prompt without changing
+   it. Upstream's generation prefills afresh every time; the port looks the prompt up in the read
+   cache, reuses a hit, and does not insert its own prefill, so replies never evict reads.
+5. **The detokenizer is the generation module's.** mlx-vlm picks `SPMStreamingDetokenizer` with
+   `trim_space=False` for this tokenizer's decoder. The port's `StreamingDetokenizer` is in
+   `Generation/`, not `Tokenization/`, because the chat work (#53) changes that folder. It reads the
+   vocabulary through `SwiftTransformersTokenizer.token(of:)`. Replaying each recorded reply gives
+   upstream's `emit` texts, piece for piece.
+6. **`generate`'s contract is upstream's, with Swift cancellation.** `emit(text, token)` once per
+   committed token, then `emit(tail, nil)` when the detokenizer holds text. The stop id is not
+   returned. `emit` returning false ends the reply after that token with `cancelled` and no tail,
+   as upstream breaks out of the stream. A cancelled calling task is checked before the prefill,
+   before each block and after the last, so it ends the reply within one block, and a reply
+   cancelled during its last block is `cancelled`, not `stop` or `length`, and gets no tail.
+   Upstream's own generation has no task to cancel; this is the Swift side of a client that goes
+   away (D-040). The prompt cap is checked in `generate` with upstream's
+   message, for `think` (`MlxEngine.think` checks it) and the chat endpoint (`MlxGenerator` checks
+   it). The result type is `TextGeneration`.
+7. **think.** The runtime's `think` is `generate` with the close marker as the stop and nothing
+   skipped. The engine's existing `DecisionEngine.think` builds the prompt, cuts at the first close
+   id and bills: input is the thought pass's prompt plus the reads after it, output the thought,
+   charged to the first group only under `sequential`; `think` with images is refused before
+   anything runs. `capabilities.think` is on for a runtime made with generation; a checkpoint
+   whose sampler class mlx-vlm refuses still loads and reads, with `think` off, as upstream reads
+   it and fails only when asked to generate. #52 asks for the
+   thought text to be available to the engine for debug logging. It is there, in the thought's
+   prefix ids, and never in the `Decision`. Nothing logs it: `OpenJevCore` has no logger, and
+   adding one was out of scope.
+8. **The Layr fork, as a second reference, differs from upstream** (its `DiffusionGemmaSampler.swift`
+   at `eeba2af`): it has only the entropy-bound sampler, always uses 256-position canvases, draws a
+   re-noise canvas on the last step too, and always applies the stopping rule. It computes the
+   step temperature in float32 and has its own quantized soft-embedding kernel. Any of these
+   changes greedy replies against upstream's. The port follows mlx-vlm in each.
+
+9. **The chat endpoint runs on it (#53).** PR #136 merged the route over a `TextGenerator` while
+   this change was open, so the runtime now conforms: `generate` returns the core's
+   `TextGeneration` (it had its own `GenerationResult` of the same shape),
+   `thoughtChannelMarkerIDs` is `enc("<|channel>thought\n") + enc("<channel|>")`,
+   `generationPromptIDs` is `SwiftTransformersTokenizer.generationPromptIDs`, rendered off the
+   actor, and `encode` is `Engine.enc`. `DecisionEngine.textGenerator` then returns the runtime and
+   the server adds the chat routes for the `mlx` backend; the CLI needed no change. The cases
+   D-058 item 11 left disabled run: `test_chat_completion_on_mlx` over the stub model and the real
+   tokenizer, the four DiffusionGemma chat cases on the checkpoint, and the live suite's
+   `test_chat` and `test_chat_stream`. It also answers D-058 item 10: mlx-vlm drops the skipped
+   ids before they enter its detokenizer's buffer wherever they appear, so the ordinary `thought`
+   and `\n` tokens of upstream's list go too; item 10 says what chat skips here instead.
+   The conformance is unconditional: a runtime made without generation still has the chat routes
+   and answers them with the 503 of a failing generator, as upstream keeps its routes whatever its
+   runtime can do.
+10. **Chat skips only the two channel markers.** Upstream's chat passes `engine.thought_open +
+    engine.thought_close`, `enc("<|channel>thought\n") + enc("<channel|>")`, which for this
+    tokenizer is `[100, 45518, 107, 101]`: the two markers and the ordinary tokens `thought` and
+    `\n`. mlx-vlm drops every one of them wherever a reply has them, so every single-newline token
+    (107) and every `thought` (45518) vanishes from upstream's chat replies: lists and code run
+    together (the oracle's list reply reads `AppleBananaCherryDateElderberry`, the JSON reply
+    `{  "name": "Ada",  "age": 36}`), and `{"thought": 1}` becomes `{"": 1}`. Other newline tokens
+    survive: the recorded `story` keeps its 20 newlines, which come as 10 tokens of id 108 (`\n\n`).
+    The runtime's `thoughtChannelMarkerIDs` is therefore `enc("<|channel>") + enc("<channel|>")`,
+    `[100, 101]`, so chat replies keep their single newlines and the word `thought`. On the
+    checkpoint no reply showed a thought channel's text with the shorter list: the five prompts of
+    `test_no_reply_leaks_the_thought_channel`, three times each, whole and streamed, start with
+    their answer, and the chat tests pass. `generate` still skips whatever its caller passes, and
+    its parity tests keep upstream's list, so the oracle comparison is unchanged. D-058 item 10
+    points here.
+11. **A streamed reply's queue holds two blocks and the tail.** `generate` emits a committed block
+    of up to 256 tokens back to back, without suspending, and only then denoises the next. The
+    chat stream's queue was upstream's `asyncio.Queue(maxsize=64)`, which refused the 65th piece of
+    every block of more than 64 tokens: the generation stopped as `cancelled` and the reply ended
+    without its finish chunk and `[DONE]`. Upstream has the same flaw, where whether the event
+    loop drains the queue in time decides, so its long streamed replies fail at random. The queue
+    now holds `max(64, 2 × blockLength + 1)` pieces, which `TextGenerator.blockLength` reports: 256
+    for this runtime, so 513. One block and the tail would be enough for a reader that has caught
+    up when a block lands; the second block covers a reader still writing the previous block. The
+    size comes from the generator rather than a constant because the block length is the model's
+    (a model that emits token by token reports 1 and keeps 64), and a constant of 513 would be
+    wrong for a checkpoint with another canvas. A reader that stops reading or goes away still
+    ends the stream as before, after the queued pieces and without `[DONE]`; the slow-reader test
+    holds that at the new size. `wholeBlockStreams` (257 pieces from one synchronous call) failed
+    with `readerFellBehind` before the change, and the live suite's `longStreamIsWhole` streams a
+    story of several blocks and compares it with the same request unstreamed.
+12. **#51 and #52's acceptance, as held.** #51 asks for long replies to agree with mlx-vlm on at
+    least their first two blocks. In the exact tier every recorded reply agrees whole, the story
+    over its three blocks and the long prompt's reply over two; on mlx-swift's own kernels the
+    story parts from the recording after 8 tokens and the cut reply after 4, where a near-tied
+    argmax flips. The long-reply agreement is held in the exact tier, as D-014 holds reads. #52
+    asks for the thought to be available to the engine for logging at debug level: the engine has
+    the thought's ids in the read's prefix, never in the `Decision`; `OpenJevCore` has no logger,
+    so nothing logs them.
+
+Measured on 2026-10-06. Exact tier (D-014): all 8 recorded replies agree whole, block by block
+(initial canvas, final canvas, passes, ending), with the same finish reasons and `emit` calls,
+the reply after a 1,235-token prompt included; both thoughts agree token for token (128 and 64
+ids), with upstream's billing (469 and 1,896 input tokens) and every answer after them bit for
+bit, probabilities and confidence. Native tier: the short answer, list, JSON reply, stop-id reply
+and the seed-7 answer agree whole. The 640-token story agrees for its first 8 tokens, the 40-token
+cut for its first 4 and the long prompt's reply for its first 2; there a near-tied argmax flips
+under mlx-swift's kernels. The seeded initial canvases match natively too. The sampler vectors
+match bit for bit on the CPU. A text read is unchanged: `RegressionTests` and `ReadOracleTests`
+pass as before. Live, against `openjev serve --backend mlx`: the Swift live suite passes 13 and
+skips 4 (the encoder models), upstream's `tests/test_live.py` passes 12 and skips 4, and a story
+of 451 tokens streams to its finish chunk and `[DONE]`, equal to the reply unstreamed.
+
+Alternatives rejected. (a) The entropy-bound sampler, as the issue text and the checkpoint name
+it: it would disagree with upstream on every reply. (b) Leaving MLX's generator unseeded, as
+upstream does: no reply could be tested against the oracle, and the same `think` request would
+bill and answer differently from run to run. (c) Caching generation prefills in the read cache:
+chat prompts would evict the reads the cache exists for, and upstream caches none.
+
+Consequences. `think` works on the `mlx` backend with upstream's answers and billing, reproducibly,
+and so does `POST /v1/chat/completions`, which calls `generate` as upstream's
+`MlxGenerator.generate` calls `MlxRuntime.generate`, with single newlines kept and long streams
+whole. Agreement past the first tokens of a long reply is held only in the exact tier.
+
+Status. Proposed with issues #50, #51, #52 and #53. First numbered D-058; renumbered because the chat
+endpoint's PR #136 claims D-058.

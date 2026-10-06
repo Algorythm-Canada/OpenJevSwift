@@ -51,7 +51,8 @@ OpenJevSwift/                          Swift package, tools 6.2, strict concurre
                      messages with the scaffold: generationPromptIDs), label discovery hookup
       Vision/        RGBImage and the JPEG and GIF ports, Gemma4ImageProcessor (Pillow's bicubic),
                      ImagePromptInputs and ImageReadInputs (expansion, mm_token_type_ids), #46
-      Generation/    Sampler, stopping rules, block loop, streaming detokenizer (later)
+      Generation/    DiffusionSampler (mlx-vlm's sampling functions), DiffusionGenerationPolicy
+                     and denoiseBlock (one block), StreamingDetokenizer (#50, #51)
     OpenJevEncoders/                   Apple platforms; its Core ML types need macOS 15 and iOS 18.
                                        Depends on Core ML and swift-transformers Tokenizers; no MLX.
       Verdict/       VerdictPrompt, VerdictTokenizer, VerdictCalibration, VerdictBackend actor
@@ -340,17 +341,39 @@ issue #29), upstream's `MlxRuntime` and `MlxEngine.one_read` in one actor:
   tokens a read reports include the image tokens. An image that does not decode or that the
   processor cannot size is a `SchemaError` `"image could not be read: {reason}"` at
   `["body", "images", i]`, the 400 of upstream's other image refusals (upstream answers a bare 500).
-- Capabilities: steps, samples, sequential and images (a model loaded without its vision tower
-  has no images, and the engine answers `"openjev-0.1 does not support images"`); not `think`
-  (milestone 5), so the engine answers `"openjev-0.1 does not support think"`.
-  `think(prompt:budget:stopIDs:)` throws `unsupported("think")`. `modelName` is `openjev-0.1`.
+- `generate(prompt:maxTokens:stopIDs:skipSpecialTokenIDs:emit:)` (#51, D-059): upstream's
+  `MlxRuntime.generate`, greedy. The prompt cap is checked with upstream's message. The prefill is
+  the one reads cached for the same prompt, else a new one that is not cached. Then blocks of
+  `min(256, max(remaining, 64))` positions, each `DiffusionGemmaModel.denoiseBlock` (the
+  `confidence-threshold` sampler at 0.9 over the linear temperature schedule, self-conditioning,
+  stable-and-confident stopping, up to 48 passes) and, before the next,
+  `DiffusionGemmaModel.updateCache` (`diffusion_update_cache`) on a copy of the caches. The
+  checkpoint's EOS ids (1, 106, 50) and `stopIDs` end the reply at the token, which is not
+  returned, and `maxTokens` ends it with `length`. Each committed token goes through
+  `StreamingDetokenizer`, `skipSpecialTokenIDs` left out first, and `emit(text, token)` gets the
+  text released. A final `emit(text, nil)` carries the buffered tail. `emit` returning false ends
+  the reply after that token, and a cancelled task ends it before the prefill, before the next
+  block or after the last one, all `cancelled`. It returns the core's `TextGeneration`: the ids,
+  the prompt tokens and `stop`, `length` or `cancelled`. Each reply's random canvases come from
+  `MLXRandom.RandomState(seed: Configuration.generationSeed)` (0), which reproduces
+  `mx.random.seed` in mlx-vlm. The whole reply runs inside the actor, as upstream holds its MLX
+  thread. With `generationPromptIDs`, `encode` and `thoughtChannelMarkerIDs` the runtime is a
+  `TextGenerator`, so the server serves `POST /v1/chat/completions` over it (#53, D-059).
+- `think(prompt:budget:stopIDs:)` (#52): `generate` of up to `budget` tokens with the close marker
+  as the stop and nothing skipped, as `ThoughtGeneration`; the engine builds the prompt (thinking
+  on, the open marker), cuts at the first close id and bills it (`DecisionEngine.think`).
+- Capabilities: steps, samples, sequential, `think` (a runtime made with generation, which a
+  loaded checkpoint is; without, the engine answers `"openjev-0.1 does not support think"`) and
+  images (a model loaded without its vision tower has no images, and the engine answers
+  `"openjev-0.1 does not support images"`). `modelName` is `openjev-0.1`.
 - Memory controls: `Configuration.cacheLimitGB` (nil leaves MLX alone, 0 disables MLX's buffer
   pool, otherwise `Memory.cacheLimit` in bytes, applied inside the actor at load, or later with
   `setCacheLimit(gb:)`), the prefill cache budgets and the prompt cap. `memoryReport()` gives
   MLX's active, cache and peak bytes and the process's resident bytes; `statistics()` the reads,
   the prefill hits and misses and the model time.
 - Test seam: the internal `init(tokenizer:configuration:calls:setCacheLimit:)` takes the model's
-  `prefill`, `read` and image expansion as closures (`ModelCalls`). The model-free tests bind them to a stub; the
+  `prefill`, `read`, image expansion and generation (`GenerationCalls`: the policy, one block's
+  denoising, the cache commit and the vocabulary) as closures (`ModelCalls`). The model-free tests bind them to a stub; the
   live read-policy tests bind them to the shared checkpoint's model and record every prompt's
   token ids, with their own prefill cache and statistics and no second load.
 - Warm-up: `warmUp()` runs one small read directly on the model (one noul question over upstream's
@@ -444,9 +467,11 @@ upstream's order: `messages`, `model`, the capacity bound (`OPENJEV_GEN_MAX_INFL
 prompt renders, `normalize`, the prompt and its limit, then the stop strings, every refusal in
 OpenAI's error shape before an answer starts. A whole reply generates while the client is there, as
 a decision does. A streamed reply waits for its turn before its 200 is sent; then
-`ChatCompletionStream` runs the generation beside a queue of 64 pieces, which the route drains into
+`ChatCompletionStream` runs the generation beside a queue of two of the generator's blocks and the
+final segment (`2 × blockLength + 1`, 513 for DiffusionGemma, never below upstream's 64; D-059),
+which the route drains into
 the event stream while a sibling task watches the connection. A client that goes away, or a piece
-that finds the queue full, stops the generation at its next block, so a reply ends early rather
+that finds the queue full, stops the generation, so a reply ends early rather
 than reaching a live client with a piece missing. The slot comes back once the generation has
 stopped, and a stream whose answer never started gives it back as it is discarded. The chat
 template renders on a thread of its own, since it recurses into a request's tool calls, and

@@ -122,12 +122,43 @@ struct ChatCompletionsTests {
 
     // MARK: The stream
 
-    /// 64 pieces of slack, then the reply ends: gap-free, and without `[DONE]`.
+    /// One block of 256 tokens and the tail, emitted back to back from inside one synchronous
+    /// call as the DiffusionGemma runtime commits a block, reach a reader that writes each event:
+    /// the reply completes with `[DONE]` last. A queue of upstream's 64 refused the 65th piece of
+    /// every block of more than 64 tokens and ended the reply without its finish.
+    @Test("A whole block emitted at once reaches a reader that keeps up between blocks")
+    func wholeBlockStreams() async throws {
+        let emitted = Counter()
+        let generator = StubTextGenerator(
+            generate: Self.counting(257, prefix: " ", emitted: emitted))
+        let chat = ChatCompletions(generator: generator)
+        let stream = try await chat.stream(try await chat.prepare(Self.streamed))
+        var events: [String] = []
+        let ending = try await stream.run { event in events.append(event) }
+        guard case .completed(let generation) = ending else {
+            Issue.record("the stream ended with \(ending)")
+            return
+        }
+        #expect(generation.finishReason == .stop && generation.generated.count == 257)
+        #expect(events.last == "data: [DONE]\n\n")
+        let (text, done) = try Self.content(events)
+        #expect(done)
+        #expect(text.split(separator: " ").compactMap { Int($0) } == Array(0..<257))
+        #expect(emitted.count == 257)
+        #expect(chat.running == 0 && chat.freeSlots == 8)
+        // Two blocks and the tail; a generator that emits token by token keeps upstream's 64.
+        #expect(stream.capacity == 513)
+        #expect(ChatCompletionStream.capacity(blockLength: 1) == 64)
+        #expect(ChatCompletionStream.capacity(blockLength: 0) == 64)
+    }
+
+    /// `capacity` pieces of slack, two blocks and the tail, then the reply ends: gap-free, and
+    /// without `[DONE]`.
     @Test("test_a_slow_reader_cancels_rather_than_loses_chunks")
     func slowReader() async throws {
         let emitted = Counter()
         let generator = StubTextGenerator(
-            generate: Self.counting(500, prefix: " ", emitted: emitted))
+            generate: Self.counting(2000, prefix: " ", emitted: emitted))
         let chat = ChatCompletions(generator: generator)
         let stream = try await chat.stream(try await chat.prepare(Self.streamed))
         var events: [String] = []
@@ -142,12 +173,13 @@ struct ChatCompletionsTests {
         let (text, done) = try Self.content(events)
         #expect(!done, "a cancelled reply must not look complete")
         let numbers = text.split(separator: " ").compactMap { Int($0) }
-        #expect(!numbers.isEmpty && numbers.count < 500)
+        #expect(!numbers.isEmpty && numbers.count < 2000)
         // A prefix of the reply with nothing missing: the piece that found the queue full ended
         // the reply instead of being dropped from the middle of it.
         #expect(numbers == Array(0..<numbers.count))
-        #expect(numbers.count >= ChatCompletionStream.bufferCapacity)
-        #expect(emitted.count < 500)
+        #expect(stream.capacity == 2 * 256 + 1)
+        #expect(numbers.count >= stream.capacity)
+        #expect(emitted.count < 2000)
         #expect(generator.running == 0)
         #expect(chat.running == 0 && chat.freeSlots == 8)
     }
