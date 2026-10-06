@@ -129,15 +129,15 @@ public actor DiffusionGemmaRuntime: DecisionBackend {
     /// A runtime over a loaded model, whose images `processor` sizes: the checkpoint's
     /// `processor_config.json` when ``load(_:configuration:cache:token:resolver:progress:)`` finds
     /// one, else the pinned checkpoint's values. It generates when `tokenizer` is a
-    /// ``SwiftTransformersTokenizer``, whose vocabulary the streaming detokenizer reads.
-    ///
-    /// - Throws: ``DiffusionGemmaRuntimeError/unsupported(_:)`` for a checkpoint whose diffusion
-    ///   sampler mlx-vlm does not implement.
+    /// ``SwiftTransformersTokenizer``, whose vocabulary the streaming detokenizer reads, and the
+    /// checkpoint's diffusion sampler is one mlx-vlm implements; otherwise it reads without
+    /// generating, and `think` is off, as upstream reads such a checkpoint and fails only when
+    /// asked to generate.
     init(
         tokenizer: any DecisionTokenizer, configuration: Configuration,
         loaded: sending DiffusionGemmaModel.LoadedModel,
         processor: Gemma4ImageProcessor = Gemma4ImageProcessor()
-    ) throws {
+    ) {
         let model = loaded.model
         self.tokenizer = tokenizer
         self.configuration = configuration
@@ -153,8 +153,9 @@ public actor DiffusionGemmaRuntime: DecisionBackend {
             }
         }
         var generation: GenerationCalls?
-        if let transformers = tokenizer as? SwiftTransformersTokenizer {
-            let policy = try DiffusionGenerationPolicy(configuration: loaded.configuration)
+        if let transformers = tokenizer as? SwiftTransformersTokenizer,
+            let policy = try? DiffusionGenerationPolicy(configuration: loaded.configuration)
+        {
             generation = GenerationCalls(
                 policy: policy,
                 denoise: { cache, length, random in
@@ -229,7 +230,7 @@ public actor DiffusionGemmaRuntime: DecisionBackend {
             FileManager.default.fileExists(atPath: processorURL.path)
             ? try Gemma4ImageProcessor(configuration: Data(contentsOf: processorURL))
             : Gemma4ImageProcessor()
-        let runtime = try DiffusionGemmaRuntime(
+        let runtime = DiffusionGemmaRuntime(
             tokenizer: tokenizer, configuration: configuration, loaded: loaded,
             processor: processor)
         try await runtime.prepare(

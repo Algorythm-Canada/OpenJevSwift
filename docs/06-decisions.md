@@ -3798,7 +3798,9 @@ Decision.
    skipped. The engine's existing `DecisionEngine.think` builds the prompt, cuts at the first close
    id and bills: input is the thought pass's prompt plus the reads after it, output the thought,
    charged to the first group only under `sequential`; `think` with images is refused before
-   anything runs. `capabilities.think` is on for a runtime made with generation. #52 asks for the
+   anything runs. `capabilities.think` is on for a runtime made with generation; a checkpoint
+   whose sampler class mlx-vlm refuses still loads and reads, with `think` off, as upstream reads
+   it and fails only when asked to generate. #52 asks for the
    thought text to be available to the engine for debug logging. It is there, in the thought's
    prefix ids, and never in the `Decision`. Nothing logs it: `OpenJevCore` has no logger, and
    adding one was out of scope.
