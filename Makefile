@@ -48,6 +48,7 @@ fixtures:
 	PYTHONHASHSEED=0 $(FIXTURES_PYTHON) Tools/fixtures/python_json_tables.py
 	PYTHONHASHSEED=0 $(FIXTURES_PYTHON) Tools/fixtures/wire_tables.py
 	PYTHONHASHSEED=0 $(FIXTURES_PYTHON) Tools/fixtures/upstream_tables.py
+	PYTHONHASHSEED=0 $(FIXTURES_PYTHON) Tools/fixtures/chat_tables.py
 	PYTHONHASHSEED=0 $(FIXTURES_PYTHON) Tools/fixtures/checkpoint_tables.py
 
 # Create Tools/sdk-compat/.venv with the pinned Python SDK, and install the pinned TypeScript SDK

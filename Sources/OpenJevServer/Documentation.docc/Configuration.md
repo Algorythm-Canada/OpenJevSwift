@@ -45,9 +45,9 @@ out or set to the empty string with the same effect.
 | `OPENJEV_LAYA_MODEL` | `convaiinnovations/laya-typed-decisions` | laya | Read as upstream reads it, with no effect, for the same reason. |
 | `OPENJEV_JEVK5_MODEL` | `Algorythm-Canada/jevk5-0.2-mlx-8bit` | jevk5 | This port's: the JevK5 checkpoint converted to MLX, a directory (`Tools/jevk5/convert.py` writes one) or a Hugging Face repository with an optional `@revision`. A conversion's repository loads its pinned commit; the default, the published 8-bit conversion, is downloaded into the Hugging Face cache on first start (D-052). Upstream reads its vLLM server's `OPENJEV_MODEL` instead. |
 | `OPENJEV_DEVICE` | unset | encoders | Upstream's PyTorch device. Read, with no effect: Core ML picks the compute units for the platform (D-011). |
-| `OPENJEV_GEN_MAX_INFLIGHT` | `8` | none yet | Generations in flight at once. Read and checked; text generation arrives with issue #53. |
-| `OPENJEV_GEN_MAX_QUEUE` | `32` | none yet | Generations waiting before a 529. No effect until issue #53. |
-| `OPENJEV_GEN_MAX_TOKENS` | `8192` | none yet | The longest generation in tokens. No effect until issue #53. |
+| `OPENJEV_GEN_MAX_INFLIGHT` | `8` | mlx | Generations of `POST /v1/chat/completions` running at once; above 1 they only wait their turn, since the model generates one reply at a time. The route serves once the model generates text (issue #51); until then this is read and checked. |
+| `OPENJEV_GEN_MAX_QUEUE` | `32` | mlx | Chat requests waiting beyond those before a 529 `overloaded_error` with `retry-after: 2`. `0` lets none wait. |
+| `OPENJEV_GEN_MAX_TOKENS` | `8192` | mlx | The longest reply in tokens: a request's `max_tokens` or `max_completion_tokens`, 1024 when it has neither, is bounded by it. |
 
 `serve` writes `--backend`, `--host`, `--port`, `--log-level` and `--no-warmup` over
 `OPENJEV_BACKEND`, `OPENJEV_HOST`, `OPENJEV_PORT`, `OPENJEV_LOG_LEVEL` and `OPENJEV_WARMUP`

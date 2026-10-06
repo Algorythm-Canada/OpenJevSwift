@@ -14,8 +14,8 @@ import Testing
 /// for whichever of `laya-1.0`, `verdict-1.4`, `clm-v0.1` and `jevk5-0.2` it lists, as upstream's
 /// do. `test_unknown_model` runs against every server. Every answer's headers and shapes are
 /// checked too (``JevContract``). `test_think`, `test_chat` and `test_chat_stream` wait for the
-/// issues that bring their features to this server, so they skip; their bodies are upstream's
-/// checks, ready for then. `LiveSettings` lists the variables.
+/// issues that bring their features to this server's model, so they skip; their bodies are
+/// upstream's checks, ready for then. `LiveSettings` lists the variables.
 @Suite(
     "test_live.py", .serialized, .enabled(if: LiveSettings.configured, LiveSettings.unsetMessage))
 struct LiveTests {
@@ -361,6 +361,7 @@ enum Waiting {
         rawValue: "waits for the think option (#52); it then runs against OPENJEV_LIVE_URL when "
             + "the server lists openjev-latest")
     static let chat = Comment(
-        rawValue: "waits for /v1/chat/completions (#53); it then runs against OPENJEV_LIVE_URL "
-            + "when the server lists diffusiongemma-26b")
+        rawValue: "waits for the model's generation (#51) behind /v1/chat/completions (#53's "
+            + "follow-up); it then runs against OPENJEV_LIVE_URL when the server lists "
+            + "diffusiongemma-26b")
 }

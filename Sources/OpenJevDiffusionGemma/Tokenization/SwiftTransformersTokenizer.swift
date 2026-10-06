@@ -60,7 +60,8 @@ public struct SwiftTransformersTokenizer: DecisionTokenizer {
     static let templateOptions = Jinja.Template.Options(lstripBlocks: true, trimBlocks: true)
 
     /// The environment a chat template renders in: swift-jinja's, with
-    /// ``pythonTrim(_:kwargs:env:)`` as `trim` (decision D-056).
+    /// ``pythonTrim(_:kwargs:env:)`` as `trim` (decision D-056), ``pythonDictsort(_:kwargs:env:)``
+    /// as `dictsort` and ``isPythonSequence(_:kwargs:env:)`` as the `sequence` test (D-058).
     ///
     /// swift-jinja 2.5.1's own `trim` strips Foundation's `whitespacesAndNewlines`, which keeps
     /// U+001C to U+001F and removes U+200B, where upstream's jinja2 strips what Python's
@@ -72,7 +73,115 @@ public struct SwiftTransformersTokenizer: DecisionTokenizer {
     static func templateEnvironment() -> Jinja.Environment {
         let environment = Jinja.Environment()
         environment["trim"] = .function(pythonTrim)
+        environment["dictsort"] = .function(pythonDictsort)
+        environment["sequence"] = .function(isPythonSequence)
         return environment
+    }
+
+    /// jinja2's `dictsort` filter, `sorted(value.items(), key=...)`, for a dict whose keys are
+    /// strings sorted by key: each key lowercased as Python's `str.lower()` lowercases it
+    /// (``pythonLowercased(_:)``) unless `case_sensitive`, the keys compared scalar by scalar as
+    /// Python compares code points, keys that compare equal kept in the dict's order, also with
+    /// `reverse`, as Python's stable sort keeps them.
+    ///
+    /// swift-jinja 2.5.1's own compares keys with Foundation's case-insensitive `compare`, which
+    /// sorts `ß` as `ss` and a decomposed `é` with `é`, where Python sorts `ß` after `~` and the
+    /// decomposed `é` between `ez` and `f`. The template sorts a tool call's arguments, the
+    /// objects inside them and a legacy tool response with it (D-058). Sorting by value, or a
+    /// dict with a key that is not a string, which no chat request holds, is left to swift-jinja.
+    @Sendable static func pythonDictsort(
+        _ args: [Jinja.Value], kwargs: [String: Jinja.Value], env: Jinja.Environment
+    ) throws -> Jinja.Value {
+        let names = ["case_sensitive", "by", "reverse"]
+        guard args.count <= names.count + 1, kwargs.keys.allSatisfy(names.contains) else {
+            throw Jinja.JinjaError.runtime("dictsort takes case_sensitive, by and reverse")
+        }
+        var options: [String: Jinja.Value] = [:]
+        for (name, value) in zip(names, args.dropFirst()) {
+            options[name] = value
+        }
+        for (name, value) in kwargs {
+            guard options.updateValue(value, forKey: name) == nil else {
+                throw Jinja.JinjaError.runtime("dictsort got multiple values for \(name)")
+            }
+        }
+        let byKey: Bool
+        switch options["by"] {
+        case nil, .string("key")?:
+            byKey = true
+        default:
+            byKey = false
+        }
+        guard byKey, case .object(let dict) = args.first,
+            dict.keys.allSatisfy({ if case .string = $0 { true } else { false } })
+        else {
+            return try Jinja.Filters.dictsort(args, kwargs: kwargs, env: env)
+        }
+        let caseSensitive = options["case_sensitive"]?.isTruthy ?? false
+        let reverse = options["reverse"]?.isTruthy ?? false
+        var items: [(order: [UInt32], index: Int, key: String, value: Jinja.Value)] = []
+        for (index, (key, value)) in dict.enumerated() {
+            guard case .string(let text) = key else { continue }
+            let compared = caseSensitive ? text : pythonLowercased(text)
+            items.append((compared.unicodeScalars.map(\.value), index, text, value))
+        }
+        items.sort { first, second in
+            if first.order == second.order {
+                return first.index < second.index
+            }
+            return reverse
+                ? second.order.lexicographicallyPrecedes(first.order)
+                : first.order.lexicographicallyPrecedes(second.order)
+        }
+        return .array(items.map { .array([.string($0.key), $0.value]) })
+    }
+
+    /// Python's `str.lower()`: each scalar's full lowercase mapping, except that a capital sigma
+    /// ending a word, after a cased letter and before none, case-ignorable scalars skipped both
+    /// ways, is the final sigma `ς`: the Unicode Standard's Final_Sigma condition, which CPython
+    /// applies in `str.lower()`. The mappings are the Swift runtime's, which may know a scalar's
+    /// case where a Python release with older Unicode data does not; against CPython 3.14 they
+    /// differ only in the 28 scalars Unicode 17 gave a lowercase.
+    static func pythonLowercased(_ text: String) -> String {
+        let scalars = Array(text.unicodeScalars)
+        var lowered = String.UnicodeScalarView()
+        for (index, scalar) in scalars.enumerated() {
+            if scalar == "\u{03A3}" {
+                lowered.append(isFinalSigma(at: index, in: scalars) ? "\u{03C2}" : "\u{03C3}")
+            } else {
+                lowered.append(contentsOf: scalar.properties.lowercaseMapping.unicodeScalars)
+            }
+        }
+        return String(lowered)
+    }
+
+    /// Whether the capital sigma at `index` ends a word, by CPython's rule: the nearest scalar
+    /// before it that is not case-ignorable is cased, and the nearest after it is not, or there
+    /// is none.
+    static func isFinalSigma(at index: Int, in scalars: [Unicode.Scalar]) -> Bool {
+        guard let before = scalars[..<index].last(where: { !$0.properties.isCaseIgnorable }),
+            before.properties.isCased
+        else {
+            return false
+        }
+        let after = scalars[(index + 1)...].first { !$0.properties.isCaseIgnorable }
+        return !(after?.properties.isCased ?? false)
+    }
+
+    /// jinja2's `sequence` test, which a value passes when Python's `len()` and `__getitem__`
+    /// accept it: a list, a string or a dict. swift-jinja 2.5.1's own test leaves dicts out, and
+    /// the template asks it of a message's `content` and a tool's result, which a chat request
+    /// may give as an object. swift-jinja looks a test up in the environment before its built-in
+    /// tests, as it does a filter (D-058).
+    @Sendable static func isPythonSequence(
+        _ args: [Jinja.Value], kwargs: [String: Jinja.Value], env: Jinja.Environment
+    ) throws -> Jinja.Value {
+        switch args.first ?? .undefined {
+        case .array, .string, .object:
+            return .boolean(true)
+        default:
+            return .boolean(false)
+        }
     }
 
     /// jinja2's `trim` filter, `soft_str(value).strip(chars)`, which is Python's `str.strip`.
@@ -82,8 +191,8 @@ public struct SwiftTransformersTokenizer: DecisionTokenizer {
     /// holds, so an empty string strips nothing. Scalars are compared one by one, as Python
     /// compares code points. Any other `chars`, an undefined variable included, throws, where
     /// Python raises `TypeError: strip arg must be None or str`. A value that is not a string is
-    /// written as swift-jinja writes it before it is stripped, as swift-jinja's own `trim` does;
-    /// Gemma 4's template trims only strings.
+    /// written as Python's `str()` writes it first (``pythonString(_:)``), as `soft_str` does: a
+    /// chat request's text part can hold a number, a Boolean or null (D-058).
     @Sendable static func pythonTrim(
         _ args: [Jinja.Value], kwargs: [String: Jinja.Value], env: Jinja.Environment
     ) throws -> Jinja.Value {
@@ -92,13 +201,7 @@ public struct SwiftTransformersTokenizer: DecisionTokenizer {
         else {
             throw Jinja.JinjaError.runtime("trim takes one argument, chars")
         }
-        let text: String
-        switch args.first ?? .undefined {
-        case .string(let string):
-            text = string
-        case let other:
-            text = other.description
-        }
+        let text = pythonString(args.first ?? .undefined)
         let strips: (Unicode.Scalar) -> Bool
         switch args.count == 2 ? args[1] : kwargs["chars"] ?? .null {
         case .null:
@@ -116,6 +219,44 @@ public struct SwiftTransformersTokenizer: DecisionTokenizer {
             return .string("")
         }
         return .string(String(scalars[start...end]))
+    }
+
+    /// Python's `str()` of a value the template reads, as jinja2 writes it: a string as itself,
+    /// an undefined value as nothing, `None`, `True`, `False`, an integer's digits, a float as
+    /// Python's `repr`, and a list or dict as Python writes it, its strings quoted.
+    static func pythonString(_ value: Jinja.Value) -> String {
+        switch value {
+        case .string(let string):
+            return string
+        case .undefined:
+            return ""
+        case .null:
+            return "None"
+        case .boolean(let flag):
+            return flag ? "True" : "False"
+        case .int(let integer):
+            return String(integer)
+        case .double(let number):
+            return number.pythonRepr
+        case .array(let elements):
+            return "[" + elements.map(pythonRepresentation).joined(separator: ", ") + "]"
+        case .object(let object):
+            let entries = object.map { key, value in
+                pythonRepresentation(Jinja.Value(key)) + ": " + pythonRepresentation(value)
+            }
+            return "{" + entries.joined(separator: ", ") + "}"
+        case .function, .macro:
+            return value.description
+        }
+    }
+
+    /// Python's `repr()` of a value inside a list or dict: a string quoted, the rest as
+    /// ``pythonString(_:)``.
+    static func pythonRepresentation(_ value: Jinja.Value) -> String {
+        if case .string(let string) = value {
+            return string.pythonRepr
+        }
+        return pythonString(value)
     }
 
     /// Renders `source`, compiled with ``templateOptions``, over `context` in
@@ -348,6 +489,122 @@ public struct SwiftTransformersTokenizer: DecisionTokenizer {
         } catch {
             throw OpenJevCore.TokenizerError(
                 "swift-jinja could not render the chat template: \(error)")
+        }
+    }
+
+    /// The prompt ids of a chat request, upstream's `MlxGenerator.prompt_ids`: the chat template
+    /// over `messages` with the generation prompt and `enable_thinking` set to `thinking`
+    /// (``renderChatTemplate(chatMessages:thinking:)``), tokenized without special tokens, then
+    /// the ids of the empty thought scaffold `<|channel>thought\n<channel|>`, which has the model
+    /// start past a thought on most replies (issue #53).
+    ///
+    /// - Throws: An ``/OpenJevCore/TokenizerError`` when the template does not render, or when
+    ///   `messages` nest deeper than ``/OpenJevCore/ChatCompletionRequest/maximumNesting``.
+    public func generationPromptIDs(messages: [JSONValue], thinking: Bool) async throws -> [Int] {
+        let text = try await renderChatTemplate(chatMessages: messages, thinking: thinking)
+        return try encode(text, addSpecialTokens: false)
+            + encode(EngineTokens.scaffoldText, addSpecialTokens: false)
+    }
+
+    /// The chat template rendered over a chat request's messages, as upstream's
+    /// `apply_chat_template(messages, add_generation_prompt=True, enable_thinking=thinking)` renders
+    /// them: each message is the value `json.loads` gave, its keys in the request's order, so the
+    /// template reads `role`, `content`, `tool_calls` and the rest as it does upstream.
+    ///
+    /// Two things differ from jinja2 with values a chat request can hold, both in tool calls: a
+    /// `null` that the template writes with `{{ }}`, a tool call's argument or a tool's missing
+    /// result, is written as nothing where jinja2 writes `None`, and an integer too large for
+    /// `Int` is a float. An object with two keys that differ only in Unicode normalization is
+    /// refused, since swift-jinja's objects would keep only one of them (D-058).
+    ///
+    /// The template renders on a thread of its own with 16 MB of stack:
+    /// swift-jinja recurses into tool call arguments, and in a debug build, on a thread with a
+    /// task's 512 KB of stack, 7 levels of them rendered and 16 overflowed it, while the 64 levels
+    /// ``/OpenJevCore/ChatCompletionRequest/maximumNesting`` allows needed 8 MB.
+    ///
+    /// - Throws: An ``/OpenJevCore/TokenizerError`` when the template does not render, when
+    ///   `messages` nest deeper than ``/OpenJevCore/ChatCompletionRequest/maximumNesting``, which
+    ///   bounds the template's recursion, or when an object in them has two keys that differ only
+    ///   in Unicode normalization.
+    public func renderChatTemplate(chatMessages messages: [JSONValue], thinking: Bool) async throws
+        -> String
+    {
+        let depth = ChatCompletionRequest.nesting(of: .array(messages))
+        guard depth <= ChatCompletionRequest.maximumNesting else {
+            throw OpenJevCore.TokenizerError(
+                "the messages nest \(depth) levels deep; the limit is "
+                    + "\(ChatCompletionRequest.maximumNesting)")
+        }
+        let template = chatTemplate
+        var context = specialTokenContext
+        context["add_generation_prompt"] = .boolean(true)
+        context["enable_thinking"] = .boolean(thinking)
+        let base = context
+        return try await Self.onRenderingThread {
+            var context = base
+            context["messages"] = .array(try messages.map(Self.templateValue))
+            do {
+                return try template.render(context, environment: Self.templateEnvironment())
+            } catch {
+                throw OpenJevCore.TokenizerError(
+                    "swift-jinja could not render the chat template: \(error)")
+            }
+        }
+    }
+
+    /// The stack of the thread a chat request's template renders on: 16 MB, twice what a debug
+    /// build needs at the deepest messages allowed.
+    static let renderingStackSize = 16 << 20
+
+    /// Runs `body` on a new thread with ``renderingStackSize`` bytes of stack and returns what it
+    /// returns or throws. The task waits without blocking its thread.
+    static func onRenderingThread<T: Sendable>(
+        _ body: @escaping @Sendable () throws -> T
+    ) async throws -> T {
+        try await withCheckedThrowingContinuation { continuation in
+            let thread = Thread {
+                continuation.resume(with: Result { try body() })
+            }
+            thread.stackSize = renderingStackSize
+            thread.start()
+        }
+    }
+
+    /// A JSON value as the template reads it, with an object's keys in order.
+    ///
+    /// - Throws: An ``/OpenJevCore/TokenizerError`` for an object with two keys that differ only
+    ///   in Unicode normalization, such as `é` written as one scalar and as `e` and a combining
+    ///   accent. Python keeps both keys and the template writes both; swift-jinja keys an object
+    ///   by Swift's `String`, whose equality is canonical equivalence, so one would replace the
+    ///   other and the prompt would not be upstream's (D-058).
+    static func templateValue(_ value: JSONValue) throws -> Jinja.Value {
+        switch value {
+        case .null:
+            return .null
+        case .bool(let flag):
+            return .boolean(flag)
+        case .integer(let digits):
+            return Int(digits).map(Jinja.Value.int) ?? .double(Double(digits) ?? .nan)
+        case .float(let number):
+            return .double(number)
+        case .string(let string):
+            return .string(string)
+        case .array(let elements):
+            return .array(try elements.map(templateValue))
+        case .object(let object):
+            var entries = OrderedDictionary<Jinja.ObjectKey, Jinja.Value>()
+            for (key, element) in object {
+                // The object's keys differ scalar by scalar, so a key already there is the same
+                // text in another normalization.
+                guard entries.updateValue(try templateValue(element), forKey: .string(key)) == nil
+                else {
+                    throw OpenJevCore.TokenizerError(
+                        "an object in the messages has two keys that differ only in Unicode "
+                            + "normalization (\(key.pythonRepr)), which the template cannot "
+                            + "tell apart")
+                }
+            }
+            return .object(entries)
         }
     }
 

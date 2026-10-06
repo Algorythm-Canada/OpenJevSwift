@@ -19,7 +19,7 @@ make fixtures
 
 `make upstream` checks out upstream at the pinned commit under `Upstream/openjev`.
 `make fixtures-venv` creates `Tools/fixtures/.venv` from CPython 3.14 with the packages pinned in
-`Tools/fixtures/requirements.txt`. `make fixtures` runs the four scripts in
+`Tools/fixtures/requirements.txt`. `make fixtures` runs the five scripts in
 [Tools/fixtures](../Tools/README.md). The first run downloads the tokenizer files of
 `mlx-community/diffusiongemma-26B-A4B-it-4bit` at revision
 `a7a81407613811e8ba63af92ac0d852b809e191f` (about 32 MB) into the Hugging Face cache, outside the
@@ -33,8 +33,8 @@ file byte for byte.
 Every file starts with a `generator` object. It names the script that wrote the file, the
 Python version and the versions of the packages whose behaviour the file depends on. Files that
 come from upstream's code also record `upstream` and `upstream_commit`. Every file written by
-`upstream_tables.py`, which loads the real tokenizer, also records `tokenizer_repo`,
-`tokenizer_revision` and the script's `version`.
+`upstream_tables.py` or `chat_tables.py`, which load the real tokenizer, also records
+`tokenizer_repo`, `tokenizer_revision` and the script's `version`.
 The files in `model/` come from the checkpoint alone, not from upstream's code: they record
 `model_repo`, `model_revision` and `version` instead of the upstream and tokenizer pins.
 `Tests/OpenJevCoreTests/Fixtures/FixturePinTests.swift` checks every file, so a fixture
@@ -47,6 +47,7 @@ THIRD_PARTY.md, the scripts and that test together, then regenerate.
 |---|---|---|---|
 | [tokenizer/](tokenizer/README.md) | Special token ids; token ids, pieces and decodes for a corpus; every text upstream's engine tokenized | `upstream_tables.py` | #12, #20 |
 | [chat-prompts/](chat-prompts/README.md) | `[system, user]` messages and their prompt text and ids, thinking off and on | `upstream_tables.py` | #21, #17 |
+| [chat-completions/](chat-completions/README.md) | `POST /v1/chat/completions`: OpenAI messages and the prompt ids `MlxGenerator.prompt_ids` renders, `Generator.normalize` and `extract_json` on their inputs, and HTTP exchanges with the chat route over upstream's stub runtimes | `chat_tables.py` | #53 |
 | `labels.json` | The 255 single-token choice labels, in order, below | `upstream_tables.py` | #12 |
 | [schemas/](schemas/README.md) | Requests and the internal schema or the `SchemaError` (message and `loc`) they produce | `upstream_tables.py` | #10 |
 | [system-texts/](system-texts/README.md) | Requests and the system text of each group, chunked and unchunked | `upstream_tables.py` | #11 |

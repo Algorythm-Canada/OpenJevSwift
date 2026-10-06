@@ -25,18 +25,24 @@ public struct PythonJSONWriter: Sendable {
         public var itemSeparator: String
         /// The text between an object key and its value.
         public var keySeparator: String
+        /// Write an infinite or NaN float as `Infinity`, `-Infinity` or `NaN`, as `allow_nan` does,
+        /// instead of refusing it. Python's default is true; here it is false, so a value that is
+        /// not JSON is never written unless a caller asks for upstream's output.
+        public var allowNaN: Bool
 
-        /// Creates options. The defaults are Python's `json.dumps` defaults.
+        /// Creates options. The defaults are Python's `json.dumps` defaults, except `allowNaN`.
         public init(
             ensureASCII: Bool = true,
             sortKeys: Bool = false,
             itemSeparator: String = ", ",
-            keySeparator: String = ": "
+            keySeparator: String = ": ",
+            allowNaN: Bool = false
         ) {
             self.ensureASCII = ensureASCII
             self.sortKeys = sortKeys
             self.itemSeparator = itemSeparator
             self.keySeparator = keySeparator
+            self.allowNaN = allowNaN
         }
 
         /// Python's `json.dumps(value)`.
@@ -56,8 +62,9 @@ public struct PythonJSONWriter: Sendable {
 
     /// Writes a value as UTF-8 bytes.
     ///
-    /// - Throws: ``JSONWriteError/nonFiniteNumber(_:)`` for an infinite or NaN float, and
-    ///   ``JSONWriteError/invalidInteger(_:)`` for integer text that is not normalized digits.
+    /// - Throws: ``JSONWriteError/nonFiniteNumber(_:)`` for an infinite or NaN float unless
+    ///   ``Options/allowNaN`` is set, and ``JSONWriteError/invalidInteger(_:)`` for integer text
+    ///   that is not normalized digits.
     public func bytes(_ value: JSONValue) throws(JSONWriteError) -> [UInt8] {
         var output: [UInt8] = []
         try write(value, into: &output)
@@ -135,7 +142,12 @@ public struct PythonJSONWriter: Sendable {
             output.append(contentsOf: digits.utf8)
         case .float(let number):
             guard number.isFinite else {
-                throw .nonFiniteNumber(number)
+                guard options.allowNaN else {
+                    throw .nonFiniteNumber(number)
+                }
+                let text = number.isNaN ? "NaN" : number < 0 ? "-Infinity" : "Infinity"
+                output.append(contentsOf: text.utf8)
+                return nil
             }
             output.append(contentsOf: pythonFloatRepr(number).utf8)
         case .string(let text):
