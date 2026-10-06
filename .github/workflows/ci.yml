@@ -357,3 +357,26 @@ jobs:
             -scheme OpenJevLetterReadout \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath "$DERIVED_DATA"
+
+      # The triage demo app (Examples/TriageDemo) uses the package by local path, through public
+      # API only, so it fails here when a public symbol it uses changes. Its own Package.resolved
+      # must pin the root's versions, so that it builds what the tests test.
+      - name: Build the triage demo for the simulator
+        if: ${{ !cancelled() && steps.toolchain.outcome == 'success' }}
+        run: |
+          python3 - <<'EOF'
+          import json, sys
+          root = {p["identity"]: p["state"] for p in json.load(open("Package.resolved"))["pins"]}
+          demo = "Examples/TriageDemo/TriageDemo.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+          drift = [p["identity"] for p in json.load(open(demo))["pins"] if root.get(p["identity"]) != p["state"]]
+          if drift:
+              print("::error::" + demo + " pins other versions than Package.resolved: " + ", ".join(drift))
+              sys.exit(1)
+          EOF
+          xcodebuild build -quiet \
+            -project Examples/TriageDemo/TriageDemo.xcodeproj \
+            -scheme TriageDemo \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$DERIVED_DATA" \
+            -onlyUsePackageVersionsFromResolvedFile \
+            CODE_SIGNING_ALLOWED=NO

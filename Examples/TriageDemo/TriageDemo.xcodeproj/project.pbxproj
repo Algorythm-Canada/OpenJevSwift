@@ -1,0 +1,555 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		DE00000000000000000000A1 /* OpenJevCore in Frameworks */ = {isa = PBXBuildFile; productRef = DE00000000000000000000B1 /* OpenJevCore */; };
+		DE00000000000000000000A2 /* OpenJevEncoders in Frameworks */ = {isa = PBXBuildFile; productRef = DE00000000000000000000B2 /* OpenJevEncoders */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		DE00000000000000000000C2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = DE00000000000000000000D0 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = DE00000000000000000000E1;
+			remoteInfo = TriageDemo;
+		};
+		DE00000000000000000000C1 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = DE00000000000000000000D0 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = DE00000000000000000000E1;
+			remoteInfo = TriageDemo;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		DE00000000000000000000F3 /* TriageDemoUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TriageDemoUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		DE00000000000000000000F1 /* TriageDemo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TriageDemo.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		DE00000000000000000000F2 /* TriageDemoTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TriageDemoTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		DE0000000000000000000103 /* TriageDemoUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = TriageDemoUITests;
+			sourceTree = "<group>";
+		};
+		DE0000000000000000000101 /* TriageDemo */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = TriageDemo;
+			sourceTree = "<group>";
+		};
+		DE0000000000000000000102 /* TriageDemoTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = TriageDemoTests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		DE0000000000000000000113 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DE0000000000000000000111 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DE00000000000000000000A1 /* OpenJevCore in Frameworks */,
+				DE00000000000000000000A2 /* OpenJevEncoders in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DE0000000000000000000112 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		DE0000000000000000000121 = {
+			isa = PBXGroup;
+			children = (
+				DE0000000000000000000101 /* TriageDemo */,
+				DE0000000000000000000102 /* TriageDemoTests */,
+				DE0000000000000000000103 /* TriageDemoUITests */,
+				DE0000000000000000000122 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		DE0000000000000000000122 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				DE00000000000000000000F1 /* TriageDemo.app */,
+				DE00000000000000000000F2 /* TriageDemoTests.xctest */,
+				DE00000000000000000000F3 /* TriageDemoUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		DE00000000000000000000E3 /* TriageDemoUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DE0000000000000000000133 /* Build configuration list for PBXNativeTarget "TriageDemoUITests" */;
+			buildPhases = (
+				DE0000000000000000000143 /* Sources */,
+				DE0000000000000000000113 /* Frameworks */,
+				DE0000000000000000000153 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				DE0000000000000000000162 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				DE0000000000000000000103 /* TriageDemoUITests */,
+			);
+			name = TriageDemoUITests;
+			packageProductDependencies = (
+			);
+			productName = TriageDemoUITests;
+			productReference = DE00000000000000000000F3 /* TriageDemoUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		DE00000000000000000000E1 /* TriageDemo */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DE0000000000000000000131 /* Build configuration list for PBXNativeTarget "TriageDemo" */;
+			buildPhases = (
+				DE0000000000000000000141 /* Sources */,
+				DE0000000000000000000111 /* Frameworks */,
+				DE0000000000000000000151 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				DE0000000000000000000101 /* TriageDemo */,
+			);
+			name = TriageDemo;
+			packageProductDependencies = (
+				DE00000000000000000000B1 /* OpenJevCore */,
+				DE00000000000000000000B2 /* OpenJevEncoders */,
+			);
+			productName = TriageDemo;
+			productReference = DE00000000000000000000F1 /* TriageDemo.app */;
+			productType = "com.apple.product-type.application";
+		};
+		DE00000000000000000000E2 /* TriageDemoTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DE0000000000000000000132 /* Build configuration list for PBXNativeTarget "TriageDemoTests" */;
+			buildPhases = (
+				DE0000000000000000000142 /* Sources */,
+				DE0000000000000000000112 /* Frameworks */,
+				DE0000000000000000000152 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				DE0000000000000000000161 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				DE0000000000000000000102 /* TriageDemoTests */,
+			);
+			name = TriageDemoTests;
+			packageProductDependencies = (
+			);
+			productName = TriageDemoTests;
+			productReference = DE00000000000000000000F2 /* TriageDemoTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		DE00000000000000000000D0 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2600;
+				LastUpgradeCheck = 2700;
+				TargetAttributes = {
+					DE00000000000000000000E1 = {
+						CreatedOnToolsVersion = 26.0;
+					};
+					DE00000000000000000000E2 = {
+						CreatedOnToolsVersion = 26.0;
+						TestTargetID = DE00000000000000000000E1;
+					};
+					DE00000000000000000000E3 = {
+						CreatedOnToolsVersion = 26.0;
+						TestTargetID = DE00000000000000000000E1;
+					};
+				};
+			};
+			buildConfigurationList = DE0000000000000000000130 /* Build configuration list for PBXProject "TriageDemo" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = DE0000000000000000000121;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				DE0000000000000000000171 /* XCLocalSwiftPackageReference "../.." */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = DE0000000000000000000122 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				DE00000000000000000000E1 /* TriageDemo */,
+				DE00000000000000000000E2 /* TriageDemoTests */,
+				DE00000000000000000000E3 /* TriageDemoUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		DE0000000000000000000153 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DE0000000000000000000151 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DE0000000000000000000152 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		DE0000000000000000000143 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DE0000000000000000000141 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DE0000000000000000000142 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		DE0000000000000000000162 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = DE00000000000000000000E1 /* TriageDemo */;
+			targetProxy = DE00000000000000000000C2 /* PBXContainerItemProxy */;
+		};
+		DE0000000000000000000161 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = DE00000000000000000000E1 /* TriageDemo */;
+			targetProxy = DE00000000000000000000C1 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		DE0000000000000000000187 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = ca.algorythm.openjev.TriageDemoUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = TriageDemo;
+			};
+			name = Debug;
+		};
+		DE0000000000000000000188 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = ca.algorythm.openjev.TriageDemoUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = TriageDemo;
+			};
+			name = Release;
+		};
+		DE0000000000000000000181 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		DE0000000000000000000182 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 6.0;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		DE0000000000000000000183 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Triage;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = ca.algorythm.openjev.TriageDemo;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		DE0000000000000000000184 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Triage;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = ca.algorythm.openjev.TriageDemo;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		DE0000000000000000000185 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = ca.algorythm.openjev.TriageDemoTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TriageDemo.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/TriageDemo";
+			};
+			name = Debug;
+		};
+		DE0000000000000000000186 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = ca.algorythm.openjev.TriageDemoTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TriageDemo.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/TriageDemo";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		DE0000000000000000000133 /* Build configuration list for PBXNativeTarget "TriageDemoUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DE0000000000000000000187 /* Debug */,
+				DE0000000000000000000188 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		DE0000000000000000000130 /* Build configuration list for PBXProject "TriageDemo" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DE0000000000000000000181 /* Debug */,
+				DE0000000000000000000182 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		DE0000000000000000000131 /* Build configuration list for PBXNativeTarget "TriageDemo" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DE0000000000000000000183 /* Debug */,
+				DE0000000000000000000184 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		DE0000000000000000000132 /* Build configuration list for PBXNativeTarget "TriageDemoTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DE0000000000000000000185 /* Debug */,
+				DE0000000000000000000186 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		DE0000000000000000000171 /* XCLocalSwiftPackageReference "../.." */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../..;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		DE00000000000000000000B1 /* OpenJevCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = OpenJevCore;
+		};
+		DE00000000000000000000B2 /* OpenJevEncoders */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = OpenJevEncoders;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = DE00000000000000000000D0 /* Project object */;
+}
