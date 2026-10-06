@@ -22,6 +22,16 @@ public protocol SystemOneService: Sendable {
     /// ends, which the server reports as `server-timing`'s `model`, and lets cancellation reach
     /// its reads: the server cancels the decision of a client that has gone away.
     func decide(_ request: SystemOneRequest) async throws -> Decision
+
+    /// The model's text generation, which the server serves at `POST /v1/chat/completions`, or
+    /// `nil` for a model that does not generate text, whose server has no chat routes, as
+    /// upstream's encoder containers have none (decision D-012).
+    var textGenerator: (any TextGenerator)? { get }
+}
+
+extension SystemOneService {
+    /// `nil`: a service generates no text unless it says otherwise.
+    public var textGenerator: (any TextGenerator)? { nil }
 }
 
 /// Upstream's `served_models(backend)`: the model version a response names, the names a request
@@ -156,6 +166,12 @@ public enum KnownEncoderModels {
 extension DecisionEngine: SystemOneService {
     /// ``ServedModels/diffusionGemma``.
     public nonisolated var servedModels: ServedModels { .diffusionGemma }
+
+    /// The backend, when it also generates text: a DiffusionGemma runtime that conforms to
+    /// ``TextGenerator`` serves `POST /v1/chat/completions` beside its reads.
+    public nonisolated var textGenerator: (any TextGenerator)? {
+        backend as? any TextGenerator
+    }
 
     /// ``decide(_:seed:)`` with the seed derived from the request, as the route does.
     public func decide(_ request: SystemOneRequest) async throws -> Decision {

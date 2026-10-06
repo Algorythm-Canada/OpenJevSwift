@@ -3735,6 +3735,175 @@ decoding would settle it. D-055 item 7 is corrected.
 
 Status. Proposed with issue #46, after D-055.
 
+## D-058 Chat completions: where the port goes beyond or differs from the issue text
+
+Context. Issue #53 ports `openjev/chat.py` for the in-process backend: upstream's `MlxGenerator`,
+whose normalization, capacity and response shapes it shares with `Generator`, the proxy to a vLLM
+server. The model side (the sampler, the block loop and `think`, issues #50 to #52) is ported in
+parallel, so this change builds the HTTP and core side against a stub generator and fixes the
+contract the runtime will meet. Several points needed choices the issue does not spell out.
+
+Decision.
+
+1. **Only the in-process generator is ported.** This port has no vLLM backend (D-030), so
+   `Generator`'s proxy is not: its HTTP client, `upstream_message`, the model-name rewriting of
+   proxied chunks, and `test_chat_passes_upstream_errors` and
+   `test_chat_upstream_error_is_truncated`, which test it. `Generator.normalize`, the capacity
+   bound and slots, and every answer the route gives itself are ported.
+2. **`TextGenerator` is the contract.** `OpenJevCore` declares `TextGenerator` with upstream's
+   `MlxRuntime.generate` as `generate(prompt:maxTokens:stopIDs:skipSpecialTokenIDs:emit:)`,
+   returning `TextGeneration` (the generated ids without the stop token, the prompt tokens and
+   `stop`, `length` or `cancelled`), and what the chat route reads from upstream's engine:
+   `maxPromptTokens`, `thoughtChannelMarkerIDs`, `encode(_:)` for a stop string, and
+   `generationPromptIDs(messages:thinking:)`, upstream's `prompt_ids` (the template over the
+   messages, then the scaffold). Rendering is `async` so that a conformance can render where the
+   template's recursion has room (item 7). `SystemOneService` gains `textGenerator`, `nil` by
+   default; `DecisionEngine` returns its backend when the backend conforms, and the server adds the
+   chat route only then. Wiring the `mlx` backend is therefore the runtime's conformance:
+   `DiffusionGemmaRuntime` conforms once it generates (#51), and its routes appear.
+3. **Upstream's answers, recorded.** Every status, type, code, message and header of the route is
+   upstream's, in its order: the body (`request.json()`, whatever the content type), `messages`,
+   `model`, the 529 (`running >= gen_max_inflight + gen_max_queue`, `retry-after: 2`),
+   `normalize`, then the prompt's limit before the answer starts. `Tools/fixtures/chat_tables.py`
+   records upstream's own functions and route (`Fixtures/chat-completions`): `normalize` on 56
+   bodies, `extract_json` on 44 replies, `prompt_ids` on 51 conversations, and 69 HTTP exchanges
+   over the stub runtimes of upstream's `test_mlx_backend.py`, with the completion id and clock
+   fixed. The port gives the same bytes, event streams included, on 61 of the 69; items 4 and 9
+   are the other eight. The capacity bound is checked where upstream checks it, and the request
+   is counted in there, before its prompt renders. Upstream counts it once the prompt has
+   rendered, but renders on its event loop, so nothing runs between its check and its count;
+   here prompts render concurrently, each on a thread of its own (item 7). Counting at the check
+   keeps upstream's guarantee that a request past the check is never refused later, refuses a
+   request beyond the bound before it renders anything, and bounds the prompts rendering at once
+   by `OPENJEV_GEN_MAX_INFLIGHT` plus `OPENJEV_GEN_MAX_QUEUE`, which a burst of requests could
+   otherwise exceed without limit, a 16 MB thread each. A request refused after the check gives
+   its place back. The sum saturates at `Int.max` rather than trapping, as Python's cannot
+   overflow.
+4. **A 400 where upstream crashes.** Upstream raises, and Starlette answers a bare 500, for a
+   message that is not an object or has no string `role` (the template's `UndefinedError` or
+   `TypeError`), a `chat_template_kwargs`, `response_format`, `response_format.json_schema` or
+   streaming `stream_options` that is true but not a dict (`normalize`'s `TypeError` or
+   `AttributeError`), and a `stop` that is neither a string, a list of strings nor a dict
+   (`stop_ids`' `TypeError`, after the prompt, which a stream reports by breaking off after its
+   first chunk). The port answers each with a 400 `invalid_request_error` naming the field, at the
+   point where upstream would raise: the role check where `normalize` or the template first reads
+   the messages, the stop strings after the prompt's limit. In JSON mode upstream answers a string
+   message with `dict()`'s `ValueError` as a 400 ("dictionary update sequence element #0 has
+   length 1; 2 is required"); the port gives its own message there too. A template that cannot
+   render the messages is a 400 too, and messages nested deeper than 64 levels are refused before
+   rendering (item 7). A `stop` given as a dict keeps upstream's reading, its keys.
+5. **A generator's failure.** Upstream's MLX generator lets a runtime error through, a bare 500.
+   Here an error before the answer starts, from generating or from encoding a `stop` string, is
+   the 503 `api_error` `inference backend unavailable: <type name>` with `retry-after: 2`, the vLLM
+   generator's answer for a backend that failed, and is logged at error level as D-031 logs a
+   backend failure. After a stream has started the status
+   is sent: the connection closes without the response's end, as uvicorn closes it upstream, and
+   the failure is logged.
+6. **Streaming and cancellation.** A streamed request takes its slot before its 200, as upstream's
+   does, and the stream hands pieces from `emit` to the response through a queue of 64, empty
+   pieces included. Five points beyond upstream's:
+   - A piece that finds the queue full is not queued: the generation is asked to stop and the
+     stream ends after the pieces already queued, without a finish chunk or `[DONE]`. Upstream's
+     end marker displaces the oldest queued piece, so a client got a gap before the end; here a
+     reply that ends early is always a prefix.
+   - `emit` queues a piece synchronously, so a generation's end can never overtake its last
+     pieces. Upstream relies on `call_soon_threadsafe` keeping them in order, which CPython 3.14
+     breaks for a call that finishes before `run_in_executor` registers its callback
+     (`asyncio.futures._chain_future` then completes the awaited future at once): upstream's own
+     one-token stream lost its only piece on a fresh app in 16 of 30 tries. CPython 3.12, which
+     upstream's container runs, keeps the order, and a model never finishes that fast, so this
+     only affects stubs; the fixture script's stub runtimes start each call once its callback is
+     registered, so the recordings are 3.12's and the same on every run.
+   - A client that goes away is seen from its connection (`ClientDisconnectHandler`, #37) at once,
+     where upstream polls `is_disconnected()` every 0.1 s, and a whole reply's client that goes
+     away cancels its generation too, as a decision's does, and logs 499; upstream runs it to the
+     end. Either way the generation stops at its next block, through `emit` and through task
+     cancellation.
+   - The slot is given back once the generation has stopped, as upstream's `reap` does. A stream
+     whose answer never started, because Hummingbird could not write its head and so never runs
+     the body, gives it back when it is discarded.
+   - A graceful shutdown lets a stream finish within the group's time, and a stream still running
+     when the time is up is cancelled and counts as cut short (D-049), although the server closes
+     the connection's input as it cancels, which a client's leaving also does.
+7. **Rendering a chat request's prompt.** `SwiftTransformersTokenizer.generationPromptIDs` renders
+   the messages as the JSON values they are, keys in the request's order, through the shipped
+   template in D-056's environment, which gains three of jinja2's behaviours that chat messages
+   reach: the `sequence` test passes a dict, `trim` writes a value that is not a string as
+   Python's `str()` writes it (`None`, `True`, `1.5`, `[1, 'a']`), and `dictsort`, which the
+   template applies to a tool call's arguments, the objects inside them and a legacy tool
+   response, orders keys as jinja2 does, by Python's `str.lower()` and then code point, final
+   sigma included. swift-jinja's own `dictsort` compares keys with Foundation's case-insensitive
+   `compare`, which sorts `ß` as `ss` and a decomposed `é` with a composed one. Lowercasing uses
+   the Swift runtime's Unicode data, which gives a lowercase to 28 scalars Unicode 17 added and
+   CPython 3.14 does not yet know. With them the port gives upstream's text and ids for all 51
+   recorded conversations, contents that are dicts, numbers and lists of strings among them, and
+   argument keys the two `dictsort`s order differently, and for the 33 prompts the recorded
+   exchanges rendered. Two
+   differences remain, in tool calls, which upstream's MLX path never declares (it does not pass
+   `tools` to the template): a `null` the template writes with `{{ }}`, a tool call argument or a
+   tool's missing result, is written as nothing where jinja2 writes `None`, and an integer past
+   `Int` is a float. One request is refused instead: an object with two keys that differ only in
+   Unicode normalization, such as `é` composed and decomposed, is a 400, since Python keeps both
+   keys and the template writes both, while swift-jinja keys an object by Swift's `String`, whose
+   equality is canonical equivalence, so one key would replace the other unseen. swift-jinja
+   recurses into tool call arguments: in a debug build, on a thread
+   with a task's 512 KB of stack, 7 levels rendered and 16 overflowed it, and 64 needed 8 MB. The
+   template renders on a thread of its own with 16 MB of stack, and messages nested deeper than 64
+   levels are refused with a 400; jinja2 would raise `RecursionError` deeper still.
+8. **`extract_json` follows CPython's `raw_decode`.** The value is scanned as CPython's
+   `scan_once` scans it (`NaN`, `Infinity`, a float past the largest double as infinity, a later
+   duplicate key in the earlier place, the 4,300-digit limit, surrogate pairs) and written as
+   `json.dumps(obj, ensure_ascii=False)` writes it, `NaN` and `Infinity` included, which
+   `PythonJSONWriter` gains as `allowNaN`. Two departures, where upstream answers a 500: a lone
+   surrogate escape is U+FFFD, since CPython keeps it and then cannot encode the answer, and a
+   value nested deeper than 1,024 levels, the parser's bound, leaves the reply unchanged, since a
+   value that deep could overflow the stack as it is released.
+9. **The body is the server's.** A body `json.loads` reads and the RFC 8259 parser refuses
+   (`NaN`, `Infinity`, a lone surrogate, D-016) is the 400 "The request body is not valid JSON."
+   where upstream serves it; `completion_nan_in_body` records upstream's 200. Authentication and
+   the body limit apply to the route with Jev's error shape, as upstream's middleware applies them
+   to every `/v1/` path.
+10. **What upstream leaves as it is, the port does too.** Chat adds nothing to `server-timing`'s
+    `model`, which upstream's generator does not time either. The thought-channel markers are
+    passed as upstream passes them, `[100, 45518, 107, 101]`, which holds two ordinary tokens,
+    `thought` and `\n`; whether mlx-vlm drops them wherever a reply has them, as its
+    `skip_special_token_ids` would, is for #51 to check against mlx-vlm (it is not installed here).
+11. **Tests.** The route's tests carry upstream's names and run over `StubTextGenerator`, which
+    reproduces `StubRuntime`, `ReplayRuntime` and `OneTokenRuntime`: in OpenJevCoreTests (the
+    stream's slow reader, cancelled waits, a stream that never runs), OpenJevServerTests (the
+    recorded exchanges, the named cases over HTTP, and on a live server a client that leaves
+    mid-stream, before its whole reply or while waiting, and a graceful and a timed-out shutdown
+    with a stream in flight), and OpenJevDiffusionGemmaTests (the prompt parity, opt-in like the
+    other tokenizer tests). The model-free ones run on macOS and Linux, and the streaming and
+    cancellation tests also ran in a release build, since Swift 6.4 has miscompiled task-group code
+    at `-O` here (PR #122). The cases that need the model (`test_chat_completion_on_mlx`,
+    `test_chat_completion_generates_text`, `test_chat_stream_matches_the_whole_reply`,
+    `test_chat_json_mode_returns_one_object`, `test_no_reply_leaks_the_thought_channel`, and the
+    live suite's `test_chat` and `test_chat_stream`) stay disabled, naming #51 and the wiring after
+    this change. Four of the DiffusionGemma ones have upstream's checks as bodies, which run
+    through `SystemOneService.textGenerator` once the runtime conforms;
+    `test_chat_completion_on_mlx` needs the runtime's stub model to generate too, and the live
+    suite's bodies were already upstream's.
+
+Alternatives rejected. (a) A `generator` parameter on the router and `DecisionServer`, which the
+CLI would pass: the backend already knows whether it generates, and the parameter would have to
+be threaded through every provider. (b) Synchronous prompt rendering on the request's task: a
+debug build overflowed it on a request a client controls. (c) Reproducing upstream's 500s, or
+`dict()`'s message: they are crashes, not answers, and a client can do nothing with them.
+(d) Dropping a piece when the queue is full, as upstream's end marker does: a live client would
+read a reply with a gap. (e) Counting a request in after its prompt renders, as upstream does,
+with the rendering threads bounded by a pool of their own: requests past the bound would still
+render before their 529, and which of two concurrent requests got the last place would depend on
+how fast each prompt rendered rather than on the order upstream's event loop serves them in.
+
+Consequences. The `mlx` backend serves chat once `DiffusionGemmaRuntime` conforms to
+`TextGenerator`, with nothing else to wire; until then its server has no chat route, though
+`/v1/models` lists `diffusiongemma-26b` as upstream's does. `make fixtures` runs one more script,
+and the Fixtures workflow regenerates its files. Every answer the route gives itself is held to
+upstream's bytes in CI.
+
+Status. Proposed with issue #53 (the HTTP and core side); the issue closes when the model is wired.
+
 ## D-059 Generation and think follow upstream's `MlxRuntime.generate`, seeded: where the port goes beyond or differs from the issue text
 
 Context. Issues #50 to #52 port the text generation that `think` (and later the chat endpoint,

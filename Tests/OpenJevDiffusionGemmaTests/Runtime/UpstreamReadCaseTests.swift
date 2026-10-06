@@ -518,28 +518,124 @@ extension MLXTests {
         // The cases that wait for /v1/chat/completions (#53). Each runs with OPENJEV_TEST_MODEL
         // once the endpoint exists.
 
-        @Test(
-            "test_chat_completion_generates_text",
-            .disabled(
-                "needs /v1/chat/completions (#53); runs with OPENJEV_TEST_MODEL once #53 lands"))
-        func chatCompletionGeneratesText() {}
+        /// Why the chat cases skip until the model generates text.
+        static let waitingForGeneration = Comment(
+            rawValue: "needs the model's generation (#51) behind the chat routes (#53's "
+                + "follow-up); runs with OPENJEV_TEST_MODEL then")
+
+        /// The chat service over the checkpoint, through the backend's ``TextGenerator``
+        /// conformance, which the model's generation brings (#51, then #53's follow-up wires the
+        /// `mlx` backend's routes).
+        static func chatService() async throws -> ChatCompletions {
+            let live = try await LiveCheckpoint.shared()
+            let engine = try DecisionEngine(backend: live.runtime, configuration: .default)
+            let generator = try #require(
+                engine.textGenerator, "DiffusionGemmaRuntime does not generate text yet")
+            return ChatCompletions(generator: generator)
+        }
+
+        /// Upstream's `chat()` request: one short question, 64 tokens at most.
+        static let chatRequest: JSONValue = [
+            "model": "diffusiongemma-26b", "max_tokens": 64,
+            "messages": [
+                [
+                    "role": "user",
+                    "content": "What is the capital of France? Answer in one short sentence.",
+                ]
+            ],
+        ]
+
+        /// `body` with `stream: true` and `stream_options.include_usage`, the stream's text and
+        /// whether it carried a usage event.
+        static func streamed(
+            _ chat: ChatCompletions, _ body: JSONValue
+        ) async throws -> (text: String, usage: Bool) {
+            var object = try #require(body.objectValue)
+            object.updateValue(true, forKey: "stream")
+            object.updateValue(["include_usage": true], forKey: "stream_options")
+            let stream = try await chat.stream(try await chat.prepare(.object(object)))
+            var text = ""
+            var usage = false
+            _ = try await stream.run { event in
+                let payload = String(event.dropFirst("data: ".count).dropLast(2))
+                guard payload != "[DONE]" else { return }
+                let chunk = try JSONParser().parse(payload)
+                usage = usage || chunk["usage"] != nil
+                text += chunk["choices"]?[0]?["delta"]?["content"]?.stringValue ?? ""
+            }
+            return (text, usage)
+        }
 
         @Test(
+            "test_chat_completion_generates_text",
+            .disabled(Self.waitingForGeneration))
+        func chatCompletionGeneratesText() async throws {
+            let chat = try await Self.chatService()
+            let reply = try await chat.complete(try await chat.prepare(Self.chatRequest))
+            #expect(reply.content.contains("Paris"), "\(reply.content)")
+            #expect([.stop, .length].contains(reply.finishReason))
+            #expect(reply.usage.completionTokens > 0)
+        }
+
+        /// Greedy generation, same prompt: the streamed pieces join to the whole reply.
+        @Test(
             "test_chat_stream_matches_the_whole_reply",
-            .disabled(
-                "needs /v1/chat/completions (#53); runs with OPENJEV_TEST_MODEL once #53 lands"))
-        func chatStreamMatchesTheWholeReply() {}
+            .disabled(Self.waitingForGeneration))
+        func chatStreamMatchesTheWholeReply() async throws {
+            let chat = try await Self.chatService()
+            let whole = try await chat.complete(try await chat.prepare(Self.chatRequest)).content
+            let (streamed, usage) = try await Self.streamed(chat, Self.chatRequest)
+            #expect(streamed == whole)
+            #expect(usage, "include_usage asked for, none sent")
+        }
 
         @Test(
             "test_chat_json_mode_returns_one_object",
-            .disabled(
-                "needs /v1/chat/completions (#53); runs with OPENJEV_TEST_MODEL once #53 lands"))
-        func chatJSONModeReturnsOneObject() {}
+            .disabled(Self.waitingForGeneration))
+        func chatJSONModeReturnsOneObject() async throws {
+            let chat = try await Self.chatService()
+            let body: JSONValue = [
+                "model": "diffusiongemma-26b", "max_tokens": 128,
+                "response_format": ["type": "json_object"],
+                "messages": [
+                    ["role": "user", "content": #"Give the capital of France as {"city": ...}."#]
+                ],
+            ]
+            let reply = try await chat.complete(try await chat.prepare(body))
+            // The reply is exactly one JSON value, no prose or fences.
+            #expect(throws: Never.self) { _ = try JSONParser().parse(reply.content) }
+        }
 
+        /// No reply may show the thought channel's markers, on either path. Emptiness is counted
+        /// rather than asserted per reply: the checkpoint returns an empty generation for an
+        /// identical greedy prompt about once in thirty, upstream measured.
         @Test(
             "test_no_reply_leaks_the_thought_channel",
-            .disabled(
-                "needs /v1/chat/completions (#53); runs with OPENJEV_TEST_MODEL once #53 lands"))
-        func noReplyLeaksTheThoughtChannel() {}
+            .disabled(Self.waitingForGeneration))
+        func noReplyLeaksTheThoughtChannel() async throws {
+            let chat = try await Self.chatService()
+            let prompts = [
+                "Count: one two three four five", "Name one prime number",
+                "What colour is the sky?", "Say hello.", "Give one European capital.",
+            ]
+            var replies: [String] = []
+            for _ in 0..<3 {
+                for prompt in prompts {
+                    let body: JSONValue = [
+                        "model": "diffusiongemma-26b", "max_tokens": 40,
+                        "messages": [["role": "user", "content": .string(prompt)]],
+                    ]
+                    let whole = try await chat.complete(try await chat.prepare(body)).content
+                    #expect(!whole.contains("channel"), "\(prompt): \(whole)")
+                    let (streamed, _) = try await Self.streamed(chat, body)
+                    #expect(!streamed.contains("channel"), "\(prompt): \(streamed)")
+                    replies += [whole, streamed]
+                }
+            }
+            let nonEmpty = replies.filter {
+                !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }
+            #expect(Double(nonEmpty.count) >= 0.6 * Double(replies.count), "\(replies)")
+        }
     }
 }
