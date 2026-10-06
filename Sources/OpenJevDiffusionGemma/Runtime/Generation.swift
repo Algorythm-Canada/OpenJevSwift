@@ -71,8 +71,8 @@ extension DiffusionGemmaRuntime {
     /// detokenizer released (often `""`: a word's text comes with the token after it). At the end
     /// `emit` is called once more with the last buffered text and a nil token, when there is any.
     /// `emit` returning false ends the reply after that token, and a cancelled calling task ends
-    /// it before the next block, both with ``GenerationResult/FinishReason/cancelled`` and no
-    /// final call.
+    /// it before the prefill or before the next block, or after the last block in place of its
+    /// stop or length, all with ``GenerationResult/FinishReason/cancelled`` and no final call.
     ///
     /// The canvases are drawn from MLX's generator seeded with
     /// ``Configuration/generationSeed`` (0) for every reply, so a prompt always gets the same
@@ -103,6 +103,11 @@ extension DiffusionGemmaRuntime {
         if prompt.count > maxPromptTokens {
             throw SchemaError(
                 "the request is \(prompt.count) tokens; the limit is \(maxPromptTokens)")
+        }
+        // A request cancelled while it waited for the actor runs nothing, not even its prefill.
+        if Task.isCancelled {
+            return GenerationResult(
+                generated: [], promptTokens: prompt.count, finishReason: .cancelled)
         }
         let clock = ContinuousClock()
         let start = clock.now
@@ -147,6 +152,12 @@ extension DiffusionGemmaRuntime {
                 }
             }
             committed = block.tokens
+        }
+        // Cancelled during the last block, which then ended at a stop id or at `maxTokens`: the
+        // reply is cancelled all the same, without its tail.
+        if Task.isCancelled {
+            return GenerationResult(
+                generated: ids, promptTokens: prompt.count, finishReason: .cancelled)
         }
         detokenizer.finalize()
         let tail = detokenizer.lastSegment()

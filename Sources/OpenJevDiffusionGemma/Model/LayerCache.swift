@@ -42,15 +42,25 @@ public final class LayerCache {
         self.slidingWindow = slidingWindow
     }
 
-    /// A cache holding the same arrays, which an update changes without changing this one.
+    /// A cache holding the same values, which an update changes without changing this one.
+    ///
+    /// An `MLXArray` is a reference, and assigning into a slice of one changes that object, so the
+    /// copy gets arrays of its own (full-range slices, which copy nothing until evaluated): an
+    /// update that writes into a full layer's buffer then reaches neither this cache nor another
+    /// copy of it.
     public func extended() -> LayerCache {
         let copy = LayerCache(isFullAttention: isFullAttention, slidingWindow: slidingWindow)
-        copy.keys = keys
-        copy.values = values
+        copy.keys = keys.map(Self.own)
+        copy.values = values.map(Self.own)
         copy.offset = offset
-        copy.keyBuffer = keyBuffer
-        copy.valueBuffer = valueBuffer
+        copy.keyBuffer = keyBuffer.map(Self.own)
+        copy.valueBuffer = valueBuffer.map(Self.own)
         return copy
+    }
+
+    /// A new array object with `array`'s values.
+    private static func own(_ array: MLXArray) -> MLXArray {
+        array[.ellipsis]
     }
 
     /// Stores new keys and values after the cached ones and returns what attention reads.

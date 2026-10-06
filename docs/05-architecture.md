@@ -330,8 +330,8 @@ issue #29), upstream's `MlxRuntime` and `MlxEngine.one_read` in one actor:
   returned, and `maxTokens` ends it with `length`. Each committed token goes through
   `StreamingDetokenizer`, `skipSpecialTokenIDs` left out first, and `emit(text, token)` gets the
   text released. A final `emit(text, nil)` carries the buffered tail. `emit` returning false ends
-  the reply after that token, and a cancelled task ends it before the next block, both
-  `cancelled`. It returns a `GenerationResult`: the ids, the prompt tokens and `stop`, `length` or
+  the reply after that token, and a cancelled task ends it before the prefill, before the next
+  block or after the last one, all `cancelled`. It returns a `GenerationResult`: the ids, the prompt tokens and `stop`, `length` or
   `cancelled`. Each reply's random canvases come from `MLXRandom.RandomState(seed:
   Configuration.generationSeed)` (0), which reproduces `mx.random.seed` in mlx-vlm. The whole
   reply runs inside the actor, as upstream holds its MLX thread.

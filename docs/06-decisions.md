@@ -3790,8 +3790,11 @@ Decision.
 6. **`generate`'s contract is upstream's, with Swift cancellation.** `emit(text, token)` once per
    committed token, then `emit(tail, nil)` when the detokenizer holds text. The stop id is not
    returned. `emit` returning false ends the reply after that token with `cancelled` and no tail,
-   as upstream breaks out of the stream. A cancelled calling task is checked before each block,
-   so it ends the reply within one block. The prompt cap is checked in `generate` with upstream's
+   as upstream breaks out of the stream. A cancelled calling task is checked before the prefill,
+   before each block and after the last, so it ends the reply within one block, and a reply
+   cancelled during its last block is `cancelled`, not `stop` or `length`, and gets no tail.
+   Upstream's own generation has no task to cancel; this is the Swift side of a client that goes
+   away (D-040). The prompt cap is checked in `generate` with upstream's
    message, for `think` (`MlxEngine.think` checks it) and the chat endpoint (`MlxGenerator` checks
    it). The result type is `GenerationResult`.
 7. **think.** The runtime's `think` is `generate` with the close marker as the stop and nothing

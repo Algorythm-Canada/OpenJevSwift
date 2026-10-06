@@ -11,7 +11,7 @@ import MLX
 /// The sampling functions of mlx-vlm's diffusion loop, as functions over `MLXArray`s.
 ///
 /// Logits are `[batch, canvas, vocab]` and canvases `[batch, canvas]` int32. The random draws take
-/// a ``MLX/MLXRandom/RandomState``: mlx-vlm draws from MLX's global generator, and a state seeded
+/// an `MLXRandom.RandomState`: mlx-vlm draws from MLX's global generator, and a state seeded
 /// with `s` gives the draws `mx.random.seed(s)` gives, because it splits its key as MLX's global
 /// `KeySequence` does.
 public enum DiffusionSampler {
