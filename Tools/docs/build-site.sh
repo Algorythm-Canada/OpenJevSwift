@@ -8,7 +8,7 @@
 # One plugin call builds the OpenJevCore, OpenJevServer, OpenJevDiffusionGemma, OpenJevEncoders and
 # OpenJevLetterReadout archives, each transformed for static hosting under /OpenJevSwift/, and merges them into one
 # site with a shared navigator, so that a page can link to another module's symbols
-# (``/OpenJevCore/DecisionEngine``). Extended types are left out: OpenJevServer extends two core
+# (``/OpenJevCore/DecisionEngine``). Extended types are left out: OpenJevServer extends three core
 # types, and the page DocC would make for them shadows the OpenJevCore module in its links, so
 # Swift 6.2's DocC resolved none of them. Tools/docs/index.html becomes the site's front page. Any
 # DocC warning, such as a link that does not resolve, fails the build.
