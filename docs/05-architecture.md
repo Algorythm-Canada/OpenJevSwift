@@ -46,7 +46,8 @@ OpenJevSwift/                          Swift package, tools 6.2, strict concurre
       Tokenization/  Tokenizer adapter, chat prompt builder, label discovery hookup
       Vision/        RGBImage and the JPEG and GIF ports, Gemma4ImageProcessor (Pillow's bicubic),
                      ImagePromptInputs and ImageReadInputs (expansion, mm_token_type_ids), #46
-      Generation/    Sampler, stopping rules, block loop, streaming detokenizer (later)
+      Generation/    DiffusionSampler (mlx-vlm's sampling functions), DiffusionGenerationPolicy
+                     and denoiseBlock (one block), StreamingDetokenizer (#50, #51)
     OpenJevEncoders/                   Apple platforms; its Core ML types need macOS 15 and iOS 18.
                                        Depends on Core ML and swift-transformers Tokenizers; no MLX.
       Verdict/       VerdictPrompt, VerdictTokenizer, VerdictCalibration, VerdictBackend actor
@@ -318,17 +319,37 @@ issue #29), upstream's `MlxRuntime` and `MlxEngine.one_read` in one actor:
   tokens a read reports include the image tokens. An image that does not decode or that the
   processor cannot size is a `SchemaError` `"image could not be read: {reason}"` at
   `["body", "images", i]`, the 400 of upstream's other image refusals (upstream answers a bare 500).
-- Capabilities: steps, samples, sequential and images (a model loaded without its vision tower
-  has no images, and the engine answers `"openjev-0.1 does not support images"`); not `think`
-  (milestone 5), so the engine answers `"openjev-0.1 does not support think"`.
-  `think(prompt:budget:stopIDs:)` throws `unsupported("think")`. `modelName` is `openjev-0.1`.
+- `generate(prompt:maxTokens:stopIDs:skipSpecialTokenIDs:emit:)` (#51, D-058): upstream's
+  `MlxRuntime.generate`, greedy. The prompt cap is checked with upstream's message. The prefill is
+  the one reads cached for the same prompt, else a new one that is not cached. Then blocks of
+  `min(256, max(remaining, 64))` positions, each `DiffusionGemmaModel.denoiseBlock` (the
+  `confidence-threshold` sampler at 0.9 over the linear temperature schedule, self-conditioning,
+  stable-and-confident stopping, up to 48 passes) and, before the next,
+  `DiffusionGemmaModel.updateCache` (`diffusion_update_cache`) on a copy of the caches. The
+  checkpoint's EOS ids (1, 106, 50) and `stopIDs` end the reply at the token, which is not
+  returned, and `maxTokens` ends it with `length`. Each committed token goes through
+  `StreamingDetokenizer`, `skipSpecialTokenIDs` left out first, and `emit(text, token)` gets the
+  text released. A final `emit(text, nil)` carries the buffered tail. `emit` returning false ends
+  the reply after that token, and a cancelled task ends it before the next block, both
+  `cancelled`. It returns a `GenerationResult`: the ids, the prompt tokens and `stop`, `length` or
+  `cancelled`. Each reply's random canvases come from `MLXRandom.RandomState(seed:
+  Configuration.generationSeed)` (0), which reproduces `mx.random.seed` in mlx-vlm. The whole
+  reply runs inside the actor, as upstream holds its MLX thread.
+- `think(prompt:budget:stopIDs:)` (#52): `generate` of up to `budget` tokens with the close marker
+  as the stop and nothing skipped, as `ThoughtGeneration`; the engine builds the prompt (thinking
+  on, the open marker), cuts at the first close id and bills it (`DecisionEngine.think`).
+- Capabilities: steps, samples, sequential, `think` (a runtime made with generation, which a
+  loaded checkpoint is; without, the engine answers `"openjev-0.1 does not support think"`) and
+  images (a model loaded without its vision tower has no images, and the engine answers
+  `"openjev-0.1 does not support images"`). `modelName` is `openjev-0.1`.
 - Memory controls: `Configuration.cacheLimitGB` (nil leaves MLX alone, 0 disables MLX's buffer
   pool, otherwise `Memory.cacheLimit` in bytes, applied inside the actor at load, or later with
   `setCacheLimit(gb:)`), the prefill cache budgets and the prompt cap. `memoryReport()` gives
   MLX's active, cache and peak bytes and the process's resident bytes; `statistics()` the reads,
   the prefill hits and misses and the model time.
 - Test seam: the internal `init(tokenizer:configuration:calls:setCacheLimit:)` takes the model's
-  `prefill`, `read` and image expansion as closures (`ModelCalls`). The model-free tests bind them to a stub; the
+  `prefill`, `read`, image expansion and generation (`GenerationCalls`: the policy, one block's
+  denoising, the cache commit and the vocabulary) as closures (`ModelCalls`). The model-free tests bind them to a stub; the
   live read-policy tests bind them to the shared checkpoint's model and record every prompt's
   token ids, with their own prefill cache and statistics and no second load.
 - Warm-up: `warmUp()` runs one small read directly on the model (one noul question over upstream's

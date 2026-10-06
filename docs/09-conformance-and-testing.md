@@ -212,9 +212,10 @@ and `steps` 1 bit-identical to the single decoder pass as it was before the step
 `test_the_prompt_cache_is_bounded_in_tokens` (12 prompts of 1,883 tokens leave 8 cached, 15,066
 tokens of the 16,384 budget), `test_the_model_reads_an_image` (solid red and blue read 0.99993 and
 0.99952, 369 input tokens) and `test_an_image_prefill_reads_the_same_cold_or_reused` (the same
-answers cold and from the cached image prefill, with no second prefill, and with `samples` 3). The
-`think` (#52) and chat (#53) cases are disabled tests under upstream's names whose comments name the
-issue and `OPENJEV_TEST_MODEL`.
+answers cold and from the cached image prefill, with no second prefill, and with `samples` 3).
+`test_think_answers_and_is_billed`, `test_think_works_with_sequential` and
+`test_think_still_gets_its_thought` run there too (#52, below). The chat (#53) cases are disabled
+tests under upstream's names whose comments name the issue and `OPENJEV_TEST_MODEL`.
 
 The image cases of upstream's `test_mlx_backend.py` and `test_api.py` run without weights, in CI:
 `ImageRuntimeTests` drives `DecisionEngine` over the runtime with a stub model that decodes each
@@ -273,6 +274,49 @@ The read extensions of milestone 4 (#43 to #45) are proven on the checkpoint the
   request. Images with `sequential` or `think` are refused before any read
   (`DecisionEngineTests`, "Images cannot be combined with think or sequential").
 
+### Generation and think (#50 to #52, D-058)
+
+`Tools/fixtures/generation_oracle.py` writes `Fixtures/generation/generation.json` from upstream's
+own path. It holds mlx-vlm's sampling functions on synthetic logits, run on the CPU. It holds seven
+greedy replies through upstream's chat prompt and `MlxRuntime.generate`: a short answer, a list, a
+JSON reply, a 640-token story over 3 blocks (256, 256, 128), a reply ended by an extra stop id, one
+cut by `max_tokens` at 40, and the short answer under another seed. Each reply records every block
+and every `emit` call. It also holds `MlxEngine.decide` with `think` for the README example
+(`think` 128) and for 24 sequential nouls (`think` 64). MLX's generator is seeded before each
+reply, which upstream never does. The script runs everything twice, the second time in reverse
+order, and writes nothing unless the passes agree bit for bit. `--check` compares a run with the
+committed file.
+
+- **Sampler** (`SamplerTests`, CI, on the CPU): each function gives mlx-vlm's output bit for bit:
+  the seeded canvas draws, the temperatures, categorical sampling, probabilities, entropies, both
+  transfer masks, and the stability rule over a sequence of steps.
+- **Detokenizer** (`StreamingDetokenizerTests`): replaying each recorded reply's ids gives
+  upstream's `emit` texts, piece for piece.
+- **Block loop** (`GenerationRuntimeTests`, CI, a stub model): canvas sizing, commits, EOS and stop
+  ids, `max_tokens`, skipped ids, `emit` returning false, a cancelled task, the prefill shared with
+  reads, the prompt cap.
+- **Replies** (`GenerationOracleTests`, `OPENJEV_TEST_MODEL`). In the exact tier all 7 replies
+  agree whole: every block's final canvas, its passes and how it ended, the finish reason and every
+  `emit` call. Both thoughts agree token for token (128 and 64), with upstream's billing (469 and
+  1,896 input tokens) and the same answers after them. In the native tier, measured on 2026-10-06
+  on the reference machine:
+
+  | Reply | Tokens | Blocks | Agreement with the oracle |
+  |---|---|---|---|
+  | short answer | 7 | 1 | whole reply |
+  | list | 10 | 1 | whole reply |
+  | JSON | 19 | 1 | whole reply |
+  | story | 640 | 3 | first 8 tokens, then a different story |
+  | stop id | 1 | 1 | whole reply |
+  | cut by `max_tokens` | 40 | 1 | first 4 tokens |
+  | short answer, seed 7 | 7 | 1 | whole reply |
+
+  The two stories diverge where a near-tied argmax flips under mlx-swift's kernels. In the exact
+  tier they match whole, so the divergence comes from the kernels, not the loop. The native test
+  holds #51's three prompts (short answer, list, JSON) to the whole reply and reports the rest.
+- **Think** (`UpstreamReadCaseTests`, `OPENJEV_TEST_MODEL`): upstream's three think cases pass, and
+  the live suite's `test_think` passes against `openjev serve --backend mlx`.
+
 ## Layer 3: end to end, behavioural
 
 - **SDK compatibility.** The oracle is the official clients themselves: "TypeSafe's SDKs work
@@ -313,7 +357,7 @@ The read extensions of milestone 4 (#43 to #45) are proven on the checkpoint the
   question. `test_image`
   wants the hot dog above 0.8, the cat below 0.2 and more than 200 input tokens (on 2026-10-05
   against `openjev serve --backend mlx`: 0.99921, 0.00013 and 355). The
-  `think`, chat and stream tests skip, naming #52 and #53. The suite's `test_read_options` (`steps
+  chat and stream tests skip, naming #53. The suite's `test_read_options` (`steps
   4`, `samples 4`, `sequential true`) checks the shapes over HTTP; what those options do on the
   model (one prefill per prompt, the billing, the re-reads and the earlier answers in the prompt)
   is shown in process in layer 2 (#43 to #45). Like the model tests, the runs are
@@ -323,7 +367,11 @@ The read extensions of milestone 4 (#43 to #45) are proven on the checkpoint the
   `openjev serve --backend mlx` on the 4-bit checkpoint: the Swift suite passed 9 and skipped 7
   (`test_think`, the chat tests and the four encoder models), and upstream's own
   `tests/test_live.py` passed 9 (`test_image` among them), failed 3 (`test_think`, `test_chat` and
-  `test_chat_stream`, which need milestone 5) and skipped 4 (the encoder models).
+  `test_chat_stream`, which need milestone 5) and skipped 4 (the encoder models). With think
+  (#52, 2026-10-06), the same server: the Swift suite passed 10 (`test_think` among them) and
+  skipped 6 (the chat tests and the four encoder models), and upstream's file passed 10
+  (`test_think` among them), failed 2 (`test_chat` and `test_chat_stream`, a 404 until #53) and
+  skipped 4.
   [development.md](development.md#the-live-suite) has the commands, upstream's own file included.
 - **JevBench.** `Tools/jevbench` (issue #61, D-041) runs JevBench v1's 231 public items, and the 102
   TypeSafe public-evaluation rows SemIf compares with Jev, against any `/v1/systemone` server, one

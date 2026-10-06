@@ -13,9 +13,9 @@ import Testing
 /// The DiffusionGemma tests run when the server lists `openjev-latest`, and `test_encoder` runs
 /// for whichever of `laya-1.0`, `verdict-1.4`, `clm-v0.1` and `jevk5-0.2` it lists, as upstream's
 /// do. `test_unknown_model` runs against every server. Every answer's headers and shapes are
-/// checked too (``JevContract``). `test_think`, `test_chat` and `test_chat_stream` wait for the
-/// issues that bring their features to this server, so they skip; their bodies are upstream's
-/// checks, ready for then. `LiveSettings` lists the variables.
+/// checked too (``JevContract``). `test_chat` and `test_chat_stream` wait for the issue that
+/// brings the chat endpoint to this server, so they skip; their bodies are upstream's checks,
+/// ready for then. `LiveSettings` lists the variables.
 @Suite(
     "test_live.py", .serialized, .enabled(if: LiveSettings.configured, LiveSettings.unsetMessage))
 struct LiveTests {
@@ -144,7 +144,6 @@ struct LiveTests {
 
     @Test(
         "test_think",
-        .disabled(Waiting.think),
         .enabled("the server at OPENJEV_LIVE_URL does not list openjev-latest") {
             try await ModelListing.lists(diffusionGemma)
         })
@@ -357,9 +356,6 @@ struct LiveTests {
 /// The skip comments of the tests that wait for a feature of this server. Each names the issue,
 /// and `OPENJEV_LIVE_URL`, which CI's test log check requires of a skipped live test.
 enum Waiting {
-    static let think = Comment(
-        rawValue: "waits for the think option (#52); it then runs against OPENJEV_LIVE_URL when "
-            + "the server lists openjev-latest")
     static let chat = Comment(
         rawValue: "waits for /v1/chat/completions (#53); it then runs against OPENJEV_LIVE_URL "
             + "when the server lists diffusiongemma-26b")

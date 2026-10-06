@@ -78,8 +78,8 @@ extension MLXTests {
     /// The read cases of upstream's tests/test_mlx_model.py that the earlier live suites did not
     /// cover, named after upstream's, through ``DecisionEngine`` over ``DiffusionGemmaRuntime``.
     /// The README example, same request same answer and the cached prefill are in
-    /// RuntimeLiveTests and ReadOracleTests; the think and chat cases wait for their
-    /// milestones and are listed at the end as disabled tests.
+    /// RuntimeLiveTests and ReadOracleTests; the chat cases wait for their milestone and are
+    /// listed at the end as disabled tests.
     @Suite(
         "upstream's test_mlx_model.py read cases",
         .enabled(if: ModelFixtures.checkpointAvailable, ModelFixtures.missingCheckpointMessage))
@@ -449,23 +449,74 @@ extension MLXTests {
                     == PolicyFixtures.body(of: await engine.decide(samples)))
         }
 
-        // The cases that wait for later milestones. Each runs with OPENJEV_TEST_MODEL once the
-        // feature it needs exists; until then the backend refuses it.
+        // The think cases (#52).
 
-        @Test(
-            "test_think_answers_and_is_billed",
-            .disabled("needs think (#52); runs with OPENJEV_TEST_MODEL once #52 lands"))
-        func thinkAnswersAndIsBilled() {}
+        @Test("test_think_answers_and_is_billed")
+        func thinkAnswersAndIsBilled() async throws {
+            let live = try await LiveCheckpoint.shared()
+            let engine = try DecisionEngine(backend: live.runtime, configuration: .default)
+            let expected = upstreamStates[0]
+            let plain = try await engine.decide(ask(expected.state))
+            let thought = try await engine.decide(
+                ask(expected.state, readmeQuestions, #""think": 128"#))
+            print(
+                "think 128: \(thought.outputTokens) thought tokens, \(thought.inputTokens) input "
+                    + "tokens (plain \(plain.inputTokens)); \(thought.answers)")
+            guard case .noul(let urgent)? = thought.answers["urgent"],
+                case .choice(let team, _, _)? = thought.answers["team"],
+                case .score(let tone, _, _, _)? = thought.answers["tone"]
+            else {
+                Issue.record("unexpected answer types: \(thought.answers)")
+                return
+            }
+            #expect(team == expected.team && (urgent > 0.9) == expected.urgent)
+            // The score only has to stay on the right side of the scale: a thought may move it.
+            #expect(abs(tone - Double(expected.tone)) < 1.0, "tone \(tone)")
+            // The thought is billed as output, and the input covers both passes.
+            #expect((1...128).contains(thought.outputTokens))
+            #expect(thought.inputTokens > plain.inputTokens)
+        }
 
-        @Test(
-            "test_think_works_with_sequential",
-            .disabled("needs think (#52); runs with OPENJEV_TEST_MODEL once #52 lands"))
-        func thinkWorksWithSequential() {}
+        @Test("test_think_works_with_sequential")
+        func thinkWorksWithSequential() async throws {
+            let live = try await LiveCheckpoint.shared()
+            let engine = try DecisionEngine(backend: live.runtime, configuration: .default)
+            let questions =
+                "{"
+                + (0..<24).map {
+                    #""k\#($0)": {"type": "noul", "instructions": "Is statement \#($0) about an outage?"}"#
+                }.joined(separator: ", ") + "}"
+            let decision = try await engine.decide(
+                ask(upstreamStates[0].state, questions, #""sequential": true, "think": 64"#))
+            print(
+                "sequential with think 64: \(decision.outputTokens) thought tokens, "
+                    + "\(decision.inputTokens) input tokens")
+            #expect(decision.answers.count == 24)
+            for (key, answer) in decision.answers {
+                guard case .noul(let p) = answer else {
+                    Issue.record("\(key): \(answer)")
+                    continue
+                }
+                #expect((0...1).contains(p), "\(key)")
+            }
+            #expect((1...64).contains(decision.outputTokens))
+        }
 
-        @Test(
-            "test_think_still_gets_its_thought",
-            .disabled("needs think (#52); runs with OPENJEV_TEST_MODEL once #52 lands"))
-        func thinkStillGetsItsThought() {}
+        /// Chat skips the thought-channel markers; think must not, or the thought it reads after
+        /// would be empty.
+        @Test("test_think_still_gets_its_thought")
+        func thinkStillGetsItsThought() async throws {
+            let live = try await LiveCheckpoint.shared()
+            let engine = try DecisionEngine(backend: live.runtime, configuration: .default)
+            let state = upstreamStates[0].state
+            let plain = try await engine.decide(ask(state))
+            let thought = try await engine.decide(ask(state, readmeQuestions, #""think": 96"#))
+            #expect((1...96).contains(thought.outputTokens))
+            #expect(thought.inputTokens > plain.inputTokens)
+        }
+
+        // The cases that wait for /v1/chat/completions (#53). Each runs with OPENJEV_TEST_MODEL
+        // once the endpoint exists.
 
         @Test(
             "test_chat_completion_generates_text",

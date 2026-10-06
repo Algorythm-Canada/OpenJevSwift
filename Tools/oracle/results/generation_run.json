@@ -1,0 +1,16 @@
+{
+"generator": {"script": "Tools/fixtures/generation_oracle.py", "version": 1, "upstream": "razorback16/openjev", "upstream_commit": "dcd2094", "tokenizer_repo": "mlx-community/diffusiongemma-26B-A4B-it-4bit", "tokenizer_revision": "a7a81407613811e8ba63af92ac0d852b809e191f", "model_repo": "mlx-community/diffusiongemma-26B-A4B-it-4bit", "model_revision": "a7a81407613811e8ba63af92ac0d852b809e191f", "python": "3.14.7", "mlx": "0.32.2", "mlx_metal": "0.32.2", "mlx_vlm": "0.6.15", "transformers": "5.17.0", "tokenizers": "0.23.2", "huggingface_hub": "1.33.0", "jinja2": "3.1.6", "numpy": "2.5.3", "device": "Apple M3 Max", "gpu_architecture": "applegpu_g15s", "metallib_sha256": "dc59d1cceb1a5c7e578232e6e41e28e2c73c9463ac6dbc3886c3ee17ffc270ed"},
+"machine": {"platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O", "mac_ver": "27.0.1", "machine": "arm64", "device_name": "Apple M3 Max", "architecture": "applegpu_g15s", "memory_size": 137438953472},
+"cache_limit_gb": 4.0,
+"load_seconds": 2.2775602500187233,
+"deterministic": true,
+"differing_between_passes": [],
+"problems": [],
+"check": null,
+"timings": {
+ "pass_1": {"short_answer": {"seconds": 0.25669283303432167, "blocks": 1, "tokens": 7}, "list": {"seconds": 0.7525138330529444, "blocks": 1, "tokens": 10}, "json": {"seconds": 0.5827720000525005, "blocks": 1, "tokens": 19}, "story": {"seconds": 16.103555999987293, "blocks": 3, "tokens": 640}, "stop_comma": {"seconds": 0.26336599997011945, "blocks": 1, "tokens": 1}, "story_cut": {"seconds": 1.4312507499707863, "blocks": 1, "tokens": 40}, "short_answer_seed_7": {"seconds": 0.26134745799936354, "blocks": 1, "tokens": 7}},
+ "pass_2": {"short_answer_seed_7": {"seconds": 0.2952330419793725, "blocks": 1, "tokens": 7}, "story_cut": {"seconds": 1.6774075839784928, "blocks": 1, "tokens": 40}, "stop_comma": {"seconds": 0.3189073340035975, "blocks": 1, "tokens": 1}, "story": {"seconds": 17.048936958017293, "blocks": 3, "tokens": 640}, "json": {"seconds": 0.5960663330042735, "blocks": 1, "tokens": 19}, "list": {"seconds": 0.7721390419756062, "blocks": 1, "tokens": 10}, "short_answer": {"seconds": 0.29666620801435784, "blocks": 1, "tokens": 7}},
+ "think_pass_1": {"readme": {"seconds": 2.295731207996141, "thoughts": 1}, "sequential_24": {"seconds": 3.679861709009856, "thoughts": 1}},
+ "think_pass_2": {"sequential_24": {"seconds": 2.834438833000604, "thoughts": 1}, "readme": {"seconds": 1.6273802079958841, "thoughts": 1}}
+}
+}

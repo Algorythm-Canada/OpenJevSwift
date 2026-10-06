@@ -10,9 +10,10 @@ import OpenJevCore
 
 /// Why the runtime refused a call.
 public enum DiffusionGemmaRuntimeError: Error, Sendable, Hashable, CustomStringConvertible {
-    /// A feature the runtime does not have: `think` (generation, milestone 5), or `images` for a
-    /// model loaded without its vision tower. ``DiffusionGemmaRuntime/capabilities`` flags them
-    /// off, so the engine refuses such requests before they get here.
+    /// A feature the runtime does not have: `think` or generation for a runtime made without
+    /// generation, `images` for a model loaded without its vision tower, or a checkpoint's
+    /// diffusion sampler mlx-vlm does not implement. ``DiffusionGemmaRuntime/capabilities`` flags
+    /// `think` and `images` off, so the engine refuses such requests before they get here.
     case unsupported(String)
     /// ``DiffusionGemmaRuntime/Configuration/cacheLimitGB`` is not a finite number of GB, 0 or
     /// more.
@@ -24,9 +25,9 @@ public enum DiffusionGemmaRuntimeError: Error, Sendable, Hashable, CustomStringC
         case .invalidCacheLimit(let gb):
             return "the MLX cache limit is \(gb) GB (cacheLimitGB, OPENJEV_MLX_CACHE_LIMIT_GB); "
                 + "it must be a finite number of GB, 0 or more"
-        case .unsupported("think"):
-            return "the DiffusionGemma runtime does not support think yet; generation arrives "
-                + "with milestone 5"
+        case .unsupported("think"), .unsupported("generation"):
+            return "the DiffusionGemma runtime was made without generation, so it does not "
+                + "support think or text generation"
         case .unsupported("images"):
             return "the DiffusionGemma model was loaded without its vision tower, so it does not "
                 + "read images"
@@ -64,6 +65,9 @@ public actor DiffusionGemmaRuntime: DecisionBackend {
         /// Decodes and expands an image prompt, upstream's `MlxRuntime._inputs` for an
         /// `ImagePrompt`; nil when the model has no vision tower.
         var imagePrompt: ImagePromptCall?
+        /// Generation, for `think` and ``generate(prompt:maxTokens:stopIDs:skipSpecialTokenIDs:emit:)``;
+        /// nil for a runtime without it, which flags `think` off.
+        var generation: GenerationCalls? = nil
 
         typealias ImagePromptCall =
             (_ systemText: String, _ stateText: String, _ images: [ImagePart]) throws
@@ -84,9 +88,9 @@ public actor DiffusionGemmaRuntime: DecisionBackend {
     public nonisolated let configuration: Configuration
     /// ``Configuration/maxPromptTokens``.
     public nonisolated var maxPromptTokens: Int { configuration.maxPromptTokens }
-    /// Steps, samples, sequential reads and images (when the model has its vision tower, as a
-    /// loaded checkpoint does); not `think` until milestone 5, so the engine answers
-    /// `"openjev-0.1 does not support think"`.
+    /// Steps, samples, sequential reads, `think` (when the runtime generates, as a loaded
+    /// checkpoint does) and images (when the model has its vision tower, as a loaded checkpoint
+    /// does). Without generation the engine answers `"openjev-0.1 does not support think"`.
     public nonisolated let capabilities: BackendCapabilities
     /// `openjev-0.1`, ``/OpenJevCore/ServedModels/diffusionGemmaVersion``.
     public nonisolated let modelName = ServedModels.diffusionGemmaVersion
@@ -96,11 +100,11 @@ public actor DiffusionGemmaRuntime: DecisionBackend {
     /// read; nothing else reads it.
     nonisolated(unsafe) let sharedLoadedModel: DiffusionGemmaModel.LoadedModel?
 
-    private let calls: ModelCalls
+    let calls: ModelCalls
     private let setCacheLimit: @Sendable (Int) -> Void
-    private var prefills: PrefillCache<PromptCache>
+    var prefills: PrefillCache<PromptCache>
     private var reads = 0
-    private var modelTime = Duration.zero
+    var modelTime = Duration.zero
     /// What loading took; nil for a runtime made without ``load(_:configuration:cache:token:resolver:progress:)``.
     public private(set) var loadReport: LoadReport?
 
@@ -112,7 +116,8 @@ public actor DiffusionGemmaRuntime: DecisionBackend {
     ) {
         self.tokenizer = tokenizer
         self.configuration = configuration
-        capabilities = Self.capabilities(images: calls.imagePrompt != nil)
+        capabilities = Self.capabilities(
+            images: calls.imagePrompt != nil, think: calls.generation != nil)
         self.calls = calls
         self.setCacheLimit = setCacheLimit
         sharedLoadedModel = nil
@@ -123,12 +128,16 @@ public actor DiffusionGemmaRuntime: DecisionBackend {
 
     /// A runtime over a loaded model, whose images `processor` sizes: the checkpoint's
     /// `processor_config.json` when ``load(_:configuration:cache:token:resolver:progress:)`` finds
-    /// one, else the pinned checkpoint's values.
+    /// one, else the pinned checkpoint's values. It generates when `tokenizer` is a
+    /// ``SwiftTransformersTokenizer``, whose vocabulary the streaming detokenizer reads.
+    ///
+    /// - Throws: ``DiffusionGemmaRuntimeError/unsupported(_:)`` for a checkpoint whose diffusion
+    ///   sampler mlx-vlm does not implement.
     init(
         tokenizer: any DecisionTokenizer, configuration: Configuration,
         loaded: sending DiffusionGemmaModel.LoadedModel,
         processor: Gemma4ImageProcessor = Gemma4ImageProcessor()
-    ) {
+    ) throws {
         let model = loaded.model
         self.tokenizer = tokenizer
         self.configuration = configuration
@@ -143,13 +152,29 @@ public actor DiffusionGemmaRuntime: DecisionBackend {
                     prefill: { try model.prefill(image: inputs) })
             }
         }
-        capabilities = Self.capabilities(images: imagePrompt != nil)
+        var generation: GenerationCalls?
+        if let transformers = tokenizer as? SwiftTransformersTokenizer {
+            let policy = try DiffusionGenerationPolicy(configuration: loaded.configuration)
+            generation = GenerationCalls(
+                policy: policy,
+                denoise: { cache, length, random in
+                    let block = try model.denoiseBlock(
+                        cache: cache, canvasLength: length, policy: policy, random: random)
+                    // mlx-vlm empties MLX's buffer pool after every block.
+                    Memory.clearCache()
+                    return block
+                },
+                commit: { try model.updateCache($0, tokens: $1) },
+                tokenText: { transformers.token(of: $0) })
+        }
+        capabilities = Self.capabilities(
+            images: imagePrompt != nil, think: generation != nil)
         calls = ModelCalls(
             prefill: { try model.prefill(promptIDs: $0) },
             read: { canvas, slots, cache, steps, topK in
                 try model.read(canvas: canvas, slots: slots, cache: cache, steps: steps, topK: topK)
             },
-            imagePrompt: imagePrompt)
+            imagePrompt: imagePrompt, generation: generation)
         setCacheLimit = { Memory.cacheLimit = $0 }
         sharedLoadedModel = loaded
         prefills = PrefillCache(
@@ -157,10 +182,11 @@ public actor DiffusionGemmaRuntime: DecisionBackend {
             tokenBudget: configuration.promptCacheTokens)
     }
 
-    /// The runtime's capabilities: everything but `think`, and images when it reads them.
-    static func capabilities(images: Bool) -> BackendCapabilities {
+    /// The runtime's capabilities: steps, samples and sequential reads, `think` when it
+    /// generates, and images when it reads them.
+    static func capabilities(images: Bool, think: Bool) -> BackendCapabilities {
         BackendCapabilities(
-            steps: true, samples: true, think: false, sequential: true, images: images)
+            steps: true, samples: true, think: think, sequential: true, images: images)
     }
 
     // MARK: Loading
@@ -203,7 +229,7 @@ public actor DiffusionGemmaRuntime: DecisionBackend {
             FileManager.default.fileExists(atPath: processorURL.path)
             ? try Gemma4ImageProcessor(configuration: Data(contentsOf: processorURL))
             : Gemma4ImageProcessor()
-        let runtime = DiffusionGemmaRuntime(
+        let runtime = try DiffusionGemmaRuntime(
             tokenizer: tokenizer, configuration: configuration, loaded: loaded,
             processor: processor)
         try await runtime.prepare(
@@ -381,14 +407,6 @@ public actor DiffusionGemmaRuntime: DecisionBackend {
         return try prefills.value(for: key, tokens: tokens) {
             try (prepared ?? imagePrompt(systemText, stateText, images)).prefill()
         }.value
-    }
-
-    /// Throws ``DiffusionGemmaRuntimeError/unsupported(_:)`` until generation arrives with
-    /// milestone 5. ``capabilities`` flags `think` off, so the engine never calls it.
-    public func think(prompt: [Int], budget: Int, stopIDs: [Int]) async throws
-        -> ThoughtGeneration
-    {
-        throw DiffusionGemmaRuntimeError.unsupported("think")
     }
 
     // MARK: Warm-up

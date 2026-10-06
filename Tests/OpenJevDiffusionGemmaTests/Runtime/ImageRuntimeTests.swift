@@ -152,10 +152,8 @@ struct ImageRuntimeTests {
         #expect(first.inputTokens == second.inputTokens)
     }
 
-    /// Upstream answers both with `"{field} needs a text state; send images without it"`. The
-    /// runtime has no `think` until milestone 5, so the engine refuses `think` first, with
-    /// `"openjev-0.1 does not support think"` at the same location; both are 400s naming the
-    /// field.
+    /// Upstream answers both with `"{field} needs a text state; send images without it"`, at
+    /// the field, before anything is read or generated (#52).
     @Test("test_images_with_think_or_sequential_are_still_refused")
     func imagesWithThinkOrSequentialAreStillRefused() async throws {
         let log = StubModelLog()
@@ -166,13 +164,9 @@ struct ImageRuntimeTests {
                 try await engine.decide(example(image + #", "\#(field)": \#(value)"#))
             }
             #expect(error?.loc == ["body", .key(field)])
-            #expect(error?.message.contains(field) == true, "\(error?.message ?? "")")
+            #expect(error?.message == "\(field) needs a text state; send images without it")
         }
-        let error = await #expect(throws: SchemaError.self) {
-            try await engine.decide(example(image + #", "sequential": true"#))
-        }
-        #expect(error?.message == "sequential needs a text state; send images without it")
-        #expect(!log.touched)
+        #expect(!log.touched && log.canvases.isEmpty)
     }
 
     @Test("The prompt cap applies to the expanded image prompt, with upstream's message")

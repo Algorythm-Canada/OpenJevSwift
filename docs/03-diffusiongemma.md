@@ -110,6 +110,32 @@ finished block into the encoder cache (`diffusion_update_cache`) and a streaming
 `skip_special_token_ids`. Upstream calls it at temperature 0. The Layr-Labs fork has a native
 Swift version of this loop (see [04-swift-inference-landscape.md](04-swift-inference-landscape.md)).
 
+What upstream actually runs (`MlxRuntime.generate`, which passes only `max_tokens`, the skipped ids
+and `temperature=0.0`), and what the port reproduces (D-058):
+
+1. **One block.** A canvas of `min(256, max(remaining, 64))` random ids from MLX's generator. Then
+   up to 48 decoder passes over the encoder cache. Each pass divides the logits by the step's
+   temperature, `0.4 + 0.4 × step / 48` for the countdown `step` 48 to 1, and takes the argmax. The
+   last pass stops there. Otherwise the default **confidence-threshold** sampler, not the
+   checkpoint's entropy-bound one, accepts the unrevealed positions whose probability is at least
+   0.9 (at least the most probable one). It keeps them and re-noises every other position with
+   fresh random ids. The next pass is conditioned on these logits (the quantized embedding's soft
+   embeddings). A block ends when every position is accepted, when the argmax canvas equals the
+   previous step's and its mean entropy is below 0.005, or after the 48th pass. The block is the
+   last pass's argmax. On the recorded replies every block ended with every position accepted, in
+   2 to 21 passes.
+2. **Between blocks.** The whole block goes through the encoder after the prompt
+   (`diffusion_update_cache`), so the next block attends to it. A full layer grows its buffer by
+   256 positions. A sliding layer keeps its last 1,023 positions and appends the block.
+3. **The reply.** The block's tokens are taken in order. The first EOS (1, 106, 50) or caller stop
+   id ends it (`stop`) and is not returned; the `max_tokens`-th token ends it (`length`). Each token
+   goes through the SentencePiece streaming detokenizer (`SPMStreamingDetokenizer`,
+   `trim_space=False`), skipped ids dropped first. A word's text comes out with the token after it,
+   and the last word comes after the last token.
+4. **Randomness.** Even greedy, the initial canvas and the re-noised positions are random, and they
+   change which positions are accepted when. Upstream never seeds MLX's generator, so its replies
+   differ from one process to the next. The port seeds a generator for every reply.
+
 ## 3. The checkpoint the port will load
 
 `mlx-community/diffusiongemma-26B-A4B-it-4bit` (revision `a7a81407`, converted with mlx-vlm

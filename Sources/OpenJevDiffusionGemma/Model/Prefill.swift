@@ -103,9 +103,10 @@ extension DiffusionGemmaModel {
     /// - Chunked prefill (generation, milestone 5): `diffusion_prefill_cache` with
     ///   `prefill_step_size`, evaluating and clearing the cache between chunks, for prompts that
     ///   do not fit one pass. Not for reads, for the reason above.
-    /// - `diffusion_update_cache` (generation, milestone 5): appending committed tokens to the
-    ///   caches, which needs a ``LayerCache`` that takes more than one update and a sliding cache
-    ///   that rotates in place as `RotatingKVCache` does.
+    ///
+    /// Generation appends each committed block with ``updateCache(_:tokens:)``, mlx-vlm's
+    /// `diffusion_update_cache`, on a copy of these caches, so a prefill that reads share is never
+    /// changed by a reply.
     ///
     /// - Parameter promptIDs: the prompt's token ids, `Engine.chat_prompt_ids` for a read.
     /// - Throws: ``ReadInputError/emptyPrompt`` or ``ReadInputError/promptTokenOutOfRange(index:id:vocabularySize:)``.
@@ -120,6 +121,76 @@ extension DiffusionGemmaModel {
         let layers = prefill(ids)
         eval(layers.flatMap { [$0.keys, $0.values].compactMap { $0 } })
         return PromptCache(layers: layers, offset: promptIDs.count, promptTokens: promptIDs.count)
+    }
+}
+
+extension DiffusionGemmaModel {
+    /// mlx-vlm's `diffusion_update_cache`: the encoder over `tokens` after the cached prompt, in
+    /// one piece, which appends their keys and values to a copy of `cache`; `cache` itself is not
+    /// changed.
+    ///
+    /// language.py `EncoderModel.__call__` with a filled cache: image and video soft token ids
+    /// replaced by `pad` before the embedding (`_embed_inputs`), RoPE from each layer's offset,
+    /// and each layer's `make_mask` for `n` new positions: `.causal` on a full layer; on a sliding
+    /// layer `.causal` while the last `window − 1` cached positions and the new ones fit the
+    /// window, else the band `create_causal_mask(n, min(window − 1, offset), window)`. Generation
+    /// calls it with the canvas each block committed, before the next block.
+    ///
+    /// - Parameters:
+    ///   - cache: the prompt's prefill, or the cache an earlier update returned.
+    ///   - tokens: the committed canvas.
+    /// - Returns: a cache with `tokens` after the cached positions. Its ``PromptCache/promptTokens``
+    ///   is `cache`'s: the committed tokens are generated, not prompt.
+    /// - Throws: ``ReadInputError/emptyCanvas``,
+    ///   ``ReadInputError/canvasTokenOutOfRange(index:id:vocabularySize:)`` or
+    ///   ``ReadInputError/cacheLayerMismatch(cacheLayers:modelLayers:)``.
+    public func updateCache(_ cache: PromptCache, tokens: [Int]) throws -> PromptCache {
+        guard !tokens.isEmpty else { throw ReadInputError.emptyCanvas }
+        let vocabularySize = configuration.vocabSize
+        if let index = tokens.firstIndex(where: { $0 < 0 || $0 >= vocabularySize }) {
+            throw ReadInputError.canvasTokenOutOfRange(
+                index: index, id: tokens[index], vocabularySize: vocabularySize)
+        }
+        guard cache.layers.count == decoder.layers.count else {
+            throw ReadInputError.cacheLayerMismatch(
+                cacheLayers: cache.layers.count, modelLayers: decoder.layers.count)
+        }
+        let count = tokens.count
+        let ids = MLXArray(tokens.map(Int32.init)).reshaped(1, count)
+        var visionMask = ids .== Int32(imageTokenID)
+        if let videoTokenID {
+            visionMask = logicalOr(visionMask, ids .== Int32(videoTokenID))
+        }
+        let textIDs = which(visionMask, MLXArray(Int32(configuration.padTokenID)), ids)
+        var h = decoder.embed(textIDs)
+        let layers = cache.layers.map { $0.extended() }
+        for (index, layer) in decoder.layers.enumerated() {
+            let layerCache = layers[index]
+            let mask = continuationMask(
+                for: layer.layerType, length: count, cachedOffset: layerCache.offset)
+            h = layer(
+                h, mask: mask, cache: layerCache, decoder: false, offset: layerCache.offset,
+                layerScalar: encoder.layerScalar(index))
+        }
+        eval(layers.flatMap { [$0.keys, $0.values].compactMap { $0 } })
+        return PromptCache(
+            layers: layers, offset: cache.offset + count, promptTokens: cache.promptTokens)
+    }
+
+    /// The encoder mask of `length` new positions after `cachedOffset` cached ones: cache.py
+    /// `KVCache.make_mask` (`.causal`) on a full layer, `RotatingKVCache.make_mask` on a sliding
+    /// one.
+    func continuationMask(
+        for layerType: DiffusionGemmaTextConfiguration.LayerType, length: Int, cachedOffset: Int
+    ) -> MLXFast.ScaledDotProductAttentionMaskMode {
+        guard length > 1 else { return .none }
+        guard layerType == .slidingAttention else { return .causal }
+        let window = configuration.slidingWindow
+        let offset = min(window - 1, cachedOffset)
+        guard offset + length > window else { return .causal }
+        let rows = MLXArray(Int32(offset)..<Int32(offset + length))[0..., .newAxis]
+        let columns = MLXArray(Int32(0)..<Int32(offset + length))[.newAxis, 0...]
+        return .array(logicalAnd(rows .>= columns, rows .< columns + window))
     }
 }
 
