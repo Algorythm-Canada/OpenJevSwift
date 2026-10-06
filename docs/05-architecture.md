@@ -34,8 +34,9 @@ OpenJevSwift/                          Swift package, tools 6.2, strict concurre
                      checks and normalize), ChatCompletions (capacity, the whole reply),
                      ChatCompletionStream (the 64-piece queue), ExtractJSON, the response and
                      event shapes, ChatCompletionError (OpenAI's error shape), #53
-    OpenJevDiffusionGemma/             Apple silicon only. Depends on mlx-swift, MLXLMCommon and
-                                       swift-transformers Tokenizers (not MLXVLM, D-054).
+    OpenJevDiffusionGemma/             Apple silicon only. Depends on mlx-swift, MLXLMCommon,
+                                       swift-transformers Tokenizers and Hub, and swift-jinja
+                                       (not MLXVLM, D-054).
       Model/         Configuration (config.json decoding, #23); Norms, Attention, DenseMLP,
                      Router, Experts, DecoderLayer, LayerCache, Softcap (text blocks, #24);
                      ModelTree (decoder, encoder scalars, root with sanitize and a one-piece
@@ -67,7 +68,7 @@ OpenJevSwift/                          Swift package, tools 6.2, strict concurre
                      (download on first use, SHA-256, the tokenizer alone, held packages)
     OpenJevLetterReadout/              Apple silicon. JevK5 (jevk5-0.2) on MLX: depends on mlx-swift,
                                        MLXLLM (Qwen3.5), MLXLMCommon, swift-transformers Tokenizers
-                                       and OpenJevDiffusionGemma's ModelResolver (D-052).
+                                       and Hub, and OpenJevDiffusionGemma's ModelResolver (D-052).
       Prompt/        JevK5Prompt (prompt_text, byte for byte), JevK5Option (decision_options),
                      Python's str() of JSON values
       Readout/       JevK5Readout: the letter softmax, groups, spread, knockout and tree
@@ -128,10 +129,10 @@ until that moves to a target of its own (D-052).
 openjev (CLI) ──► OpenJevServer ──► OpenJevCore
       │                                  ▲
       ├──► OpenJevEncoders (macOS) ──────┤──► Core ML, swift-transformers (Tokenizers)
-      ├──► OpenJevDiffusionGemma (#29) ──┤──► mlx-swift, mlx-swift-lm (MLXLMCommon, MLXVLM),
-      │          ▲                        │    swift-transformers (Tokenizers)
+      ├──► OpenJevDiffusionGemma (#29) ──┤──► mlx-swift, mlx-swift-lm (MLXLMCommon),
+      │          ▲                        │    swift-transformers (Tokenizers, Hub), swift-jinja
       └──► OpenJevLetterReadout (#55) ───┘──► mlx-swift, mlx-swift-lm (MLXLLM, MLXLMCommon),
-                 (ModelResolver)               swift-transformers (Tokenizers)
+                 (ModelResolver)               swift-transformers (Tokenizers, Hub)
 ```
 
 `OpenJevCore` has no third-party dependencies (an `OrderedDictionary` from `swift-collections`
