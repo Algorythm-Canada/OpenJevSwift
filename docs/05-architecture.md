@@ -467,7 +467,9 @@ upstream's order: `messages`, `model`, the capacity bound (`OPENJEV_GEN_MAX_INFL
 prompt renders, `normalize`, the prompt and its limit, then the stop strings, every refusal in
 OpenAI's error shape before an answer starts. A whole reply generates while the client is there, as
 a decision does. A streamed reply waits for its turn before its 200 is sent; then
-`ChatCompletionStream` runs the generation beside a queue of 64 pieces, which the route drains into
+`ChatCompletionStream` runs the generation beside a queue of two of the generator's blocks and the
+final segment (`2 × blockLength + 1`, 513 for DiffusionGemma, never below upstream's 64; D-059),
+which the route drains into
 the event stream while a sibling task watches the connection. A client that goes away, or a piece
 that finds the queue full, stops the generation at its next block, so a reply ends early rather
 than reaching a live client with a piece missing. The slot comes back once the generation has

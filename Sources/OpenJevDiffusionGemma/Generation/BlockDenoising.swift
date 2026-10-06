@@ -124,6 +124,8 @@ public struct DenoisedBlock: Sendable, Hashable {
         case maxDenoisingSteps = "max_denoising_steps"
     }
 
+    /// The random canvas the block started from.
+    public var initialCanvas: [Int]
     /// The final canvas, the last step's argmax.
     public var tokens: [Int]
     /// The decoder passes it took.
@@ -132,7 +134,8 @@ public struct DenoisedBlock: Sendable, Hashable {
     public var ending: Ending
 
     /// Creates a block.
-    public init(tokens: [Int], steps: Int, ending: Ending) {
+    public init(initialCanvas: [Int] = [], tokens: [Int], steps: Int, ending: Ending) {
+        self.initialCanvas = initialCanvas
         self.tokens = tokens
         self.steps = steps
         self.ending = ending
@@ -164,6 +167,7 @@ extension DiffusionGemmaModel {
         let vocabulary = policy.vocabularySize
         var current = DiffusionSampler.initialCanvas(
             length: canvasLength, vocabularySize: vocabulary, random: random)
+        let initialCanvas = current
         var revealed = MLXArray.zeros(current.shape, dtype: .bool)
         var draft = current
         var argmaxCanvas = current
@@ -216,8 +220,10 @@ extension DiffusionGemmaModel {
             // (`diffusion_self_conditioning`), which the next pass turns into soft embeddings.
             conditioning = logits
         }
-        eval(argmaxCanvas)
+        eval(argmaxCanvas, initialCanvas)
         let tokens = argmaxCanvas[0].asArray(Int32.self).map(Int.init)
-        return DenoisedBlock(tokens: tokens, steps: steps, ending: ending)
+        return DenoisedBlock(
+            initialCanvas: initialCanvas[0].asArray(Int32.self).map(Int.init), tokens: tokens,
+            steps: steps, ending: ending)
     }
 }

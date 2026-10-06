@@ -430,7 +430,8 @@ tokens take seconds, so requests beyond `OPENJEV_GEN_MAX_INFLIGHT` wait, and dec
 reply too. Every refusal comes before the answer starts. A streamed reply (`"stream": true`) is a
 `text/event-stream` of OpenAI's chunks: the role, the text as the model commits it block by block,
 the finish reason, the usage, then `data: [DONE]`. A client that disconnects stops its generation
-at the next block, and so does one that reads so slowly that 64 pieces wait for it: its stream
+at the next block, and so does one that reads so slowly that two blocks of pieces (513) wait for
+it: its stream
 ends after the pieces it already had, with no finish chunk and no `[DONE]`, so it never reads a
 reply with a piece missing as if it were whole. A whole reply's client that disconnects stops it
 too, and the request log shows 499. On a graceful shutdown a reply in flight runs to its end within

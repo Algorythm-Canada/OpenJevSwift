@@ -617,6 +617,15 @@ extension MLXTests {
                     #expect(!whole.contains("channel"), "\(prompt): \(whole)")
                     let (streamed, _) = try await Self.streamed(chat, body)
                     #expect(!streamed.contains("channel"), "\(prompt): \(streamed)")
+                    // With only the two markers skipped (D-059 item 10), a thought the model opened
+                    // would show as text starting `thought`: none may.
+                    for reply in [whole, streamed] {
+                        #expect(
+                            !reply.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix(
+                                "thought"),
+                            "\(prompt): \(reply)")
+                    }
+                    print("\(prompt): \(whole.debugDescription)")
                     replies += [whole, streamed]
                 }
             }

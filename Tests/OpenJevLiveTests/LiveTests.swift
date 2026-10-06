@@ -302,6 +302,55 @@ struct LiveTests {
         #expect(!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, "\(response.text)")
     }
 
+    /// The port's own check, not upstream's: a reply of more than one 256-token block streams to
+    /// the end, its finish chunk and `[DONE]` last, and its text is the reply without `stream`.
+    /// The model emits a whole block at once; upstream's queue of 64 pieces overflowed on every
+    /// block of more than 64 tokens and ended such a reply without either (D-059).
+    @Test(
+        "A long streamed reply arrives whole, with its finish and [DONE], as the reply unstreamed",
+        .enabled("the server at OPENJEV_LIVE_URL does not serve text generation") {
+            try await ModelListing.lists("diffusiongemma-26b")
+        })
+    func longStreamIsWhole() async throws {
+        let messages: JSONValue = [
+            [
+                "role": "user",
+                "content": "Write a story of about 400 words about a lighthouse keeper who finds "
+                    + "a message in a bottle.",
+            ]
+        ]
+        let client = try LiveClient.make()
+        let whole = try await client.post(
+            "/v1/chat/completions", json: ["model": "diffusiongemma-26b", "messages": messages])
+        try #require(whole.status == 200, "\(whole.status): \(whole.text)")
+        let body = try whole.json()
+        let expected = try #require(body["choices"]?[0]?["message"]?["content"]?.stringValue)
+        let completionTokens = try #require(body["usage"]?["completion_tokens"]?.intValue)
+        // More than one block, so the stream carries at least one whole block of 256.
+        #expect(completionTokens > 256, "\(completionTokens) tokens")
+
+        let streamed = try await client.post(
+            "/v1/chat/completions",
+            json: ["model": "diffusiongemma-26b", "messages": messages, "stream": true])
+        try #require(streamed.status == 200, "\(streamed.status): \(streamed.text)")
+        let lines = streamed.text.split(omittingEmptySubsequences: false) {
+            $0 == "\n" || $0 == "\r\n" || $0 == "\r"
+        }.filter { $0.hasPrefix("data: ") }
+        #expect(lines.last == "data: [DONE]")
+        var text = ""
+        var finishes: [String] = []
+        for line in lines.dropLast() {
+            let chunk = try JSONParser().parse(String(line.dropFirst("data: ".count)))
+            guard let choice = chunk["choices"]?[0] else { continue }
+            text += choice["delta"]?["content"]?.stringValue ?? ""
+            if let finish = choice["finish_reason"]?.stringValue {
+                finishes.append(finish)
+            }
+        }
+        #expect(finishes.count == 1 && ["stop", "length"].contains(finishes.first ?? ""))
+        #expect(text == expected, "streamed \(text.count) characters, whole \(expected.count)")
+    }
+
     /// Upstream's `test_encoder` for one of its four models.
     static func encoder(_ model: String) async throws {
         let answers = try #require(

@@ -164,7 +164,13 @@ extension DiffusionGemmaRuntime {
 }
 
 extension DiffusionGemmaRuntime: TextGenerator {
-    /// `enc("<|channel>thought\n") + enc("<channel|>")`, which the chat route skips.
+    /// The largest block ``generate(prompt:maxTokens:stopIDs:skipSpecialTokenIDs:emit:)`` emits at
+    /// once: the checkpoint's canvas length, 256; the canvas length of a runtime without
+    /// generation, which emits nothing.
+    public nonisolated var blockLength: Int { maxBlockLength }
+
+    /// The thought channel's two markers, `[100, 101]`, which the chat route skips; upstream skips
+    /// `thought` and `\n` too (D-059 item 10).
     public nonisolated var thoughtChannelMarkerIDs: [Int] { markerIDs }
 
     /// The prompt of a chat request, upstream's `MlxGenerator.prompt_ids`, through

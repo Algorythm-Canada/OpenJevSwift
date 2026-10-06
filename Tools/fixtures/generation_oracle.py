@@ -5,7 +5,7 @@ stop_ids, emit, skip_special)` runs mlx-vlm 0.6.15's `stream_diffusion_generate`
 (`temperature=0.0`, as upstream calls it) on the pinned 4-bit checkpoint, and `MlxEngine.think`
 runs it for a thought before a read. This script writes Fixtures/generation/generation.json:
 
-- `sampler`: test vectors for each sampling function of mlx-vlm's `generate/diffusion.py` (lines
+- `sampler`: test vectors for the sampling functions of mlx-vlm's `generate/diffusion.py` (lines
   285 to 505) on small synthetic logits, computed on the CPU: `_diffusion_initialize_canvas`
   after `mx.random.seed`, `_diffusion_linear_temperature`, `_diffusion_sample_canvas` at
   temperature 0 and above after `mx.random.seed`, `_diffusion_token_probability`,
@@ -15,7 +15,7 @@ runs it for a thought before a read. This script writes Fixtures/generation/gene
 - `generations`: chat replies through upstream's own chat prompt (`MlxGenerator.prompt_ids`) and
   `MlxRuntime.generate`, with the thought-channel markers skipped as `MlxGenerator.generate` skips
   them: a short answer, a list, a JSON reply, a reply of several blocks, one ended by an extra stop
-  id and one cut by `max_tokens`. Per block: the canvas length, the initial canvas, the denoising
+  id, one cut by `max_tokens`, and one after a prompt longer than the sliding window. Per block: the canvas length, the initial canvas, the denoising
   steps taken, why the block ended, the final canvas, and the tokens the block committed. Per reply:
   the generated ids, the prompt tokens, the finish reason, the stop token, and every `emit(text,
   token)` call in order.
@@ -58,7 +58,8 @@ FIXTURES = ROOT / "Fixtures"
 OUT = FIXTURES / "generation" / "generation.json"
 RUN_OUT = ROOT / "Tools" / "oracle" / "results" / "generation_run.json"
 SCRIPT = "Tools/fixtures/generation_oracle.py"
-GENERATOR_VERSION = 1
+# Bump when the shape of generation.json changes. 2: the `long_prompt` reply and dashes escaped.
+GENERATOR_VERSION = 2
 UPSTREAM_COMMIT = "dcd2094"
 MODEL_REPO = "mlx-community/diffusiongemma-26B-A4B-it-4bit"
 MODEL_REVISION = "a7a81407613811e8ba63af92ac0d852b809e191f"
@@ -176,7 +177,7 @@ def peaked_logits(seed, shape, peaks):
 
 
 def sampler_vectors():
-    """Every function of diffusion.py lines 285 to 505 on synthetic inputs, on the CPU."""
+    """The sampling functions of diffusion.py lines 285 to 505 on synthetic inputs, on the CPU."""
     out = {}
     vocab = 262144
     with mx.stream(mx.cpu):
@@ -278,7 +279,30 @@ def sampler_vectors():
 
 # name -> (messages, max_tokens, stop strings, MLX seed). The first three are #51's three oracle
 # prompts; `story` runs past two full blocks to a partial third; `stop_comma` ends at its first
-# comma through an extra stop id; `story_cut` is cut by max_tokens inside its only block.
+# comma through an extra stop id; `story_cut` is cut by max_tokens inside its only block;
+# `long_prompt`'s prompt is longer than the sliding window, so its first commit trims the sliding
+# layers' caches.
+def support_thread():
+    """A support thread of about 1,200 tokens, so its prompt is longer than the sliding layers'
+    1,023-position window and a reply's first commit trims them. Deterministic: the text is a pure
+    function of the line number."""
+    lines = []
+    for i in range(1, 37):
+        code = f"{(i * 7919) % 10000:04d}"
+        hour, minute, count = 8 + i % 10, (i * 13) % 60, i % 5 + 1
+        lines.append([
+            f"Customer ({i}): I tried to connect my Stripe account again at {hour}:{minute:02d} "
+            f"and the dashboard still answers with a 403 error.",
+            f"Agent ({i}): Thanks for the update. Could you confirm the account ID ending in {code} "
+            f"and whether two-factor authentication is on?",
+            f"Customer ({i}): The account ID ends in {code}. Two-factor is on, and I regenerated "
+            f"the API keys {count} times this week.",
+            f"Agent ({i}): I see {count} failed OAuth handshakes in our logs; the last one "
+            f"reported that the read_write scope was missing.",
+        ][i % 4])
+    return "\n".join(lines)
+
+
 GENERATIONS = [
     ("short_answer", [{"role": "user", "content": "What is the capital of France? Answer in one short sentence."}],
      64, None, 0),
@@ -291,6 +315,9 @@ GENERATIONS = [
      [","], 0),
     ("story_cut", [{"role": "user", "content": "Write a story of about 400 words about a lighthouse keeper who "
                                                "finds a message in a bottle."}], 40, None, 0),
+    ("long_prompt", [{"role": "user", "content": "Here is a support thread.\n\n" + support_thread()
+                      + "\n\nWrite a detailed report of about 400 words on what went wrong, what was "
+                        "tried, and what the agent should do next."}], 320, None, 0),
     ("short_answer_seed_7", [{"role": "user", "content": "What is the capital of France? Answer in one short "
                                                          "sentence."}], 64, None, 7),
 ]
@@ -498,8 +525,13 @@ def run_think(eng, case):
 
 # Output --------------------------------------------------------------------------------------
 
+# The dashes this repository keeps out of its files, which the model writes in its replies, are
+# written as JSON escapes and read back as the same text, as Tools/fixtures/mlx_vlm_oracle.py does.
+DASHES = {code: f"\\u{code:04x}" for code in range(0x2012, 0x2016)}
+
+
 def dumps(value):
-    return json.dumps(value, ensure_ascii=False, allow_nan=False)
+    return json.dumps(value, ensure_ascii=False, allow_nan=False).translate(DASHES)
 
 
 def write_json(path, payload):
@@ -622,6 +654,8 @@ def main():
         problems.append("story_cut was not cut by max_tokens")
     if len(records_a["story"]["blocks"]) < 3:
         problems.append("story did not run past two blocks")
+    if len(records_a["long_prompt"]["prompt"]) <= 1100 or len(records_a["long_prompt"]["blocks"]) < 2:
+        problems.append("long_prompt does not commit a block after a prompt of more than 1,100 tokens")
 
     payload = {
         "generator": generator(),

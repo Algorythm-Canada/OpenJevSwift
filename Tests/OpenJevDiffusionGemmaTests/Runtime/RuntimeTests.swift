@@ -128,8 +128,11 @@ struct RuntimeTests {
     func textGenerator() throws {
         let engine = try DecisionEngine(backend: DiffusionGemmaRuntime.stub())
         let generator = try #require(engine.textGenerator)
-        let tokens = try EngineTokens(tokenizer: StubRuntimeTokenizer())
-        #expect(generator.thoughtChannelMarkerIDs == tokens.thoughtOpen + tokens.thoughtClose)
+        let tokenizer = StubRuntimeTokenizer()
+        #expect(
+            generator.thoughtChannelMarkerIDs
+                == (try tokenizer.encode("<|channel>", addSpecialTokens: false))
+                + (try tokenizer.encode("<channel|>", addSpecialTokens: false)))
         #expect(try generator.encode("ab") == [97, 98])
     }
 }

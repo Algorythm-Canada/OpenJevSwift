@@ -246,6 +246,16 @@ extension MLXTests {
             let thought = try await runtime.think(prompt: [1, 2, 3], budget: 16, stopIDs: [101])
             #expect(thought == ThoughtGeneration(generated: [7, 100, 8], promptTokens: 3))
             #expect(log.canvases == [64])
+            // Nothing skipped: the open marker reached the detokenizer with the thought, where a
+            // chat reply's generation leaves it out.
+            #expect(log.detokenizedIDs == [7, 100, 8])
+            let chatLog = StubModelLog()
+            _ = try await DiffusionGemmaRuntime.stub(
+                log: chatLog, blocks: { _, _ in [7, 100, 8, 101, 9] }
+            ).generate(
+                prompt: [1, 2, 3], maxTokens: 16, stopIDs: [], skipSpecialTokenIDs: [100, 101],
+                emit: { _, _ in true })
+            #expect(chatLog.detokenizedIDs == [7, 8, 9] + [Int](repeating: 5, count: 11))
             let capped = try await DiffusionGemmaRuntime.stub(blocks: { _, _ in [7, 8, 9] })
                 .think(prompt: [1], budget: 2, stopIDs: [101])
             #expect(capped == ThoughtGeneration(generated: [7, 8], promptTokens: 1))
@@ -264,6 +274,8 @@ extension MLXTests {
             let log = StubModelLog()
             let runtime = DiffusionGemmaRuntime.stub(
                 log: log, tokenizer: tokenizer, blocks: { _, _ in [10, 11, 12, 106] })
+            // The two channel markers only, not upstream's `thought` and newline (D-059 item 10).
+            #expect(runtime.thoughtChannelMarkerIDs == [100, 101])
             let engine = try DecisionEngine(backend: runtime)
             let chat = ChatCompletions(generator: try #require(engine.textGenerator))
             let body: JSONValue = [

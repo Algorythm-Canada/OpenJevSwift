@@ -44,6 +44,7 @@ final class StubModelLog: @unchecked Sendable {
     private var readCalls: [Read] = []
     private var cacheLimits: [Int] = []
     private var canvasCalls: [Int] = []
+    private var detokenized: [Int] = []
     private var commitCalls: [(promptTokens: Int, offset: Int, tokens: [Int])] = []
 
     var prefills: [[Int]] { lock.withLock { prefillCalls } }
@@ -51,6 +52,9 @@ final class StubModelLog: @unchecked Sendable {
     var imagePrefills: Int { lock.withLock { imagePrefillCalls } }
     var reads: [Read] { lock.withLock { readCalls } }
     var limits: [Int] { lock.withLock { cacheLimits } }
+    /// The ids the detokenizer looked up, in order: every generated id it was not told to skip.
+    var detokenizedIDs: [Int] { lock.withLock { detokenized } }
+    func detokenizing(_ id: Int) { lock.withLock { detokenized.append(id) } }
     /// The canvas length of each block the stub denoised.
     var canvases: [Int] { lock.withLock { canvasCalls } }
     /// Each committed block: the cache's prompt tokens and offset, and the block.
@@ -146,7 +150,10 @@ extension DiffusionGemmaRuntime {
                             layers: [], offset: cache.offset + tokens.count,
                             promptTokens: cache.promptTokens)
                     },
-                    tokenText: { "\u{2581}w\($0)" })
+                    tokenText: { id in
+                        log.detokenizing(id)
+                        return "\u{2581}w\(id)"
+                    })
             })
         return DiffusionGemmaRuntime(
             tokenizer: tokenizer, configuration: configuration, calls: calls,

@@ -96,6 +96,33 @@ private func withTier<T>(
     return try await body(exact)
 }
 
+/// Whether `answer` is the recorded one bit for bit: a noul's probability; a choice's label, every
+/// probability and its confidence; a score's value, every probability and its confidence.
+private func sameAnswer(_ answer: Answer, _ recorded: JSONValue) -> Bool {
+    switch answer {
+    case .noul(let p):
+        return recorded["type"]?.stringValue == "noul" && recorded["noul"]?.doubleValue == p
+    case .choice(let choice, let probabilities, let confidence):
+        guard recorded["type"]?.stringValue == "choice",
+            recorded["choice"]?.stringValue == choice,
+            recorded["confidence"]?.doubleValue == confidence,
+            let recordedProbabilities = recorded["probabilities"]?.objectValue,
+            recordedProbabilities.count == probabilities.count
+        else { return false }
+        return probabilities.allSatisfy {
+            recorded["probabilities"]?[$0.key]?.doubleValue == $0.value
+        }
+    case .score(let score, _, let probabilities, let confidence):
+        guard recorded["type"]?.stringValue == "score",
+            recorded["score"]?.doubleValue == score,
+            recorded["confidence"]?.doubleValue == confidence
+        else { return false }
+        return probabilities.indices.allSatisfy {
+            recorded["probabilities"]?[String($0)]?.doubleValue == probabilities[$0]
+        } && recorded["probabilities"]?.objectValue?.count == probabilities.count
+    }
+}
+
 /// How far a reply agrees with the oracle's: the leading blocks equal, and the first token that
 /// differs.
 private struct Agreement: CustomStringConvertible {
@@ -173,6 +200,18 @@ extension MLXTests {
                     #expect(
                         blocks.first.map { $0.canvasLength }
                             == generation.blocks.first?.canvasLength)
+                    // The canvases come from the reply's seed (`generationSeed`), as
+                    // `mx.random.seed` gives them: the first block's in both tiers, and each later
+                    // one while the blocks before it drew as many canvases as the oracle's.
+                    for (index, (block, recorded)) in zip(blocks, generation.blocks).enumerated() {
+                        let drewAlike = zip(blocks, generation.blocks).prefix(index).allSatisfy {
+                            $0.0.block.steps == $0.1.steps && $0.0.block.tokens == $0.1.finalCanvas
+                        }
+                        guard exact || drewAlike else { break }
+                        #expect(
+                            block.block.initialCanvas == recorded.initialCanvas,
+                            "\(generation.name) block \(index): initial canvas")
+                    }
                     // #51's three prompts are held to the whole reply in both tiers.
                     if ["short_answer", "list", "json"].contains(generation.name) {
                         #expect(whole, "\(generation.name)")
@@ -240,12 +279,15 @@ extension MLXTests {
                     if exact {
                         #expect(decision.outputTokens == record.outputTokens)
                         #expect(decision.inputTokens == record.inputTokens)
-                        // The reads after the thought are the oracle's too.
+                        // The reads after the thought are the oracle's too: every answer, its
+                        // probabilities and its confidence, bit for bit.
                         let answers = try #require(file["think"]?[index]?["answers"])
+                        #expect(decision.answers.count == answers.objectValue?.count)
                         for (key, answer) in decision.answers {
-                            if case .noul(let p) = answer {
-                                #expect(p == answers[key]?["noul"]?.doubleValue, "\(key)")
-                            }
+                            let recorded = try #require(answers[key], "\(key)")
+                            #expect(
+                                sameAnswer(answer, recorded),
+                                "\(record.name) \(key): \(answer) against \(recorded)")
                         }
                     } else {
                         #expect((1...request.think!).contains(decision.outputTokens))
@@ -254,20 +296,37 @@ extension MLXTests {
             }
         }
 
-        @Test("A committed block leaves the shared prefill unchanged")
+        @Test("Committed blocks leave the shared prefill's tensors unchanged")
         func commitsCopy() async throws {
             let live = try await LiveCheckpoint.shared()
             let model = live.loaded.model
             let oracle = try GenerationOracle.load()
+            /// Every layer's offset and key and value digests.
+            func digests(_ cache: PromptCache) -> [String] {
+                cache.layers.map { layer in
+                    let digest = layer.digest
+                    return "\(layer.offset) \(digest?.keys.shape ?? []) "
+                        + "\(digest?.keys.sha256 ?? "-") \(digest?.values.sha256 ?? "-")"
+                }
+            }
+            // A short prompt and one past the sliding window, whose commit trims.
+            for name in ["short_answer", "long_prompt"] {
+                let prompt = try #require(oracle.generations.first { $0.name == name }).prompt
+                let cache = try model.prefill(promptIDs: prompt)
+                let before = digests(cache)
+                // Two continuations of the prefill, and a second block on the first.
+                let first = try model.updateCache(
+                    cache, tokens: [Int](repeating: 236761, count: 64))
+                let second = try model.updateCache(cache, tokens: [Int](repeating: 818, count: 64))
+                _ = try model.updateCache(first, tokens: [Int](repeating: 529, count: 64))
+                #expect(digests(cache) == before, "\(name): the prefill changed")
+                #expect(digests(first) != digests(second), "\(name)")
+                #expect(first.layers.allSatisfy { $0.offset == prompt.count + 64 }, "\(name)")
+            }
             let prompt = try #require(oracle.generations.first).prompt
             let cache = try model.prefill(promptIDs: prompt)
-            let before = cache.layers.map { ($0.offset, $0.keys?.shape) }
             let tokens = [Int](repeating: 236761, count: 64)
             let extended = try model.updateCache(cache, tokens: tokens)
-            #expect(
-                cache.layers.map { ($0.offset, $0.keys?.shape) }.elementsEqual(before) {
-                    $0.0 == $1.0 && $0.1 == $1.1
-                })
             #expect(extended.offset == cache.offset + 64)
             #expect(extended.promptTokens == cache.promptTokens)
             #expect(extended.layers.allSatisfy { $0.offset == prompt.count + 64 })

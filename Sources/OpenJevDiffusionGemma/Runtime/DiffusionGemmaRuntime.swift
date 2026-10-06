@@ -97,6 +97,8 @@ public actor DiffusionGemmaRuntime: DecisionBackend {
     /// The thought-channel markers' ids, ``thoughtChannelMarkerIDs``; empty when the tokenizer
     /// cannot encode them.
     nonisolated let markerIDs: [Int]
+    /// ``blockLength``: the generation policy's largest canvas, 256 without one.
+    nonisolated let maxBlockLength: Int
 
     /// The model the live tests share with the model-level suites, so the 16 GB checkpoint loads
     /// once per test process. Those suites are serialized under one parent and never overlap a
@@ -122,6 +124,7 @@ public actor DiffusionGemmaRuntime: DecisionBackend {
         markerIDs = Self.markerIDs(tokenizer)
         capabilities = Self.capabilities(
             images: calls.imagePrompt != nil, think: calls.generation != nil)
+        maxBlockLength = calls.generation?.policy.maxCanvasLength ?? 256
         self.calls = calls
         self.setCacheLimit = setCacheLimit
         sharedLoadedModel = nil
@@ -175,6 +178,7 @@ public actor DiffusionGemmaRuntime: DecisionBackend {
         }
         capabilities = Self.capabilities(
             images: imagePrompt != nil, think: generation != nil)
+        maxBlockLength = generation?.policy.maxCanvasLength ?? 256
         calls = ModelCalls(
             prefill: { try model.prefill(promptIDs: $0) },
             read: { canvas, slots, cache, steps, topK in
@@ -188,11 +192,16 @@ public actor DiffusionGemmaRuntime: DecisionBackend {
             tokenBudget: configuration.promptCacheTokens)
     }
 
-    /// `enc("<|channel>thought\n") + enc("<channel|>")`, upstream's `engine.thought_open +
-    /// engine.thought_close`.
+    /// The thought channel's two marker tokens, `enc("<|channel>") + enc("<channel|>")`, `[100,
+    /// 101]` for the checkpoint's tokenizer. Upstream's chat skips `enc("<|channel>thought\n") +
+    /// enc("<channel|>")`, which also holds the ordinary tokens `thought` and `\n`, so its replies
+    /// lose every single newline and every `thought`; this port keeps them (D-059 item 10).
     static func markerIDs(_ tokenizer: any DecisionTokenizer) -> [Int] {
-        guard let tokens = try? EngineTokens(tokenizer: tokenizer) else { return [] }
-        return tokens.thoughtOpen + tokens.thoughtClose
+        guard let open = try? tokenizer.encode("<|channel>", addSpecialTokens: false),
+            let close = try? tokenizer.encode(
+                EngineTokens.thoughtCloseText, addSpecialTokens: false)
+        else { return [] }
+        return open + close
     }
 
     /// The runtime's capabilities: steps, samples and sequential reads, `think` when it
