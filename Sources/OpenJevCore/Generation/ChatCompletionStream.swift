@@ -13,8 +13,8 @@ import Foundation
 /// the generator's blocks and the final segment, so it never waits for the reader and cannot run
 /// far ahead of one. A piece that finds the queue full means the reader is gone or hopelessly
 /// behind: its `emit` returns false, which stops the generation, the pieces already queued are
-/// still written, and the stream ends there without a finish chunk or
-/// `[DONE]`, so a client never reads a reply with a piece missing as if it were whole. Cancelling
+/// still written, and the stream ends there without a finish chunk or `[DONE]`, so a client never
+/// reads a reply with a piece missing as if it were whole. Cancelling
 /// the task that runs it, as the server does when the client goes away, stops the generation the
 /// same way and writes nothing more.
 ///
@@ -45,7 +45,7 @@ public final class ChatCompletionStream: Sendable {
     public enum Ending: Sendable, Hashable {
         /// Every event was written, `[DONE]` last.
         case completed(TextGeneration)
-        /// The reader fell ``ChatCompletionStream/capacity`` pieces behind: the generation
+        /// The reader fell the stream's `capacity` pieces behind: the generation
         /// was stopped and the stream ended after the pieces already queued.
         case readerFellBehind
     }
@@ -75,8 +75,8 @@ public final class ChatCompletionStream: Sendable {
     }
 
     /// Stops the stream from any task, as the server does when the client goes away: the
-    /// generation's next `emit` returns false, which stops it, and ``run(_:)`` writes nothing more and
-    /// throws `CancellationError`. Before the run, the run stops at once.
+    /// generation's next `emit` returns false, which stops it, and ``run(_:)`` writes nothing more
+    /// and throws `CancellationError`. Before the run, the run stops at once.
     public func cancel() {
         buffer.cancel()
     }
@@ -182,7 +182,7 @@ private final class StartFlag: @unchecked Sendable {
 }
 
 /// The queue between a generation's `emit` and a stream's reader, upstream's `asyncio.Queue` with
-/// its `END` marker and `cancel` flag, holding ``ChatCompletionStream/capacity`` pieces.
+/// its `END` marker and `cancel` flag, holding the stream's `capacity` pieces.
 ///
 /// `offer` never blocks. The reader takes the pieces in order and, once none is left, how the
 /// stream ends: the generation's outcome, or that the reader fell behind. Cancelling ends the
