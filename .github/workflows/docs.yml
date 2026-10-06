@@ -67,7 +67,7 @@ jobs:
               ;;
           esac
 
-      # The four archives, each transformed for static hosting under /OpenJevSwift/, merged into
+      # The five archives, each transformed for static hosting under /OpenJevSwift/, merged into
       # one site with Tools/docs/index.html as its front page. Any DocC warning fails the step.
       - name: Build the site
         run: Tools/docs/build-site.sh "$RUNNER_TEMP/site"
