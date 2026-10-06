@@ -18,6 +18,24 @@ Package.resolved.lock
 *.xcodeproj
 *.xcworkspace
 !*.xcworkspace/contents.xcworkspacedata
+# The demo app's project keeps its project file and its one shared scheme; everything else Xcode
+# writes inside it (xcuserdata and the rest of the embedded workspace) stays local.
+!Examples/TriageDemo/TriageDemo.xcodeproj/
+Examples/TriageDemo/TriageDemo.xcodeproj/*
+!Examples/TriageDemo/TriageDemo.xcodeproj/project.pbxproj
+!Examples/TriageDemo/TriageDemo.xcodeproj/xcshareddata/
+Examples/TriageDemo/TriageDemo.xcodeproj/xcshareddata/*
+!Examples/TriageDemo/TriageDemo.xcodeproj/xcshareddata/xcschemes/
+Examples/TriageDemo/TriageDemo.xcodeproj/xcshareddata/xcschemes/*
+!Examples/TriageDemo/TriageDemo.xcodeproj/xcshareddata/xcschemes/TriageDemo.xcscheme
+# Its pins, the root Package.resolved's versions: CI fails when the two disagree.
+!Examples/TriageDemo/TriageDemo.xcodeproj/project.xcworkspace/
+Examples/TriageDemo/TriageDemo.xcodeproj/project.xcworkspace/*
+!Examples/TriageDemo/TriageDemo.xcodeproj/project.xcworkspace/xcshareddata/
+Examples/TriageDemo/TriageDemo.xcodeproj/project.xcworkspace/xcshareddata/*
+!Examples/TriageDemo/TriageDemo.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+Examples/TriageDemo/TriageDemo.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/*
+!Examples/TriageDemo/TriageDemo.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 xcuserdata/
 DerivedData/
 

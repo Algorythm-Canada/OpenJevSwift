@@ -57,6 +57,27 @@ DocC article "Making decisions in an app" loads the same models inside an app:
 .package(url: "https://github.com/Algorythm-Canada/OpenJevSwift.git", from: "0.1.0"),
 ```
 
+## Try the demo app
+
+![The triage demo answering a billing complaint as it is typed, on an iPhone simulator](docs/assets/triage-demo.gif)
+
+[Examples/TriageDemo](Examples/TriageDemo) is an iPhone app that answers upstream's README
+example on the device: whether a customer message needs a reply within the hour (`noul`), which
+team should handle it (`choice`) and how upset the customer is (`score`), with every option's
+probability as a bar, as you type. It needs Xcode 26.4 or later and an iPhone or a simulator with
+iOS 18 or later:
+
+1. Close any Xcode window that has the OpenJevSwift package open: Xcode lets only one window use
+   a local package.
+2. Open `Examples/TriageDemo/TriageDemo.xcodeproj`.
+3. To run on an iPhone, choose your team under Signing & Capabilities; the simulator needs none.
+4. Run the `TriageDemo` scheme.
+
+The first launch downloads Verdict through the library's own store, about 310 MB from the
+openjev-models release and Hugging Face, and checks each file's SHA-256; later launches work
+offline. [Examples/TriageDemo/README.md](Examples/TriageDemo/README.md) has the details and the
+tests.
+
 ## Requirements
 
 | Backend | Model | Mac | Memory |
