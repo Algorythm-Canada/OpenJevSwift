@@ -106,7 +106,7 @@ oracle's full tensors, every value is compared and the largest difference printe
 image); with the tokenizer files, every prompt's ids and `mm_token_type_ids`. These skip naming
 `OPENJEV_TEST_MODEL`. The same tests measure `MLXVLM`'s Gemma 4 processor, which misses by 0.17
 to 1.21 (D-051). The fixture's `reads.json` holds upstream's hot dog reads, which
-`ImageReadOracleTests` reads (above). Its `jpeg_cases.json` holds 213 damaged and unusual JPEGs
+`ImageReadOracleTests` reads (above). Its `jpeg_cases.json` holds 232 damaged and unusual JPEGs
 built by `Tools/fixtures/jpeg_cases.py` from the fixture JPEGs or from bytes it writes, with what
 upstream's `ImagePrompt.pil` made of each: `JPEGParityTests` decodes each to Pillow's bytes or
 refuses it where Pillow raised, within a bound on decoding work counted in blocks, and
