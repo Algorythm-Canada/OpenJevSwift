@@ -69,11 +69,11 @@ Heman10x and Laya by Nandakishor M / Convai Innovations. Each release holds one 
 its files uploaded one asset each, and the `OpenJevEncoders` library embeds every file's SHA-256 and
 refuses a file that does not match (D-033).
 
-## Models upstream serves that this port does not yet
+## Models upstream serves that this port does not
 
-| Model | Served as | Authors | License | Checkpoint | Upstream's pin | Issue |
+| Model | Served as | Authors | License | Checkpoint | Upstream's pin | Status |
 |---|---|---|---|---|---|---|
-| CLM 0.1 | `clm-v0.1` | Contrastive-LM ([CLM](https://github.com/Contrastive-LM/CLM)) | Apache-2.0 | [Contrastive-LM/CLM-v0.1-8B](https://huggingface.co/Contrastive-LM/CLM-v0.1-8B) | package 0.1.0 | #59 |
+| CLM 0.1 | `clm-v0.1` | Contrastive-LM ([CLM](https://github.com/Contrastive-LM/CLM)) | Apache-2.0 | [Contrastive-LM/CLM-v0.1-8B](https://huggingface.co/Contrastive-LM/CLM-v0.1-8B) | package 0.1.0 | Deferred until someone asks for it ([D-011](06-decisions.md#d-011-encoder-models-core-ml-for-verdict-and-laya-jevk5-first-among-the-extra-models)) |
 
 A server lists them, with upstream's descriptions, when `OPENJEV_MODEL_ROUTES` forwards them to a
 server that serves them.

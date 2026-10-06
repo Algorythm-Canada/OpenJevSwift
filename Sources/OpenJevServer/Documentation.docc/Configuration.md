@@ -15,7 +15,7 @@ out or set to the empty string with the same effect.
 
 | Variable | Default | Backends | Meaning |
 |---|---|---|---|
-| `OPENJEV_BACKEND` | `mlx` | all | The backend to load: `mlx`, `verdict`, `laya` or `jevk5`. Upstream's default, `vllm`, does not exist in this port, nor does `clm` yet (issue #59); any other name is refused. |
+| `OPENJEV_BACKEND` | `mlx` | all | The backend to load: `mlx`, `verdict`, `laya` or `jevk5`. Upstream's default, `vllm`, does not exist in this port, nor does `clm`, which is deferred until someone asks for it (D-011); any other name is refused. |
 | `OPENJEV_HOST` | `127.0.0.1` | all | The address to bind. `0.0.0.0` serves the network. |
 | `OPENJEV_PORT` | `8080` | all | The port to bind. `0` picks a free one, which the `serving on` line names. |
 | `OPENJEV_LOG_LEVEL` | `info` | all | `trace`, `debug`, `info`, `notice`, `warning`, `error` or `critical`, case-sensitive. `notice` is this port's addition to uvicorn's names. |
