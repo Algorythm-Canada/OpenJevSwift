@@ -278,7 +278,27 @@ with enumerated shapes, a misleading `functionName` load error, silent fallbacks
 Laya's multifunction package failing to load for the Neural Engine, which costs an iPhone one
 download per length) enter the backends' test matrix on every OS release.
 
-Status. Decided by spike #56 on 2026-09-30.
+Status. Decided by spike #56 on 2026-09-30. Item 7's last sentence, on CLM, is replaced by the
+addendum below (issue #59).
+
+Addendum, 2026-10-06 (issue #59). CLM (`clm-v0.1`) is deferred until someone asks for it. Item 7
+deferred it until the others exist; JevK5, Verdict and Laya are served now, and three reasons keep
+it deferred:
+
+- **Nobody has asked for it.** Every issue that mentions CLM is the project's own planning, and no
+  Discussions post asks for it.
+- **Upstream documents a quality caveat.** Score questions can ignore the state (CLM issue #3,
+  still open), so upstream's README says to evaluate them on your own data first; choice and noul
+  questions follow the state.
+- **It is about a week of work** (#59's estimate): Qwen3-8B last-token embeddings through
+  `MLXLLM` (about 5 GB at 4-bit), the two 9.4M-parameter heads of `CLM_v0.1-8B.pt` converted to
+  safetensors, the `contrastive-lm` prompt layout, left truncation at 2,048 tokens, the embedding
+  and projection caches, and CLM's `usage` semantics (only the texts it had to embed count).
+
+A request in an issue or in Discussions, with the use case, reopens the decision; the work then
+gets an implementation issue modelled on #55. Until then `clm` stays an unknown backend name, and a
+server lists and forwards `clm-v0.1` only through `OPENJEV_MODEL_ROUTES`, for example to upstream's
+`clm` container.
 
 ## D-012 Reads come first; text generation and `think` come later
 

@@ -88,8 +88,12 @@ published top answer on 230 of JevBench's 231 items (D-052).
 
 Not there yet:
 
-- The CLM model: #59.
-- Faster DiffusionGemma reads: #100, #101 and #102.
+- The CLM model, deferred until someone asks for it
+  ([D-011](docs/06-decisions.md#d-011-encoder-models-core-ml-for-verdict-and-laya-jevk5-first-among-the-extra-models)).
+  If you need it, open an [issue](https://github.com/Algorythm-Canada/OpenJevSwift/issues) or a
+  [Discussions](https://github.com/Algorythm-Canada/OpenJevSwift/discussions) post with your use
+  case.
+- Release 0.1.0, with a version tag a package can depend on: #65.
 
 [docs/08-implementation-plan.md](docs/08-implementation-plan.md) has the milestones and the issue
 index.
