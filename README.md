@@ -80,9 +80,6 @@ published top answer on 230 of JevBench's 231 items (D-052).
 
 Not there yet:
 
-- `think`, a thought before the read: #50, #51 and #52.
-- `POST /v1/chat/completions` on DiffusionGemma: the route, its streaming, JSON mode and
-  cancellation are in (#53, D-058); it serves once the model generates text, #51.
 - The CLM model: #59.
 - Release 0.1.0, with a version tag a package can depend on: #65.
 

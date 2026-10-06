@@ -279,29 +279,40 @@ The read extensions of milestone 4 (#43 to #45) are proven on the checkpoint the
 ### Generation and think (#50 to #52, D-059)
 
 `Tools/fixtures/generation_oracle.py` writes `Fixtures/generation/generation.json` from upstream's
-own path. It holds mlx-vlm's sampling functions on synthetic logits, run on the CPU. It holds seven
+own path. It holds mlx-vlm's sampling functions on synthetic logits, run on the CPU. It holds eight
 greedy replies through upstream's chat prompt and `MlxRuntime.generate`: a short answer, a list, a
 JSON reply, a 640-token story over 3 blocks (256, 256, 128), a reply ended by an extra stop id, one
-cut by `max_tokens` at 40, and the short answer under another seed. Each reply records every block
-and every `emit` call. It also holds `MlxEngine.decide` with `think` for the README example
-(`think` 128) and for 24 sequential nouls (`think` 64). MLX's generator is seeded before each
-reply, which upstream never does. The script runs everything twice, the second time in reverse
-order, and writes nothing unless the passes agree bit for bit. `--check` compares a run with the
-committed file.
+cut by `max_tokens` at 40, a 320-token report after a 1,235-token prompt, whose first commit trims
+the sliding layers' caches past their 1,023-position window, and the short answer under another
+seed. Each reply records every block (its initial canvas, passes, ending and final canvas) and
+every `emit` call. It also holds `MlxEngine.decide` with `think` for the README example (`think`
+128) and for 24 sequential nouls (`think` 64), with every answer after the thought. MLX's generator
+is seeded before each reply, which upstream never does. The script runs everything twice, the
+second time in reverse order, and writes nothing unless the passes agree bit for bit. `--check`
+compares a run with the committed file, and the committed run record holds the last check.
 
-- **Sampler** (`SamplerTests`, CI, on the CPU): each function gives mlx-vlm's output bit for bit:
-  the seeded canvas draws, the temperatures, categorical sampling, probabilities, entropies, both
-  transfer masks, and the stability rule over a sequence of steps.
+- **Sampler** (`SamplerTests`, CI, on the CPU): each sampling function gives mlx-vlm's output bit for
+  bit: the seeded canvas draws, the temperatures, categorical sampling, probabilities, entropies,
+  both transfer masks, and the stability rule over a sequence of steps.
 - **Detokenizer** (`StreamingDetokenizerTests`): replaying each recorded reply's ids gives
   upstream's `emit` texts, piece for piece.
+- **Layer caches** (`LayerCacheTests`, CI): the sliding window's trim across updates, the full
+  layer's buffer, and two continuations of one prefill that never see each other's blocks.
 - **Block loop** (`GenerationRuntimeTests`, CI, a stub model): canvas sizing, commits, EOS and stop
-  ids, `max_tokens`, skipped ids, `emit` returning false, a cancelled task, the prefill shared with
-  reads, the prompt cap.
-- **Replies** (`GenerationOracleTests`, `OPENJEV_TEST_MODEL`). In the exact tier all 7 replies
-  agree whole: every block's final canvas, its passes and how it ended, the finish reason and every
-  `emit` call. Both thoughts agree token for token (128 and 64), with upstream's billing (469 and
-  1,896 input tokens) and the same answers after them. In the native tier, measured on 2026-10-06
-  on the reference machine:
+  ids, `max_tokens`, skipped ids (and none for a thought), `emit` returning false, a task cancelled
+  before the call, during a block and during the last block, the prefill shared with reads, the
+  prompt cap, and upstream's `test_chat_completion_on_mlx` through the runtime's `TextGenerator`.
+- **Streaming** (`ChatCompletionsTests`, CI): 257 pieces emitted from one synchronous call, a block
+  and the tail, reach a reader that writes each event, `[DONE]` last; the queue holds two blocks
+  and the tail, 513 pieces (D-059 item 11), and a reader that stops reading still ends the reply
+  after the queued pieces without `[DONE]`.
+- **Replies** (`GenerationOracleTests`, `OPENJEV_TEST_MODEL`). In the exact tier all 8 replies
+  agree whole: every block's initial canvas, final canvas, passes and ending, the finish reason
+  and every `emit` call. Both thoughts agree token for token (128 and 64), with upstream's billing
+  (469 and 1,896 input tokens) and the same answers after them, bit for bit: every probability and
+  confidence of the README case's `urgent`, `team` and `tone` and of the 24 nouls. Two
+  continuations of one prefill, after a short prompt and after the long one, leave the prefill's
+  tensor digests unchanged. In the native tier, measured on 2026-10-06 on the reference machine:
 
   | Reply | Tokens | Blocks | Agreement with the oracle |
   |---|---|---|---|
@@ -311,13 +322,23 @@ committed file.
   | story | 640 | 3 | first 8 tokens, then a different story |
   | stop id | 1 | 1 | whole reply |
   | cut by `max_tokens` | 40 | 1 | first 4 tokens |
+  | long prompt | 320 | 2 | first 2 tokens |
   | short answer, seed 7 | 7 | 1 | whole reply |
 
-  The two stories diverge where a near-tied argmax flips under mlx-swift's kernels. In the exact
-  tier they match whole, so the divergence comes from the kernels, not the loop. The native test
-  holds #51's three prompts (short answer, list, JSON) to the whole reply and reports the rest.
+  The long replies diverge where a near-tied argmax flips under mlx-swift's kernels. In the exact
+  tier they match whole, so the divergence comes from the kernels, not the loop, and #51's
+  long-reply agreement is held there, as D-014 holds reads. Natively the seeded initial canvases
+  match the recording wherever the blocks before them drew alike, the first block of every reply
+  included, and both thoughts bill as upstream does (128 and 64 output tokens, 469 and 1,896 input),
+  though their ids part after 48 and 3 tokens. The native test holds #51's three prompts (short
+  answer, list, JSON) to the whole reply and reports the rest.
 - **Think** (`UpstreamReadCaseTests`, `OPENJEV_TEST_MODEL`): upstream's three think cases pass, and
   the live suite's `test_think` passes against `openjev serve --backend mlx`.
+- **Chat on the checkpoint** (`UpstreamReadCaseTests`, `OPENJEV_TEST_MODEL`): upstream's four chat
+  cases pass, and no reply of `test_no_reply_leaks_the_thought_channel` shows a thought channel or
+  starts with thought text when chat skips only the two markers (D-059 item 10). The live suite's
+  `longStreamIsWhole` streams a story of more than one block to its finish and `[DONE]` and
+  compares it with the same request unstreamed.
 
 ## Layer 3: end to end, behavioural
 

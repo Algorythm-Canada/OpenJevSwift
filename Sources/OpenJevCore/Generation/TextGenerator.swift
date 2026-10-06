@@ -12,8 +12,8 @@ public struct TextGeneration: Sendable, Hashable {
         case stop
         /// The generation reached its `maxTokens`.
         case length
-        /// `emit` returned false, or the calling task was cancelled, and the generation stopped
-        /// at the next block boundary.
+        /// `emit` returned false, and the generation stopped after that token; or the calling
+        /// task was cancelled, and it stopped before its next block.
         case cancelled
     }
 
@@ -102,8 +102,9 @@ public protocol TextGenerator: Sendable {
     /// empty, and once more at the end with the detokenizer's final buffered segment and a `nil`
     /// token; the chat route takes an empty text as no chunk, so that last call may be skipped when
     /// the segment is empty, as upstream's runtime skips it, and its return value is ignored.
-    /// Returning false asks the generation to stop: it ends at the next block boundary with
-    /// ``TextGeneration/FinishReason/cancelled``, as it does when the calling task is cancelled.
+    /// Returning false stops the generation after that token, with
+    /// ``TextGeneration/FinishReason/cancelled`` and no final call, as upstream's runtime breaks
+    /// out of its stream; a cancelled calling task stops it before its next block, the same way.
     /// `emit` may be called on the generator's own executor and must not block.
     ///
     /// - Throws: Whatever the model throws. A generation the calling task cancelled may throw

@@ -76,8 +76,9 @@ writes a reply a block of up to 256 tokens at a time, streams each committed tok
 `emit`, and stops at the model's EOS ids, the caller's stop ids or `maxTokens`. `think` runs on it,
 so the engine writes a thought before a read when a request asks for one. Each reply's random
 canvases come from MLX's generator seeded with
-``DiffusionGemmaRuntime/Configuration/generationSeed``, so a prompt always gets the same reply.
-`POST /v1/chat/completions` arrives with issue #53. Images are read: the checkpoint's vision
+``DiffusionGemmaRuntime/Configuration/generationSeed``, so a prompt always gets the same reply in
+any process. The runtime is the server's ``/OpenJevCore/TextGenerator``, so the `mlx` backend
+serves `POST /v1/chat/completions` over it. Images are read: the checkpoint's vision
 tower loads with the model (1.06 GiB more), and an image the decoder cannot read is a
 ``/OpenJevCore/SchemaError`` naming it at `["body", "images", i]`.
 

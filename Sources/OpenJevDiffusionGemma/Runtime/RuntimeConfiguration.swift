@@ -7,7 +7,8 @@ import Foundation
 import MLX
 
 extension DiffusionGemmaRuntime {
-    /// The runtime's settings, with upstream's defaults.
+    /// The runtime's settings, with upstream's defaults and a generation seed of 0, which upstream
+    /// does not have.
     ///
     /// The library never reads the environment (D-013). The CLI maps `ServerSettings` onto this
     /// initializer: `mlxMaxPrompt` to ``maxPromptTokens``, `mlxPromptCache` to
@@ -34,7 +35,8 @@ extension DiffusionGemmaRuntime {
         /// process to the next. Fixtures/generation records the replies with seed 0.
         public var generationSeed: UInt64
 
-        /// Creates a configuration; every argument defaults to upstream's value.
+        /// Creates a configuration; every argument defaults to upstream's value, but
+        /// `generationSeed`, which upstream does not have (it leaves MLX's generator unseeded).
         public init(
             maxPromptTokens: Int = 32_768,
             promptCacheEntries: Int = PrefillCacheDefaults.entries,
@@ -51,7 +53,7 @@ extension DiffusionGemmaRuntime {
             self.generationSeed = generationSeed
         }
 
-        /// Upstream's defaults.
+        /// Upstream's defaults, and `generationSeed` 0.
         public static let `default` = Configuration()
 
         /// The byte count ``cacheLimitGB`` asks MLX for, or nil when MLX is left alone. 0 stays

@@ -124,7 +124,7 @@ struct RuntimeTests {
         #expect(!log.touched)
     }
 
-    @Test("The runtime generates text, so its server has chat routes; its markers are upstream's")
+    @Test("The runtime generates text, so its server has chat routes; it skips the channel markers")
     func textGenerator() throws {
         let engine = try DecisionEngine(backend: DiffusionGemmaRuntime.stub())
         let generator = try #require(engine.textGenerator)

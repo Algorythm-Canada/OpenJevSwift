@@ -471,7 +471,7 @@ a decision does. A streamed reply waits for its turn before its 200 is sent; the
 final segment (`2 × blockLength + 1`, 513 for DiffusionGemma, never below upstream's 64; D-059),
 which the route drains into
 the event stream while a sibling task watches the connection. A client that goes away, or a piece
-that finds the queue full, stops the generation at its next block, so a reply ends early rather
+that finds the queue full, stops the generation, so a reply ends early rather
 than reaching a live client with a piece missing. The slot comes back once the generation has
 stopped, and a stream whose answer never started gives it back as it is discarded. The chat
 template renders on a thread of its own, since it recurses into a request's tool calls, and

@@ -3760,7 +3760,9 @@ Decision.
    template's recursion has room (item 7). `SystemOneService` gains `textGenerator`, `nil` by
    default; `DecisionEngine` returns its backend when the backend conforms, and the server adds the
    chat route only then. Wiring the `mlx` backend is therefore the runtime's conformance:
-   `DiffusionGemmaRuntime` conforms once it generates (#51), and its routes appear.
+   `DiffusionGemmaRuntime` conforms (D-059 item 9), unconditionally, so a runtime made without
+   generation keeps the routes and answers them with the 503 of a failing generator, as upstream
+   keeps its routes whatever its runtime can do.
 3. **Upstream's answers, recorded.** Every status, type, code, message and header of the route is
    upstream's, in its order: the body (`request.json()`, whatever the content type), `messages`,
    `model`, the 529 (`running >= gen_max_inflight + gen_max_queue`, `retry-after: 2`),
@@ -3868,6 +3870,7 @@ Decision.
     passed as upstream passes them, `[100, 45518, 107, 101]`, which holds two ordinary tokens,
     `thought` and `\n`; whether mlx-vlm drops them wherever a reply has them, as its
     `skip_special_token_ids` would, is for #51 to check against mlx-vlm (it is not installed here).
+    It does, and the DiffusionGemma runtime reports only the two markers: D-059 item 10.
 11. **Tests.** The route's tests carry upstream's names and run over `StubTextGenerator`, which
     reproduces `StubRuntime`, `ReplayRuntime` and `OneTokenRuntime`: in OpenJevCoreTests (the
     stream's slow reader, cancelled waits, a stream that never runs), OpenJevServerTests (the
@@ -3991,24 +3994,64 @@ Decision.
    the server adds the chat routes for the `mlx` backend; the CLI needed no change. The cases
    D-058 item 11 left disabled run: `test_chat_completion_on_mlx` over the stub model and the real
    tokenizer, the four DiffusionGemma chat cases on the checkpoint, and the live suite's
-   `test_chat` and `test_chat_stream`. This also answers D-058 item 10: mlx-vlm drops the skipped
+   `test_chat` and `test_chat_stream`. It also answers D-058 item 10: mlx-vlm drops the skipped
    ids before they enter its detokenizer's buffer wherever they appear, so the ordinary `thought`
-   and `\n` tokens among them go too (below), and the port does the same.
+   and `\n` tokens of upstream's list go too; item 10 says what chat skips here instead.
+   The conformance is unconditional: a runtime made without generation still has the chat routes
+   and answers them with the 503 of a failing generator, as upstream keeps its routes whatever its
+   runtime can do.
+10. **Chat skips only the two channel markers.** Upstream's chat passes `engine.thought_open +
+    engine.thought_close`, `enc("<|channel>thought\n") + enc("<channel|>")`, which for this
+    tokenizer is `[100, 45518, 107, 101]`: the two markers and the ordinary tokens `thought` and
+    `\n`. mlx-vlm drops every one of them wherever a reply has them, so every single-newline token
+    (107) and every `thought` (45518) vanishes from upstream's chat replies: lists and code run
+    together (the oracle's list reply reads `AppleBananaCherryDateElderberry`, the JSON reply
+    `{  "name": "Ada",  "age": 36}`), and `{"thought": 1}` becomes `{"": 1}`. Other newline tokens
+    survive: the recorded `story` keeps its 20 newlines, which come as 10 tokens of id 108 (`\n\n`).
+    The runtime's `thoughtChannelMarkerIDs` is therefore `enc("<|channel>") + enc("<channel|>")`,
+    `[100, 101]`, so chat replies keep their single newlines and the word `thought`. On the
+    checkpoint no reply showed a thought channel's text with the shorter list: the five prompts of
+    `test_no_reply_leaks_the_thought_channel`, three times each, whole and streamed, start with
+    their answer, and the chat tests pass. `generate` still skips whatever its caller passes, and
+    its parity tests keep upstream's list, so the oracle comparison is unchanged. D-058 item 10
+    points here.
+11. **A streamed reply's queue holds two blocks and the tail.** `generate` emits a committed block
+    of up to 256 tokens back to back, without suspending, and only then denoises the next. The
+    chat stream's queue was upstream's `asyncio.Queue(maxsize=64)`, which refused the 65th piece of
+    every block of more than 64 tokens: the generation stopped as `cancelled` and the reply ended
+    without its finish chunk and `[DONE]`. Upstream has the same flaw, where whether the event
+    loop drains the queue in time decides, so its long streamed replies fail at random. The queue
+    now holds `max(64, 2 × blockLength + 1)` pieces, which `TextGenerator.blockLength` reports: 256
+    for this runtime, so 513. One block and the tail would be enough for a reader that has caught
+    up when a block lands; the second block covers a reader still writing the previous block. The
+    size comes from the generator rather than a constant because the block length is the model's
+    (a model that emits token by token reports 1 and keeps 64), and a constant of 513 would be
+    wrong for a checkpoint with another canvas. A reader that stops reading or goes away still
+    ends the stream as before, after the queued pieces and without `[DONE]`; the slow-reader test
+    holds that at the new size. `wholeBlockStreams` (257 pieces from one synchronous call) failed
+    with `readerFellBehind` before the change, and the live suite's `longStreamIsWhole` streams a
+    story of several blocks and compares it with the same request unstreamed.
+12. **#51 and #52's acceptance, as held.** #51 asks for long replies to agree with mlx-vlm on at
+    least their first two blocks. In the exact tier every recorded reply agrees whole, the story
+    over its three blocks and the long prompt's reply over two; on mlx-swift's own kernels the
+    story parts from the recording after 8 tokens and the cut reply after 4, where a near-tied
+    argmax flips. The long-reply agreement is held in the exact tier, as D-014 holds reads. #52
+    asks for the thought to be available to the engine for logging at debug level: the engine has
+    the thought's ids in the read's prefix, never in the `Decision`; `OpenJevCore` has no logger,
+    so nothing logs them.
 
-Found. Upstream's chat path skips `engine.thought_open + engine.thought_close`, and
-`enc("<|channel>thought\n")` is three ids: the open marker, `thought` (45518) and the newline
-(107). A chat reply therefore loses every newline and every `thought` token: the oracle's list
-reply reads `AppleBananaCherryDateElderberry`. `generate` skips whatever its caller passes, so
-reproducing this or fixing it is the chat endpoint's decision (#53).
-
-Measured on 2026-10-06. Exact tier (D-014): all 7 recorded replies agree whole, block by block
-(final canvas, passes, ending), with the same finish reasons and `emit` calls; both thoughts agree
-token for token (128 and 64 ids), with upstream's billing (469 and 1,896 input tokens) and the same
-noul answers after them. Native tier: the short answer, list, JSON reply, stop-id reply and the
-seed-7 answer agree whole. The 640-token story agrees for its first 8 tokens and the 40-token cut
-for its first 4; there a near-tied argmax flips under mlx-swift's kernels. The sampler vectors
+Measured on 2026-10-06. Exact tier (D-014): all 8 recorded replies agree whole, block by block
+(initial canvas, final canvas, passes, ending), with the same finish reasons and `emit` calls,
+the reply after a 1,235-token prompt included; both thoughts agree token for token (128 and 64
+ids), with upstream's billing (469 and 1,896 input tokens) and every answer after them bit for
+bit, probabilities and confidence. Native tier: the short answer, list, JSON reply, stop-id reply
+and the seed-7 answer agree whole. The 640-token story agrees for its first 8 tokens, the 40-token
+cut for its first 4 and the long prompt's reply for its first 2; there a near-tied argmax flips
+under mlx-swift's kernels. The seeded initial canvases match natively too. The sampler vectors
 match bit for bit on the CPU. A text read is unchanged: `RegressionTests` and `ReadOracleTests`
-pass as before.
+pass as before. Live, against `openjev serve --backend mlx`: the Swift live suite passes 13 and
+skips 4 (the encoder models), upstream's `tests/test_live.py` passes 12 and skips 4, and a story
+of 451 tokens streams to its finish chunk and `[DONE]`, equal to the reply unstreamed.
 
 Alternatives rejected. (a) The entropy-bound sampler, as the issue text and the checkpoint name
 it: it would disagree with upstream on every reply. (b) Leaving MLX's generator unseeded, as
@@ -4018,8 +4061,8 @@ chat prompts would evict the reads the cache exists for, and upstream caches non
 
 Consequences. `think` works on the `mlx` backend with upstream's answers and billing, reproducibly,
 and so does `POST /v1/chat/completions`, which calls `generate` as upstream's
-`MlxGenerator.generate` calls `MlxRuntime.generate`. Agreement past the first tokens of a long reply is held only in the exact
-tier.
+`MlxGenerator.generate` calls `MlxRuntime.generate`, with single newlines kept and long streams
+whole. Agreement past the first tokens of a long reply is held only in the exact tier.
 
 Status. Proposed with issues #50, #51, #52 and #53. First numbered D-058; renumbered because the chat
 endpoint's PR #136 claims D-058.

@@ -21,7 +21,7 @@ write ``JSONValue`` instead of using `Codable`.
 | `images` | `[ImageInput]` | Optional, an OpenJev extension: up to 8 data URLs or `{content_type, base64}` objects of JPEG, PNG, WebP or GIF, read ahead of the state. The DiffusionGemma backend reads them; the encoder backends refuse them. |
 | `steps` | `Int` | Optional, 1 to 8: denoise passes per read. |
 | `samples` | `Int` | Optional, 1 to 32: a fixed number of noise draws, all billed, in place of the automatic re-reads. |
-| `think` | `Int` | Optional, 0 to 4096: a thought budget before the read. No backend generates yet (issue #52). |
+| `think` | `Int` | Optional, 0 to 4096: a thought budget before the read: the DiffusionGemma backend writes a thought of up to that many tokens, billed as output, then reads after it. |
 | `sequential` | `Bool` | Optional: read the groups in order, each conditioned on the earlier answers. |
 
 The encoders honour none of the five extensions, as upstream's encoder engines do not: they refuse

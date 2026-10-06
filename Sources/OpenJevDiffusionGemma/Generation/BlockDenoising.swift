@@ -10,7 +10,8 @@ import MLX
 /// as upstream calls it.
 ///
 /// For the pinned checkpoint: canvases of 64 to 256 positions, up to 48 denoising steps, the
-/// linear temperature schedule from 0.8 down to 0.4, the stable-and-confident rule (stability 1,
+/// linear temperature schedule `0.4 + 0.4 × step / 48`, from 0.8 on the first step down to
+/// 0.4 + 0.4/48 on the 48th, the stable-and-confident rule (stability 1,
 /// mean entropy below 0.005), the `confidence-threshold` sampler at 0.9, greedy, and the EOS ids
 /// 1, 106 and 50.
 public struct DiffusionGenerationPolicy: Sendable, Hashable {
@@ -20,7 +21,8 @@ public struct DiffusionGenerationPolicy: Sendable, Hashable {
     public var minCanvasLength: Int
     /// `max_denoising_steps` (48), the step cap of a block.
     public var maxDenoisingSteps: Int
-    /// `t_min` (0.4), the temperature of the last step.
+    /// `t_min` (0.4), the floor the schedule approaches: the last of 48 steps runs at
+    /// `tMin + (tMax − tMin) / 48`.
     public var tMin: Double
     /// `t_max` (0.8), the temperature the schedule starts from.
     public var tMax: Double

@@ -11,9 +11,9 @@ import Foundation
 /// emits its text: the role, each non-empty piece, the finish reason, the usage and `[DONE]`. The
 /// generation hands its pieces over through a queue of ``capacity(blockLength:)`` entries, two of
 /// the generator's blocks and the final segment, so it never waits for the reader and cannot run
-/// far ahead of one. A piece that finds the queue full means
-/// the reader is gone or hopelessly behind: the generation is asked to stop at its next block, the
-/// pieces already queued are still written, and the stream ends there without a finish chunk or
+/// far ahead of one. A piece that finds the queue full means the reader is gone or hopelessly
+/// behind: its `emit` returns false, which stops the generation, the pieces already queued are
+/// still written, and the stream ends there without a finish chunk or
 /// `[DONE]`, so a client never reads a reply with a piece missing as if it were whole. Cancelling
 /// the task that runs it, as the server does when the client goes away, stops the generation the
 /// same way and writes nothing more.
@@ -75,7 +75,7 @@ public final class ChatCompletionStream: Sendable {
     }
 
     /// Stops the stream from any task, as the server does when the client goes away: the
-    /// generation is asked to stop at its next block and ``run(_:)`` writes nothing more and
+    /// generation's next `emit` returns false, which stops it, and ``run(_:)`` writes nothing more and
     /// throws `CancellationError`. Before the run, the run stops at once.
     public func cancel() {
         buffer.cancel()

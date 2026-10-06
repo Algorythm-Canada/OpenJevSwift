@@ -27,7 +27,7 @@ with `mx.random.seed(seed)` before each reply and each `decide`, and records the
   step cap (48), the sampler (`confidence-threshold`, the default, at 0.9), the temperature (0),
   the detokenizer class (`SPMStreamingDetokenizer`, `trim_space` false), and upstream's
   thought-open and thought-close ids and read scaffold.
-- `sampler` holds test vectors for each sampling function of `generate/diffusion.py` lines 285 to
+- `sampler` holds test vectors for the sampling functions of `generate/diffusion.py` lines 285 to
   505, computed on the CPU: two canvas draws after each of three seeds; the 48 step temperatures
   (as Python floats and as the float32 the logits are divided by); categorical and argmax samples
   of synthetic logits at four temperatures after a seed; token probabilities; token entropies of
@@ -35,11 +35,13 @@ with `mx.random.seed(seed)` before each reply and each `decide`, and records the
   four thresholds with and without `force_all`; and the stable-and-confident result over a
   sequence of six steps for four stopping settings. Arrays are `{shape, values}` or, for floats,
   `{shape, float32_bits}`.
-- `generations` lists seven chat replies, each prompt built by upstream's `MlxGenerator.prompt_ids`
+- `generations` lists eight chat replies, each prompt built by upstream's `MlxGenerator.prompt_ids`
   (thinking off, then the read scaffold) and generated with the thought-channel markers skipped,
   as `MlxGenerator.generate` skips them: `short_answer`, `list` and `json` (#51's three prompts),
   `story` (640 tokens over blocks of 256, 256 and 128), `stop_comma` (ended by the extra stop id of
-  `","`), `story_cut` (cut by `max_tokens` 40) and `short_answer_seed_7` (another seed). Each has
+  `","`), `story_cut` (cut by `max_tokens` 40), `long_prompt` (a 1,235-token prompt, longer than
+  the sliding layers' 1,023-position window, so its first commit trims them; 320 tokens over
+  blocks of 256 and 64) and `short_answer_seed_7` (another seed). Each has
   the messages, `max_tokens`, the stop strings and ids, the skipped ids, the seed, the prompt ids,
   then what upstream returned: `prompt_tokens`, `finish_reason`, `stop_token` (the id that ended a
   `stop` reply), `generated` (the ids, without the stop id), `text` and `pieces` (every
@@ -58,6 +60,12 @@ with `mx.random.seed(seed)` before each reply and each `decide`, and records the
 
 Note what the `list` and `json` texts show: upstream's chat path skips `enc("<|channel>thought\n")`
 and `enc("<channel|>")`, and the first is three ids, the open marker, `thought` (45518) and the
-newline (107), so a chat reply loses every newline and every `thought` token (D-059).
+single newline (107), so a chat reply loses every token 107 and every `thought` wherever they
+appear. Other newline tokens stay: the `story` text keeps its 20 newlines, which come as 10 tokens
+of id 108 (`\n\n`). The replies here are upstream's, skip list and all; the port's chat skips only
+the two markers (D-059 item 10).
+
+Dashes the model writes (U+2012 to U+2015) are stored as JSON escapes, which read back as the same
+text, as in `oracle/reads.json`.
 
 The run's timings are in `Tools/oracle/results/generation_run.json`, never in this file.

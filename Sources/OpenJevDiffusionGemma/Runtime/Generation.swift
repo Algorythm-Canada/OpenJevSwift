@@ -48,8 +48,10 @@ extension DiffusionGemmaRuntime {
     ///
     /// The canvases are drawn from MLX's generator seeded with
     /// ``Configuration/generationSeed`` (0) for every reply, so a prompt always gets the same
-    /// reply, the one Fixtures/generation records; upstream leaves MLX's generator unseeded, so
-    /// its replies vary from one process to the next.
+    /// reply in any process; upstream leaves MLX's generator unseeded, so its replies vary from
+    /// one process to the next. The exact tier (D-014) reproduces the reply Fixtures/generation
+    /// records; on mlx-swift's own kernels a near-tied argmax can flip and a long reply part from
+    /// the recording (the recorded story after 8 tokens), while the short ones match whole.
     ///
     /// The whole reply runs inside the actor, as upstream holds its one MLX thread for it.
     ///

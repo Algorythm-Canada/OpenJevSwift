@@ -315,8 +315,9 @@ struct LiveTests {
         let messages: JSONValue = [
             [
                 "role": "user",
-                "content": "Write a story of about 400 words about a lighthouse keeper who finds "
-                    + "a message in a bottle.",
+                "content": .string(
+                    "Write a story of about 400 words about a lighthouse keeper who finds "
+                        + "a message in a bottle."),
             ]
         ]
         let client = try LiveClient.make()
