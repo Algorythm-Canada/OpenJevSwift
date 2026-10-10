@@ -1,6 +1,15 @@
+[English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Español](README.es.md) | [Português](README.pt-BR.md)
+
 # OpenJevSwift
 
 [![CI](https://github.com/Algorythm-Canada/OpenJevSwift/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Algorythm-Canada/OpenJevSwift/actions/workflows/ci.yml) [![Fixtures](https://github.com/Algorythm-Canada/OpenJevSwift/actions/workflows/fixtures.yml/badge.svg?branch=main)](https://github.com/Algorythm-Canada/OpenJevSwift/actions/workflows/fixtures.yml) [![Documentation](https://github.com/Algorythm-Canada/OpenJevSwift/actions/workflows/docs.yml/badge.svg?branch=main)](https://github.com/Algorythm-Canada/OpenJevSwift/actions/workflows/docs.yml)
+
+Ask a model typed questions about a piece of text (yes or no, which of several options, or how
+much on a scale) and get probabilities back instead of generated text. OpenJevSwift answers them
+locally: on your Mac behind a Jev-compatible HTTP API, or inside your own iPhone or Mac app. It is
+for Swift developers who want these decisions on device, and for Mac users who want OpenJev's API
+from one native binary instead of a Python environment. The [demo app](#try-the-demo-app) shows it
+answering as you type.
 
 A native Swift implementation of [OpenJev](https://github.com/razorback16/openjev), the open,
 Jev-compatible "System One" decision server. Send it a state and typed questions (`noul`,
@@ -18,15 +27,20 @@ owners.
 
 ## Quick start
 
-On an Apple silicon Mac with macOS 15 or later, Xcode 27 and its Metal Toolchain component
-([docs/development.md](docs/development.md) has the one-time install):
+On an Apple silicon Mac with macOS 15 or later and Xcode 27 (the first command is a one-time
+install of Xcode's Metal Toolchain, which
+[docs/development.md](docs/development.md#xcode-27-needs-the-metal-toolchain) explains):
 
 ```bash
+xcodebuild -downloadComponent MetalToolchain
 git clone https://github.com/Algorythm-Canada/OpenJevSwift.git
 cd OpenJevSwift
 swift build -c release --product openjev
 .build/release/openjev serve --backend verdict
 ```
+
+With Xcode 26.4 to 26.6, add `--build-system swiftbuild` to `swift build`, or the `mlx` and
+`jevk5` backends lack MLX's Metal shaders.
 
 The first start downloads Verdict's converted Core ML package, tokenizer and calibrator (about
 310 MB) into Application Support and checks each file's SHA-256; the server listens on
@@ -50,11 +64,24 @@ echo '{"model":"jev-latest","state":"The deploy failed twice and the site is dow
 Ctrl-C stops the server gracefully. [docs/deployment.md](docs/deployment.md) covers the settings,
 a launchd job, the logs and the exit statuses.
 
-An app depends on a release and links `OpenJevCore` and the module of each backend it loads; the
-DocC article "Making decisions in an app" loads the same models inside an app:
+An app depends on a release and links `OpenJevCore` and the module of each backend it loads:
+`OpenJevEncoders` for Verdict and Laya, `OpenJevDiffusionGemma` for DiffusionGemma and
+`OpenJevLetterReadout` for JevK5. The DocC article
+[Making decisions in an app](https://algorythm-canada.github.io/OpenJevSwift/documentation/openjevcore/gettingstarted/)
+loads the same models inside an app:
 
 ```swift
-.package(url: "https://github.com/Algorythm-Canada/OpenJevSwift.git", from: "0.1.0"),
+dependencies: [
+    .package(url: "https://github.com/Algorythm-Canada/OpenJevSwift.git", from: "0.1.0"),
+],
+targets: [
+    .target(
+        name: "MyApp",
+        dependencies: [
+            .product(name: "OpenJevCore", package: "OpenJevSwift"),
+            .product(name: "OpenJevEncoders", package: "OpenJevSwift"),
+        ]),
+]
 ```
 
 ## Try the demo app
@@ -97,15 +124,18 @@ core, the server and the `openjev` tool for the tests, without any backend.
 ## Status
 
 Release 0.1.0 is the first version a package can depend on; [CHANGELOG.md](CHANGELOG.md) lists
-what it ships. Milestones 0 to 5 are complete, every work issue in them closed: the foundations,
-the decision engine core, DiffusionGemma reads on MLX, the Jev-compatible HTTP server with the
-`openjev` tool, the read extensions and images, and text generation with `think` and chat
-completions (#50 to #53). `steps`, `samples` and `sequential` are verified end to end on
-the DiffusionGemma checkpoint (#43, #44 and #45), and images are read on it, matching upstream's
-image reads bit for bit on the oracle's kernels (#46 to #48). Verdict and Laya, from milestone 6,
-and from milestone 7 the JevBench comparison with upstream and DiffusionGemma's calibration report
-(#61 and #62), are done too. JevK5 (#55), also from milestone 6, is served, and gives its author's
-published top answer on 230 of JevBench's 231 items (D-052).
+what it ships. Done:
+
+- **Milestones 0 to 5**, every work issue in them closed: the foundations, the decision engine
+  core, DiffusionGemma reads on MLX, the Jev-compatible HTTP server with the `openjev` tool, the
+  read extensions and images, and text generation with `think` and chat completions (#50 to #53).
+- **DiffusionGemma, verified on its checkpoint:** `steps`, `samples` and `sequential` end to end
+  (#43, #44 and #45), and image reads, matching upstream's bit for bit on the oracle's kernels
+  (#46 to #48).
+- **From milestone 6:** Verdict and Laya, and JevK5 (#55), which gives its author's published top
+  answer on 230 of JevBench's 231 items (D-052).
+- **From milestone 7:** the JevBench comparison with upstream and DiffusionGemma's calibration
+  report (#61 and #62).
 
 Not there yet:
 
@@ -124,15 +154,18 @@ index.
 Apart from the recorded differences, everything up to the model's probabilities is upstream's byte
 for byte: the prompts, the answer templates, the canvases and seeds, the request validation, the
 error bodies, the headers and the `/v1/models` listing, all checked against fixtures upstream's own
-code writes. The probabilities agree within measured bounds: DiffusionGemma's within decisions
-D-014's and D-048's on the 63 oracle reads (the top label on 91.7% of slots, and on 139 of the 140
-where mlx-vlm's top two are at least 0.5 apart), and between the two servers on 333 JevBench and
-TypeSafe items; Verdict's and Laya's with upstream's top answer on all 666 items; JevK5's, on its
-8-bit conversion, with its author's published top answer on 230 of JevBench's 231 items and the same
-token counts on all of them. The differences, among them a stricter JSON parser, the 503 for any
-backend failure and the features not built yet, each have a decision record.
-[docs/compatibility.md](docs/compatibility.md) has the three tables and the matrix of what runs on
-macOS, iOS and Linux.
+code writes. The probabilities agree within measured bounds:
+
+- **DiffusionGemma:** within the bounds of decisions D-014 and D-048 on the 63 oracle reads (the
+  top label on 91.7% of slots, and on 139 of the 140 where mlx-vlm's top two are at least 0.5
+  apart), and between the two servers on 333 JevBench and TypeSafe items.
+- **Verdict and Laya:** upstream's top answer on all 666 items.
+- **JevK5, on its 8-bit conversion:** its author's published top answer on 230 of JevBench's 231
+  items, with the same token counts on all of them.
+
+The differences, among them a stricter JSON parser, the 503 for any backend failure and the
+features not built yet, each have a decision record. [docs/compatibility.md](docs/compatibility.md)
+has the three tables and the matrix of what runs on macOS, iOS and Linux.
 
 ## Documentation
 
@@ -155,6 +188,14 @@ macOS, iOS and Linux.
   it handles keys.
 - **[ADOPTERS.md](ADOPTERS.md)**: organizations that use OpenJevSwift; add yours with a pull
   request.
+
+## Contributing
+
+Bug reports, compatibility reports, documentation fixes and pull requests are welcome from anyone.
+[CONTRIBUTING.md](CONTRIBUTING.md) covers building, testing and opening a pull request. Issues
+labelled [help wanted](https://github.com/Algorythm-Canada/OpenJevSwift/labels/help%20wanted) are
+open to anyone, and [Discussions](https://github.com/Algorythm-Canada/OpenJevSwift/discussions) is
+the place for questions and ideas.
 
 ## License and credits
 

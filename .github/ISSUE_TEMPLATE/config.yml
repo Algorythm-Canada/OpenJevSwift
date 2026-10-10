@@ -1,5 +1,8 @@
 blank_issues_enabled: true
 contact_links:
+  - name: Ask a question
+    url: https://github.com/Algorythm-Canada/OpenJevSwift/discussions/categories/q-a
+    about: Ask how to use OpenJevSwift in Discussions, where the answer stays findable for others.
   - name: Report a security vulnerability
     url: https://github.com/Algorythm-Canada/OpenJevSwift/security/advisories/new
     about: Report it privately, as SECURITY.md describes, never in a public issue.

@@ -1,0 +1,32 @@
+name: Feature request
+description: Something OpenJevSwift does not do yet, such as a model, a setting or an API.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe what you are trying to do: a use case helps more than a design. The README's
+        [Status](https://github.com/Algorythm-Canada/OpenJevSwift#status) section lists what is
+        not there yet. A question about using OpenJevSwift fits
+        [Discussions](https://github.com/Algorythm-Canada/OpenJevSwift/discussions) better.
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use case
+      description: What you are building, and what OpenJevSwift would need to do for it.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: How it could work, if you have an idea, such as an API sketch or a request.
+    validations:
+      required: false
+  - type: textarea
+    id: today
+    attributes:
+      label: What you do today
+      description: The workaround or other tool you use instead, if any.
+    validations:
+      required: false
