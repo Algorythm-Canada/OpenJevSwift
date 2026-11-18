@@ -129,15 +129,6 @@ jobs:
           Tools/sdk-compat/.venv/bin/python Tools/sdk-compat/run.py \
             --server "$server" --swift-sdk --exchanges "$RUNNER_TEMP/sdk-compat"
 
-      - name: Upload the exchanges and the server logs
-        if: failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: sdk-compat-exchanges
-          path: ${{ runner.temp }}/sdk-compat
-          if-no-files-found: ignore
-          retention-days: 14
-
   macos:
     name: macOS
     runs-on: macos-26
@@ -326,15 +317,6 @@ jobs:
 
       - name: Check that only model tests were skipped
         run: .github/scripts/check-test-log.sh "$RUNNER_TEMP/xcodebuild-test.log"
-
-      - name: Upload the result bundle
-        if: failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: ios-xcresult
-          path: ${{ runner.temp }}/${{ env.SCHEME }}.xcresult
-          if-no-files-found: ignore
-          retention-days: 14
 
       # OpenJevDiffusionGemma declares iOS 17 like the rest of the package, so it must keep
       # compiling for iOS. Its tests stay out of the iOS job: they need weights that no iOS device

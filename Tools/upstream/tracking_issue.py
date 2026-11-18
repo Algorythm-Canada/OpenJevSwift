@@ -89,8 +89,7 @@ def body_of(review, repo, run_url=None):
     if len(markdown) > room:
         cut = markdown.rfind("\n", 0, room)
         markdown = (markdown[:cut if cut > 0 else room] + "\n\nThe review was cut to fit an issue "
-                    "body. The workflow run's summary and its `upstream-review` artifact hold all "
-                    "of it.\n")
+                    "body. The full report is in the workflow run's summary.\n")
     return header + markdown + footer
 
 

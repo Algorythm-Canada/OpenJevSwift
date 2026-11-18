@@ -627,8 +627,9 @@ And took this long:
   runtime on the image ships that device, and `OS=latest` picks the newest runtime, so the name
   resolves to one simulator; a step checks that before the tests and fails with a readable message
   when it stops holding, because a device name that matches none or several produces a wall of
-  `xcodebuild` output. The job writes an `.xcresult` bundle and uploads it when a step failed. The
-  tests read `Fixtures/` through a path derived from `#filePath`, which works unchanged in the
+  `xcodebuild` output. The job keeps the console output in the workflow log and leaves the
+  `.xcresult` bundle on the runner. The tests read `Fixtures/` through a path derived from
+  `#filePath`, which works unchanged in the
   simulator: the simulator runs on the host and reads the checkout in place, so the tests of both
   targets run there with no resource copying (223 and 89 on 2026-10-01). The encoder tests that
   need Verdict's or Laya's tokenizer or converted packages look for them in the Mac's home, which
@@ -640,17 +641,16 @@ And took this long:
 - **The SDK compatibility job.** It restores the Linux job's build directory without saving it,
   builds only the stub server, and runs the official SDKs against it (decision D-040). CPython
   3.12 is Ubuntu 24.04's own `python3`, installed with apt inside the Swift container and checked
-  by version. A failure prints every HTTP exchange of the failed checks in the log, and the
-  artifact `sdk-compat-exchanges` holds every exchange and the three servers' logs for 14 days.
+  by version. A failure prints every HTTP exchange of the failed checks in the workflow log.
 - **The documentation job.** It builds the five modules' DocC catalogs into one site with
   `Tools/docs/build-site.sh`, every DocC warning an error, so a link that does not resolve or a
   parameter documented under the wrong name fails the pull request
   ([API documentation](#api-documentation)). It keeps Xcode 26.6's default build system, the
   native one, since symbol graphs need no Metal library, and it has no cache, so each run
-  compiles the dependencies. The site is uploaded with `actions/upload-pages-artifact`, so a pull
-  request's run also offers it for download. On `main`, `Check GitHub Pages` asks the Pages API
-  whether Pages publishes from GitHub Actions, and `Deploy to GitHub Pages` runs only when it does;
-  otherwise that job is skipped and the run carries a notice. Enabling Pages is a repository
+  compiles the dependencies. Pull requests build the site for validation. On `main`,
+  `Check GitHub Pages` asks the Pages API whether Pages publishes from GitHub Actions. Only an
+  enabled deployment gets a one-day artifact and runs `Deploy to GitHub Pages`. If Pages is
+  disabled, the deployment is skipped and the run carries a notice. Enabling Pages is a repository
   setting (Settings, Pages, Build and deployment, Source: GitHub Actions), which no workflow
   changes.
 - **The test log check.** [check-test-log.sh](../.github/scripts/check-test-log.sh) reads the
@@ -701,8 +701,8 @@ And took this long:
 - **The upstream review.** It reads other repositories through the REST API with the workflow's own
   token, which needs no permission for public repositories, and `issues: write` is for the tracking
   issue alone. A pull request that changes the review or the pins runs it as a dry run, so its
-  summary shows the report and what the issue step would do. Each run uploads the review as the
-  `upstream-review` artifact for 90 days. GitHub disables a public repository's schedule after 60
+  summary shows the report and what the issue step would do. Scheduled and manual runs also
+  record the review in their job summaries. GitHub disables a public repository's schedule after 60
   days without activity; enable it again from the workflow's page.
   [upstream-log.md](upstream-log.md) describes the tracking issue and the review a maintainer then
   does.

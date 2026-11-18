@@ -2394,10 +2394,11 @@ Decision.
    of D-031 item 7.
 4. **GitHub Pages, deployed only once enabled.** `.github/workflows/docs.yml` builds the site on
    `macos-26` with the macOS CI job's Xcode 26.6 for every pull request and push to `main` that
-   changes the sources or the site's files, uploads it with `actions/upload-pages-artifact` and, on
-   `main`, deploys it with `actions/deploy-pages`. A job asks the Pages API with the workflow's
-   token whether Pages publishes from GitHub Actions; until it does, the deploy job is skipped and
-   the run carries a notice, instead of failing. Enabling Pages is a repository setting the
+   changes the sources or the site's files. On `main`, a job asks the Pages API with the workflow's
+   token whether Pages publishes from GitHub Actions. When enabled, the build uploads a one-day
+   deployment artifact with `actions/upload-pages-artifact` and the deploy job uses
+   `actions/deploy-pages`. Otherwise the deploy job is skipped and the run carries a notice.
+   Enabling Pages is a repository setting the
    maintainers make. The Swift Package Index is left to release 0.1.0 (#65).
 5. **The configuration reference is one table, checked by a test.** It lists the 32 variables the
    server and the tool read, the 31 of `ServerSettings(environment:)` and `OPENJEV_ENCODER_MODELS`,
