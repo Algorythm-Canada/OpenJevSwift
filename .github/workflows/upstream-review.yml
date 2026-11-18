@@ -82,14 +82,3 @@ jobs:
             cat "$RUNNER_TEMP/tracking.txt"
             printf '```\n'
           } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload the review
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: upstream-review
-          path: |
-            ${{ runner.temp }}/review.json
-            ${{ runner.temp }}/review.md
-          if-no-files-found: ignore
-          retention-days: 90

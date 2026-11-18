@@ -94,15 +94,6 @@ jobs:
           git diff --stat -- Fixtures/
           git diff -- Fixtures/ > "$RUNNER_TEMP/fixtures.diff"
           # Fixture lines run to tens of kilobytes, so the log shows the first 1,000 lines of the
-          # diff cut to 1,000 characters each. The fixtures-diff artifact holds all of it.
+          # diff cut to 1,000 characters each. To see the full diff, regenerate locally.
           cut -c 1-1000 "$RUNNER_TEMP/fixtures.diff" | head -n 1000 || true
           exit 1
-
-      - name: Upload the fixture diff
-        if: failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: fixtures-diff
-          path: ${{ runner.temp }}/fixtures.diff
-          if-no-files-found: ignore
-          retention-days: 14

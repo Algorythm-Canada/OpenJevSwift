@@ -42,6 +42,8 @@ defaults:
 jobs:
   build:
     name: Build the documentation
+    needs: pages
+    if: ${{ !cancelled() }}
     # The macOS job's runner and Xcode in ci.yml. OpenJevDiffusionGemma, OpenJevEncoders and
     # OpenJevLetterReadout exist only on a macOS host, so the site cannot be built on Linux.
     runs-on: macos-26
@@ -73,9 +75,11 @@ jobs:
         run: Tools/docs/build-site.sh "$RUNNER_TEMP/site"
 
       - name: Upload the site
+        if: needs.pages.outputs.enabled == 'true'
         uses: actions/upload-pages-artifact@v5
         with:
           path: ${{ runner.temp }}/site
+          retention-days: 1
 
   pages:
     name: Check GitHub Pages
